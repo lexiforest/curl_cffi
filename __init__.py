@@ -46,8 +46,6 @@ class Curl(object):
 			pass  # Pass string as is
 		else:
 			raise NotImplementedError("Option unsupported: %s" % option)
-		print(option, value)
-		print(CurlOpt.WRITEDATA)
 		val = lib.bind_curl_easy_setopt(self.instance, option, value)
 		assert val == 0
 		return val
