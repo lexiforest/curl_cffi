@@ -1,0 +1,7 @@
+.idea
+.pytest_cache
+Release
+*.pyc
+*.pyd
+*.so
+_*.cpp
