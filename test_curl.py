@@ -1,13 +1,12 @@
 import unittest
-import python_curl_cffi
-from python_curl_cffi.curl_constants import CurlOpt
-from StringIO import StringIO
+from python_curl_cffi import Curl, CurlOpt, CurlInfo
+from io import BytesIO
 
 
 class TestCurl(unittest.TestCase):
 	def test_curl(self):
-		b = StringIO()
-		c = python_curl_cffi.Curl()
+		b = BytesIO()
+		c = Curl()
 		c.setopt(CurlOpt.URL, 'https://www.onfry.com')
 		c.setopt(CurlOpt.WRITEDATA, b)
 		c.perform()

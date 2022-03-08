@@ -1,12 +1,12 @@
 import sys
-from curl_constants import CurlOpt, CurlInfo
+from _const import CurlOpt, CurlInfo
 try:
 	from ._curl_cffi import ffi, lib
 except ImportError:
 	ffi = lib = None
 
 
-class Curl(object):
+class Curl:
 	def __init__(self):
 		self.instance = lib.bind_curl_easy_init()
 		self.buffer_values = {}
@@ -28,7 +28,7 @@ class Curl(object):
 		if value_type in ["int*"]:
 			value = ffi.new(value_type, value)
 		elif option in [CurlOpt.WRITEFUNCTION, CurlOpt.WRITEDATA]:
-			print("write_data")
+			# print("write_data")
 			value = lib.make_string()
 			target_func = original_value
 			if option == CurlOpt.WRITEDATA:
@@ -83,8 +83,3 @@ class Curl(object):
 				opt_to_delete.append(self.buffer_values[option][1])
 				self.buffer_values[option] = (self.buffer_values[option][0], ffi.gc(self.buffer_values[option][1], lib.free_string))
 			self.buffer_values = {}
-
-
-def patch_as_pycurl():
-	from . import pycurl_patch  # Force package to be loaded so it appears in sys.modules
-	sys.modules["curl"] = sys.modules["pycurl"] = sys.modules["python_curl_cffi.pycurl_patch"]

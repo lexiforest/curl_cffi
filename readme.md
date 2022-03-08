@@ -5,16 +5,20 @@ CFFI bindings for libcurl.
 # Example Usage
 
 ```python
-import python_curl_cffi
-from python_curl_cffi.curl_constants import CurlOpt
-from StringIO import StringIO
-buffer = StringIO()
-c = python_curl_cffi.Curl()
-c.setopt(CurlOpt.URL, 'http://www.onfry.com')
-c.setopt(CurlOpt.WRITEDATA, buffer)
-c.perform()
-c.close()
-body = buffer.getvalue()
+from python_curl_cffi import Curl, CurlOpt, CurlInfo
+from io import BytesIO
+
+def main():
+    buffer = BytesIO()
+    c = Curl()
+    c.setopt(CurlOpt.URL, b'https://ja3er.com/json')
+    c.setopt(CurlOpt.WRITEDATA, buffer)
+    c.perform()
+    c.close()
+    body = buffer.getvalue()
+    print(body.decode())
+
+main()
 ```
 
 # API
@@ -25,14 +29,7 @@ Curl object:
 * getinfo(CurlInfo): Gets information in response after curl perform, as in `curl_easy_getinfo`
 * close(): Closes and cleans up the curl object, as in `curl_easy_cleanup`
 
-Enum values to be used with `setopt` and `getinfo` can be accessed from `curl_constants` module.
-
-This library can act as a drop-in replacement for `pycurl` by calling the following monkey patch function
-
-```python
-import python_curl_cffi
-python_curl_cffi.patch_as_pycurl()
-```
+Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt` and `CurlInfo`.
 
 # Installation
 

@@ -4,7 +4,7 @@ from setuptools import setup
 
 
 def do_setup():
-	os.chdir(os.path.dirname(__file__))
+	# os.chdir(os.path.dirname(__file__))
 
 	if "_cffi_backend" in sys.builtin_module_names:
 		# pypy has cffi bundled
@@ -34,8 +34,8 @@ def do_setup():
 		author='Nicholas Kwan',
 		description="libcurl ffi bindings for Python",
 		url="https://bitbucket.org/multippt/python_curl_cffi",
-		package_dir={"python_curl_cffi": ""},
-		packages=['python_curl_cffi', 'python_curl_cffi.pycurl_patch'],
+		package_dir={"python_curl_cffi": "."},
+		packages=['python_curl_cffi'],
 		**extra_args
 	)
 
