@@ -37,6 +37,9 @@ curl_instance_t* bind_curl_easy_init() {
     return instance;
 }
 int bind_curl_easy_setopt(curl_instance_t* instance, int option, void* parameter) {
+    // printf("****** hijack test begins: \n");
+    // int val = curl_easy_setopt(instance->curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+    // printf("****** hijack test ends. opt: %d, val: %d, result is: %d\n", CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0, val);
     CURLoption opt_value = (CURLoption) option;
     CURLcode res = CURLE_OK;
     if (opt_value == CURLOPT_WRITEDATA) {
@@ -46,6 +49,11 @@ int bind_curl_easy_setopt(curl_instance_t* instance, int option, void* parameter
     }
     if (res != CURLE_OK) {
         return (int)res;
+    }
+    // printf("option: %d, setopt parameter: %d\n", option, *(int*)parameter);
+    // for interger options, we need to convert them to integer, not pointer.
+    if (option < 10000) {
+        return (int)curl_easy_setopt(instance->curl, (CURLoption)option, *(int*)parameter);
     }
     return (int)curl_easy_setopt(instance->curl, (CURLoption)option, parameter);
 }

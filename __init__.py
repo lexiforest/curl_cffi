@@ -1,9 +1,6 @@
 import sys
 from _const import CurlOpt, CurlInfo
-try:
-	from ._curl_cffi import ffi, lib
-except ImportError:
-	ffi = lib = None
+from ._curl_cffi import ffi, lib
 
 
 class Curl:
