@@ -5,3 +5,9 @@ Release
 *.pyd
 *.so
 _*.cpp
+**/__pycache__
+.venv
+build/
+curl.egg-info/
+curl_cffi.egg-info/
+dist/

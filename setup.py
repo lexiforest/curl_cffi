@@ -1,44 +1,29 @@
-import os
-import sys
 from setuptools import setup
 
 
-def do_setup():
-	# os.chdir(os.path.dirname(__file__))
-
-	if "_cffi_backend" in sys.builtin_module_names:
-		# pypy has cffi bundled
-		import _cffi_backend
-		requires_cffi = "cffi==" + _cffi_backend.__version__
-	else:
-		requires_cffi = "cffi>=1.0.0"
-
-	if requires_cffi.startswith("cffi==0."):
-		# Existing cffi version present
-		from cffi_build import ffibuilder
-		ext_config = ffibuilder.verifier.get_extension()
-		ext_config.name = "python_curl_cffi._curl_cffi"
-		extra_args = {
-			"setup_requires": [requires_cffi],
-			"ext_modules": [ext_config],
-		}
-	else:
-		extra_args = {
-			"setup_requires": [requires_cffi],
-			"cffi_modules": ["cffi_build.py:ffi_setup"]
-		}
-
-	setup(
-		name='python-curl-cffi',
-		version='0.1.0',
-		author='Nicholas Kwan',
-		description="libcurl ffi bindings for Python",
-		url="https://bitbucket.org/multippt/python_curl_cffi",
-		package_dir={"python_curl_cffi": "."},
-		packages=['python_curl_cffi'],
-		**extra_args
-	)
-
-
-if __name__ == "__main__":
-	do_setup()
+setup(
+    name="curl_cffi",
+    packages=["curl_cffi"],
+    package_dir={"curl_cffi": "."},
+    version="0.1.5",
+    author="Yifei Kong",
+    description="libcurl ffi bindings for Python",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+    url="https://github.com/yifeikong/curl_cffi",
+    setup_requires= ["cffi>=1.0.0"],
+    cffi_modules= ["cffi_build.py:ffibuilder"],
+    install_requires= ["cffi>=1.0.0"],
+    classifiers = [
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+    ],
+    python_requires=">=3.6"
+)
