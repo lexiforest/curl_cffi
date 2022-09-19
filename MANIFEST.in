@@ -1,2 +1,3 @@
-include include/*
-include cdef.c
+include lib/*
+include curl_cffi/*.c
+include curl_cffi/include/*

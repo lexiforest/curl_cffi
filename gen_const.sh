@@ -12,7 +12,7 @@ cat << EOF >> $CONST_FILE
 	if locals().get("READDATA"):
 		INFILE = locals().get("READDATA")
 	if locals().get("HEADERDATA"):
-		WRITEHEADER = locals().get("READDATA")
+		WRITEHEADER = locals().get("HEADERDATA")
 EOF
 
 echo "" >> $CONST_FILE

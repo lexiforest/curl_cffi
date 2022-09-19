@@ -230,7 +230,7 @@ class CurlOpt(IntEnum):
 	if locals().get("READDATA"):
 		INFILE = locals().get("READDATA")
 	if locals().get("HEADERDATA"):
-		WRITEHEADER = locals().get("READDATA")
+		WRITEHEADER = locals().get("HEADERDATA")
 
 
 class CurlInfo(IntEnum):
