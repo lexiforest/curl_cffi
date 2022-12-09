@@ -12,5 +12,5 @@ curl.egg-info/
 curl_cffi.egg-info/
 dist/
 lib/
-curl_cffi/include/curl/
+# curl_cffi/include/curl/
 *.o

@@ -10,7 +10,7 @@ ffibuilder.set_source(
     "curl_cffi._curl_cffi",
     """#include "shim.h"
     """,
-    libraries=["curl-impersonate-chrome"],
+    libraries=["curl"],
     library_dirs=[
         os.path.join(os.path.dirname(__file__), "../lib/" + arch),
     ],

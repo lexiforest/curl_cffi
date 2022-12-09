@@ -1,3 +1,4 @@
-include lib/*
+include lib/*/*
 include curl_cffi/*.c
 include curl_cffi/include/*
+include curl_cffi/include/curl/*

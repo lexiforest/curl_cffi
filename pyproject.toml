@@ -1,0 +1,54 @@
+[project]
+name = "curl_cffi"
+version = "0.2.0"
+authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
+description = "libcurl ffi bindings for Python, with impersonation support"
+license = { file = "LICENSE" }
+dependencies = ["cffi>=1.0.0"]
+readme = "README.md"
+requires-python = ">=3.7"
+urls = { "repository" = "https://github.com/yifeikong/curl_cffi" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "autoflake==1.4",
+    "black==22.8.0",
+    "coverage==6.4.1",
+    "cryptography==37.0.2",
+    "flake8==3.9.2",
+    "flake8-bugbear==22.7.1",
+    "flake8-pie==0.15.0",
+    "isort==5.10.1",
+    "mypy==0.971",
+    "types-certifi==2021.10.8.2",
+    "pytest==7.1.2",
+    "pytest-asyncio==0.19.0",
+    "pytest-trio==0.7.0",
+    "trio==0.21.0",
+    "trio-typing==0.7.0",
+    "trustme==0.9.0",
+    "uvicorn==0.18.3",
+]
+
+
+[tool.setuptools]
+packages = ["curl_cffi"]
+package-data = { curl_cffi = ["libcurl/*/*"] }
+include-package-data = true
+
+
+[build-system]
+requires = ["setuptools", "cffi>=1.0.0"]
+build-backend = "setuptools.build_meta"

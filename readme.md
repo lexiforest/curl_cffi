@@ -1,20 +1,39 @@
 # Python Curl CFFI
 
-CFFI bindings for libcurl with the ability to impersonate browsers' TLS signatures.
+Python bindings for curl using CFFI with the ability to impersonate browsers' TLS
+signatures or JA3 fingerprints.
 
 ## Install
 
+Linux & Windows:
+
     pip install curl_cffi
+
+macOS:
+
+    # First, install curl 
+    brew install 
 
 ## Usage
 
+Use the requests/httpx-like API:
+
 ```python
-from curl_cffi import Curl, CurlOpt, CurlInfo
+from curl_cffi import requests
+
+r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101")
+print(r.json())
+```
+
+Or, use the low-level curl-like API:
+
+```python
+from curl_cffi import Curl
 from io import BytesIO
 
 buffer = BytesIO()
 c = Curl()
-c.setopt(CurlOpt.URL, b'https://ja3er.com/json')
+c.setopt(CurlOpt.URL, b'https://tls.browserleaks.com/json')
 c.setopt(CurlOpt.WRITEDATA, buffer)
 c.perform()
 c.close()
@@ -35,4 +54,4 @@ Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt
 
 ## Acknowledgement
 
-This module is forked from https://github.com/multippt/python_curl_cffi
+This package is originally forked from https://github.com/multippt/python_curl_cffi
