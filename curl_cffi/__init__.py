@@ -6,7 +6,7 @@ from io import BytesIO
 from typing import Any, List, Union
 
 from ._const import CurlInfo, CurlOpt
-from ._curl_cffi import ffi, lib
+from ._wrapper import ffi, lib
 
 
 class CurlError(Exception):
@@ -114,8 +114,7 @@ class Curl:
         cookie = SimpleCookie()
         for header in headers:
             if header.lower().startswith(b"set-cookie: "):
-                # len("set-cookie: ") == 12
-                cookie.load(header[12:].decode())
+                cookie.load(header[12:].decode())  # len("set-cookie: ") == 12
         return cookie
 
     def get_reason_phrase(self, status_line: bytes) -> bytes:
@@ -128,5 +127,5 @@ class Curl:
             self._curl = None
 
         for _, buffer in self._write_callbacks:
-            ffi.gc(buffer, lib.free_string),
+            ffi.gc(buffer, lib.free_string)
         self._write_callbacks = []

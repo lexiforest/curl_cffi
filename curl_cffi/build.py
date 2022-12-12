@@ -3,16 +3,17 @@ import os
 from cffi import FFI
 
 ffibuilder = FFI()
-arch = "%s-%s" % (os.uname().sysname, os.uname().machine)
+# arch = "%s-%s" % (os.uname().sysname, os.uname().machine)
 
 
 ffibuilder.set_source(
-    "curl_cffi._curl_cffi",
-    """#include "shim.h"
+    "curl_cffi._wrapper",
+    """
+        #include "shim.h"
     """,
-    libraries=["curl"],
+    libraries=["curl-impersonate-chrome"],
     library_dirs=[
-        os.path.join(os.path.dirname(__file__), "../lib/" + arch),
+        "/usr/local/lib" if os.uname().sysname in ("Linux", "Darwin") else ""
     ],
     source_extension=".c",
     include_dirs=[
@@ -21,7 +22,7 @@ ffibuilder.set_source(
     sources=[
         os.path.join(os.path.dirname(__file__), "shim.c"),
     ],
-    extra_link_args=["-Wl,-rpath,$ORIGIN/../lib/" + arch],
+    # extra_link_args=["-Wl,-rpath,$ORIGIN/../libcurl/" + arch],
 )
 
 with open(os.path.join(os.path.dirname(__file__), "cdef.c")) as f:

@@ -64,6 +64,3 @@ def test_relative_redirect_n():
 def test_redirect_max():
     with pytest.raises(requests.RequestsError, match="Failed"):
         r = requests.get("https://httpbin.org/redirect/5", max_redirects=3)
-
-
-

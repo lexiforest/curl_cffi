@@ -27,11 +27,24 @@ dev = [
     "black==22.8.0",
     "coverage==6.4.1",
     "cryptography==37.0.2",
-    "flake8==3.9.2",
+    "flake8==6.0.0",
     "flake8-bugbear==22.7.1",
     "flake8-pie==0.15.0",
+    "httpx==0.23.1",
     "isort==5.10.1",
     "mypy==0.971",
+    "types-certifi==2021.10.8.2",
+    "pytest==7.1.2",
+    "pytest-asyncio==0.19.0",
+    "pytest-trio==0.7.0",
+    "trio==0.21.0",
+    "trio-typing==0.7.0",
+    "trustme==0.9.0",
+    "uvicorn==0.18.3",
+]
+test = [
+    "cryptography==37.0.2",
+    "httpx==0.23.1",
     "types-certifi==2021.10.8.2",
     "pytest==7.1.2",
     "pytest-asyncio==0.19.0",
@@ -45,10 +58,21 @@ dev = [
 
 [tool.setuptools]
 packages = ["curl_cffi"]
-package-data = { curl_cffi = ["libcurl/*/*"] }
-include-package-data = true
+# package-data = { curl_cffi = ["libcurl/*/*"] }
+# include-package-data = true
 
 
 [build-system]
 requires = ["setuptools", "cffi>=1.0.0"]
 build-backend = "setuptools.build_meta"
+
+
+[tool.cibuildwheel]
+# musllinux(alpine) is not supported because we download the binaries from upstream.
+# TODO build binaries inside musllinux/manylinux
+skip = "*-musllinux_*"
+before-all = "bash ./prebuild.sh"
+test-requires = "pytest"
+test-command = "pytest {project}/tests"
+test-extras = ["test"]
+test-skip = "pp*"
