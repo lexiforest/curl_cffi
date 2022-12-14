@@ -1,12 +1,15 @@
 __all__ = ["Curl", "CurlInfo", "CurlOpt", "CurlError"]
 
 import re
+import os
 from http.cookies import SimpleCookie
-from io import BytesIO
-from typing import Any, List, Union
+from typing import Any, List, Union, Optional
 
 from ._const import CurlInfo, CurlOpt
 from ._wrapper import ffi, lib
+
+
+DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 
 class CurlError(Exception):
@@ -14,10 +17,11 @@ class CurlError(Exception):
 
 
 class Curl:
-    def __init__(self):
+    def __init__(self, cacert: Optional[str] = None):
         self._curl = lib.curl_easy_init()
         self._write_callbacks = []
         self._headers = ffi.NULL
+        self._cacert = cacert
 
     def __del__(self):
         self.close()
@@ -94,6 +98,8 @@ class Curl:
         )
 
     def perform(self):
+        if self._cacert is None:
+            self.setopt(CurlOpt.CAINFO, DEFAULT_CACERT)
         # TODO: use CURL_ERROR_SIZE
         error_buffer = ffi.new("char[]", 256)
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, error_buffer)

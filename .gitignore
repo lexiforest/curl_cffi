@@ -11,7 +11,7 @@ build/
 curl.egg-info/
 curl_cffi.egg-info/
 dist/
-libcurl/
 # curl_cffi/include/curl/
 *.o
 wheelhouse/
+curl_cffi/cacert.pem
