@@ -1,0 +1,53 @@
+name: build
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+jobs:
+  sdist:
+    name: build sdist wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: pipx run build --sdist
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./dist/*.tar.gz
+  bdist:
+    name: build bdist wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, macos-11]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: all
+      - name: Build
+        uses: pypa/cibuildwheel@v2.12.0
+        env:
+          # configure cibuildwheel to build native archs ('auto'), and some emulated ones
+          CIBW_ARCHS_LINUX: auto aarch64
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
+  upload_all:
+    needs: [bdist, sdist]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: artifact
+        path: dist
+    - uses: pypa/gh-action-pypi-publish@v1.5.0
+      with:
+        password: ${{ secrets.PYPI_TOKEN }}
+

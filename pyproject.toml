@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.2.0"
+version = "0.2.1"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -27,7 +27,7 @@ dev = [
     "autoflake==1.4",
     "black==22.8.0",
     "coverage==6.4.1",
-    "cryptography==37.0.2",
+    "cryptography==38.0.3",
     "flake8==6.0.0",
     "flake8-bugbear==22.7.1",
     "flake8-pie==0.15.0",
@@ -43,8 +43,11 @@ dev = [
     "trustme==0.9.0",
     "uvicorn==0.18.3",
 ]
+build = [
+    "cibuildwheel",
+]
 test = [
-    "cryptography==37.0.2",
+    "cryptography==38.0.3",
     "httpx==0.23.1",
     "types-certifi==2021.10.8.2",
     "pytest==7.1.2",
