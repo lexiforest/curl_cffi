@@ -13,7 +13,8 @@ ffibuilder.set_source(
     """,
     libraries=["curl-impersonate-chrome"],
     library_dirs=[
-        "/usr/local/lib" if os.uname().sysname in ("Linux", "Darwin") else ""
+        "/usr/local/lib" if os.uname().sysname == "Linux" else
+        "/Users/runner/work/_temp/install/lib" if os.uname().sysname == "Darwin" else ""
     ],
     source_extension=".c",
     include_dirs=[

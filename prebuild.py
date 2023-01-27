@@ -12,6 +12,8 @@ CURL_VERSION="7.84.0"
 CONST_FILE="curl_cffi/_const.py"
 if uname.system == "Windows":
     LIBDIR = "./lib"
+elif uname.system == "Darwin":
+    LIBDIR = "/Users/runner/work/_temp/install/lib"
 else:
     LIBDIR="/usr/local/lib"
 
@@ -32,10 +34,14 @@ print("Download firefox certs, see: https://curl.se/docs/caextract.html")
 urlretrieve("https://curl.se/ca/cacert.pem", "curl_cffi/cacert.pem", reporthook)
 
 
-# Download my own build of libcurl-impersonate for M1 Mac
-if uname.system == "Darwin" and uname.machine == "arm64":
-    url = ""
-    filename = "./curl-impersonate.tar.gz"
+if uname.system == "Darwin":
+    if uname.machine == "arm64":
+        # TODO Download my own build of libcurl-impersonate for M1 Mac
+        url = ""
+        filename = "./curl-impersonate.tar.gz"
+    else:
+        url = f"https://github.com/lwthiker/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-macos.tar.gz"
+        filename = "./curl-impersonate.tar.gz"
 elif uname.system == "Windows":
     url = f"https://github.com/depler/curl-impersonate-win/releases/download/{CURL_VERSION}/curl-impersonate-win.zip"
     filename = "./curl-impersonate.zip"
@@ -48,6 +54,7 @@ else:
     print(f"Download libcurl-impersonate-chrome from {url}")
     urlretrieve(url, filename, reporthook)
 shutil.unpack_archive(filename, LIBDIR)
+# shutil.copytree(LIBDIR, "/Users/runner/work/_temp/install/")
 
 # TODO download curl automatically
 
