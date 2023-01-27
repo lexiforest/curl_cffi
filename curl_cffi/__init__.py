@@ -35,6 +35,7 @@ class Curl:
             20000: "void*",
             30000: "int*",  # offset type
         }
+        # print("option", option, "value", value)
 
         # Convert value
         value_type = input_option.get(int(option / 10000) * 10000)
@@ -58,7 +59,10 @@ class Curl:
             elif option == CurlOpt.HEADERFUNCTION:
                 option = CurlOpt.HEADERDATA
         elif value_type == "char*":
-            c_value = value
+            if isinstance(value, str):
+                c_value = value.encode()
+            else:
+                c_value = value
         else:
             raise NotImplementedError("Option unsupported: %s" % option)
         if option == CurlOpt.HTTPHEADER:
