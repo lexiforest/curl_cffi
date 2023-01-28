@@ -27,6 +27,10 @@ r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101")
 print(r.json())
 # output: {'ja3_hash': '53ff64ddf993ca882b70e1c82af5da49'
 # the fingerprint should be the same as target browser
+
+# proxies are supported
+proxies = {"https": "http://localhost:3128"}
+r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101", proxies=proxies)
 ```
 
 For a list of supported impersonation versions, please check the curl-impersonate repo.
