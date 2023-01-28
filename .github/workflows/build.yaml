@@ -1,8 +1,6 @@
 name: build
 on:
   push:
-    branches:
-      - master
     tags:
       - v*
 jobs:
@@ -41,7 +39,6 @@ jobs:
   upload_all:
     needs: [bdist, sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
     - uses: actions/download-artifact@v3
       with:
