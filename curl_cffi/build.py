@@ -1,4 +1,5 @@
 import os
+import platform
 
 from cffi import FFI
 
@@ -13,8 +14,9 @@ ffibuilder.set_source(
     """,
     libraries=["curl-impersonate-chrome"],
     library_dirs=[
-        "/usr/local/lib" if os.uname().sysname == "Linux" else
-        "/Users/runner/work/_temp/install/lib" if os.uname().sysname == "Darwin" else ""
+        "/usr/local/lib" if platform.uname().system == "Linux" else
+        "/Users/runner/work/_temp/install/lib" if platform.uname().system == "Darwin" else
+        "./lib"
     ],
     source_extension=".c",
     include_dirs=[

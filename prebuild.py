@@ -43,7 +43,8 @@ if uname.system == "Darwin":
         url = f"https://github.com/lwthiker/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-macos.tar.gz"
         filename = "./curl-impersonate.tar.gz"
 elif uname.system == "Windows":
-    url = f"https://github.com/depler/curl-impersonate-win/releases/download/{CURL_VERSION}/curl-impersonate-win.zip"
+    # url = f"https://github.com/depler/curl-impersonate-win/releases/download/{CURL_VERSION}/curl-impersonate-win.zip"
+    url = f"https://f004.backblazeb2.com/file/onefly-public/static/2023/curl-impersonate-chrome-{CURL_VERSION}.zip"
     filename = "./curl-impersonate.zip"
 else:
     url = f"https://github.com/lwthiker/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-linux-gnu.tar.gz"
@@ -54,7 +55,11 @@ else:
     print(f"Download libcurl-impersonate-chrome from {url}")
     urlretrieve(url, filename, reporthook)
 shutil.unpack_archive(filename, LIBDIR)
-# shutil.copytree(LIBDIR, "/Users/runner/work/_temp/install/")
+
+# Copy dll file into the package, so that Windows can find it.
+if uname.system == "Windows":
+    shutil.copy(LIBDIR + "/curl-impersonate-chrome.dll", "./curl_cffi")
+
 
 # TODO download curl automatically
 
