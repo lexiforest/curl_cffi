@@ -84,7 +84,7 @@ if uname.system != "Windows":
 """)
         f.write("class CurlInfo(IntEnum):\n")
         cmd = r"""
-            echo '#include "curl_cffi/include/curl/curl.h"' | gcc -E - | grep -i "CURLINFO_.\+ =" | sed "s/  CURLINFO_/\t/g" | sed "s/,//g"
+            echo '#include "curl_cffi/include/curl/curl.h"' | gcc -E - | grep -i "CURLINFO_.\+ =" | sed "s/  CURLINFO_/    /g" | sed "s/,//g"
         """
         output = subprocess.check_output(cmd, shell=True)
         f.write(output.decode())
