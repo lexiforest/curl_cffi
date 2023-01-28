@@ -11,8 +11,8 @@ website for no obvious reason, you can give this package a try.
 
     pip install --upgrade curl_cffi
 
-This should work for most Linux systems. If it does not work, you may need to compile and
-install [curl-impersonate](https://github.com/lwthiker/curl-impersonate) first.
+This should work for Linux(x86_64/aarch64), macOS(Intel), Windows(amd64). If it does not
+work, you may need to compile and install `curl-impersonate` first.
 
 ## Usage
 
@@ -28,6 +28,8 @@ print(r.json())
 # output: {'ja3_hash': '53ff64ddf993ca882b70e1c82af5da49'
 # the fingerprint should be the same as target browser
 ```
+
+For a list of supported impersonation versions, please check the curl-impersonate repo.
 
 Or, the low-level curl-like API:
 
@@ -65,9 +67,7 @@ Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt
 
 ## Current Status
 
-This repo is very early stage for now, the pypi package only works on Linux, not macOS
-or Windows. If you wish to use it on macOS or Windows, you need to clone it and the
-curl-impersonate repo, and then compile them by yourself.
+This implementation is very hacky now, but it works for most common systems.
 
 When people installing other python curl bindings, like `pycurl`, they often face
 compiling issues or OpenSSL issues, so I really hope that this package can be distributed
@@ -83,10 +83,11 @@ Help wanted!
 
 TODOs:
 
-- [ ] write docs.
-- [ ] binary package for macOS and Windows.
-- [ ] Support musllinux(alpine) bdist by building curl-impersonate from source.
-- [ ] Update curl header files and constants via scripts.
+- [ ] Write docs.
+- [x] Binary package for macOS(Intel) and Windows.
+- [ ] Support musllinux(alpine) and macOS(Apple Silicon) bdist by building from source.
+- [ ] Exclude the curl headers from source, download them when building.
+- [x] Update curl header files and constants via scripts.
 - [ ] Implement `requests.Session/httpx.Session`.
 
 ## Acknowledgement
