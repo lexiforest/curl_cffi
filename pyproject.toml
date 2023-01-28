@@ -77,6 +77,6 @@ build-backend = "setuptools.build_meta"
 skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 before-all = "python ./prebuild.py"
 test-requires = "pytest"
-test-command = "pytest {project}/tests"
+test-command = "pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
