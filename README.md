@@ -89,6 +89,7 @@ TODOs:
 - [ ] Exclude the curl headers from source, download them when building.
 - [x] Update curl header files and constants via scripts.
 - [ ] Implement `requests.Session/httpx.Session`.
+- [ ] Create [ABI3 wheels](https://cibuildwheel.readthedocs.io/en/stable/faq/#abi3) to reduce package size and build time.
 
 ## Acknowledgement
 
