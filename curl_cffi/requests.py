@@ -286,7 +286,6 @@ def request(
 
     rsp.cookies = SimpleCookie()
     for set_cookie_line in cookie_headers:
-        print(set_cookie_line)
         rsp.cookies.load(set_cookie_line.decode())
 
     content_type = rsp.headers.get("Content-Type", default="")
