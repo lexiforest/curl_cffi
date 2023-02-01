@@ -7,6 +7,8 @@ Unlike other pure python http clients like `httpx` or `requests`, this package c
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
 website for no obvious reason, you can give this package a try.
 
+[中文文档](README-zh.md)
+
 ## Install
 
     pip install --upgrade curl_cffi
@@ -35,7 +37,7 @@ r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101", p
 
 For a list of supported impersonation versions, please check the curl-impersonate repo.
 
-Or, the low-level curl-like API:
+Alternatively, use the low-level curl-like API:
 
 ```python
 from curl_cffi import Curl, CurlOpt
@@ -54,7 +56,7 @@ body = buffer.getvalue()
 print(body.decode())
 ```
 
-See `example.py` or `tests/` from more examples.
+See `example.py` or `tests/` for more examples.
 
 ## API
 
@@ -68,6 +70,14 @@ Curl object:
 * `close()`: Closes and cleans up the curl object, as in `curl_easy_cleanup`
 
 Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt` and `CurlInfo`.
+
+## Trouble Shooting
+
+### Pyinstaller `ModuleNotFoundError: No module named '_cffi_backend'`
+
+You need to tell pyinstaller to pack cffi and data files inside the package:
+
+    pyinstaller -F .\example.py --hidden-import=_cffi_backend --collect-all curl_cffi
 
 ## Current Status
 
@@ -83,7 +93,7 @@ bdist wheel, which is a binary package format used by PyPI, and upload it. Howev
 right way is to download curl and curl-impersonate sources on our side and compile them
 all together.
 
-Help wanted! 
+Help wanted!
 
 TODOs:
 
