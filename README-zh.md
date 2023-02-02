@@ -101,7 +101,7 @@ TODOs:
 
 有问题和建议可以加微信群交流讨论：
 
-![wechat](wechat.jpg)
+<img src="wechat.jpg" style="width: 512px;" />
 
 ## 致谢
 
