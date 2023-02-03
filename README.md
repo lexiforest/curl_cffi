@@ -78,6 +78,14 @@ Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt
 You need to tell pyinstaller to pack cffi and data files inside the package:
 
     pyinstaller -F .\example.py --hidden-import=_cffi_backend --collect-all curl_cffi
+    
+### Using https proxy, error: `OPENSSL_internal:WRONG_VERSION_NUMBER`
+
+You are messing up https-over-http proxy and https-over-https proxy, for most cases, you
+should change `{"https": "https://localhost:3128"}` to `{"https": "http://localhost:3128"}`.
+Note the protocol in the url for https proxy is `http` not `https`.
+
+See [this issue](https://github.com/yifeikong/curl_cffi/issues/6#issuecomment-1415162495) for a detailed explaination
 
 ## Current Status
 
