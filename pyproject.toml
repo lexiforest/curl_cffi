@@ -80,3 +80,6 @@ test-requires = "pytest"
 test-command = "pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
+
+[tool.isort]
+profile = "black"
