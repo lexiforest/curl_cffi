@@ -33,11 +33,20 @@ print(r.json())
 # proxies are supported
 proxies = {"https": "http://localhost:3128"}
 r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101", proxies=proxies)
+```
 
+### Sessions
+
+```python
 # sessions are supported
 s = requests.Session()
-s.get()
+# httpbin is a http test website
+s.get("https://httpbin.org/cookies/set/foo/bar")
 print(s.cookies)
+# <Cookies[<Cookie foo=bar for httpbin.org />]>
+r = s.get("https://httpbin.org/cookies")
+print(r.json())
+# {'cookies': {'foo': 'bar'}}
 ```
 
 Supported impersonate versions:

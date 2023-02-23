@@ -301,7 +301,8 @@ class Session:
             if header_line.startswith(b"HTTP/"):
                 # read header from last response
                 rsp.reason = c.get_reason_phrase(header_line).decode()
-                header_list = []  # empty header list for new redirected response
+                # empty header list for new redirected response
+                header_list = [h for h in header_lines if h.lower().startswith(b"set-cookie")]
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
