@@ -131,5 +131,6 @@ TODOs:
 
 ## Acknowledgement
 
-This package was originally forked from https://github.com/multippt/python_curl_cffi
+- This package was originally forked from https://github.com/multippt/python_curl_cffi
+- headers/cookies files are copied from https://github.com/encode/httpx/blob/master/httpx/_models.py, which is under BSD License.
 

@@ -95,6 +95,7 @@ class Session:
         "trust_env",  # TODO
         "max_redirects",
         "impersonate",
+        "timeout"
     ]
 
     def __init__(
@@ -107,6 +108,7 @@ class Session:
         proxies: Optional[dict] = None,
         params: Optional[dict] = None,
         verify: bool = True,
+        timeout: Union[float, Tuple[float, float]] = 30,
         trust_env: bool = True,
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
@@ -118,6 +120,7 @@ class Session:
         self.proxies = proxies
         self.params = params
         self.verify = verify
+        self.timeout = timeout
         self.trust_env = trust_env
         self.max_redirects = max_redirects
         self.impersonate = impersonate
@@ -142,7 +145,7 @@ class Session:
         cookies: Optional[CookieTypes] = None,
         files: Optional[Dict] = None,
         auth: Optional[Tuple[str, str]] = None,
-        timeout: Union[float, Tuple[float, float]] = 30,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
         allow_redirects: bool = True,
         max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
@@ -182,15 +185,18 @@ class Session:
             c.setopt(CurlOpt.POSTFIELDSIZE, len(body))
 
         # headers
-        h = self.headers.copy()
+        h = Headers(self.headers)
         h.update(headers)
 
         # cookies
+        co = Cookies(self.cookies)
+        co.update(cookies)
         req = Request(url=url, headers=h, method=method)
-        self.cookies.update(cookies)
-        self.cookies.set_cookie_header(req)
+        co.set_cookie_header(req)
+
         # An alternative way to implement cookiejar is to use curl's builtin cookiejar,
-        # However, it would be diffcult to interploate with Headers
+        # However, it would be diffcult to interploate with Headers and get cookies as
+        # dicta
         # c.setopt(CurlOpt.COOKIE, cookies_str.encode())
 
         header_lines = []
@@ -218,6 +224,7 @@ class Session:
             c.setopt(CurlOpt.PASSWORD, password.encode())  # type: ignore
 
         # timeout
+        timeout = timeout or self.timeout
         if isinstance(timeout, tuple):
             connect_timeout, read_timeout = timeout
             all_timeout = connect_timeout + read_timeout
@@ -233,18 +240,19 @@ class Session:
         c.setopt(CurlOpt.MAXREDIRS, max_redirects or self.max_redirects)
 
         # proxies
-        if self.proxies is not None:
-            proxies = self.proxies.copy().update(proxies or {})
-        if proxies is not None:
+        if self.proxies:
+            proxies = {**self.proxies, **(proxies or {})}
+        if proxies:
             if url.startswith("http://"):
                 c.setopt(CurlOpt.PROXY, proxies["http"])
             elif url.startswith("https://"):
-                c.setopt(CurlOpt.PROXY, proxies["https"])
                 if proxies["https"].startswith("https://"):
                     raise RequestsError(
                         "You are using http proxy WRONG, the prefix should be 'http://' not 'https://', see: https://github.com/yifeikong/curl_cffi/issues/6"
                     )
-                elif not proxies["https"].startswith("socks"):
+                c.setopt(CurlOpt.PROXY, proxies["https"])
+                # for http proxy, need to tell curl to enable tunneling
+                if not proxies["https"].startswith("socks"):
                     c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
 
         # verify

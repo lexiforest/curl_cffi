@@ -1,4 +1,4 @@
-from . import Curl, CurlError, CurlInfo, CurlOpt
+from .. import CurlError
 
 
 class RequestsError(CurlError):

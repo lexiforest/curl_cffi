@@ -1,3 +1,8 @@
+# Copied from: https://github.com/encode/httpx/blob/master/httpx/_models.py,
+# which is licensed under the BSD License.
+# See https://github.com/encode/httpx/blob/master/LICENSE.md
+
+
 import email.message
 import typing
 import urllib.request
@@ -5,7 +10,7 @@ import warnings
 from http.cookiejar import Cookie, CookieJar
 from json import loads
 
-from . import Curl
+from .. import Curl
 from .errors import RequestsError
 from .headers import Headers
 
