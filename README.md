@@ -33,11 +33,26 @@ print(r.json())
 # proxies are supported
 proxies = {"https": "http://localhost:3128"}
 r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101", proxies=proxies)
+
+# sessions are supported
+s = requests.Session()
+s.get()
+print(s.cookies)
 ```
 
-For a list of supported impersonation versions, please check the curl-impersonate repo.
+Supported impersonate versions:
 
-Alternatively, use the low-level curl-like API:
+- chrome99
+- chrome100
+- chrome101
+- chrome104
+- chrome99_android
+- edge99
+- edge101
+- safari15_3
+- safari15_5
+
+Alternatively, you can use the low-level curl-like API:
 
 ```python
 from curl_cffi import Curl, CurlOpt
@@ -69,7 +84,7 @@ Curl object:
 * `getinfo(CurlInfo)`: Gets information in response after curl perform, as in `curl_easy_getinfo`
 * `close()`: Closes and cleans up the curl object, as in `curl_easy_cleanup`
 
-Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt` and `CurlInfo`.
+Enum values to be used with `setopt` and `getinfo`, and can be accessed from `CurlOpt` and `CurlInfo`.
 
 ## Trouble Shooting
 
@@ -78,14 +93,14 @@ Enum values to be used with `setopt` and `getinfo` can be accessed from `CurlOpt
 You need to tell pyinstaller to pack cffi and data files inside the package:
 
     pyinstaller -F .\example.py --hidden-import=_cffi_backend --collect-all curl_cffi
-    
+
 ### Using https proxy, error: `OPENSSL_internal:WRONG_VERSION_NUMBER`
 
 You are messing up https-over-http proxy and https-over-https proxy, for most cases, you
 should change `{"https": "https://localhost:3128"}` to `{"https": "http://localhost:3128"}`.
 Note the protocol in the url for https proxy is `http` not `https`.
 
-See [this issue](https://github.com/yifeikong/curl_cffi/issues/6#issuecomment-1415162495) for a detailed explaination
+See [this issue](https://github.com/yifeikong/curl_cffi/issues/6#issuecomment-1415162495) for a detailed explaination.
 
 ## Current Status
 
@@ -110,8 +125,9 @@ TODOs:
 - [ ] Support musllinux(alpine) and macOS(Apple Silicon) bdist by building from source.
 - [ ] Exclude the curl headers from source, download them when building.
 - [x] Update curl header files and constants via scripts.
-- [ ] Implement `requests.Session/httpx.Session`.
+- [x] Implement `requests.Session/httpx.Client`.
 - [ ] Create [ABI3 wheels](https://cibuildwheel.readthedocs.io/en/stable/faq/#abi3) to reduce package size and build time.
+- [ ] Set default headers as in curl-impersonate wrapper scripts.
 
 ## Acknowledgement
 

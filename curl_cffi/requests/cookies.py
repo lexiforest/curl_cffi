@@ -1,3 +1,57 @@
+import email.message
+import typing
+import urllib.request
+import warnings
+from http.cookiejar import Cookie, CookieJar
+from json import loads
+
+from . import Curl
+from .errors import RequestsError
+from .headers import Headers
+
+CookieTypes = typing.Union[
+    "Cookies", CookieJar, typing.Dict[str, str], typing.List[typing.Tuple[str, str]]
+]
+
+
+class Request:
+    def __init__(self, url: str, headers: Headers, method: str):
+        self.url = url
+        self.headers = headers
+        self.method = method
+
+
+class Response:
+    def __init__(self, curl: Curl, request: Request):
+        self.curl = curl
+        self.request = request
+        self.url = ""
+        self.content = b""
+        self.status_code = 200
+        self.reason = "OK"
+        self.ok = True
+        self.headers = Headers()
+        self.cookies = Cookies()
+        self.elapsed = 0.0
+        self.encoding = "utf-8"
+        self.charset = self.encoding
+        self.redirect_count = 0
+        self.redirect_url = ""
+
+    @property
+    def text(self) -> str:
+        return self.content.decode(self.charset)
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise RequestsError(f"HTTP Error {self.status_code}: {self.reason}")
+
+    def json(self, **kw):
+        return loads(self.content, **kw)
+
+    def close(self):
+        warnings.warn("Deprecated, use Session.close")
+
 
 class Cookies(typing.MutableMapping[str, str]):
     """

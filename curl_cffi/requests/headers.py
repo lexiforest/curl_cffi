@@ -11,6 +11,8 @@ HeaderTypes = typing.Union[
     typing.Mapping[bytes, bytes],
     typing.Sequence[typing.Tuple[str, str]],
     typing.Sequence[typing.Tuple[bytes, bytes]],
+    typing.Sequence[str],
+    typing.Sequence[bytes],
 ]
 
 
@@ -85,13 +87,23 @@ class Headers(typing.MutableMapping[str, str]):
                 for k, v in headers.items()
             ]
         else:
+            if isinstance(headers[0], (str, bytes)):
+                sep = ":" if isinstance(headers[0], str) else b":"
+                h = []
+                for line in headers:
+                    k, v = line.split(sep, maxsplit=1)  # type: ignore
+                    v = v.lstrip()
+                    h.append((k, v))
+            else:
+                h = headers
+
             self._list = [
                 (
-                    normalize_header_key(k, lower=False, encoding=encoding),
-                    normalize_header_key(k, lower=True, encoding=encoding),
-                    normalize_header_value(v, encoding),
+                    normalize_header_key(k, lower=False, encoding=encoding),  # type: ignore
+                    normalize_header_key(k, lower=True, encoding=encoding),  # type: ignore
+                    normalize_header_value(v, encoding),  # type: ignore
                 )
-                for k, v in headers
+                for k, v in h
             ]
 
         self._encoding = encoding
@@ -133,7 +145,7 @@ class Headers(typing.MutableMapping[str, str]):
         return [(raw_key, value) for raw_key, _, value in self._list]
 
     def keys(self) -> typing.KeysView[str]:
-        return {key.decode(self.encoding): None for _, key, value in self._list}.keys()
+        return {key.decode(self.encoding): None for _, key, _ in self._list}.keys()
 
     def values(self) -> typing.ValuesView[str]:
         values_dict: typing.Dict[str, str] = {}

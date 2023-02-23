@@ -1,19 +1,15 @@
 import re
 from enum import Enum
-from functools import partial, partialmethod
-from http.cookies import SimpleCookie
-from http.cookiejar import CookieJar
+from functools import partialmethod
 from io import BytesIO
-from json import dumps, loads
-from typing import IO, Any, Dict, List, Optional, Tuple, Union, cast
+from json import dumps
+from typing import Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
-from . import Curl, CurlError, CurlInfo, CurlOpt
-from .headers import Headers
-
-
-class RequestsError(CurlError):
-    pass
+from .. import Curl, CurlError, CurlInfo, CurlOpt
+from .cookies import Cookies, CookieTypes, Request, Response
+from .errors import RequestsError
+from .headers import Headers, HeaderTypes
 
 
 class BrowserType(str, Enum):
@@ -77,35 +73,13 @@ def _update_url_params(url: str, params: Dict) -> str:
     return new_url
 
 
-class Response:
-    def __init__(self, curl: Curl):
-        self._curl = curl
-        self.url = ""
-        self.content = b""
-        self.status_code = 200
-        self.reason = "OK"
-        self.ok = True
-        self.headers = Headers()
-        self.cookies = SimpleCookie()
-        self.elapsed = 0.0
-        self.encoding = "utf-8"
-        self.charset = self.encoding
-        self.redirect_count = 0
-        self.redirect_url = ""
-
-    @property
-    def text(self) -> str:
-        return self.content.decode(self.charset)
-
-    def raise_for_status(self):
-        if not self.ok:
-            raise RequestsError(f"HTTP Error {self.status_code}: {self.reason}")
-
-    def json(self, **kw):
-        return loads(self.content, **kw)
-
-    def close(self):
-        self._curl.close()
+def _update_header_line(header_lines: List[str], key: str, value: str):
+    for idx, line in enumerate(header_lines):
+        if line.lower().startswith(key + ":"):
+            header_lines[idx] = f"{key}: {value}"
+            break
+    else:  # if not break
+        header_lines.append(f"{key}: {value}")
 
 
 class Session:
@@ -127,8 +101,8 @@ class Session:
         self,
         *,
         curl: Optional[Curl] = None,
-        headers: Optional[Union[Dict[str, str], List[str], Headers]] = None,
-        cookies: Optional[Union[Dict[str, str], SimpleCookie]] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
         auth: Optional[Tuple[str, str]] = None,
         proxies: Optional[dict] = None,
         params: Optional[dict] = None,
@@ -137,9 +111,9 @@ class Session:
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
     ):
-        self._curl = curl if curl is not None else Curl()
-        self.headers = headers
-        self.cookies = cookies
+        self.curl = curl if curl is not None else Curl()
+        self.headers = Headers(headers)
+        self.cookies = Cookies(cookies)
         self.auth = auth
         self.proxies = proxies
         self.params = params
@@ -155,7 +129,7 @@ class Session:
         self.close()
 
     def close(self):
-        self._curl.close()
+        self.curl.close()
 
     def request(
         self,
@@ -164,20 +138,20 @@ class Session:
         params: Optional[dict] = None,
         data: Optional[Union[Dict[str, str], BytesIO, bytes]] = None,
         json: Optional[dict] = None,
-        headers: Optional[Union[Dict[str, str], List[str], Headers]] = None,
-        cookies: Optional[Union[Dict[str, str], SimpleCookie]] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
         files: Optional[Dict] = None,
         auth: Optional[Tuple[str, str]] = None,
         timeout: Union[float, Tuple[float, float]] = 30,
         allow_redirects: bool = True,
-        max_redirects: int = -1,
+        max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
-        verify: bool = True,
+        verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         impersonate: Optional[Union[str, BrowserType]] = None,
     ) -> Response:
-        c = self._curl
+        c = self.curl
 
         # method
         c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
@@ -204,64 +178,44 @@ class Session:
             body = dumps(json).encode()
         if body:
             c.setopt(CurlOpt.POSTFIELDS, body)
-            c.setopt(
-                CurlOpt.POSTFIELDSIZE, len(body)
-            )  # necessary if body contains '\0'
+            # necessary if body contains '\0'
+            c.setopt(CurlOpt.POSTFIELDSIZE, len(body))
 
         # headers
-        if isinstance(headers, list):
-            header_lines = headers
-        else:
-            if isinstance(headers, dict):
-                h = Headers(headers)
-            elif isinstance(headers, Headers):
-                h = headers
-            elif headers is None:
-                h = Headers()
-            else:
-                raise TypeError("headers must be a dict, list or Headers")
-            header_lines = []
-            for k, v in h.multi_items():
-                header_lines.append(f"{k}: {v}")
-        if json:
-            for idx, line in enumerate(header_lines):
-                if line.lower().startswith("content-type:"):
-                    header_lines[idx] = "Content-Type: application/json"
-                    break
-            else:  # if not break
-                header_lines.append("Content-Type: application/json")
-        if isinstance(data, dict):
-            for idx, line in enumerate(header_lines):
-                if line.lower().startswith("content-type:"):
-                    header_lines[
-                        idx
-                    ] = "Content-Type: application/x-www-form-urlencoded"
-                    break
-            else:  # if not break
-                header_lines.append("Content-Type: application/x-www-form-urlencoded")
-        c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
+        h = self.headers.copy()
+        h.update(headers)
 
         # cookies
-        if isinstance(cookies, dict):
-            cookies_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-        elif isinstance(cookies, SimpleCookie):
-            cookies_str = "; ".join([f"{k}={v.value}" for k, v in cookies.items()])
-        elif cookies is None:
-            cookies_str = ""
-        else:
-            raise TypeError("cookies must be a dict or SimpleCookie")
-        if cookies_str:
-            c.setopt(CurlOpt.COOKIE, cookies_str.encode())
+        req = Request(url=url, headers=h, method=method)
+        self.cookies.update(cookies)
+        self.cookies.set_cookie_header(req)
+        # An alternative way to implement cookiejar is to use curl's builtin cookiejar,
+        # However, it would be diffcult to interploate with Headers
+        # c.setopt(CurlOpt.COOKIE, cookies_str.encode())
+
+        header_lines = []
+        for k, v in h.multi_items():
+            header_lines.append(f"{k}: {v}")
+        if json:
+            _update_header_line(header_lines, "Content-Type", "application/json")
+        if isinstance(data, dict):
+            _update_header_line(
+                header_lines, "Content-Type", "application/x-www-form-urlencoded"
+            )
+        c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
         # files
         if files:
             raise NotImplementedError("Files has not been implemented.")
 
         # auth
-        if auth:
-            username, password = auth
-            c.setopt(CurlOpt.USERNAME, username.encode())
-            c.setopt(CurlOpt.PASSWORD, password.encode())
+        if self.auth or auth:
+            if self.auth:
+                username, password = self.auth
+            if auth:
+                username, password = auth
+            c.setopt(CurlOpt.USERNAME, username.encode())  # type: ignore
+            c.setopt(CurlOpt.PASSWORD, password.encode())  # type: ignore
 
         # timeout
         if isinstance(timeout, tuple):
@@ -276,18 +230,25 @@ class Session:
         c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
 
         # max_redirects
-        c.setopt(CurlOpt.MAXREDIRS, max_redirects)
+        c.setopt(CurlOpt.MAXREDIRS, max_redirects or self.max_redirects)
 
         # proxies
+        if self.proxies is not None:
+            proxies = self.proxies.copy().update(proxies or {})
         if proxies is not None:
             if url.startswith("http://"):
                 c.setopt(CurlOpt.PROXY, proxies["http"])
             elif url.startswith("https://"):
                 c.setopt(CurlOpt.PROXY, proxies["https"])
-                c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
+                if proxies["https"].startswith("https://"):
+                    raise RequestsError(
+                        "You are using http proxy WRONG, the prefix should be 'http://' not 'https://', see: https://github.com/yifeikong/curl_cffi/issues/6"
+                    )
+                elif not proxies["https"].startswith("socks"):
+                    c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
 
         # verify
-        if not verify:
+        if verify is False or not self.verify and verify is None:
             c.setopt(CurlOpt.SSL_VERIFYPEER, 0)
             c.setopt(CurlOpt.SSL_VERIFYHOST, 0)
 
@@ -300,6 +261,7 @@ class Session:
             c.setopt(CurlOpt.ACCEPT_ENCODING, accept_encoding.encode())
 
         # impersonate
+        impersonate = impersonate or self.impersonate
         if impersonate:
             if not BrowserType.has(impersonate):
                 raise RequestsError(f"impersonate {impersonate} is not supported")
@@ -315,7 +277,7 @@ class Session:
         except CurlError as e:
             raise RequestsError(e)
 
-        rsp = Response(c)
+        rsp = Response(c, req)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         rsp.content = buffer.getvalue()
         rsp.status_code = cast(int, c.getinfo(CurlInfo.RESPONSE_CODE))
@@ -324,7 +286,6 @@ class Session:
 
         # TODO history urls
         header_list = []
-        cookie_headers = []
         for header_line in header_lines:
             if not header_line.strip():
                 continue
@@ -333,16 +294,9 @@ class Session:
                 rsp.reason = c.get_reason_phrase(header_line).decode()
                 header_list = []  # empty header list for new redirected response
                 continue
-            name, value = header_line.split(b":", 1)
-            value = value.lstrip()
-            if name.lower() == b"set-cookie":
-                cookie_headers.append(value)
-            header_list.append((name, value))
+            header_list.append(header_line)
         rsp.headers = Headers(header_list)
-
-        rsp.cookies = SimpleCookie()
-        for set_cookie_line in cookie_headers:
-            rsp.cookies.load(set_cookie_line.decode())
+        self.cookies.extract_cookies(rsp)
 
         content_type = rsp.headers.get("Content-Type", default="")
         m = re.search(r"charset=([\w-]+)", content_type)
@@ -363,52 +317,3 @@ class Session:
     put = partialmethod(request, "PUT")
     patch = partialmethod(request, "PATCH")
     delete = partialmethod(request, "DELETE")
-
-
-def request(
-    method: str,
-    url: str,
-    params: Optional[dict] = None,
-    data: Optional[Union[Dict[str, str], BytesIO, bytes]] = None,
-    json: Optional[dict] = None,
-    headers: Optional[Union[Dict[str, str], List[str], Headers]] = None,
-    cookies: Optional[Union[Dict[str, str], SimpleCookie]] = None,
-    files: Optional[Dict] = None,
-    auth: Optional[Tuple[str, str]] = None,
-    timeout: Union[float, Tuple[float, float]] = 30,
-    allow_redirects: bool = True,
-    max_redirects: int = -1,
-    proxies: Optional[dict] = None,
-    verify: bool = True,
-    referer: Optional[str] = None,
-    accept_encoding: Optional[str] = "gzip, deflate, br",
-    impersonate: Optional[Union[str, BrowserType]] = None,
-) -> Response:
-    s = Session()
-    return s.request(
-        method,
-        url,
-        params,
-        data,
-        json,
-        headers,
-        cookies,
-        files,
-        auth,
-        timeout,
-        allow_redirects,
-        max_redirects,
-        proxies,
-        verify,
-        referer,
-        accept_encoding,
-        impersonate,
-    )
-
-
-head = partial(request, "HEAD")
-get = partial(request, "GET")
-post = partial(request, "POST")
-put = partial(request, "PUT")
-patch = partial(request, "PATCH")
-delete = partial(request, "DELETE")
