@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.2.4"
+version = "0.3.0"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -45,6 +45,7 @@ dev = [
 ]
 build = [
     "cibuildwheel",
+    "wheel"
 ]
 test = [
     "cryptography==38.0.3",
@@ -61,13 +62,13 @@ test = [
 
 
 [tool.setuptools]
-packages = ["curl_cffi"]
+packages = ["curl_cffi", "curl_cffi.requests"]
 # package-data = { curl_cffi = ["libcurl/*/*"] }
 # include-package-data = true
 
 
 [build-system]
-requires = ["setuptools", "cffi>=1.0.0"]
+requires = ["wheel", "setuptools", "cffi>=1.0.0"]
 build-backend = "setuptools.build_meta"
 
 

@@ -126,8 +126,15 @@ TODOs:
 - [ ] Exclude the curl headers from source, download them when building.
 - [x] Update curl header files and constants via scripts.
 - [x] Implement `requests.Session/httpx.Client`.
-- [ ] Create [ABI3 wheels](https://cibuildwheel.readthedocs.io/en/stable/faq/#abi3) to reduce package size and build time.
+- [x] Create [ABI3 wheels](https://cibuildwheel.readthedocs.io/en/stable/faq/#abi3) to reduce package size and build time.
 - [ ] Set default headers as in curl-impersonate wrapper scripts.
+
+## Change Log
+
+- 0.3.0, copied more code from `httpx` to support session
+    - Add `requests.Session`
+    - Breaking change: `Response.cookies` changed from `http.cookies.SimpleCookie` to `curl_cffi.requests.Cookies`
+    - Using ABI3 wheels to reduce package size.
 
 ## Acknowledgement
 

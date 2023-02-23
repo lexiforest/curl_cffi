@@ -208,6 +208,7 @@ class Session:
             _update_header_line(
                 header_lines, "Content-Type", "application/x-www-form-urlencoded"
             )
+        # print("header lines", header_lines)
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
         # files
@@ -304,7 +305,9 @@ class Session:
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
+        rsp.cookies = self.cookies
         self.cookies.extract_cookies(rsp)
+        # print("Cookies after extraction", self.cookies)
 
         content_type = rsp.headers.get("Content-Type", default="")
         m = re.search(r"charset=([\w-]+)", content_type)

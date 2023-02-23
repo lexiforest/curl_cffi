@@ -87,6 +87,7 @@ class Cookies(typing.MutableMapping[str, str]):
         urllib_response = self._CookieCompatResponse(response)
         urllib_request = self._CookieCompatRequest(response.request)
 
+        # print("cookies extracted: ", self.jar.make_cookies(urllib_response, urllib_request))
         self.jar.extract_cookies(urllib_response, urllib_request)  # type: ignore
 
     def set_cookie_header(self, request: Request) -> None:
