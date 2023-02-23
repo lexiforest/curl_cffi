@@ -33,6 +33,10 @@ print(r.json())
 # proxies are supported
 proxies = {"https": "http://localhost:3128"}
 r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101", proxies=proxies)
+
+# socks proxies are also supported
+proxies = {"https": "socks://localhost:3128"}
+r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome101", proxies=proxies)
 ```
 
 ### Sessions
