@@ -27,26 +27,26 @@ def request(
     accept_encoding: Optional[str] = "gzip, deflate, br",
     impersonate: Optional[Union[str, BrowserType]] = None,
 ) -> Response:
-    s = Session()
-    return s.request(
-        method,
-        url,
-        params,
-        data,
-        json,
-        headers,
-        cookies,
-        files,
-        auth,
-        timeout,
-        allow_redirects,
-        max_redirects,
-        proxies,
-        verify,
-        referer,
-        accept_encoding,
-        impersonate,
-    )
+    with Session() as s:
+        return s.request(
+            method,
+            url,
+            params,
+            data,
+            json,
+            headers,
+            cookies,
+            files,
+            auth,
+            timeout,
+            allow_redirects,
+            max_redirects,
+            proxies,
+            verify,
+            referer,
+            accept_encoding,
+            impersonate,
+        )
 
 
 head = partial(request, "HEAD")
