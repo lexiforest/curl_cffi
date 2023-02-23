@@ -106,7 +106,7 @@ def test_response_headers(server):
 def test_response_cookies(server):
     r = requests.get(str(server.url.copy_with(path="/set_cookies")))
     print(r.cookies)
-    assert r.cookies["foo"].value == "bar"
+    assert r.cookies["foo"] == "bar"
 
 
 def test_elapsed(server):
@@ -121,3 +121,41 @@ def test_reason(server):
     assert r.status_code == 200
     assert r.reason == "OK"
 
+
+#######################################################################################
+# testing session
+#######################################################################################
+
+def test_session_explicitly(server):
+    s = requests.Session()
+    r = s.get(str(server.url))
+    assert r.status_code == 200
+
+
+def test_session_update_parms(server):
+    s = requests.Session(params={"old": "day"})
+    r = s.get(str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"})
+    assert r.content == b'{"params": {"old": ["day"], "foo": ["bar"]}}'
+
+def test_session_preset_cookies(server):
+    s = requests.Session(cookies={"foo": "bar"})
+    # send requests with other cookies
+    r = s.get(str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"})
+    cookies = r.json()
+    # old cookies should be persisted
+    assert cookies["foo"] == "bar"
+    # new cookies should be added
+    assert cookies["hello"] == "world"
+
+def test_session_cookies(server):
+    s = requests.Session()
+    # let the server set cookies
+    r = s.get(str(server.url.copy_with(path="/set_cookies")))
+    assert s.cookies["foo"] == "bar"
+    # send requests with other cookies
+    r = s.get(str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"})
+    cookies = r.json()
+    # old cookies should be persisted
+    assert cookies["foo"] == "bar"
+    # new cookies should be added
+    assert cookies["hello"] == "world"

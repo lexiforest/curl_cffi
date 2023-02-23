@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.2.5"
+version = "0.3.0"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -45,6 +45,7 @@ dev = [
 ]
 build = [
     "cibuildwheel",
+    "wheel"
 ]
 test = [
     "cryptography==38.0.3",
@@ -61,22 +62,27 @@ test = [
 
 
 [tool.setuptools]
-packages = ["curl_cffi"]
+packages = ["curl_cffi", "curl_cffi.requests"]
 # package-data = { curl_cffi = ["libcurl/*/*"] }
 # include-package-data = true
 
 
 [build-system]
-requires = ["setuptools", "cffi>=1.0.0"]
+requires = ["wheel", "setuptools", "cffi>=1.0.0"]
 build-backend = "setuptools.build_meta"
 
 
 [tool.cibuildwheel]
 # musllinux(alpine) is not supported because we download the binaries from upstream.
 # TODO build binaries inside musllinux/manylinux
-skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
+# skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
+# Building for these platforms is enough since we are using abi3 packages
+build = ["cp37-macosx_x86_64", "cp37-win_amd64", "cp37-manylinux_x86_64", "cp37-manylinux_aarch64"]
 before-all = "python ./prebuild.py"
 test-requires = "pytest"
 test-command = "pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
+
+[tool.isort]
+profile = "black"
