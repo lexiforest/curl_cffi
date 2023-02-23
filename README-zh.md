@@ -10,8 +10,8 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 
     pip install --upgrade curl_cffi
 
-在 Linux(x86_64/aarch64), macOS(Intel), Windows(amd64), 这样应该就够了，如果不工作，你
-可能需要先编译并安装 `curl-impersonate`.
+在 Linux(x86_64/aarch64), macOS(Intel/Apple Silicon), Windows(amd64), 这样应该就够了，如果
+在其他小众平台，你可能需要先编译并安装 `curl-impersonate`.
 
 ## 使用
 

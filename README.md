@@ -13,8 +13,8 @@ website for no obvious reason, you can give this package a try.
 
     pip install --upgrade curl_cffi
 
-This should work for Linux(x86_64/aarch64), macOS(Intel), Windows(amd64). If it does not
-work, you may need to compile and install `curl-impersonate` first.
+This should work for Linux(x86_64/aarch64), macOS(Intel/Apple Silicon), Windows(amd64).
+If it does not work, you may need to compile and install `curl-impersonate` first.
 
 ## Usage
 
@@ -130,8 +130,8 @@ Help wanted!
 TODOs:
 
 - [ ] Write docs.
-- [x] Binary package for macOS(Intel) and Windows.
-- [ ] Support musllinux(alpine) and macOS(Apple Silicon) bdist by building from source.
+- [x] Binary package for macOS(Intel/AppleSilicon) and Windows.
+- [ ] Support musllinux(alpine) bdist by building from source.
 - [ ] Exclude the curl headers from source, download them when building.
 - [x] Update curl header files and constants via scripts.
 - [x] Implement `requests.Session/httpx.Client`.
