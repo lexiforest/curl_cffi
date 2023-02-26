@@ -7,7 +7,7 @@ import subprocess
 
 uname = platform.uname()
 
-VERSION="0.5.3"
+VERSION="0.5.4"
 CURL_VERSION="7.84.0"
 CONST_FILE="curl_cffi/_const.py"
 if uname.system == "Windows":
@@ -30,6 +30,7 @@ def reporthook(blocknum, blocksize, totalsize):
     else: # total size is unknown
         sys.stderr.write("read %d\n" % (readsofar,))
 
+
 print("Download firefox certs, see: https://curl.se/docs/caextract.html")
 urlretrieve("https://curl.se/ca/cacert.pem", "curl_cffi/cacert.pem", reporthook)
 
@@ -43,9 +44,8 @@ if uname.system == "Darwin":
         url = f"https://github.com/lwthiker/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-macos.tar.gz"
         filename = "./curl-impersonate.tar.gz"
 elif uname.system == "Windows":
-    # url = f"https://github.com/depler/curl-impersonate-win/releases/download/{CURL_VERSION}/curl-impersonate-win.zip"
-    url = f"https://f004.backblazeb2.com/file/onefly-public/static/2023/curl-impersonate-chrome-{CURL_VERSION}.zip"
-    filename = "./curl-impersonate.zip"
+    url = f"https://github.com/yifeikong/curl-impersonate-win/releases/download/v{VERSION}/curl-impersonate-win.tar.gz"
+    filename = "./curl-impersonate.tar.gz"
 else:
     url = f"https://github.com/lwthiker/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-linux-gnu.tar.gz"
     filename = "./curl-impersonate.tar.gz"
@@ -58,7 +58,8 @@ shutil.unpack_archive(filename, LIBDIR)
 
 # Copy dll file into the package, so that Windows can find it.
 if uname.system == "Windows":
-    shutil.copy(LIBDIR + "/curl-impersonate-chrome.dll", "./curl_cffi")
+    shutil.copy(LIBDIR + "/libcurl.dll", "./curl_cffi/curl-impersonate-chrome.dll")
+    shutil.copy(LIBDIR + "/libcurl.lib", LIBDIR + "/curl-impersonate-chrome.lib")
 
 
 # TODO download curl automatically

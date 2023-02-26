@@ -59,6 +59,8 @@ Supported impersonate versions:
 - chrome100
 - chrome101
 - chrome104
+- chrome107
+- chrome110
 - chrome99_android
 - edge99
 - edge101
@@ -143,6 +145,9 @@ TODOs:
 - [ ] Set default headers as in curl-impersonate wrapper scripts.
 
 ## Change Log
+
+- 0.3.6
+    - Updated to curl-impersonate v0.5.4, supported chrome107 and chrome110
 
 - 0.3.0, copied more code from `httpx` to support session
     - Add `requests.Session`
