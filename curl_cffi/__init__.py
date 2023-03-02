@@ -119,6 +119,7 @@ class Curl:
             func(ffi.buffer(binary_string.content, binary_string.size)[:])
         if self._headers != ffi.NULL:
             ret = lib.curl_slist_free_all(self._headers)
+        self._headers = ffi.NULL
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
         cookie = SimpleCookie()

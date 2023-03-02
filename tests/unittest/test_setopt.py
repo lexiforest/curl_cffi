@@ -1,10 +1,10 @@
-import json
 import base64
+import json
 from io import BytesIO
+
 import pytest
 
-from curl_cffi import Curl, CurlInfo, CurlOpt, CurlError
-
+from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt
 
 #######################################################################################
 # testing setopt
@@ -67,6 +67,14 @@ def test_headers(server):
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Foo"] == "bar"
 
+    # https://github.com/yifeikong/curl_cffi/issues/16
+    c.setopt(CurlOpt.HTTPHEADER, [b"Foo: baz"])
+    buffer = BytesIO()
+    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.perform()
+    headers = json.loads(buffer.getvalue().decode())
+    assert headers["Foo"] == "baz"
+
 
 def test_cookies(server):
     c = Curl()
@@ -99,7 +107,7 @@ def test_timeout(server):
     url = str(server.url.copy_with(path="/slow_response"))
     c.setopt(CurlOpt.URL, url.encode())
     c.setopt(CurlOpt.TIMEOUT_MS, 100)
-    with pytest.raises(CurlError, match=r'ErrCode: 28'):
+    with pytest.raises(CurlError, match=r"ErrCode: 28"):
         c.perform()
 
 
@@ -140,7 +148,7 @@ def test_https_proxy_using_connect(server):
     c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
     buffer = BytesIO()
     c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
-    with pytest.raises(CurlError, match=r'ErrCode: 35'):
+    with pytest.raises(CurlError, match=r"ErrCode: 35"):
         c.perform()
 
 
