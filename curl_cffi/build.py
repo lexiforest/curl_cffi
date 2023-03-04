@@ -5,6 +5,7 @@ from cffi import FFI
 
 ffibuilder = FFI()
 # arch = "%s-%s" % (os.uname().sysname, os.uname().machine)
+uname = platform.uname()
 
 
 ffibuilder.set_source(
@@ -12,9 +13,9 @@ ffibuilder.set_source(
     """
         #include "shim.h"
     """,
-    libraries=["curl-impersonate-chrome"],
+    libraries=["curl-impersonate-chrome"] if uname.system != "Windows" else ["libcurl"],
     library_dirs=[
-        "/usr/local/lib" if platform.uname().system == "Linux" else
+        "/usr/local/lib" if uname.system == "Linux" else
         "/Users/runner/work/_temp/install/lib" if platform.uname().system == "Darwin" else
         "./lib"
     ],

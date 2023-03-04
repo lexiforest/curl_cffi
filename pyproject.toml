@@ -84,5 +84,10 @@ test-command = "pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
 
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair --add-path ./lib -w {dest_dir} {wheel}"
+
+
 [tool.isort]
 profile = "black"
