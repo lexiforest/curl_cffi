@@ -3,11 +3,22 @@
 Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
 via [CFFI](https://cffi.readthedocs.io/en/latest/).
 
+[中文文档](README-zh.md)
+
 Unlike other pure python http clients like `httpx` or `requests`, this package can
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
 website for no obvious reason, you can give this package a try.
 
-[中文文档](README-zh.md)
+## Note on Chrome 110+ JA3 fingerprints
+
+Chrome introduces ClientHello permutation in version 110, which means the order of
+extensions will be random, thus JA3 fingerprints will be random. So, when comparing
+JA3 fingerprints of `curl_cffi` and a browser, they may differ. However, this does not
+mean that TLS fingerprints will not be a problem, ClientHello extension order is just
+one factor of how servers can tell automated requests from browsers.
+
+See more from [this article](https://www.fastly.com/blog/a-first-look-at-chromes-tls-clienthello-permutation-in-the-wild)
+and [curl-impersonate notes](https://github.com/lwthiker/curl-impersonate/pull/148)
 
 ## Install
 
