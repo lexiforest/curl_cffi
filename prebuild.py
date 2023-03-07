@@ -12,7 +12,7 @@ CURL_VERSION="7.84.0"
 CONST_FILE="curl_cffi/_const.py"
 if uname.system == "Windows":
     LIBDIR = "./lib"
-elif uname.system == "Darwin":
+elif uname.system == "Darwin" and uname.machine == "x86_64":
     LIBDIR = "/Users/runner/work/_temp/install/lib"
 else:
     LIBDIR="/usr/local/lib"

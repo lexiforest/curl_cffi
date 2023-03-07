@@ -15,9 +15,9 @@ ffibuilder.set_source(
     """,
     libraries=["curl-impersonate-chrome"] if uname.system != "Windows" else ["libcurl"],
     library_dirs=[
-        "/usr/local/lib" if uname.system == "Linux" else
-        "/Users/runner/work/_temp/install/lib" if platform.uname().system == "Darwin" else
-        "./lib"
+        "/Users/runner/work/_temp/install/lib" if uname.system == "Darwin" and uname.machine == "x86_64" else
+        "./lib" if uname.system == "Windows" else
+        "/usr/local/lib"  # Linux and macOS arm64
     ],
     source_extension=".c",
     include_dirs=[

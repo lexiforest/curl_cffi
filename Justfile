@@ -5,8 +5,9 @@ build:
 	python ./prebuild.sh
 
 build-m1:
+    rm dist/*
     pip install build delocate twine
     python -m build --wheel
-    delocate dist/curl_cffi-0.3.1-cp37-abi3-macosx_11_0_arm64.whl
+    delocate-wheel dist/*.whl
     twine upload dist/*.whl
 
