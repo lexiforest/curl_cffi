@@ -247,10 +247,10 @@ class Session:
             proxies = {**self.proxies, **(proxies or {})}
         if proxies:
             if url.startswith("http://"):
-                if proxies["http"]:
+                if proxies["http"] is not None:
                     c.setopt(CurlOpt.PROXY, proxies["http"])
             elif url.startswith("https://"):
-                if proxies["https"]:
+                if proxies["https"] is not None:
                     if proxies["https"].startswith("https://"):
                         raise RequestsError(
                             "You are using http proxy WRONG, the prefix should be 'http://' not 'https://', see: https://github.com/yifeikong/curl_cffi/issues/6"
