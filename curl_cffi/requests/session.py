@@ -247,16 +247,18 @@ class Session:
             proxies = {**self.proxies, **(proxies or {})}
         if proxies:
             if url.startswith("http://"):
-                c.setopt(CurlOpt.PROXY, proxies["http"])
+                if proxies["http"] is not None:
+                    c.setopt(CurlOpt.PROXY, proxies["http"])
             elif url.startswith("https://"):
-                if proxies["https"].startswith("https://"):
-                    raise RequestsError(
-                        "You are using http proxy WRONG, the prefix should be 'http://' not 'https://', see: https://github.com/yifeikong/curl_cffi/issues/6"
-                    )
-                c.setopt(CurlOpt.PROXY, proxies["https"])
-                # for http proxy, need to tell curl to enable tunneling
-                if not proxies["https"].startswith("socks"):
-                    c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
+                if proxies["https"] is not None:
+                    if proxies["https"].startswith("https://"):
+                        raise RequestsError(
+                            "You are using http proxy WRONG, the prefix should be 'http://' not 'https://', see: https://github.com/yifeikong/curl_cffi/issues/6"
+                        )
+                    c.setopt(CurlOpt.PROXY, proxies["https"])
+                    # for http proxy, need to tell curl to enable tunneling
+                    if not proxies["https"].startswith("socks"):
+                        c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
 
         # verify
         if verify is False or not self.verify and verify is None:
