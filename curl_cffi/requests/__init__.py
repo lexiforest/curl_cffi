@@ -12,7 +12,7 @@ def request(
     method: str,
     url: str,
     params: Optional[dict] = None,
-    data: Optional[Union[Dict[str, str], BytesIO, bytes]] = None,
+    data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
     json: Optional[dict] = None,
     headers: Optional[HeaderTypes] = None,
     cookies: Optional[CookieTypes] = None,

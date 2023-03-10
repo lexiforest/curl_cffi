@@ -10,11 +10,15 @@ def test_get(server):
     assert r.status_code == 200
 
 
-def test_post(server):
+def test_post_dict(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
     assert r.status_code == 200
     assert r.content == b"foo=bar"
 
+def test_post_str(server):
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}')
+    assert r.status_code == 200
+    assert r.content == b'{"foo": "bar"}'
 
 def test_post_json(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})

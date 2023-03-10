@@ -141,7 +141,7 @@ class Session:
         method: str,
         url: str,
         params: Optional[dict] = None,
-        data: Optional[Union[Dict[str, str], BytesIO, bytes]] = None,
+        data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
         json: Optional[dict] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -171,6 +171,8 @@ class Session:
         # data/body/json
         if isinstance(data, dict):
             body = urlencode(data).encode()
+        elif isinstance(data, str):
+            body = data.encode()
         elif isinstance(data, BytesIO):
             body = data.read()
         elif isinstance(data, bytes):
@@ -178,7 +180,7 @@ class Session:
         elif data is None:
             body = b""
         else:
-            raise TypeError("data must be dict, BytesIO or bytes")
+            raise TypeError("data must be dict, str, BytesIO or bytes")
         if json:
             body = dumps(json).encode()
         if body:
