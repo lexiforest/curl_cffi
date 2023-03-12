@@ -24,7 +24,7 @@ def test_post(server):
     c.setopt(CurlOpt.POST, 1)
     c.setopt(CurlOpt.POSTFIELDS, b"foo=bar")
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     assert buffer.getvalue() == b"foo=bar"
 
@@ -51,7 +51,7 @@ def test_post_data_with_size(server):
     c.setopt(CurlOpt.POSTFIELDS, b"\0" * 7)
     c.setopt(CurlOpt.POSTFIELDSIZE, 7)
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     assert buffer.getvalue() == b"\0" * 7
 
@@ -62,7 +62,7 @@ def test_headers(server):
     c.setopt(CurlOpt.URL, url.encode())
     c.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Foo"] == "bar"
@@ -70,11 +70,21 @@ def test_headers(server):
     # https://github.com/yifeikong/curl_cffi/issues/16
     c.setopt(CurlOpt.HTTPHEADER, [b"Foo: baz"])
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Foo"] == "baz"
 
+
+def test_write_function_memory_leak(server):
+    c = Curl()
+    for _ in range(10):
+        url = str(server.url.copy_with(path="/echo_headers"))
+        c.setopt(CurlOpt.URL, url.encode())
+        c.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
+        buffer = BytesIO()
+        c.setopt(CurlOpt.WRITEDATA, buffer)
+        c.perform()
 
 def test_cookies(server):
     c = Curl()
@@ -82,7 +92,7 @@ def test_cookies(server):
     c.setopt(CurlOpt.URL, url.encode())
     c.setopt(CurlOpt.COOKIE, b"foo=bar")
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     cookies = json.loads(buffer.getvalue().decode())
     print(cookies)
@@ -96,7 +106,7 @@ def test_auth(server):
     c.setopt(CurlOpt.USERNAME, b"foo")
     c.setopt(CurlOpt.PASSWORD, b"bar")
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Authorization"] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
@@ -134,7 +144,7 @@ def test_http_proxy_changed_path(server):
     c.setopt(CurlOpt.URL, b"http://example.org")
     c.setopt(CurlOpt.PROXY, proxy_url.encode())
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     rsp = json.loads(buffer.getvalue().decode())
     assert rsp["Hello"] == "http_proxy!"
@@ -147,7 +157,7 @@ def test_https_proxy_using_connect(server):
     c.setopt(CurlOpt.PROXY, proxy_url.encode())
     c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     with pytest.raises(CurlError, match=r"ErrCode: 35"):
         c.perform()
 
@@ -175,7 +185,7 @@ def test_referer(server):
     c.setopt(CurlOpt.URL, url.encode())
     c.setopt(CurlOpt.REFERER, b"http://example.org")
     buffer = BytesIO()
-    c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+    c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Referer"] == "http://example.org"

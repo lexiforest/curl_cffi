@@ -283,9 +283,9 @@ class Session:
             c.impersonate(impersonate)
 
         buffer = BytesIO()
-        c.setopt(CurlOpt.WRITEFUNCTION, buffer.write)
+        c.setopt(CurlOpt.WRITEDATA, buffer)
         header_buffer = BytesIO()
-        c.setopt(CurlOpt.HEADERFUNCTION, header_buffer.write)
+        c.setopt(CurlOpt.HEADERDATA, header_buffer)
 
         try:
             c.perform()
