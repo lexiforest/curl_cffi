@@ -3,7 +3,7 @@ from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
 from .. import Curl, CurlError, CurlInfo, CurlOpt
@@ -154,6 +154,7 @@ class Session:
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
+        content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
     ) -> Response:
         c = self.curl
@@ -282,8 +283,12 @@ class Session:
                 raise RequestsError(f"impersonate {impersonate} is not supported")
             c.impersonate(impersonate)
 
-        buffer = BytesIO()
-        c.setopt(CurlOpt.WRITEDATA, buffer)
+        # import pdb; pdb.set_trace()
+        if content_callback is None:
+            buffer = BytesIO()
+            c.setopt(CurlOpt.WRITEDATA, buffer)
+        else:
+            c.setopt(CurlOpt.WRITEFUNCTION, content_callback)
         header_buffer = BytesIO()
         c.setopt(CurlOpt.HEADERDATA, header_buffer)
 
@@ -294,7 +299,8 @@ class Session:
 
         rsp = Response(c, req)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
-        rsp.content = buffer.getvalue()
+        if content_callback is None:
+            rsp.content = buffer.getvalue()  # type: ignore
         rsp.status_code = cast(int, c.getinfo(CurlInfo.RESPONSE_CODE))
         rsp.ok = 200 <= rsp.status_code < 400
         header_lines = header_buffer.getvalue().splitlines()

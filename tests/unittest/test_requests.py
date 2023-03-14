@@ -1,4 +1,5 @@
 import base64
+from io import BytesIO
 
 import pytest
 
@@ -15,10 +16,25 @@ def test_post_dict(server):
     assert r.status_code == 200
     assert r.content == b"foo=bar"
 
+
+def test_callback(server):
+    buffer = BytesIO()
+    r = requests.post(
+        str(server.url.copy_with(path="/echo_body")),
+        data={"foo": "bar"},
+        content_callback=buffer.write,
+    )
+    assert r.status_code == 200
+    assert buffer.getvalue() == b"foo=bar"
+
+
 def test_post_str(server):
-    r = requests.post(str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}')
+    r = requests.post(
+        str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}'
+    )
     assert r.status_code == 200
     assert r.content == b'{"foo": "bar"}'
+
 
 def test_post_json(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})

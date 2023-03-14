@@ -85,6 +85,24 @@ def test_write_function_memory_leak(server):
         buffer = BytesIO()
         c.setopt(CurlOpt.WRITEDATA, buffer)
         c.perform()
+    assert c._write_handle is None
+
+
+def test_write_function(server):
+    c = Curl()
+    url = str(server.url.copy_with(path="/echo_body"))
+    c.setopt(CurlOpt.URL, url.encode())
+    c.setopt(CurlOpt.POST, 1)
+    c.setopt(CurlOpt.POSTFIELDS, b"foo=bar")
+
+    buffer = BytesIO()
+    def write(data: bytes):
+        buffer.write(data)
+
+    c.setopt(CurlOpt.WRITEFUNCTION, write)
+    c.perform()
+    assert buffer.getvalue() == b"foo=bar"
+
 
 def test_cookies(server):
     c = Curl()
@@ -95,7 +113,7 @@ def test_cookies(server):
     c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     cookies = json.loads(buffer.getvalue().decode())
-    print(cookies)
+    # print(cookies)
     assert cookies["foo"] == "bar"
 
 

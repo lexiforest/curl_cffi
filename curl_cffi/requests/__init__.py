@@ -1,6 +1,6 @@
 from functools import partial
 from io import BytesIO
-from typing import Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 from .cookies import Cookies, CookieTypes, Response
 from .errors import RequestsError
@@ -25,6 +25,7 @@ def request(
     verify: Optional[bool] = None,
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br",
+    content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
 ) -> Response:
     with Session() as s:
@@ -45,6 +46,7 @@ def request(
             verify,
             referer,
             accept_encoding,
+            content_callback,
             impersonate,
         )
 
