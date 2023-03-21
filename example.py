@@ -34,5 +34,16 @@ def main_requests():
     print(r.json())
 
 
+async def async_main():
+    async with requests.AsyncSession() as s:
+        r = await s.get("https://httpbin.org/headers")
+        print(r.text)
+
+        r = await s.get("https://httpbin.org/headers", stream=True)
+        async for content in r.iter_content():
+            print(content)
+
+
+
 if __name__ == "__main__":
     main_requests()
