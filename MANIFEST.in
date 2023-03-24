@@ -1,1 +1,2 @@
 include curl_cffi/cacert.pem
+include curl_cffi/_wrapper.*
