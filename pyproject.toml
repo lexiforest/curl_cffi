@@ -79,10 +79,10 @@ build-backend = "setuptools.build_meta"
 # Building for these platforms is enough since we are using abi3 packages
 build = ["cp37-macosx_x86_64", "cp37-win_amd64", "cp37-manylinux_x86_64", "cp37-manylinux_aarch64"]
 before-all = "make preprocess"
-# test-requires = "pytest"
-# test-command = "pytest {project}/tests/unittest"
-# test-extras = ["test"]
-# test-skip = "pp*"
+test-requires = "pytest"
+test-command = "pytest {project}/tests/unittest"
+test-extras = ["test"]
+test-skip = "pp*"
 
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
@@ -90,6 +90,7 @@ before-all = "gmake preprocess"
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
 repair-wheel-command = "delvewheel repair --add-path ./lib -w {dest_dir} {wheel}"
+
 
 [tool.isort]
 profile = "black"
