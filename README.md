@@ -149,13 +149,21 @@ TODOs:
 - [ ] Write docs.
 - [x] Binary package for macOS(Intel/AppleSilicon) and Windows.
 - [ ] Support musllinux(alpine) bdist by building from source.
-- [ ] Exclude the curl headers from source, download them when building.
+- [x] Exclude the curl headers from source, download them when building.
 - [x] Update curl header files and constants via scripts.
 - [x] Implement `requests.Session/httpx.Client`.
 - [x] Create [ABI3 wheels](https://cibuildwheel.readthedocs.io/en/stable/faq/#abi3) to reduce package size and build time.
 - [ ] Set default headers as in curl-impersonate wrapper scripts.
+- [ ] Support stream in asyncio mode
+    <!--use loop.call_soon(q.put_nowait), wait for headers, then let user iter over content -->
 
 ## Change Log
+
+- 0.5.0
+    - Added asyncio support
+
+- 0.4.0
+    - Removed c shim callback function, use cffi native callback function
 
 - 0.3.6
     - Updated to curl-impersonate v0.5.4, supported chrome107 and chrome110
@@ -167,6 +175,7 @@ TODOs:
 
 ## Acknowledgement
 
-- This package was originally forked from https://github.com/multippt/python_curl_cffi
-- headers/cookies files are copied from https://github.com/encode/httpx/blob/master/httpx/_models.py, which is under BSD License.
+- This package was originally forked from https://github.com/multippt/python_curl_cffi , which is under the MIT license.
+- headers/cookies files are copied from https://github.com/encode/httpx/blob/master/httpx/_models.py , which is under the BSD license.
+- Asyncio support is inspired by Tornado's curl http client.
 
