@@ -6,7 +6,7 @@ CURL_VERSION := curl-7.84.0
 .preprocessed: curl_cffi/const.py curl_cffi/cacert.pem .so_downloaded
 	touch .preprocessed
 
-curl_cffi/const.py: include 
+curl_cffi/const.py: curl_cffi/include 
 	python preprocess/generate_consts.py $(CURL_VERSION)
 
 $(CURL_VERSION):
@@ -19,13 +19,13 @@ curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
-include: curl-impersonate-$(VERSION)/chrome/patches
+curl_cffi/include: curl-impersonate-$(VERSION)/chrome/patches
 	cd $(CURL_VERSION)
 	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
 	autoreconf -fi
-	mkdir -p ../include/curl
-	cp -R include/curl/* ../include/curl/
+	mkdir -p ../curl_cffi/include/curl
+	cp -R include/curl/* ../curl_cffi/include/curl/
 
 curl_cffi/cacert.pem:
 	# https://curl.se/docs/caextract.html
@@ -47,7 +47,7 @@ test: install-local
 install-local: .prebuilt
 	pip install -e .
 
-build:
+build: .preprocessed
 	rm -rf dist/
 	pip install build delocate twine
 	python -m build --wheel
@@ -57,6 +57,6 @@ clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
 	rm -rf curl_cffi/const.py curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c curl_cffi/cacert.pem
 	rm -rf .preprocessed .so_downloaded $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
-	rm -rf include/
+	rm -rf curl_cffi/include/
 
 .PHONY: clean build test install-local upload preprocess
