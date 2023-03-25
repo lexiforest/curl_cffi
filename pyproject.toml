@@ -96,5 +96,5 @@ repair-wheel-command = "delvewheel repair --add-path ./lib -w {dest_dir} {wheel}
 profile = "black"
 
 [tool.pytest.ini_options]
-pythonpath = [ "." ]
+# pythonpath = [ "." ]
 asyncio_mode = "auto"
