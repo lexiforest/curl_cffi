@@ -183,6 +183,7 @@ async def echo_body(scope, receive, send):
             "headers": [[b"content-type", b"text/plain"]],
         }
     )
+    print("server: received:", body)
     await send({"type": "http.response.body", "body": body})
 
 

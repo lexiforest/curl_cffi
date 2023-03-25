@@ -4,14 +4,38 @@ import warnings
 from http.cookies import SimpleCookie
 from typing import Any, List, Union
 
-from .const import CurlInfo, CurlOpt
 from ._wrapper import ffi, lib  # type: ignore
+from .const import CurlInfo, CurlOpt
 
 DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 
 class CurlError(Exception):
     pass
+
+
+CURLINFO_TEXT = 0
+CURLINFO_HEADER_IN = 1
+CURLINFO_HEADER_OUT = 2
+CURLINFO_DATA_IN = 3
+CURLINFO_DATA_OUT = 4
+CURLINFO_SSL_DATA_IN = 5
+CURLINFO_SSL_DATA_OUT = 6
+CURLINFO_DATA_OUT = 4
+
+
+@ffi.def_extern()
+def debug_function(curl, type: int, data, size, clientp) -> int:
+    text = ffi.buffer(data, size)[:]
+    if type == 0:
+        print("CURLINFO", text)
+    elif type == 2:
+        print("HEADER OUT", text)
+    elif type == 4:
+        print("DATA OUT", text)
+    elif type == 6:
+        print("SSL OUT", text)
+    return 0
 
 
 @ffi.def_extern()
@@ -31,7 +55,7 @@ def write_callback(ptr, size, nmemb, userdata):
 
 
 class Curl:
-    def __init__(self, cacert: str = DEFAULT_CACERT):
+    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool=False):
         self._curl = lib.curl_easy_init()
         self._headers = ffi.NULL
         self._cacert = cacert
@@ -43,6 +67,9 @@ class Curl:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
             warnings.warn(f"Failed to set error buffer")
+        if debug:
+            self.setopt(CurlOpt.VERBOSE, 1)
+            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
 
     def __del__(self):
         self.close()
@@ -84,22 +111,21 @@ class Curl:
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
             option = CurlOpt.WRITEDATA
         elif option == CurlOpt.HEADERFUNCTION:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
             option = CurlOpt.HEADERDATA
         elif value_type == "char*":
             if isinstance(value, str):
                 c_value = value.encode()
             else:
                 c_value = value
+            # Must keep a reference, otherwisd may be GCed.
+            if option == CurlOpt.POSTFIELDS:
+                self._body_handle = c_value
         else:
             raise NotImplementedError("Option unsupported: %s" % option)
 
