@@ -22,7 +22,7 @@ ffibuilder.set_source(
     ],
     source_extension=".c",
     include_dirs=[
-        os.path.join(os.path.dirname(__file__), "../include"),
+        os.path.join(os.path.dirname(__file__), "include"),
         os.path.join(os.path.dirname(__file__), "ffi"),
     ],
     sources=[
