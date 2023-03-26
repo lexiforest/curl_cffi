@@ -60,7 +60,7 @@ def test_parms(server):
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
 
-def test_update_parms(server):
+def test_update_params(server):
     r = requests.get(
         str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"}
     )
