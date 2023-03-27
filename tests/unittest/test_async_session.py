@@ -103,12 +103,10 @@ async def test_auth(server):
         )
 
 
-# async def test_timeout(server):
-#     with pytest.raises(RequestsError):
-#         async with AsyncSession() as s:
-#             r = await s.get(
-#                 str(server.url.copy_with(path="/slow_response")), timeout=0.1
-#             )
+async def test_timeout(server):
+    with pytest.raises(RequestsError):
+        async with AsyncSession() as s:
+            await s.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
 
 
 async def test_not_follow_redirects(server):
@@ -130,15 +128,16 @@ async def test_follow_redirects(server):
         assert r.redirect_count == 1
 
 
-# async def test_verify(https_server):
-#     with pytest.raises(requests.RequestsError, match="SSL certificate problem"):
-#         r = requests.get(str(https_server.url), verify=True)
+async def test_verify(https_server):
+    async with AsyncSession() as s:
+        with pytest.raises(RequestsError, match="SSL certificate problem"):
+            await s.get(str(https_server.url), verify=True)
 
 
-# async def test_verify_false(https_server):
-#     async with AsyncSession() as s:
-#         r = await s.get(str(https_server.url), verify=False)
-#         assert r.status_code == 200
+async def test_verify_false(https_server):
+    async with AsyncSession() as s:
+        r = await s.get(str(https_server.url), verify=False)
+        assert r.status_code == 200
 
 
 async def test_referer(server):

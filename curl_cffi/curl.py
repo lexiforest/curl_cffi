@@ -75,9 +75,14 @@ class Curl:
         self.close()
 
     def _check_error(self, errcode: int, action: str):
+        error = self._get_error(errcode, action)
+        if error is not None:
+            raise error
+
+    def _get_error(self, errcode: int, action: str):
         if errcode != 0:
             errmsg = ffi.string(self._error_buffer).decode()
-            raise CurlError(
+            return CurlError(
                 f"Failed to {action}, ErrCode: {errcode}, Reason: '{errmsg}'"
             )
 

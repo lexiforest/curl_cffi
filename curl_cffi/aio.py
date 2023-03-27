@@ -38,7 +38,7 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
     else:
         async_curl.timer = async_curl.loop.call_later(
             timeout_ms / 1000,
-            async_curl.socket_action,
+            async_curl.process_data,
             CURL_SOCKET_TIMEOUT,  # -1
             CURL_POLL_NONE,  # 0
         )
@@ -73,6 +73,7 @@ class AsyncCurl:
         self._sockfds = set()  # sockfds
         self.timger = None
         self.loop = loop if loop is not None else asyncio.get_running_loop()
+        self._checker = self.loop.create_task(self._force_timeout())
         self.setup()
 
     def setup(self):
@@ -83,11 +84,19 @@ class AsyncCurl:
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
 
     def close(self):
+        self._checker.cancel()
         for curl, future in self._curl2future.items():
             lib.curl_multi_remove_handle(self._curlm, curl._curl)
             future.set_result(None)
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
+
+    async def _force_timeout(self):
+        while True:
+            await asyncio.sleep(1)
+            print("force timeout")
+            self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
+
 
     async def add_handle(self, curl: Curl, wait=True):
         # import pdb; pdb.set_trace()
@@ -113,15 +122,20 @@ class AsyncCurl:
             if curl_msg == ffi.NULL:
                 break
             if curl_msg.msg == CURLMSG_DONE:
-                # import pdb; pdb.set_trace()
+                # print("curl_message", curl_msg.msg, curl_msg.data.result)
                 curl = self._curl2curl[curl_msg.easy_handle]
-                if curl_msg.data.result == 0:
+                retcode = curl_msg.data.result
+                if retcode == 0:
                     self.set_result(curl)
                 else:
-                    self.set_exception(curl, CurlError(curl_msg.result))
+                    # import pdb; pdb.set_trace()
+                    self.set_exception(curl, curl._get_error(retcode, "perform"))
+            else:
+                print("NOT DONE")
 
     def _pop_future(self, curl: Curl):
         lib.curl_multi_remove_handle(self._curlm, curl._curl)
+        self._curl2curl.pop(curl._curl)
         return self._curl2future.pop(curl)
 
     def cancel_handle(self, curl: Curl):

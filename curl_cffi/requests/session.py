@@ -413,9 +413,7 @@ class AsyncSession(BaseSession):
     ):
         super().__init__(**kwargs)
         self.loop = loop if loop is not None else asyncio.get_running_loop()
-        self.async_curl = (
-            async_curl if async_curl is not None else AsyncCurl(loop=self.loop)
-        )
+        self.acurl = async_curl if async_curl is not None else AsyncCurl(loop=self.loop)
         self.max_clients = max_clients
         self.reset()
 
@@ -445,7 +443,11 @@ class AsyncSession(BaseSession):
         return self
 
     async def __aexit__(self, x, y, z):
+        self.close()
         return None
+
+    def close(self):
+        self.acurl.close()
 
     async def request(
         self,
@@ -490,7 +492,10 @@ class AsyncSession(BaseSession):
             content_callback,
             impersonate,
         )
-        await self.async_curl.add_handle(curl)
+        try:
+            await self.acurl.add_handle(curl)
+        except CurlError as e:
+            raise RequestsError(e)
         rsp = self._parse_response(curl, req, buffer, header_buffer)
         self.push_curl(curl)
         return rsp
