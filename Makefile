@@ -3,10 +3,10 @@ SHELL := bash
 VERSION := 0.5.4
 CURL_VERSION := curl-7.84.0
 
-.preprocessed: curl_cffi/const.py curl_cffi/cacert.pem .so_downloaded
+.preprocessed: curl_cffi/include curl_cffi/cacert.pem .so_downloaded
 	touch .preprocessed
 
-curl_cffi/const.py: curl_cffi/include 
+curl_cffi/const.py: curl_cffi/include
 	python preprocess/generate_consts.py $(CURL_VERSION)
 
 $(CURL_VERSION):
@@ -55,7 +55,7 @@ build: .preprocessed
 
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
-	rm -rf curl_cffi/const.py curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c curl_cffi/cacert.pem
+	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c curl_cffi/cacert.pem
 	rm -rf .preprocessed .so_downloaded $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
 	rm -rf curl_cffi/include/
 
