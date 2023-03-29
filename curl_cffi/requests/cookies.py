@@ -2,7 +2,6 @@
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
-
 import email.message
 import typing
 import urllib.request

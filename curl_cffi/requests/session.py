@@ -1,3 +1,4 @@
+import asyncio
 import re
 from enum import Enum
 from functools import partialmethod
@@ -6,7 +7,7 @@ from json import dumps
 from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
-from .. import Curl, CurlError, CurlInfo, CurlOpt
+from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt
 from .cookies import Cookies, CookieTypes, Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
@@ -84,7 +85,7 @@ def _update_header_line(header_lines: List[str], key: str, value: str):
         header_lines.append(f"{key}: {value}")
 
 
-class Session:
+class BaseSession:
     __attrs__ = [
         "headers",
         "cookies",
@@ -97,13 +98,12 @@ class Session:
         "trust_env",  # TODO
         "max_redirects",
         "impersonate",
-        "timeout"
+        "timeout",
     ]
 
     def __init__(
         self,
         *,
-        curl: Optional[Curl] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         auth: Optional[Tuple[str, str]] = None,
@@ -115,7 +115,6 @@ class Session:
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
     ):
-        self.curl = curl if curl is not None else Curl()
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
         self.auth = auth
@@ -127,17 +126,9 @@ class Session:
         self.max_redirects = max_redirects
         self.impersonate = impersonate
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
-    def close(self):
-        self.curl.close()
-
-    def request(
+    def _set_curl_options(
         self,
+        curl,
         method: str,
         url: str,
         params: Optional[dict] = None,
@@ -156,8 +147,8 @@ class Session:
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
-    ) -> Response:
-        c = self.curl
+    ):
+        c = curl
 
         # method
         c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
@@ -256,7 +247,8 @@ class Session:
                 if proxies["https"] is not None:
                     if proxies["https"].startswith("https://"):
                         raise RequestsError(
-                            "You are using http proxy WRONG, the prefix should be 'http://' not 'https://', see: https://github.com/yifeikong/curl_cffi/issues/6"
+                            "You are using http proxy WRONG, the prefix should be 'http://' not 'https://',"
+                            "see: https://github.com/yifeikong/curl_cffi/issues/6"
                         )
                     c.setopt(CurlOpt.PROXY, proxies["https"])
                     # for http proxy, need to tell curl to enable tunneling
@@ -288,18 +280,18 @@ class Session:
             buffer = BytesIO()
             c.setopt(CurlOpt.WRITEDATA, buffer)
         else:
+            buffer = None
             c.setopt(CurlOpt.WRITEFUNCTION, content_callback)
         header_buffer = BytesIO()
         c.setopt(CurlOpt.HEADERDATA, header_buffer)
 
-        try:
-            c.perform()
-        except CurlError as e:
-            raise RequestsError(e)
+        return req, buffer, header_buffer
 
+    def _parse_response(self, curl, req: Request, buffer, header_buffer):
+        c = curl
         rsp = Response(c, req)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
-        if content_callback is None:
+        if buffer:
             rsp.content = buffer.getvalue()  # type: ignore
         rsp.status_code = cast(int, c.getinfo(CurlInfo.RESPONSE_CODE))
         rsp.ok = 200 <= rsp.status_code < 400
@@ -314,7 +306,9 @@ class Session:
                 # read header from last response
                 rsp.reason = c.get_reason_phrase(header_line).decode()
                 # empty header list for new redirected response
-                header_list = [h for h in header_lines if h.lower().startswith(b"set-cookie")]
+                header_list = [
+                    h for h in header_lines if h.lower().startswith(b"set-cookie")
+                ]
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
@@ -327,12 +321,183 @@ class Session:
         charset = m.group(1) if m else "utf-8"
 
         rsp.charset = charset
-        rsp.encoding = charset
+        rsp.encoding = charset  # TODO use chardet
 
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
         rsp.redirect_url = cast(bytes, c.getinfo(CurlInfo.REDIRECT_URL)).decode()
 
+        return rsp
+
+
+class Session(BaseSession):
+    def __init__(self, curl: Optional[Curl] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.curl = curl if curl is not None else Curl()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def close(self):
+        self.curl.close()
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[dict] = None,
+        data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
+        json: Optional[dict] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
+        files: Optional[Dict] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        allow_redirects: bool = True,
+        max_redirects: Optional[int] = None,
+        proxies: Optional[dict] = None,
+        verify: Optional[bool] = None,
+        referer: Optional[str] = None,
+        accept_encoding: Optional[str] = "gzip, deflate, br",
+        content_callback: Optional[Callable] = None,
+        impersonate: Optional[Union[str, BrowserType]] = None,
+    ) -> Response:
+        c = self.curl
+        req, buffer, header_buffer = self._set_curl_options(
+            c,
+            method,
+            url,
+            params,
+            data,
+            json,
+            headers,
+            cookies,
+            files,
+            auth,
+            timeout,
+            allow_redirects,
+            max_redirects,
+            proxies,
+            verify,
+            referer,
+            accept_encoding,
+            content_callback,
+            impersonate,
+        )
+        try:
+            c.perform()
+        except CurlError as e:
+            raise RequestsError(e)
+
+        return self._parse_response(c, req, buffer, header_buffer)
+
+    head = partialmethod(request, "HEAD")
+    get = partialmethod(request, "GET")
+    post = partialmethod(request, "POST")
+    put = partialmethod(request, "PUT")
+    patch = partialmethod(request, "PATCH")
+    delete = partialmethod(request, "DELETE")
+
+
+class AsyncSession(BaseSession):
+    def __init__(
+        self,
+        *,
+        loop=None,
+        async_curl: Optional[AsyncCurl] = None,
+        max_clients: int = 10,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.loop = loop if loop is not None else asyncio.get_running_loop()
+        self.acurl = async_curl if async_curl is not None else AsyncCurl(loop=self.loop)
+        self.max_clients = max_clients
+        self.reset()
+
+    def reset(self):
+        self.pool = asyncio.LifoQueue(self.max_clients)
+        while True:
+            try:
+                self.pool.put_nowait(None)
+            except asyncio.QueueFull:
+                break
+        self._running_curl = []
+
+    async def pop_curl(self):
+        curl = await self.pool.get()
+        if curl is None:
+            curl = Curl()
+            self._running_curl.append(curl)
+        return curl
+
+    def push_curl(self, curl):
+        try:
+            self.pool.put_nowait(curl)
+        except asyncio.QueueFull:
+            pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, x, y, z):
+        self.close()
+        return None
+
+    def close(self):
+        self.acurl.close()
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[dict] = None,
+        data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
+        json: Optional[dict] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
+        files: Optional[Dict] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        allow_redirects: bool = True,
+        max_redirects: Optional[int] = None,
+        proxies: Optional[dict] = None,
+        verify: Optional[bool] = None,
+        referer: Optional[str] = None,
+        accept_encoding: Optional[str] = "gzip, deflate, br",
+        content_callback: Optional[Callable] = None,
+        impersonate: Optional[Union[str, BrowserType]] = None,
+    ):
+        curl = await self.pop_curl()
+        req, buffer, header_buffer = self._set_curl_options(
+            curl,
+            method,
+            url,
+            params,
+            data,
+            json,
+            headers,
+            cookies,
+            files,
+            auth,
+            timeout,
+            allow_redirects,
+            max_redirects,
+            proxies,
+            verify,
+            referer,
+            accept_encoding,
+            content_callback,
+            impersonate,
+        )
+        try:
+            await self.acurl.add_handle(curl)
+        except CurlError as e:
+            raise RequestsError(e)
+        rsp = self._parse_response(curl, req, buffer, header_buffer)
+        self.push_curl(curl)
         return rsp
 
     head = partialmethod(request, "HEAD")

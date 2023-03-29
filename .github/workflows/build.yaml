@@ -28,6 +28,9 @@ jobs:
         uses: docker/setup-qemu-action@v2
         with:
           platforms: all
+      # macOS make is too old
+      - if: runner.os == 'macOS'
+        run: brew install make
       - name: Build
         uses: pypa/cibuildwheel@v2.12.0
         env:

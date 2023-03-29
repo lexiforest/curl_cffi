@@ -1,3 +1,14 @@
+__all__ = [
+    "Session",
+    "AsyncSession",
+    "BrowserType",
+    "request",
+    "get",
+    "post",
+    "put",
+    "delete",
+    "RequestsError"
+]
 from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union
@@ -5,7 +16,7 @@ from typing import Callable, Dict, Optional, Tuple, Union
 from .cookies import Cookies, CookieTypes, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .session import BrowserType, Session
+from .session import AsyncSession, BrowserType, Session
 
 
 def request(

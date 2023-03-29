@@ -1,4 +1,4 @@
-#include "include/shim.h"
+#include "shim.h"
 
 #define INTEGER_OPTION_MAX 10000
 

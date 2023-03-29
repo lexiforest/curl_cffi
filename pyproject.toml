@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.4.0"
+version = "0.5.0"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -78,11 +78,14 @@ build-backend = "setuptools.build_meta"
 # skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 # Building for these platforms is enough since we are using abi3 packages
 build = ["cp37-macosx_x86_64", "cp37-win_amd64", "cp37-manylinux_x86_64", "cp37-manylinux_aarch64"]
-before-all = "python ./prebuild.py"
+before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
+
+[tool.cibuildwheel.macos]
+before-all = "gmake preprocess"
 
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
@@ -91,3 +94,7 @@ repair-wheel-command = "delvewheel repair --add-path ./lib -w {dest_dir} {wheel}
 
 [tool.isort]
 profile = "black"
+
+[tool.pytest.ini_options]
+# pythonpath = [ "." ]
+asyncio_mode = "auto"

@@ -1,5 +1,4 @@
-include curl_cffi/*.c
 include curl_cffi/cacert.pem
-include curl_cffi/include/*
+include curl_cffi/_wrapper.*
+include curl_cffi/ffi/*
 include curl_cffi/include/curl/*
-include curl_cffi/*.dll

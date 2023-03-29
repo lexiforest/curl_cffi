@@ -4,14 +4,21 @@ Release
 *.pyc
 *.pyd
 *.so
-_*.cpp
+*.o
 **/__pycache__
 .venv
+
 build/
+dist/
+wheelhouse/
 curl.egg-info/
 curl_cffi.egg-info/
-dist/
-# curl_cffi/include/curl/
-*.o
-wheelhouse/
 curl_cffi/cacert.pem
+# curl_cffi/const.py
+curl-*/
+*.tar.xz
+*.tar.gz
+.patched
+.preprocessed
+.so_downloaded
+include/
