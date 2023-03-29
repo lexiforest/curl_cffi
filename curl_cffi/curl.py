@@ -173,11 +173,14 @@ class Curl:
             self._curl, target.encode(), int(default_headers)
         )
 
-    def perform(self, clear_headers: bool = True):
-        # make sure we set a cacert store
+    def ensure_cacert(self):
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
             self._check_error(ret, action="set cacert")
+
+    def perform(self, clear_headers: bool = True):
+        # make sure we set a cacert store
+        self.ensure_cacert()
 
         # here we go
         ret = lib.curl_easy_perform(self._curl)
