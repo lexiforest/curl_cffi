@@ -33,15 +33,19 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
     see: https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html
     """
     async_curl = ffi.from_handle(clientp)
+    # print("time out in %sms" % timeout_ms)
     if timeout_ms == -1:
-        async_curl.timer = None
+        for timer in async_curl._timers:
+            timer.cancel()
+        async_curl.timers = []
     else:
-        async_curl.timer = async_curl.loop.call_later(
+        timer = async_curl.loop.call_later(
             timeout_ms / 1000,
             async_curl.process_data,
             CURL_SOCKET_TIMEOUT,  # -1
             CURL_POLL_NONE,  # 0
         )
+        async_curl._timers.append(timer)
 
 
 @ffi.def_extern()
@@ -71,9 +75,9 @@ class AsyncCurl:
         self._curl2future = {}  # curl to future map
         self._curl2curl = {}  # c curl to Curl
         self._sockfds = set()  # sockfds
-        self.timger = None
         self.loop = loop if loop is not None else asyncio.get_running_loop()
         self._checker = self.loop.create_task(self._force_timeout())
+        self._timers = []
         self.setup()
 
     def setup(self):
@@ -90,13 +94,19 @@ class AsyncCurl:
             future.set_result(None)
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
+        for sockfd in  self._sockfds:
+            self.loop.remove_reader(sockfd)
+            self.loop.remove_writer(sockfd)
+        for timer in self._timers:
+            timer.cancel()
 
     async def _force_timeout(self):
         while True:
+            if not self._curlm:
+                break
             await asyncio.sleep(1)
-            print("force timeout")
+            # print("force timeout")
             self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
-
 
     async def add_handle(self, curl: Curl, wait=True):
         # import pdb; pdb.set_trace()
@@ -114,6 +124,10 @@ class AsyncCurl:
         return running_handle[0]
 
     def process_data(self, sockfd: int, ev_bitmask: int):
+        if not self._curlm:
+            print("Curlm alread closed! quitting from process_data")
+            return
+
         self.socket_action(sockfd, ev_bitmask)
 
         msg_in_queue = ffi.new("int *")
