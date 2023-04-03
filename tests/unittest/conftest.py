@@ -5,13 +5,18 @@ import threading
 import time
 import typing
 from asyncio import sleep
+from collections import defaultdict
 from urllib.parse import parse_qs
 
 import pytest
 import trustme
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import (
-    BestAvailableEncryption, Encoding, PrivateFormat, load_pem_private_key)
+    BestAvailableEncryption,
+    Encoding,
+    PrivateFormat,
+    load_pem_private_key,
+)
 from httpx import URL
 from uvicorn.config import Config
 from uvicorn.main import Server
@@ -67,6 +72,7 @@ def clean_environ():
 
 async def app(scope, receive, send):
     assert scope["type"] == "http"
+    print("scope_path:", scope["path"])
     if scope["path"].startswith("/slow_response"):
         await slow_response(scope, receive, send)
     elif scope["path"].startswith("/status"):
@@ -229,10 +235,10 @@ async def echo_binary(scope, receive, send):
 
 
 async def echo_headers(scope, receive, send):
-    body = {
-        name.capitalize().decode(): value.decode()
-        for name, value in scope.get("headers", [])
-    }
+    body = defaultdict(list)
+    for name, value in scope.get("headers", []):
+        body[name.capitalize().decode()].append(value.decode() )
+
     await send(
         {
             "type": "http.response.start",

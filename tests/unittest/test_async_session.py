@@ -78,7 +78,7 @@ async def test_headers(server):
             str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar"}
         )
         headers = r.json()
-        assert headers["Foo"] == "bar"
+        assert headers["Foo"][0] == "bar"
 
 
 async def test_cookies(server):
@@ -98,7 +98,7 @@ async def test_auth(server):
         )
         assert r.status_code == 200
         assert (
-            r.json()["Authorization"]
+            r.json()["Authorization"][0]
             == f"Basic {base64.b64encode(b'foo:bar').decode()}"
         )
 
@@ -147,7 +147,7 @@ async def test_referer(server):
             referer="http://example.com",
         )
         headers = r.json()
-        assert headers["Referer"] == "http://example.com"
+        assert headers["Referer"][0] == "http://example.com"
 
 
 #######################################################################################
@@ -245,6 +245,19 @@ async def test_session_with_headers(server):
         assert r.status_code == 200
 
 
+async def test_session_too_many_headers(server):
+    async with AsyncSession() as s:
+        r = await s.get(
+            str(server.url.copy_with(path="/echo_headers")), headers={"Foo": "1"}
+        )
+        r = await s.get(
+            str(server.url.copy_with(path="/echo_headers")), headers={"Foo": "2"}
+        )
+        headers = r.json()
+        assert len(headers["Foo"]) == 1
+        assert headers["Foo"][0] == "2"
+
+
 #######################################################################################
 # async parallel
 #######################################################################################
@@ -262,4 +275,4 @@ async def test_parallel(server):
         rs = await asyncio.gather(*tasks)
         for idx, r in enumerate(rs):
             assert r.status_code == 200
-            assert r.json()["Foo"] == str(idx)
+            assert r.json()["Foo"][0] == str(idx)

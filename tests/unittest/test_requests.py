@@ -72,7 +72,7 @@ def test_headers(server):
         str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar"}
     )
     headers = r.json()
-    assert headers["Foo"] == "bar"
+    assert headers["Foo"][0] == "bar"
 
 
 def test_cookies(server):
@@ -89,7 +89,7 @@ def test_auth(server):
         str(server.url.copy_with(path="/echo_headers")), auth=("foo", "bar")
     )
     assert r.status_code == 200
-    assert r.json()["Authorization"] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    assert r.json()["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
 
 
 def test_timeout(server):
@@ -129,7 +129,7 @@ def test_referer(server):
         str(server.url.copy_with(path="/echo_headers")), referer="http://example.com"
     )
     headers = r.json()
-    assert headers["Referer"] == "http://example.com"
+    assert headers["Referer"][0] == "http://example.com"
 
 
 #######################################################################################

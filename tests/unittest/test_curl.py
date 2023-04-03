@@ -65,7 +65,7 @@ def test_headers(server):
     c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
-    assert headers["Foo"] == "bar"
+    assert headers["Foo"][0] == "bar"
 
     # https://github.com/yifeikong/curl_cffi/issues/16
     c.setopt(CurlOpt.HTTPHEADER, [b"Foo: baz"])
@@ -73,7 +73,7 @@ def test_headers(server):
     c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
-    assert headers["Foo"] == "baz"
+    assert headers["Foo"][0] == "baz"
 
 
 def test_write_function_memory_leak(server):
@@ -96,6 +96,7 @@ def test_write_function(server):
     c.setopt(CurlOpt.POSTFIELDS, b"foo=bar")
 
     buffer = BytesIO()
+
     def write(data: bytes):
         buffer.write(data)
 
@@ -127,7 +128,9 @@ def test_auth(server):
     c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
-    assert headers["Authorization"] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    assert (
+        headers["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    )
 
 
 def test_timeout(server):
@@ -158,7 +161,8 @@ def test_not_follow_redirect(server):
 
 def test_http_proxy_changed_path(server):
     c = Curl()
-    proxy_url = str(server.url)
+    proxy_url = str(server.url).rstrip("/")
+    print("proxy url", proxy_url)
     c.setopt(CurlOpt.URL, b"http://example.org")
     c.setopt(CurlOpt.PROXY, proxy_url.encode())
     buffer = BytesIO()
@@ -206,7 +210,7 @@ def test_referer(server):
     c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
-    assert headers["Referer"] == "http://example.org"
+    assert headers["Referer"][0] == "http://example.org"
 
 
 #######################################################################################

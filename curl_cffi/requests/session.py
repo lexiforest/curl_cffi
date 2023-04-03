@@ -494,6 +494,7 @@ class AsyncSession(BaseSession):
         )
         try:
             await self.acurl.add_handle(curl)
+            curl.clear_headers()
         except CurlError as e:
             raise RequestsError(e)
         rsp = self._parse_response(curl, req, buffer, header_buffer)

@@ -3,7 +3,7 @@ SHELL := bash
 VERSION := 0.5.4
 CURL_VERSION := curl-7.84.0
 
-.preprocessed: curl_cffi/include curl_cffi/cacert.pem .so_downloaded
+.preprocessed: curl_cffi/include/curl/curl.h curl_cffi/cacert.pem .so_downloaded
 	touch .preprocessed
 
 curl_cffi/const.py: curl_cffi/include
@@ -19,7 +19,7 @@ curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
-curl_cffi/include: curl-impersonate-$(VERSION)/chrome/patches
+curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	cd $(CURL_VERSION)
 	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
