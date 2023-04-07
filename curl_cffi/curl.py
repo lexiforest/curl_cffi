@@ -67,9 +67,11 @@ class Curl:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
             warnings.warn(f"Failed to set error buffer")
-        if debug:
-            self.setopt(CurlOpt.VERBOSE, 1)
-            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+        if debug: self.debug()
+
+    def debug(self):
+        self.setopt(CurlOpt.VERBOSE, 1)
+        lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
 
     def __del__(self):
         self.close()
@@ -189,6 +191,7 @@ class Curl:
         # cleaning
         self._write_handle = None
         self._header_handle = None
+        self._body_handle = None
         if clear_headers:
             self.clear_headers()
 
@@ -198,6 +201,9 @@ class Curl:
             ret = lib.curl_slist_free_all(self._headers)
         self._headers = ffi.NULL
         return ret
+
+    def reset(self):
+        lib.curl_easy_reset(self._curl)
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
         cookie = SimpleCookie()

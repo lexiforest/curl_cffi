@@ -3,6 +3,7 @@ int _curl_easy_setopt(void *curl, int option, void *param);
 int curl_easy_getinfo(void *curl, int option, void *ret);
 int curl_easy_perform(void *curl);
 void curl_easy_cleanup(void *curl);
+void curl_easy_reset(void *curl);
 char *curl_version();
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
 struct curl_slist *curl_slist_append(struct curl_slist *list, char *string);

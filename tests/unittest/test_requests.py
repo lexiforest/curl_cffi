@@ -218,6 +218,17 @@ def test_session_cookies(server):
     assert cookies["hello"] == "world"
 
 
+# https://github.com/yifeikong/curl_cffi/issues/39
+def test_post_body_cleaned(server):
+    s = requests.Session()
+    # POST with body
+    r = s.post(str(server.url), json={"foo": "bar"})
+    # GET request with echo_body
+    r = s.get(str(server.url.copy_with(path="/echo_body")))
+    # ensure body is empty
+    assert r.content == b""
+
+
 # https://github.com/yifeikong/curl_cffi/issues/16
 def test_session_with_headers(server):
     s = requests.Session()

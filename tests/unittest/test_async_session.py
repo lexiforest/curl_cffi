@@ -258,6 +258,17 @@ async def test_session_too_many_headers(server):
         assert headers["Foo"][0] == "2"
 
 
+# https://github.com/yifeikong/curl_cffi/issues/39
+async def test_post_body_cleaned(server):
+    async with AsyncSession() as s:
+        # POST with body
+        r = await s.post(str(server.url), json={"foo": "bar"})
+        # GET request with echo_body
+        r = await s.get(str(server.url.copy_with(path="/echo_body")))
+        # ensure body is empty
+        assert r.content == b""
+
+
 #######################################################################################
 # async parallel
 #######################################################################################

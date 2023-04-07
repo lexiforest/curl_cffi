@@ -392,7 +392,9 @@ class Session(BaseSession):
         except CurlError as e:
             raise RequestsError(e)
 
-        return self._parse_response(c, req, buffer, header_buffer)
+        rsp = self._parse_response(c, req, buffer, header_buffer)
+        self.curl.reset()
+        return rsp
 
     head = partialmethod(request, "HEAD")
     get = partialmethod(request, "GET")
@@ -493,11 +495,13 @@ class AsyncSession(BaseSession):
             impersonate,
         )
         try:
+            # curl.debug()
             await self.acurl.add_handle(curl)
             curl.clear_headers()
         except CurlError as e:
             raise RequestsError(e)
         rsp = self._parse_response(curl, req, buffer, header_buffer)
+        curl.reset()
         self.push_curl(curl)
         return rsp
 
