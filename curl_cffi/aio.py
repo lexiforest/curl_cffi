@@ -7,7 +7,7 @@ from typing import Any
 
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
-from .curl import Curl, CurlError
+from .curl import Curl, CurlError, CurlInfo
 
 DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 

@@ -64,14 +64,16 @@ class Curl:
         self._header_handle = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
+        self._debug = debug
+        self.set_error_buffer()
+
+    def set_error_buffer(self):
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
             warnings.warn(f"Failed to set error buffer")
-        if debug: self.debug()
-
-    def debug(self):
-        self.setopt(CurlOpt.VERBOSE, 1)
-        lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+        if self._debug:
+            self.setopt(CurlOpt.VERBOSE, 1)
+            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
 
     def __del__(self):
         self.close()
@@ -189,21 +191,21 @@ class Curl:
         self._check_error(ret, action="perform")
 
         # cleaning
+        self.clean_after_perform(clear_headers)
+
+    def clean_after_perform(self, clear_headers: bool = True):
         self._write_handle = None
         self._header_handle = None
         self._body_handle = None
         if clear_headers:
-            self.clear_headers()
-
-    def clear_headers(self) -> int:
-        ret = 0
-        if self._headers != ffi.NULL:
-            ret = lib.curl_slist_free_all(self._headers)
-        self._headers = ffi.NULL
-        return ret
+            if self._headers != ffi.NULL:
+                lib.curl_slist_free_all(self._headers)
+            self._headers = ffi.NULL
 
     def reset(self):
+        self._is_cert_set = False
         lib.curl_easy_reset(self._curl)
+        self.set_error_buffer()
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
         cookie = SimpleCookie()

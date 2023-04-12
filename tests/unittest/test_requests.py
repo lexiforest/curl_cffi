@@ -224,6 +224,7 @@ def test_post_body_cleaned(server):
     # POST with body
     r = s.post(str(server.url), json={"foo": "bar"})
     # GET request with echo_body
+    assert s.curl._is_cert_set is False
     r = s.get(str(server.url.copy_with(path="/echo_body")))
     # ensure body is empty
     assert r.content == b""

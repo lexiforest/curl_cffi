@@ -444,7 +444,7 @@ class AsyncSession(BaseSession):
     async def __aenter__(self):
         return self
 
-    async def __aexit__(self, x, y, z):
+    async def __aexit__(self, *args):
         self.close()
         return None
 
@@ -497,7 +497,8 @@ class AsyncSession(BaseSession):
         try:
             # curl.debug()
             await self.acurl.add_handle(curl)
-            curl.clear_headers()
+            # print(curl.getinfo(CurlInfo.CAINFO))
+            curl.clean_after_perform()
         except CurlError as e:
             raise RequestsError(e)
         rsp = self._parse_response(curl, req, buffer, header_buffer)
