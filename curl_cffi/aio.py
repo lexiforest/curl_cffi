@@ -37,7 +37,7 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
     if timeout_ms == -1:
         for timer in async_curl._timers:
             timer.cancel()
-        async_curl.timers = []
+        async_curl._timers = []
     else:
         timer = async_curl.loop.call_later(
             timeout_ms / 1000,
