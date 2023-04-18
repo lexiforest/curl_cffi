@@ -6,7 +6,7 @@ from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt
@@ -342,11 +342,11 @@ class BaseSession:
         return rsp
 
 
-ThreadType = Literal["eventlet", "gevent", None]
+# ThreadType = Literal["eventlet", "gevent", None]
 
 
 class Session(BaseSession):
-    def __init__(self, curl: Optional[Curl] = None, thread: ThreadType = None, **kwargs):
+    def __init__(self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self._thread = thread
         self._local = threading.local()
