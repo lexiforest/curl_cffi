@@ -11,12 +11,14 @@ __all__ = [
 ]
 from functools import partial
 from io import BytesIO
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Literal, Optional, Tuple, Union
 
 from .cookies import Cookies, CookieTypes, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
+
+ThreadType = Literal["eventlet", "gevent", None]
 
 
 def request(
@@ -38,8 +40,9 @@ def request(
     accept_encoding: Optional[str] = "gzip, deflate, br",
     content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
+    thread: ThreadType = None,
 ) -> Response:
-    with Session() as s:
+    with Session(thread=thread) as s:
         return s.request(
             method,
             url,

@@ -20,7 +20,7 @@ except ImportError:
     pass
 
 try:
-    import eventlet
+    import eventlet.tpool
 except ImportError:
     pass
 
@@ -419,8 +419,10 @@ class Session(BaseSession):
         )
         try:
             if self._thread == "eventlet":
+                # see: https://eventlet.net/doc/threading.html
                 eventlet.tpool.execute(c.perform)
             elif self._thread == "gevent":
+                # see: https://www.gevent.org/api/gevent.threadpool.html
                 gevent.get_hub().threadpool.spawn(c.perform).get()
             else:
                 c.perform()
