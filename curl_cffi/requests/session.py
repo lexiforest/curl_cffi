@@ -6,13 +6,23 @@ from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt
 from .cookies import Cookies, CookieTypes, Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
+
+try:
+    import gevent
+except ImportError:
+    pass
+
+try:
+    import eventlet
+except ImportError:
+    pass
 
 
 class BrowserType(str, Enum):
@@ -332,9 +342,13 @@ class BaseSession:
         return rsp
 
 
+ThreadType = Literal["eventlet", "gevent", None]
+
+
 class Session(BaseSession):
-    def __init__(self, curl: Optional[Curl] = None, **kwargs):
+    def __init__(self, curl: Optional[Curl] = None, thread: ThreadType = None, **kwargs):
         super().__init__(**kwargs)
+        self._thread = thread
         self._local = threading.local()
         if curl:
             self._is_customized_curl = True
@@ -404,7 +418,12 @@ class Session(BaseSession):
             impersonate,
         )
         try:
-            c.perform()
+            if self._thread == "eventlet":
+                eventlet.tpool.execute(c.perform)
+            elif self._thread == "gevent":
+                gevent.get_hub().threadpool.spawn(c.perform).get()
+            else:
+                c.perform()
         except CurlError as e:
             raise RequestsError(e)
 
