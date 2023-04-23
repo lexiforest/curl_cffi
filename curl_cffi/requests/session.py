@@ -14,6 +14,16 @@ from .cookies import Cookies, CookieTypes, Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 
+try:
+    import gevent
+except ImportError:
+    pass
+
+try:
+    import eventlet.tpool
+except ImportError:
+    pass
+
 
 class BrowserType(str, Enum):
     edge99 = "edge99"
@@ -332,9 +342,13 @@ class BaseSession:
         return rsp
 
 
+# ThreadType = Literal["eventlet", "gevent", None]
+
+
 class Session(BaseSession):
-    def __init__(self, curl: Optional[Curl] = None, **kwargs):
+    def __init__(self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
+        self._thread = thread
         self._local = threading.local()
         if curl:
             self._is_customized_curl = True
@@ -404,7 +418,14 @@ class Session(BaseSession):
             impersonate,
         )
         try:
-            c.perform()
+            if self._thread == "eventlet":
+                # see: https://eventlet.net/doc/threading.html
+                eventlet.tpool.execute(c.perform)
+            elif self._thread == "gevent":
+                # see: https://www.gevent.org/api/gevent.threadpool.html
+                gevent.get_hub().threadpool.spawn(c.perform).get()
+            else:
+                c.perform()
         except CurlError as e:
             raise RequestsError(e)
 

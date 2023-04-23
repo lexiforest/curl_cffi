@@ -18,6 +18,8 @@ from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
 
+# ThreadType = Literal["eventlet", "gevent", None]
+
 
 def request(
     method: str,
@@ -38,8 +40,9 @@ def request(
     accept_encoding: Optional[str] = "gzip, deflate, br",
     content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
+    thread: Optional[str] = None,
 ) -> Response:
-    with Session() as s:
+    with Session(thread=thread) as s:
         return s.request(
             method,
             url,
