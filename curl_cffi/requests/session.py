@@ -1,5 +1,7 @@
 import asyncio
 import re
+import threading
+import warnings
 from enum import Enum
 from functools import partialmethod
 from io import BytesIO
@@ -333,7 +335,21 @@ class BaseSession:
 class Session(BaseSession):
     def __init__(self, curl: Optional[Curl] = None, **kwargs):
         super().__init__(**kwargs)
-        self.curl = curl if curl is not None else Curl()
+        self._local = threading.local()
+        if curl:
+            self._is_customized_curl = True
+            self._local.curl = curl
+        else:
+            self._is_customized_curl = False
+            self._local.curl = Curl()
+
+    @property
+    def curl(self):
+        if self._is_customized_curl:
+            warnings.warn("Creating fresh curl in different thread.")
+        if not getattr(self._local, "curl", None):
+            self._local.curl = Curl()
+        return self._local.curl
 
     def __enter__(self):
         return self
