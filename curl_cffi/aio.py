@@ -91,7 +91,8 @@ class AsyncCurl:
         self._checker.cancel()
         for curl, future in self._curl2future.items():
             lib.curl_multi_remove_handle(self._curlm, curl._curl)
-            future.set_result(None)
+            if not future.done() and not future.cancelled():
+                future.set_result(None)
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
         for sockfd in  self._sockfds:
@@ -159,11 +160,13 @@ class AsyncCurl:
 
     def set_result(self, curl: Curl):
         future = self._pop_future(curl)
-        future.set_result(None)
+        if not future.done() and not future.cancelled():
+            future.set_result(None)
 
     def set_exception(self, curl: Curl, exception):
         future = self._pop_future(curl)
-        future.set_exception(exception)
+        if not future.done() and not future.cancelled():
+            future.set_exception(exception)
 
     def setopt(self, option, value):
         return lib.curl_multi_setopt(self._curlm, option, value)
