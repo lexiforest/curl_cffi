@@ -186,7 +186,7 @@ class BaseSession:
         else:
             raise TypeError("data must be dict, str, BytesIO or bytes")
         if json:
-            body = dumps(json).encode()
+            body = dumps(json, separators=(",", ":")).encode()
         if body:
             c.setopt(CurlOpt.POSTFIELDS, body)
             # necessary if body contains '\0'
