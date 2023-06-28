@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import re
 import threading
 import warnings
@@ -24,6 +25,11 @@ try:
 except ImportError:
     pass
 
+
+WINDOWS_WARN = """
+WindowsProactorEventLoopPolicy is not supported, you can use the selector loop by:
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+"""
 
 class BrowserType(str, Enum):
     edge99 = "edge99"
@@ -346,7 +352,9 @@ class BaseSession:
 
 
 class Session(BaseSession):
-    def __init__(self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs):
+    def __init__(
+        self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs
+    ):
         super().__init__(**kwargs)
         self._thread = thread
         self._local = threading.local()
@@ -455,6 +463,11 @@ class AsyncSession(BaseSession):
         self.acurl = async_curl if async_curl is not None else AsyncCurl(loop=self.loop)
         self.max_clients = max_clients
         self.reset()
+        if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
+            if isinstance(
+                asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy
+            ):
+                warnings.warn(WINDOWS_WARN)
 
     def reset(self):
         self.pool = asyncio.LifoQueue(self.max_clients)
