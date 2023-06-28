@@ -11,9 +11,10 @@ from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CURL_HTTP_VERSION_1_1
-from .cookies import Cookies, CookieTypes, Request, Response
+from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
+from .models import Request, Response
 
 try:
     import gevent
@@ -114,7 +115,6 @@ class BaseSession:
         "params",
         "verify",
         "cert",
-        "stream",  # TODO
         "trust_env",  # TODO
         "max_redirects",
         "impersonate",
@@ -154,6 +154,21 @@ class BaseSession:
         if h11_only:
             self.curl_options[CurlOpt.HTTP_VERSION] = CURL_HTTP_VERSION_1_1
         self.debug = debug
+
+    def _set_cookies(self, curl, cookiejar):
+        for ck in cookiejar:
+            cookie_line = "\t".join(
+                [
+                    ck.domain,
+                    "TRUE" if ck.domain_initial_dot else "FALSE",
+                    ck.path,
+                    "TRUE" if ck.secure else "FALSE",
+                    str(ck.expires) or "0",
+                    ck.name,
+                    ck.value or "",
+                ]
+            )
+            curl.setopt(CurlOpt.COOKIELIST, cookie_line.encode())
 
     def _set_curl_options(
         self,
@@ -214,17 +229,6 @@ class BaseSession:
         h = Headers(self.headers)
         h.update(headers)
 
-        # cookies
-        co = Cookies(self.cookies)
-        co.update(cookies)
-        req = Request(url=url, headers=h, method=method)
-        co.set_cookie_header(req)
-
-        # An alternative way to implement cookiejar is to use curl's builtin cookiejar,
-        # However, it would be diffcult to interploate with Headers and get cookies as
-        # dicta
-        # c.setopt(CurlOpt.COOKIE, cookies_str.encode())
-
         header_lines = []
         for k, v in h.multi_items():
             header_lines.append(f"{k}: {v}")
@@ -236,6 +240,13 @@ class BaseSession:
             )
         # print("header lines", header_lines)
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
+
+        # cookies
+        # req = Request(url=url, headers=h, method=method)
+        # co.set_cookie_header(req)
+        # https://curl.se/libcurl/c/CURLOPT_COOKIELIST.html
+        co = Cookies(cookies)
+        self._set_cookies(c, co)
 
         # files
         if files:
@@ -333,7 +344,11 @@ class BaseSession:
         if method == "HEAD":
             c.setopt(CurlOpt.NOBODY, 1)
 
-        return req, buffer, header_buffer
+        return buffer, header_buffer
+
+    def _extract_cookies(self, curl):
+        cookies = Cookies()
+        return cookies
 
     def _parse_response(self, curl, req: Request, buffer, header_buffer):
         c = curl
@@ -361,8 +376,7 @@ class BaseSession:
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
-        rsp.cookies = self.cookies
-        self.cookies.extract_cookies(rsp)
+        rsp.cookies = self._extract_cookies(curl)
         # print("Cookies after extraction", self.cookies)
 
         content_type = rsp.headers.get("Content-Type", default="")

@@ -1,84 +1,22 @@
-# Copied from: https://github.com/encode/httpx/blob/master/httpx/_models.py,
+# Adapted from https://github.com/encode/httpx/blob/master/httpx/_models.py,
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
-import email.message
-import typing
-import urllib.request
-import warnings
-from http.cookiejar import Cookie, CookieJar
-from json import loads
+__all__ = ["Cookies"]
 
-from .. import Curl
-from .errors import RequestsError
-from .headers import Headers
+import typing
+from http.cookiejar import Cookie, CookieJar
+
+from .errors import CookieConflict
 
 CookieTypes = typing.Union[
     "Cookies", CookieJar, typing.Dict[str, str], typing.List[typing.Tuple[str, str]]
 ]
 
 
-class Request:
-    def __init__(self, url: str, headers: Headers, method: str):
-        self.url = url
-        self.headers = headers
-        self.method = method
-
-
-class Response:
-    """Contains information the server sends.
-
-    Attributes:
-        url: url used in the request.
-        content: response body in bytes.
-        status_code: http status code.
-        reason: http response reason, such as OK, Not Found.
-        ok: is status_code in [200, 400)?
-        headers: response headers.
-        cookies: response cookies.
-        elapsed: how many seconds the request cost.
-        encoding: http body encoding.
-        charset: alias for encoding.
-        redirect_count: how many redirects happened.
-        redirect_url: the final redirected url.
-    """
-    def __init__(self, curl: Curl, request: Request):
-        self.curl = curl
-        self.request = request
-        self.url = ""
-        self.content = b""
-        self.status_code = 200
-        self.reason = "OK"
-        self.ok = True
-        self.headers = Headers()
-        self.cookies = Cookies()
-        self.elapsed = 0.0
-        self.encoding = "utf-8"
-        self.charset = self.encoding
-        self.redirect_count = 0
-        self.redirect_url = ""
-        self.http_version = 0
-
-    @property
-    def text(self) -> str:
-        return self.content.decode(self.charset)
-
-    def raise_for_status(self):
-        """raise an exception if status_code not in [200, 400)"""
-        if not self.ok:
-            raise RequestsError(f"HTTP Error {self.status_code}: {self.reason}")
-
-    def json(self, **kw):
-        """Returns the json-parsed content."""
-        return loads(self.content, **kw)
-
-    def close(self):
-        warnings.warn("Deprecated, use Session.close")
-
-
 class Cookies(typing.MutableMapping[str, str]):
     """
-    HTTP Cookies, as a mutable mapping.
+    Cookies, as a mutable mapping. A simple wrapper around `http.cookiejar.CookieJar`.
     """
 
     def __init__(self, cookies: typing.Optional[CookieTypes] = None) -> None:
@@ -97,23 +35,6 @@ class Cookies(typing.MutableMapping[str, str]):
                 self.jar.set_cookie(cookie)
         else:
             self.jar = cookies
-
-    def extract_cookies(self, response: Response) -> None:
-        """
-        Loads any cookies based on the response `Set-Cookie` headers.
-        """
-        urllib_response = self._CookieCompatResponse(response)
-        urllib_request = self._CookieCompatRequest(response.request)
-
-        # print("cookies extracted: ", self.jar.make_cookies(urllib_response, urllib_request))
-        self.jar.extract_cookies(urllib_response, urllib_request)  # type: ignore
-
-    def set_cookie_header(self, request: Request) -> None:
-        """
-        Sets an appropriate 'Cookie:' HTTP header on the `Request`.
-        """
-        urllib_request = self._CookieCompatRequest(request)
-        self.jar.add_cookie_header(urllib_request)
 
     def set(self, name: str, value: str, domain: str = "", path: str = "/") -> None:
         """
@@ -229,52 +150,14 @@ class Cookies(typing.MutableMapping[str, str]):
         return (cookie.name for cookie in self.jar)
 
     def __bool__(self) -> bool:
-        for _ in self.jar:
-            return True
-        return False
+        return len(self.jar) > 0
 
     def __repr__(self) -> str:
         cookies_repr = ", ".join(
             [
-                f"<Cookie {cookie.name}={cookie.value} for {cookie.domain} />"
+                f"<Cookie {cookie.name}={cookie.value} for {cookie.domain or 'all'} />"
                 for cookie in self.jar
             ]
         )
 
         return f"<Cookies[{cookies_repr}]>"
-
-    class _CookieCompatRequest(urllib.request.Request):
-        """
-        Wraps a `Request` instance up in a compatibility interface suitable
-        for use with `CookieJar` operations.
-        """
-
-        def __init__(self, request: Request) -> None:
-            super().__init__(
-                url=str(request.url),
-                headers=dict(request.headers),
-                method=request.method,
-            )
-            self.request = request
-
-        def add_unredirected_header(self, key: str, value: str) -> None:
-            super().add_unredirected_header(key, value)
-            self.request.headers[key] = value
-
-    class _CookieCompatResponse:
-        """
-        Wraps a `Request` instance up in a compatibility interface suitable
-        for use with `CookieJar` operations.
-        """
-
-        def __init__(self, response: Response):
-            self.response = response
-
-        def info(self) -> email.message.Message:
-            info = email.message.Message()
-            for key, value in self.response.headers.multi_items():
-                # Note that setting `info[key]` here is an "append" operation,
-                # not a "replace" operation.
-                # https://docs.python.org/3/library/email.compat32-message.html#email.message.Message.__setitem__
-                info[key] = value
-            return info
