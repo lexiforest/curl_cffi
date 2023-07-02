@@ -447,6 +447,7 @@ class Session(BaseSession):
     put = partialmethod(request, "PUT")
     patch = partialmethod(request, "PATCH")
     delete = partialmethod(request, "DELETE")
+    options = partialmethod(request, "OPTIONS")
 
 
 class AsyncSession(BaseSession):
@@ -562,3 +563,4 @@ class AsyncSession(BaseSession):
     put = partialmethod(request, "PUT")
     patch = partialmethod(request, "PATCH")
     delete = partialmethod(request, "DELETE")
+    options = partialmethod(request, "OPTIONS")
