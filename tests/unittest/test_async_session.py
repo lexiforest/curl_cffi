@@ -36,7 +36,7 @@ async def test_post_json(server):
             str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"}
         )
         assert r.status_code == 200
-        assert r.content == b'{"foo": "bar"}'
+        assert r.content == b'{"foo":"bar"}'
 
 
 async def test_put_json(server):
@@ -45,12 +45,18 @@ async def test_put_json(server):
             str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"}
         )
         assert r.status_code == 200
-        assert r.content == b'{"foo": "bar"}'
+        assert r.content == b'{"foo":"bar"}'
 
 
 async def test_delete(server):
     async with AsyncSession() as s:
         r = await s.delete(str(server.url.copy_with(path="/echo_body")))
+        assert r.status_code == 200
+
+
+async def test_options(server):
+    async with AsyncSession() as s:
+        r = await s.options(str(server.url.copy_with(path="/echo_body")))
         assert r.status_code == 200
 
 

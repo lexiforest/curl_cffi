@@ -39,17 +39,22 @@ def test_post_str(server):
 def test_post_json(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
     assert r.status_code == 200
-    assert r.content == b'{"foo": "bar"}'
+    assert r.content == b'{"foo":"bar"}'
 
 
 def test_put_json(server):
     r = requests.put(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
     assert r.status_code == 200
-    assert r.content == b'{"foo": "bar"}'
+    assert r.content == b'{"foo":"bar"}'
 
 
 def test_delete(server):
     r = requests.delete(str(server.url.copy_with(path="/echo_body")))
+    assert r.status_code == 200
+
+
+def test_options(server):
+    r = requests.options(str(server.url.copy_with(path="/echo_body")))
     assert r.status_code == 200
 
 
@@ -180,6 +185,12 @@ def test_reason(server):
 def test_session_explicitly(server):
     s = requests.Session()
     r = s.get(str(server.url))
+    assert r.status_code == 200
+
+
+def test_session_options(server):
+    s = requests.Session()
+    r = s.options(str(server.url))
     assert r.status_code == 200
 
 
