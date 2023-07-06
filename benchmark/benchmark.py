@@ -137,13 +137,13 @@ for size in ["1k", "20k", "200k"]:
             ("curl_cffi_async", httpx_worker, curl_cffi.requests.AsyncSession),
         ]:
             q = asyncio.Queue()
-            for _ in range(10):
+            for _ in range(1000):
                 await q.put(url)
             done = asyncio.Event()
             start = time.time()
             workers = []
             async with SessionClass() as s:
-                for _ in range(100):
+                for _ in range(10):
                     w = asyncio.create_task(worker(q, done, s))
                     workers.append(w)
                 await q.join()

@@ -16,3 +16,6 @@ app = Starlette(
         Route("/200k", lambda r: PlainTextResponse(random_200k)),
     ],
 )
+
+# Run:
+# gunicorn benchmark.server:app -b 127.0.0.1:8000 -n benchmark -w 8 -k uvicorn.workers.UvicornWorker
