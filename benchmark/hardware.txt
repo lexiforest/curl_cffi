@@ -1,0 +1,12 @@
+Benchmarks run on:
+
+macOS
+
+Processor Name: 6-Core Intel Core i5
+Processor Speed: 3.3 GHz
+Number of Processors: 1
+Total Number of Cores: 6
+L2 Cache (per Core): 256 KB
+L3 Cache: 12 MB
+Hyper-Threading Technology: Enabled
+Memory: 32 GB

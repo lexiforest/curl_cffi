@@ -1,0 +1,10 @@
+pandas
+starlette
+uvicorn
+requests
+httpx
+aiohttp
+pycurl
+tls-client
+gunicorn
+uvloop
