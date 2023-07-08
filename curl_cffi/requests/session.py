@@ -96,7 +96,7 @@ def _update_url_params(url: str, params: Dict) -> str:
 
 def _update_header_line(header_lines: List[str], key: str, value: str):
     for idx, line in enumerate(header_lines):
-        if line.lower().startswith(key + ":"):
+        if line.lower().startswith(key.lower() + ":"):
             header_lines[idx] = f"{key}: {value}"
             break
     else:  # if not break

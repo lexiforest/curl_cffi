@@ -80,6 +80,27 @@ def test_headers(server):
     assert headers["Foo"][0] == "bar"
 
 
+def test_content_type_header_with_json(server):
+    # FIXME: this actually does not work, because the test server uvicorn will merge
+    # Content-Type headers, so it always works even if there is duplicate headers.
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")),
+        json={"foo": "bar"},
+        headers={"content-type": "application/json"},
+    )
+    headers = r.json()
+    assert len(headers["Content-type"]) == 1
+    assert headers["Content-type"][0] == "application/json"
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")),
+        json={"foo": "bar"},
+        headers={"content-type": "application/json"},
+    )
+    headers = r.json()
+    assert len(headers["Content-type"]) == 1
+    assert headers["Content-type"][0] == "application/json"
+
+
 def test_cookies(server):
     r = requests.get(
         str(server.url.copy_with(path="/echo_cookies")),
@@ -94,12 +115,14 @@ def test_auth(server):
         str(server.url.copy_with(path="/echo_headers")), auth=("foo", "bar")
     )
     assert r.status_code == 200
-    assert r.json()["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    assert (
+        r.json()["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    )
 
 
 def test_timeout(server):
     with pytest.raises(requests.RequestsError):
-        r = requests.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
+        requests.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
 
 
 def test_not_follow_redirects(server):
@@ -121,7 +144,7 @@ def test_follow_redirects(server):
 
 def test_verify(https_server):
     with pytest.raises(requests.RequestsError, match="SSL certificate problem"):
-        r = requests.get(str(https_server.url), verify=True)
+        requests.get(str(https_server.url), verify=True)
 
 
 def test_verify_false(https_server):

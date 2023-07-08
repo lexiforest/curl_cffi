@@ -236,6 +236,7 @@ async def echo_binary(scope, receive, send):
 
 async def echo_headers(scope, receive, send):
     body = defaultdict(list)
+    # print(scope.get("headers"))
     for name, value in scope.get("headers", []):
         body[name.capitalize().decode()].append(value.decode() )
 

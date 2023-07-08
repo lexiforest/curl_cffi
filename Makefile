@@ -44,7 +44,7 @@ upload: dist/*.whl
 test: install-local
 	pytest tests/unittest
 
-install-local: .prebuilt
+install-local: .preprocessed
 	pip install -e .
 
 build: .preprocessed
