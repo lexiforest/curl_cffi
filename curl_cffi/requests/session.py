@@ -31,6 +31,7 @@ WindowsProactorEventLoopPolicy is not supported, you can use the selector loop b
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 """
 
+
 class BrowserType(str, Enum):
     edge99 = "edge99"
     edge101 = "edge101"
@@ -132,6 +133,7 @@ class BaseSession:
         trust_env: bool = True,
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        default_headers: bool = True,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -143,6 +145,7 @@ class BaseSession:
         self.trust_env = trust_env
         self.max_redirects = max_redirects
         self.impersonate = impersonate
+        self.default_headers = default_headers
 
     def _set_curl_options(
         self,
@@ -165,6 +168,7 @@ class BaseSession:
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        default_headers: Optional[bool] = None,
     ):
         c = curl
 
@@ -288,10 +292,13 @@ class BaseSession:
 
         # impersonate
         impersonate = impersonate or self.impersonate
+        default_headers = (
+            self.default_headers if default_headers is None else default_headers
+        )
         if impersonate:
             if not BrowserType.has(impersonate):
                 raise RequestsError(f"impersonate {impersonate} is not supported")
-            c.impersonate(impersonate)
+            c.impersonate(impersonate, default_headers=default_headers)
 
         # import pdb; pdb.set_trace()
         if content_callback is None:
@@ -402,6 +409,7 @@ class Session(BaseSession):
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        default_headers: Optional[bool] = None,
     ) -> Response:
         c = self.curl
         req, buffer, header_buffer = self._set_curl_options(
@@ -424,6 +432,7 @@ class Session(BaseSession):
             accept_encoding,
             content_callback,
             impersonate,
+            default_headers,
         )
         try:
             if self._thread == "eventlet":
@@ -522,6 +531,7 @@ class AsyncSession(BaseSession):
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        default_headers: Optional[bool] = None,
     ):
         curl = await self.pop_curl()
         req, buffer, header_buffer = self._set_curl_options(
@@ -544,6 +554,7 @@ class AsyncSession(BaseSession):
             accept_encoding,
             content_callback,
             impersonate,
+            default_headers,
         )
         try:
             # curl.debug()

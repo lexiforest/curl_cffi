@@ -7,7 +7,9 @@ __all__ = [
     "post",
     "put",
     "delete",
-    "RequestsError"
+    "RequestsError",
+    "Headers",
+    "Cookies",
 ]
 from functools import partial
 from io import BytesIO
@@ -41,6 +43,7 @@ def request(
     content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
     thread: Optional[str] = None,
+    default_headers: Optional[bool] = None,
 ) -> Response:
     with Session(thread=thread) as s:
         return s.request(
@@ -62,6 +65,7 @@ def request(
             accept_encoding,
             content_callback,
             impersonate,
+            default_headers,
         )
 
 
