@@ -111,7 +111,7 @@ class AsyncCurl:
 
     async def add_handle(self, curl: Curl, wait=True):
         # import pdb; pdb.set_trace()
-        curl.ensure_cacert()
+        curl._ensure_cacert()
         lib.curl_multi_add_handle(self._curlm, curl._curl)
         future = self.loop.create_future()
         self._curl2future[curl] = future

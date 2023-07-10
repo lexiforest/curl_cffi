@@ -11,6 +11,7 @@ DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 
 class CurlError(Exception):
+    """Base exception for curl_cffi package"""
     pass
 
 
@@ -55,7 +56,15 @@ def write_callback(ptr, size, nmemb, userdata):
 
 
 class Curl:
+    """
+    Wrapper for `curl_easy_*` functions of libcurl.
+    """
     def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool=False):
+        """
+        Parameters:
+            cacert: CA cert path to use, by default, curl_cffi uses its own bundled cert.
+            debug: whether to show curl debug messages.
+        """
         self._curl = lib.curl_easy_init()
         self._headers = ffi.NULL
         self._cacert = cacert
@@ -65,9 +74,9 @@ class Curl:
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
-        self.set_error_buffer()
+        self._set_error_buffer()
 
-    def set_error_buffer(self):
+    def _set_error_buffer(self):
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
             warnings.warn(f"Failed to set error buffer")
@@ -91,6 +100,12 @@ class Curl:
             )
 
     def setopt(self, option: CurlOpt, value: Any):
+        """Wrapper for curl_easy_setopt.
+
+        Parameters:
+            option: option to set, use the constants from CurlOpt enum
+            value: value to set, strings will be handled automatically
+        """
         input_option = {
             # this should be int in curl, but cffi requires pointer for void*
             # it will be convert back in the glue c code.
@@ -132,7 +147,7 @@ class Curl:
                 c_value = value.encode()
             else:
                 c_value = value
-            # Must keep a reference, otherwisd may be GCed.
+            # Must keep a reference, otherwise may be GCed.
             if option == CurlOpt.POSTFIELDS:
                 self._body_handle = c_value
         else:
@@ -152,6 +167,11 @@ class Curl:
         return ret
 
     def getinfo(self, option: CurlInfo) -> Union[bytes, int, float]:
+        """Wrapper for curl_easy_getinfo.
+
+        Parameters:
+            option: option to get info of, use the constants from CurlInfo enum
+        """
         ret_option = {
             0x100000: "char**",
             0x200000: "long*",
@@ -170,21 +190,26 @@ class Curl:
         return ret_cast_option[option & 0xF00000](c_value[0])
 
     def version(self) -> bytes:
+        """Get the underlying libcurl version."""
         return ffi.string(lib.curl_version())
 
     def impersonate(self, target: str, default_headers: bool = True) -> int:
+        """Set the browser type to impersonate.
+
+        """
         return lib.curl_easy_impersonate(
             self._curl, target.encode(), int(default_headers)
         )
 
-    def ensure_cacert(self):
+    def _ensure_cacert(self):
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
             self._check_error(ret, action="set cacert")
 
     def perform(self, clear_headers: bool = True):
+        """Wrapper for curl_easy_perform."""
         # make sure we set a cacert store
-        self.ensure_cacert()
+        self._ensure_cacert()
 
         # here we go
         ret = lib.curl_easy_perform(self._curl)
@@ -205,7 +230,7 @@ class Curl:
     def reset(self):
         self._is_cert_set = False
         lib.curl_easy_reset(self._curl)
-        self.set_error_buffer()
+        self._set_error_buffer()
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
         cookie = SimpleCookie()
