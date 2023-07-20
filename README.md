@@ -76,6 +76,35 @@ Supported impersonate versions, as supported by [curl-impersonate](https://githu
 - safari15_3
 - safari15_5
 
+### asyncio
+
+```python
+from curl_cffi.requests import AsyncSession
+
+async with AsyncSession() as s:
+    r = await s.get("https://example.com")
+```
+
+More concurrency:
+
+```python
+import asyncio
+from curl_cffi.requests import AsyncSession
+
+urls = [
+    "https://googel.com/",
+    "https://facebook.com/",
+    "https://twitter.com/",
+]
+
+async with AsyncSession() as s:
+    tasks = []
+    for url in urls:
+        task = s.get("https://example.com")
+        tasks.append(task)
+    results = await asyncio.gather(*tasks)
+```
+
 ### curl-like
 
 Alternatively, you can use the low-level curl-like API:

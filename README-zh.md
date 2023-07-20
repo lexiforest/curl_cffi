@@ -73,6 +73,35 @@ print(r.json())
 - safari15_3
 - safari15_5
 
+### asyncio
+
+```python
+from curl_cffi.requests import AsyncSession
+
+async with AsyncSession() as s:
+    r = await s.get("https://example.com")
+```
+
+更多并发:
+
+```python
+import asyncio
+from curl_cffi.requests import AsyncSession
+
+urls = [
+    "https://googel.com/",
+    "https://facebook.com/",
+    "https://twitter.com/",
+]
+
+async with AsyncSession() as s:
+    tasks = []
+    for url in urls:
+        task = s.get("https://example.com")
+        tasks.append(task)
+    results = await asyncio.gather(*tasks)
+```
+
 ### 类 curl
 
 另外，你还可以使用类似 curl 的底层 API：
