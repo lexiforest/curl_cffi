@@ -48,7 +48,7 @@ Try remove the `Content-Length` header from you request. see [#19](https://githu
 
 ## Not working on Windows, `NotImplementedError`
 
-Accroding to the [docs](https://docs.python.org/3/library/asyncio-platforms.html#windows):
+Accroding to the [Python docs](https://docs.python.org/3/library/asyncio-platforms.html#windows):
 
 > Changed in version 3.8: On Windows, [ProactorEventLoop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.ProactorEventLoop) is now the default event loop.
 > The [loop.add_reader()](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.add_reader) and [loop.add_writer()](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.add_writer) methods are not supported.

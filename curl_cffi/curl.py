@@ -167,7 +167,7 @@ class Curl:
         return ret
 
     def getinfo(self, option: CurlInfo) -> Union[bytes, int, float]:
-        """Wrapper for curl_easy_getinfo.
+        """Wrapper for curl_easy_getinfo. Gets information in response after curl perform.
 
         Parameters:
             option: option to get info of, use the constants from CurlInfo enum
@@ -196,6 +196,9 @@ class Curl:
     def impersonate(self, target: str, default_headers: bool = True) -> int:
         """Set the browser type to impersonate.
 
+        Parameters:
+            target: browser to impersonate.
+            default_headers: whether to add default headers, like User-Agent.
         """
         return lib.curl_easy_impersonate(
             self._curl, target.encode(), int(default_headers)
@@ -207,7 +210,7 @@ class Curl:
             self._check_error(ret, action="set cacert")
 
     def perform(self, clear_headers: bool = True):
-        """Wrapper for curl_easy_perform."""
+        """Wrapper for curl_easy_perform, performs a curl request."""
         # make sure we set a cacert store
         self._ensure_cacert()
 
@@ -219,6 +222,7 @@ class Curl:
         self.clean_after_perform(clear_headers)
 
     def clean_after_perform(self, clear_headers: bool = True):
+        """Clean up handles and buffers after perform, called at the end of `perform`."""
         self._write_handle = None
         self._header_handle = None
         self._body_handle = None
@@ -228,11 +232,20 @@ class Curl:
             self._headers = ffi.NULL
 
     def reset(self):
+        """Reset all curl options, wrapper for curl_easy_reset."""
         self._is_cert_set = False
         lib.curl_easy_reset(self._curl)
         self._set_error_buffer()
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
+        """Extract cookies.SimpleCookie from header lines.
+
+        Parameters:
+            headers: list of headers in bytes.
+
+        Returns:
+            A parsed cookies.SimpleCookie instance.
+        """
         cookie = SimpleCookie()
         for header in headers:
             if header.lower().startswith(b"set-cookie: "):
@@ -240,10 +253,12 @@ class Curl:
         return cookie
 
     def get_reason_phrase(self, status_line: bytes) -> bytes:
+        """Extract reason phrase, like `OK`, `Not Found` from response status line."""
         m = re.match(rb"HTTP/\d\.\d [0-9]{3} (.*)", status_line)
         return m.group(1) if m else b""
 
     def close(self):
+        """Close and cleanup curl handle, wrapper for curl_easy_cleanup"""
         if self._curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None

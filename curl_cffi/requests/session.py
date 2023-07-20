@@ -105,6 +105,7 @@ def _update_header_line(header_lines: List[str], key: str, value: str):
 
 
 class BaseSession:
+    """Provide common methods for setting curl options in sessions."""
     __attrs__ = [
         "headers",
         "cookies",
@@ -359,9 +360,40 @@ class BaseSession:
 
 
 class Session(BaseSession):
+    """A request session, cookies and connections will be reused. This object is thread-safe,
+    but it's recommended to use a seperate session for each thread."""
     def __init__(
         self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs
     ):
+        """
+        Parameters set in the init method will be override by the same parameter in request method.
+
+        Parameters:
+            curl: curl object to use in the session. If not provided, a new one will be
+                created. Also, a fresh curl object will always be created when accessed
+                from another thread.
+            thread: thread engine to use for working with other thread implementations.
+                choices: eventlet, gevent., possible values: eventlet, gevent.
+            headers: headers to use in the session.
+            cookies: cookies to add in the session.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
+            proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            params: query string for the session.
+            verify: whether to verify https certs.
+            timeout: how many seconds to wait before giving up.
+            trust_env: use http_proxy/https_proxy and other environments, default True.
+            max_redirects: max redirect counts, default unlimited(-1).
+            impersonate: which browser version to impersonate in the session.
+
+        Notes:
+            This class can be used as a context manager.
+            ```
+            from curl_cffi.requests import Session
+
+            with Session() as s:
+                r = s.get("https://example.com")
+            ```
+        """
         super().__init__(**kwargs)
         self._thread = thread
         self._local = threading.local()
@@ -387,6 +419,7 @@ class Session(BaseSession):
         self.close()
 
     def close(self):
+        """Close the session."""
         self.curl.close()
 
     def request(
@@ -411,6 +444,7 @@ class Session(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
     ) -> Response:
+        """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         c = self.curl
         req, buffer, header_buffer = self._set_curl_options(
             c,
@@ -460,6 +494,7 @@ class Session(BaseSession):
 
 
 class AsyncSession(BaseSession):
+    """An async request session, cookies and connections will be reused."""
     def __init__(
         self,
         *,
@@ -468,6 +503,33 @@ class AsyncSession(BaseSession):
         max_clients: int = 10,
         **kwargs,
     ):
+        """
+        Parameters set in the init method will be override by the same parameter in request method.
+
+        Parameters:
+            loop: loop to use, if not provided, the running loop will be used.
+            async_curl: [AsyncCurl](/api/curl_cffi#curl_cffi.AsyncCurl) object to use.
+            max_clients: maxmium curl handle to use in the session, this will affect the concurrency ratio.
+            headers: headers to use in the session.
+            cookies: cookies to add in the session.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
+            proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            params: query string for the session.
+            verify: whether to verify https certs.
+            timeout: how many seconds to wait before giving up.
+            trust_env: use http_proxy/https_proxy and other environments, default True.
+            max_redirects: max redirect counts, default unlimited(-1).
+            impersonate: which browser version to impersonate in the session.
+
+        Notes:
+            This class can be used as a context manager, and it's recommended to use via `async with`.
+            ```
+            from curl_cffi.requests import AsyncSession
+
+            async with AsyncSession() as s:
+                r = await s.get("https://example.com")
+            ```
+        """
         super().__init__(**kwargs)
         self.loop = loop if loop is not None else asyncio.get_running_loop()
         self.acurl = async_curl if async_curl is not None else AsyncCurl(loop=self.loop)
@@ -509,6 +571,7 @@ class AsyncSession(BaseSession):
         return None
 
     def close(self):
+        """Close the session."""
         self.acurl.close()
 
     async def request(
@@ -533,6 +596,7 @@ class AsyncSession(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
     ):
+        """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
         req, buffer, header_buffer = self._set_curl_options(
             curl,

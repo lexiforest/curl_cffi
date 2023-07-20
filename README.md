@@ -1,7 +1,7 @@
 # curl_cffi
 
 Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
-via [CFFI](https://cffi.readthedocs.io/en/latest/).
+via [cffi](https://cffi.readthedocs.io/en/latest/).
 
 [Documentation](https://curl-cffi.readthedocs.io) | [中文文档](https://curl-cffi.readthedocs.io/zh)
 
@@ -28,7 +28,7 @@ first and set some environment variables like `LD_LIBRARY_PATH`.
 
 ## Usage
 
-### requests-like:
+### requests-like
 
 ```python
 from curl_cffi import requests
@@ -97,10 +97,10 @@ body = buffer.getvalue()
 print(body.decode())
 ```
 
-See the [docs](https://curl-cffi.readthedocs.io) for more examples.
+See the [docs](https://curl-cffi.readthedocs.io) for more details.
 
 ## Acknowledgement
 
-- This package was originally forked from https://github.com/multippt/python_curl_cffi , which is under the MIT license.
-- headers/cookies files are copied from https://github.com/encode/httpx/blob/master/httpx/_models.py , which is under the BSD license.
+- Originally forked from [multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), which is under the MIT license.
+- Headers/Cookies files are copied from [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), which is under the BSD license.
 - Asyncio support is inspired by Tornado's curl http client.
