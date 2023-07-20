@@ -3,7 +3,7 @@
 Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
 via [cffi](https://cffi.readthedocs.io/en/latest/).
 
-[Documentation](https://curl-cffi.readthedocs.io) | [中文文档](https://curl-cffi.readthedocs.io/zh)
+[Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/master/README-zh.md)
 
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some

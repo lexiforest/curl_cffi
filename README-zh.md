@@ -123,7 +123,7 @@ body = buffer.getvalue()
 print(body.decode())
 ```
 
-更多细节请查看 [文档](https://curl-cffi.readthedocs.io)。
+更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
 
 有问题和建议请优先提 issue，中英文均可，也可以加微信群交流讨论：
 
