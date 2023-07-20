@@ -26,6 +26,22 @@ class Request:
 
 
 class Response:
+    """Contains information the server sends.
+
+    Attributes:
+        url: url used in the request.
+        content: response body in bytes.
+        status_code: http status code.
+        reason: http response reason, such as OK, Not Found.
+        ok: is status_code in [200, 400)?
+        headers: response headers.
+        cookies: response cookies.
+        elapsed: how many seconds the request cost.
+        encoding: http body encoding.
+        charset: alias for encoding.
+        redirect_count: how many redirects happened.
+        redirect_url: the final redirected url.
+    """
     def __init__(self, curl: Curl, request: Request):
         self.curl = curl
         self.request = request
@@ -47,10 +63,12 @@ class Response:
         return self.content.decode(self.charset)
 
     def raise_for_status(self):
+        """raise an exception if status_code not in [200, 400)"""
         if not self.ok:
             raise RequestsError(f"HTTP Error {self.status_code}: {self.reason}")
 
     def json(self, **kw):
+        """Returns the json-parsed content."""
         return loads(self.content, **kw)
 
     def close(self):

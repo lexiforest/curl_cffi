@@ -8,8 +8,9 @@ __all__ = [
     "put",
     "delete",
     "RequestsError",
-    "Headers",
     "Cookies",
+    "Headers",
+    "Response",
 ]
 from functools import partial
 from io import BytesIO
@@ -45,6 +46,32 @@ def request(
     thread: Optional[str] = None,
     default_headers: Optional[bool] = None,
 ) -> Response:
+    """Send a http request.
+
+    Parameters:
+        method: http method for the request: GET/POST/PUT/DELETE etc.
+        url: url for the requests.
+        params: query string for the requests.
+        data: form values or binary data to use in body, `Content-Type: application/x-www-form-urlencoded` will be added if a dict is given.
+        json: json values to use in body, `Content-Type: application/json` will be added automatically.
+        headers: headers to send.
+        cookies: cookies to use.
+        files: not implemented yet.
+        auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
+        timeout: how many seconds to wait before giving up.
+        allow_redirects: whether to allow redirection.
+        max_redirects: max redirect counts, default unlimited(-1).
+        proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+        verify: whether to verify https certs.
+        referer: shortcut for setting referer header.
+        accept_encoding: shortcut for setting accept-encoding header.
+        content_callback: a callback function to receive response body. `def callback(chunk: bytes):`
+        impersonate: which browser version to impersonate.
+        thread: work with other thread implementations. choices: eventlet, gevent.
+
+    Returns:
+        A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
+    """
     with Session(thread=thread) as s:
         return s.request(
             method,

@@ -4,6 +4,7 @@ __all__ = ["AsyncCurl"]
 import asyncio
 import os
 from typing import Any
+import warnings
 
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
@@ -69,6 +70,8 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
 
 
 class AsyncCurl:
+    """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
+    socket_action APIs."""
     def __init__(self, cacert: str = DEFAULT_CACERT, loop=None):
         self._curlm = lib.curl_multi_init()
         self._cacert = cacert
@@ -78,9 +81,9 @@ class AsyncCurl:
         self.loop = loop if loop is not None else asyncio.get_running_loop()
         self._checker = self.loop.create_task(self._force_timeout())
         self._timers = []
-        self.setup()
+        self._setup()
 
-    def setup(self):
+    def _setup(self):
         self.setopt(CurlMOpt.TIMERFUNCTION, lib.timer_function)
         self.setopt(CurlMOpt.SOCKETFUNCTION, lib.socket_function)
         self._self_handle = ffi.new_handle(self)
@@ -88,16 +91,22 @@ class AsyncCurl:
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
 
     def close(self):
+        """Close and cleanup running timers, readers, writers and handles."""
+        # Close force timeout checker
         self._checker.cancel()
+        # Close all pending futures
         for curl, future in self._curl2future.items():
             lib.curl_multi_remove_handle(self._curlm, curl._curl)
             if not future.done() and not future.cancelled():
                 future.set_result(None)
+        # Cleanup curl_multi handle
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
+        # Remove add readers and writers
         for sockfd in  self._sockfds:
             self.loop.remove_reader(sockfd)
             self.loop.remove_writer(sockfd)
+        # Cancel all time functions
         for timer in self._timers:
             timer.cancel()
 
@@ -110,8 +119,9 @@ class AsyncCurl:
             self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
 
     async def add_handle(self, curl: Curl, wait=True):
+        """Add a curl handle to be managed by curl_multi."""
         # import pdb; pdb.set_trace()
-        curl.ensure_cacert()
+        curl._ensure_cacert()
         lib.curl_multi_add_handle(self._curlm, curl._curl)
         future = self.loop.create_future()
         self._curl2future[curl] = future
@@ -120,13 +130,15 @@ class AsyncCurl:
             await future
 
     def socket_action(self, sockfd: int, ev_bitmask: int) -> int:
+        """Call libcurl socket_action function"""
         running_handle = ffi.new("int *")
         lib.curl_multi_socket_action(self._curlm, sockfd, ev_bitmask, running_handle)
         return running_handle[0]
 
     def process_data(self, sockfd: int, ev_bitmask: int):
+        """Call curl_multi_info_read to read data for given socket."""
         if not self._curlm:
-            print("Curlm alread closed! quitting from process_data")
+            warnings.warn("Curlm alread closed! quitting from process_data")
             return
 
         self.socket_action(sockfd, ev_bitmask)
@@ -147,7 +159,7 @@ class AsyncCurl:
                     # import pdb; pdb.set_trace()
                     self.set_exception(curl, curl._get_error(retcode, "perform"))
             else:
-                print("NOT DONE")
+                print("NOT DONE")  # Will not reach, for no other code being defined.
 
     def _pop_future(self, curl: Curl):
         lib.curl_multi_remove_handle(self._curlm, curl._curl)
@@ -155,18 +167,22 @@ class AsyncCurl:
         return self._curl2future.pop(curl)
 
     def cancel_handle(self, curl: Curl):
+        """Cancel a future for given curl handle."""
         future = self._pop_future(curl)
         future.cancel()
 
     def set_result(self, curl: Curl):
+        """Mark a future as done for given curl handle."""
         future = self._pop_future(curl)
         if not future.done() and not future.cancelled():
             future.set_result(None)
 
     def set_exception(self, curl: Curl, exception):
+        """Raise exception of a future for given curl handle."""
         future = self._pop_future(curl)
         if not future.done() and not future.cancelled():
             future.set_exception(exception)
 
     def setopt(self, option, value):
+        """Wrapper around curl_multi_setopt."""
         return lib.curl_multi_setopt(self._curlm, option, value)
