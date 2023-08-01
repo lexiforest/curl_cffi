@@ -482,10 +482,11 @@ class Session(BaseSession):
                 c.perform()
         except CurlError as e:
             raise RequestsError(e)
-
-        rsp = self._parse_response(c, req, buffer, header_buffer)
-        self.curl.reset()
-        return rsp
+        else:
+            rsp = self._parse_response(c, req, buffer, header_buffer)
+            return rsp
+        finally:
+            self.curl.reset()
 
     head = partialmethod(request, "HEAD")
     get = partialmethod(request, "GET")
@@ -629,11 +630,12 @@ class AsyncSession(BaseSession):
             # print(curl.getinfo(CurlInfo.CAINFO))
         except CurlError as e:
             raise RequestsError(e)
-
-        rsp = self._parse_response(curl, req, buffer, header_buffer)
-        curl.reset()
-        self.push_curl(curl)
-        return rsp
+        else:
+            rsp = self._parse_response(curl, req, buffer, header_buffer)
+            return rsp
+        finally:
+            curl.reset()
+            self.push_curl(curl)
 
     head = partialmethod(request, "HEAD")
     get = partialmethod(request, "GET")
