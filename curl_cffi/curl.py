@@ -59,7 +59,7 @@ class Curl:
     """
     Wrapper for `curl_easy_*` functions of libcurl.
     """
-    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool=False):
+    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False):
         """
         Parameters:
             cacert: CA cert path to use, by default, curl_cffi uses its own bundled cert.
@@ -79,7 +79,7 @@ class Curl:
     def _set_error_buffer(self):
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
-            warnings.warn(f"Failed to set error buffer")
+            warnings.warn("Failed to set error buffer")
         if self._debug:
             self.setopt(CurlOpt.VERBOSE, 1)
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
@@ -96,7 +96,9 @@ class Curl:
         if errcode != 0:
             errmsg = ffi.string(self._error_buffer).decode()
             return CurlError(
-                f"Failed to {action}, ErrCode: {errcode}, Reason: '{errmsg}'"
+                f"Failed to {action}, ErrCode: {errcode}, Reason: '{errmsg}'. "
+                "This may be a libcurl error, "
+                "See https://curl.se/libcurl/c/libcurl-errors.html first for more details."
             )
 
     def setopt(self, option: CurlOpt, value: Any):

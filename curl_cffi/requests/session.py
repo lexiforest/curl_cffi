@@ -10,7 +10,7 @@ from json import dumps
 from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
-from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt
+from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CURL_HTTP_VERSION_1_1
 from .cookies import Cookies, CookieTypes, Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
@@ -135,6 +135,9 @@ class BaseSession:
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
+        curl_options: Optional[dict] = None,
+        h11_only: bool = False,
+        debug: bool = False,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -147,6 +150,10 @@ class BaseSession:
         self.max_redirects = max_redirects
         self.impersonate = impersonate
         self.default_headers = default_headers
+        self.curl_options = curl_options or {}
+        if h11_only:
+            self.curl_options[CurlOpt.HTTP_VERSION] = CURL_HTTP_VERSION_1_1
+        self.debug = debug
 
     def _set_curl_options(
         self,
@@ -164,7 +171,7 @@ class BaseSession:
         allow_redirects: bool = True,
         max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
-        verify: Optional[bool] = None,
+        verify: Optional[Union[bool, str]] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
@@ -283,6 +290,14 @@ class BaseSession:
             c.setopt(CurlOpt.SSL_VERIFYPEER, 0)
             c.setopt(CurlOpt.SSL_VERIFYHOST, 0)
 
+        # cert for this single request
+        if isinstance(verify, str):
+            c.setopt(CurlOpt.CAINFO, verify)
+
+        # cert for the session
+        if verify in (None, True) and isinstance(self.verify, str):
+            c.setopt(CurlOpt.CAINFO, self.verify)
+
         # referer
         if referer:
             c.setopt(CurlOpt.REFERER, referer.encode())
@@ -300,6 +315,10 @@ class BaseSession:
             if not BrowserType.has(impersonate):
                 raise RequestsError(f"impersonate {impersonate} is not supported")
             c.impersonate(impersonate, default_headers=default_headers)
+
+        # set extra curl options, must come after impersonate, because it will alter some options
+        for k, v in self.curl_options.items():
+            c.setopt(k, v)
 
         # import pdb; pdb.set_trace()
         if content_callback is None:
@@ -322,6 +341,7 @@ class BaseSession:
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()  # type: ignore
+        rsp.http_version = cast(int, c.getinfo(CurlInfo.HTTP_VERSION))
         rsp.status_code = cast(int, c.getinfo(CurlInfo.RESPONSE_CODE))
         rsp.ok = 200 <= rsp.status_code < 400
         header_lines = header_buffer.getvalue().splitlines()
@@ -405,14 +425,14 @@ class Session(BaseSession):
             self._local.curl = curl
         else:
             self._is_customized_curl = False
-            self._local.curl = Curl()
+            self._local.curl = Curl(debug=self.debug)
 
     @property
     def curl(self):
         if self._is_customized_curl:
             warnings.warn("Creating fresh curl in different thread.")
         if not getattr(self._local, "curl", None):
-            self._local.curl = Curl()
+            self._local.curl = Curl(debug=self.debug)
         return self._local.curl
 
     def __enter__(self):
@@ -557,7 +577,7 @@ class AsyncSession(BaseSession):
     async def pop_curl(self):
         curl = await self.pool.get()
         if curl is None:
-            curl = Curl()
+            curl = Curl(debug=self.debug)
             self._running_curl.append(curl)
         return curl
 

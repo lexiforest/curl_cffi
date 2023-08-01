@@ -45,3 +45,18 @@ def test_imperonsate_default_headers():
     )
     headers = r.json()
     assert "user-agent" not in headers["headers"]
+
+
+def test_curl_options(server):
+    url = "https://postman-echo.com/headers"
+    r = requests.get(url, impersonate="chrome110", default_headers=False)
+    headers = r.json()
+    print(headers)
+    r = requests.get(
+        url,
+        curl_options={CurlOpt.HTTP_VERSION: CURL_HTTP_VERSION_1_1},
+        impersonate="chrome110",
+        default_headers=False,
+    )
+    headers = r.json()
+    print(headers)

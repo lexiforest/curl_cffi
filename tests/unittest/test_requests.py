@@ -41,6 +41,11 @@ def test_post_str(server):
     assert r.content == b'{"foo": "bar"}'
 
 
+def test_post_no_body(server):
+    r = requests.post(str(server.url.copy_with(path="/")), headers={"Content-Type": "application/json"})
+    assert r.status_code == 200
+
+
 def test_post_json(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
     assert r.status_code == 200

@@ -45,6 +45,9 @@ def request(
     impersonate: Optional[Union[str, BrowserType]] = None,
     thread: Optional[str] = None,
     default_headers: Optional[bool] = None,
+    curl_options: Optional[dict] = None,
+    h11_only: bool = False,
+    debug: bool = False,
 ) -> Response:
     """Send a http request.
 
@@ -72,7 +75,9 @@ def request(
     Returns:
         A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
     """
-    with Session(thread=thread) as s:
+    with Session(
+        thread=thread, curl_options=curl_options, h11_only=h11_only, debug=debug
+    ) as s:
         return s.request(
             method,
             url,

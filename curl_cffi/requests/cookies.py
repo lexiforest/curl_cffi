@@ -57,6 +57,7 @@ class Response:
         self.charset = self.encoding
         self.redirect_count = 0
         self.redirect_url = ""
+        self.http_version = 0
 
     @property
     def text(self) -> str:
