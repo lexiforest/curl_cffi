@@ -311,6 +311,9 @@ class BaseSession:
         header_buffer = BytesIO()
         c.setopt(CurlOpt.HEADERDATA, header_buffer)
 
+        if method == "HEAD":
+            c.setopt(CurlOpt.NOBODY, 1)
+
         return req, buffer, header_buffer
 
     def _parse_response(self, curl, req: Request, buffer, header_buffer):

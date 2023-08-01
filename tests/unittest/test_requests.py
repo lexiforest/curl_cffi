@@ -6,6 +6,11 @@ import pytest
 from curl_cffi import requests
 
 
+def test_head(server):
+    r = requests.head(str(server.url))
+    assert r.status_code == 200
+
+
 def test_get(server):
     r = requests.get(str(server.url))
     assert r.status_code == 200
