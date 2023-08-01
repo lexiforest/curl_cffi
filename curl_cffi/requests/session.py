@@ -177,6 +177,7 @@ class BaseSession:
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        interface: Optional[str] = None,
     ):
         c = curl
 
@@ -333,6 +334,10 @@ class BaseSession:
         if method == "HEAD":
             c.setopt(CurlOpt.NOBODY, 1)
 
+        # set interface
+        if interface is not None:
+            c.setopt(CurlOpt.INTERFACE, interface.encode())
+
         return req, buffer, header_buffer
 
     def _parse_response(self, curl, req: Request, buffer, header_buffer):
@@ -466,6 +471,7 @@ class Session(BaseSession):
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        interface: Optional[str] = None,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         c = self.curl
@@ -490,6 +496,7 @@ class Session(BaseSession):
             content_callback,
             impersonate,
             default_headers,
+            interface
         )
         try:
             if self._thread == "eventlet":
@@ -619,6 +626,7 @@ class AsyncSession(BaseSession):
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        interface: Optional[str] = None,
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
@@ -643,6 +651,7 @@ class AsyncSession(BaseSession):
             content_callback,
             impersonate,
             default_headers,
+            interface
         )
         try:
             # curl.debug()
