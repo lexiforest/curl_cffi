@@ -210,16 +210,22 @@ class Curl:
             self._check_error(ret, action="set cacert")
 
     def perform(self, clear_headers: bool = True):
-        """Wrapper for curl_easy_perform, performs a curl request."""
+        """Wrapper for curl_easy_perform, performs a curl request.
+
+        Parameters:
+            clear_headers: clear header slist used in this perform
+        """
         # make sure we set a cacert store
         self._ensure_cacert()
 
         # here we go
         ret = lib.curl_easy_perform(self._curl)
-        self._check_error(ret, action="perform")
 
-        # cleaning
-        self.clean_after_perform(clear_headers)
+        try:
+            self._check_error(ret, action="perform")
+        finally:
+            # cleaning
+            self.clean_after_perform(clear_headers)
 
     def clean_after_perform(self, clear_headers: bool = True):
         """Clean up handles and buffers after perform, called at the end of `perform`."""

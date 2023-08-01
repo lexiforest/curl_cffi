@@ -119,7 +119,8 @@ class AsyncCurl:
             self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
 
     async def add_handle(self, curl: Curl, wait=True):
-        """Add a curl handle to be managed by curl_multi."""
+        """Add a curl handle to be managed by curl_multi. This is the equivalent of
+        `perform` in the async world."""
         # import pdb; pdb.set_trace()
         curl._ensure_cacert()
         lib.curl_multi_add_handle(self._curlm, curl._curl)
@@ -127,7 +128,10 @@ class AsyncCurl:
         self._curl2future[curl] = future
         self._curl2curl[curl._curl] = curl
         if wait:
-            await future
+            try:
+                await future
+            finally:
+                curl.clean_after_perform()
 
     def socket_action(self, sockfd: int, ev_bitmask: int) -> int:
         """Call libcurl socket_action function"""

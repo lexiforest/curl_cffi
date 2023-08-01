@@ -142,6 +142,27 @@ def test_timeout(server):
         c.perform()
 
 
+def test_repeated_headers_after_error(server):
+    c = Curl()
+    url = str(server.url.copy_with(path="/slow_response"))
+    c.setopt(CurlOpt.URL, url.encode())
+    c.setopt(CurlOpt.TIMEOUT_MS, 100)
+    c.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
+    with pytest.raises(CurlError, match=r"ErrCode: 28"):
+        c.perform()
+
+    # another request
+    url = str(server.url.copy_with(path="/echo_headers"))
+    c.setopt(CurlOpt.URL, url.encode())
+    c.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
+    buffer = BytesIO()
+    c.setopt(CurlOpt.WRITEDATA, buffer)
+    c.perform()
+    headers = json.loads(buffer.getvalue().decode())
+    assert len(headers["Foo"]) == 1
+    # print(headers)
+
+
 def test_follow_redirect(server):
     c = Curl()
     url = str(server.url.copy_with(path="/redirect_301"))
