@@ -48,6 +48,7 @@ def request(
     curl_options: Optional[dict] = None,
     h11_only: bool = False,
     debug: bool = False,
+    interface: Optional[str] = None,
 ) -> Response:
     """Send a http request.
 
@@ -71,6 +72,7 @@ def request(
         content_callback: a callback function to receive response body. `def callback(chunk: bytes):`
         impersonate: which browser version to impersonate.
         thread: work with other thread implementations. choices: eventlet, gevent.
+        interface: which interface use in request to server.
 
     Returns:
         A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
@@ -98,6 +100,7 @@ def request(
             content_callback,
             impersonate,
             default_headers,
+            interface
         )
 
 

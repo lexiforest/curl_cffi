@@ -138,6 +138,7 @@ class BaseSession:
         curl_options: Optional[dict] = None,
         h11_only: bool = False,
         debug: bool = False,
+        interface: Optional[str] = None,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -154,6 +155,7 @@ class BaseSession:
         if h11_only:
             self.curl_options[CurlOpt.HTTP_VERSION] = CURL_HTTP_VERSION_1_1
         self.debug = debug
+        self.interface = interface
 
     def _set_curl_options(
         self,
@@ -337,6 +339,9 @@ class BaseSession:
         # set interface
         if interface is not None:
             c.setopt(CurlOpt.INTERFACE, interface.encode())
+        else:
+            if self.interface is not None:
+                c.setopt(CurlOpt.INTERFACE, self.interface.encode())
 
         return req, buffer, header_buffer
 
@@ -412,6 +417,7 @@ class Session(BaseSession):
             trust_env: use http_proxy/https_proxy and other environments, default True.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
+            interface: which interface use in request to server.
 
         Notes:
             This class can be used as a context manager.
