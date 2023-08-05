@@ -101,16 +101,6 @@ def _update_url_params(url: str, params: Dict) -> str:
     return new_url
 
 
-def _extract_domain(url: str) -> str:
-    """Extract domains from url."""
-    parsed_url = urlparse(url)
-    netloc = parsed_url.netloc
-    if ":" in netloc:
-        return netloc.split(":")[0]
-    else:
-        return netloc
-
-
 def _update_header_line(header_lines: List[str], key: str, value: str):
     """Update header line list by key value pair."""
     for idx, line in enumerate(header_lines):
@@ -172,7 +162,7 @@ class BaseSession:
             self.curl_options[CurlOpt.HTTP_VERSION] = CURL_HTTP_VERSION_1_1
         self.debug = debug
 
-    def _set_cookies(self, curl, cookies: Cookies, domain: str):
+    def _set_cookies(self, curl, cookies: Cookies):
         curl.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
         # Credits: @coletdjnz
         encoder = SimpleCookie()
@@ -313,9 +303,7 @@ class BaseSession:
         c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
         co = Cookies(self.cookies)
         co.update(cookies)
-        # Cookies are not port-specific, see: https://stackoverflow.com/a/16328399/1061155
-        domain = _extract_domain(url)
-        self._set_cookies(c, co, domain)
+        self._set_cookies(c, co)
 
         # files
         if files:
