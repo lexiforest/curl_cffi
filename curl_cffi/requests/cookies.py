@@ -36,7 +36,15 @@ class Cookies(typing.MutableMapping[str, str]):
         else:
             self.jar = cookies
 
-    def set(self, name: str, value: str, domain: str = "", path: str = "/") -> None:
+    def set(
+        self,
+        name: str,
+        value: str,
+        domain: str = "",
+        path: str = "/",
+        expires: typing.Optional[int] = None,
+        secure: bool = False,
+    ) -> None:
         """
         Set a cookie value by name. May optionally include domain and path.
         """
@@ -51,8 +59,8 @@ class Cookies(typing.MutableMapping[str, str]):
             "domain_initial_dot": domain.startswith("."),
             "path": path,
             "path_specified": bool(path),
-            "secure": False,
-            "expires": None,
+            "secure": secure,
+            "expires": expires,
             "discard": True,
             "comment": None,
             "comment_url": None,

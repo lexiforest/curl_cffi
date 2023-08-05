@@ -6,6 +6,10 @@ void curl_easy_cleanup(void *curl);
 void curl_easy_reset(void *curl);
 char *curl_version();
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
+struct curl_slist {
+   char *data;
+   struct curl_slist *next;
+};
 struct curl_slist *curl_slist_append(struct curl_slist *list, char *string);
 void curl_slist_free_all(struct curl_slist *list);
 extern "Python" size_t buffer_callback(void *ptr, size_t size, size_t nmemb, void *userdata);

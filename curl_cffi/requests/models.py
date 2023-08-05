@@ -1,5 +1,6 @@
 import warnings
 from json import loads
+from typing import Optional
 
 from .. import Curl
 from .headers import Headers
@@ -32,7 +33,7 @@ class Response:
         redirect_url: the final redirected url.
         http_version: http version used.
     """
-    def __init__(self, curl: Curl, request: Request):
+    def __init__(self, curl: Curl, request: Optional[Request] = None):
         self.curl = curl
         self.request = request
         self.url = ""

@@ -12,7 +12,10 @@ DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 class CurlError(Exception):
     """Base exception for curl_cffi package"""
-    pass
+
+    def __init__(self, msg, code: int = 0, *args, **kwargs):
+        super().__init__(msg, *args, **kwargs)
+        self.code = code
 
 
 CURLINFO_TEXT = 0
@@ -55,10 +58,22 @@ def write_callback(ptr, size, nmemb, userdata):
     return nmemb * size
 
 
+# Credits: @alexio777 on https://github.com/yifeikong/curl_cffi/issues/4
+def slist_to_list(head) -> List[bytes]:
+    result = []
+    ptr = head
+    while ptr:
+        result.append(ffi.string(ptr.data))
+        ptr = ptr.next
+    lib.curl_slist_free_all(head)
+    return result
+
+
 class Curl:
     """
     Wrapper for `curl_easy_*` functions of libcurl.
     """
+
     def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False):
         """
         Parameters:
@@ -98,7 +113,8 @@ class Curl:
             return CurlError(
                 f"Failed to {action}, ErrCode: {errcode}, Reason: '{errmsg}'. "
                 "This may be a libcurl error, "
-                "See https://curl.se/libcurl/c/libcurl-errors.html first for more details."
+                "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
+                code=errcode,
             )
 
     def setopt(self, option: CurlOpt, value: Any):
@@ -168,7 +184,7 @@ class Curl:
 
         return ret
 
-    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float]:
+    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, List]:
         """Wrapper for curl_easy_getinfo. Gets information in response after curl perform.
 
         Parameters:
@@ -178,6 +194,7 @@ class Curl:
             0x100000: "char**",
             0x200000: "long*",
             0x300000: "double*",
+            0x400000: "struct curl_slist **",
         }
         ret_cast_option = {
             0x100000: ffi.string,
@@ -187,6 +204,9 @@ class Curl:
         c_value = ffi.new(ret_option[option & 0xF00000])
         ret = lib.curl_easy_getinfo(self._curl, option, c_value)
         self._check_error(ret, action="getinfo(%s)" % option)
+        # cookielist and ssl_engines starts with 0x400000, see also: const.py
+        if option & 0xF00000 == 0x400000:
+            return slist_to_list(c_value[0])
         if c_value[0] == ffi.NULL:
             return b""
         return ret_cast_option[option & 0xF00000](c_value[0])

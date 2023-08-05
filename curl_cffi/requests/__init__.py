@@ -55,7 +55,7 @@ def request(
     h11_only: bool = False,
     debug: bool = False,
 ) -> Response:
-    """Send a http request.
+    """Send an http request.
 
     Parameters:
         method: http method for the request: GET/POST/PUT/DELETE etc.
