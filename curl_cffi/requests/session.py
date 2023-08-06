@@ -169,18 +169,18 @@ class BaseSession:
         for cookie in cookies.jar:
             values = []
             _, value = encoder.value_encode(cookie.value)
-            values.append(f'{cookie.name}={value}')
+            values.append(f"{cookie.name}={value}")
             if cookie.domain:
-                values.append(f'Domain={cookie.domain}')
+                values.append(f"Domain={cookie.domain}")
             if cookie.path:
-                values.append(f'Path={cookie.path}')
+                values.append(f"Path={cookie.path}")
             if cookie.secure:
-                values.append('Secure')
+                values.append("Secure")
             if cookie.expires:
-                values.append(f'Expires={cookie.expires}')
+                values.append(f"Expires={cookie.expires}")
             if cookie.version:
-                values.append(f'Version={cookie.version}')
-            cookie_line = "set-cookie: " + ('; '.join(values))
+                values.append(f"Version={cookie.version}")
+            cookie_line = "set-cookie: " + ("; ".join(values))
             # print(cookie_line)
             # https://curl.se/libcurl/c/CURLOPT_COOKIELIST.html
             curl.setopt(CurlOpt.COOKIELIST, cookie_line.encode())
@@ -458,7 +458,11 @@ class Session(BaseSession):
     but it's recommended to use a seperate session for each thread."""
 
     def __init__(
-        self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs
+        self,
+        curl: Optional[Curl] = None,
+        thread: Optional[str] = None,
+        use_thread_local_curl: bool = True,
+        **kwargs,
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -491,21 +495,28 @@ class Session(BaseSession):
         """
         super().__init__(**kwargs)
         self._thread = thread
-        self._local = threading.local()
-        if curl:
-            self._is_customized_curl = True
-            self._local.curl = curl
+        self._use_thread_local_curl = use_thread_local_curl
+        if use_thread_local_curl:
+            self._local = threading.local()
+            if curl:
+                self._is_customized_curl = True
+                self._local.curl = curl
+            else:
+                self._is_customized_curl = False
+                self._local.curl = Curl(debug=self.debug)
         else:
-            self._is_customized_curl = False
-            self._local.curl = Curl(debug=self.debug)
+            self._curl = curl if curl else Curl(debug=self.debug)
 
     @property
     def curl(self):
-        if self._is_customized_curl:
-            warnings.warn("Creating fresh curl in different thread.")
-        if not getattr(self._local, "curl", None):
-            self._local.curl = Curl(debug=self.debug)
-        return self._local.curl
+        if self._use_thread_local_curl:
+            if self._is_customized_curl:
+                warnings.warn("Creating fresh curl in different thread.")
+            if not getattr(self._local, "curl", None):
+                self._local.curl = Curl(debug=self.debug)
+            return self._local.curl
+        else:
+            return self._curl
 
     def __enter__(self):
         return self
