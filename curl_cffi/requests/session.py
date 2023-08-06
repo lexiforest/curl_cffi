@@ -4,6 +4,8 @@ import re
 import threading
 import warnings
 from enum import Enum
+from http.cookiejar import Cookie
+from http.cookies import SimpleCookie
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
@@ -11,9 +13,10 @@ from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CURL_HTTP_VERSION_1_1
-from .cookies import Cookies, CookieTypes, Request, Response
+from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
+from .models import Request, Response
 
 try:
     import gevent
@@ -53,9 +56,12 @@ class BrowserType(str, Enum):
 def _update_url_params(url: str, params: Dict) -> str:
     """Add GET params to provided URL being aware of existing.
 
-    :param url: string of target URL
-    :param params: dict containing requested params to be added
-    :return: string with updated URL
+    Parameters:
+        url: string of target URL
+        params: dict containing requested params to be added
+
+    Returns:
+        string with updated URL
 
     >> url = 'http://stackoverflow.com/test?answers=true'
     >> new_params = {'answers': False, 'data': ['some','values']}
@@ -96,6 +102,7 @@ def _update_url_params(url: str, params: Dict) -> str:
 
 
 def _update_header_line(header_lines: List[str], key: str, value: str):
+    """Update header line list by key value pair."""
     for idx, line in enumerate(header_lines):
         if line.lower().startswith(key.lower() + ":"):
             header_lines[idx] = f"{key}: {value}"
@@ -105,7 +112,8 @@ def _update_header_line(header_lines: List[str], key: str, value: str):
 
 
 class BaseSession:
-    """Provide common methods for setting curl options in sessions."""
+    """Provide common methods for setting curl options and reading info in sessions."""
+
     __attrs__ = [
         "headers",
         "cookies",
@@ -114,7 +122,6 @@ class BaseSession:
         "params",
         "verify",
         "cert",
-        "stream",  # TODO
         "trust_env",  # TODO
         "max_redirects",
         "impersonate",
@@ -154,6 +161,72 @@ class BaseSession:
         if h11_only:
             self.curl_options[CurlOpt.HTTP_VERSION] = CURL_HTTP_VERSION_1_1
         self.debug = debug
+
+    def _set_cookies(self, curl, cookies: Cookies):
+        curl.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
+        # Credits: @coletdjnz
+        encoder = SimpleCookie()
+        for cookie in cookies.jar:
+            values = []
+            _, value = encoder.value_encode(cookie.value)
+            values.append(f'{cookie.name}={value}')
+            if cookie.domain:
+                values.append(f'Domain={cookie.domain}')
+            if cookie.path:
+                values.append(f'Path={cookie.path}')
+            if cookie.secure:
+                values.append('Secure')
+            if cookie.expires:
+                values.append(f'Expires={cookie.expires}')
+            if cookie.version:
+                values.append(f'Version={cookie.version}')
+            cookie_line = "set-cookie: " + ('; '.join(values))
+            # print(cookie_line)
+            # https://curl.se/libcurl/c/CURLOPT_COOKIELIST.html
+            curl.setopt(CurlOpt.COOKIELIST, cookie_line.encode())
+
+    def _extract_cookies(self, curl) -> List[Cookie]:
+        cookie_lines = curl.getinfo(CurlInfo.COOKIELIST)
+        cookies = []
+        for cookie_line in cookie_lines:
+            (
+                hostname,
+                subdomains,
+                path,
+                secure,
+                expires,
+                name,
+                value,
+            ) = cookie_line.decode().split("\t")
+            if hostname and hostname[0] == "#":
+                http_only = True
+                # e.g. #HttpOnly_postman-echo.com
+                domain = hostname[10:]  # len("#HttpOnly_") == 10
+            else:
+                http_only = False
+                domain = hostname
+            cookies.append(
+                Cookie(
+                    version=0,
+                    name=name,
+                    value=value,
+                    port=None,
+                    port_specified=False,
+                    domain=domain,
+                    domain_specified=bool(domain),
+                    domain_initial_dot=(subdomains == "TRUE"),
+                    path=path,
+                    path_specified=bool(path),
+                    secure=(secure == "TRUE"),
+                    expires=int(expires),
+                    discard=False,
+                    comment=None,
+                    comment_url=None,
+                    rest=dict(http_only=http_only),  # type: ignore
+                    rfc2109=False,
+                )
+            )
+        return cookies
 
     def _set_curl_options(
         self,
@@ -214,17 +287,6 @@ class BaseSession:
         h = Headers(self.headers)
         h.update(headers)
 
-        # cookies
-        co = Cookies(self.cookies)
-        co.update(cookies)
-        req = Request(url=url, headers=h, method=method)
-        co.set_cookie_header(req)
-
-        # An alternative way to implement cookiejar is to use curl's builtin cookiejar,
-        # However, it would be diffcult to interploate with Headers and get cookies as
-        # dicta
-        # c.setopt(CurlOpt.COOKIE, cookies_str.encode())
-
         header_lines = []
         for k, v in h.multi_items():
             header_lines.append(f"{k}: {v}")
@@ -236,6 +298,12 @@ class BaseSession:
             )
         # print("header lines", header_lines)
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
+
+        # cookies
+        c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
+        co = Cookies(self.cookies)
+        co.update(cookies)
+        self._set_cookies(c, co)
 
         # files
         if files:
@@ -333,11 +401,11 @@ class BaseSession:
         if method == "HEAD":
             c.setopt(CurlOpt.NOBODY, 1)
 
-        return req, buffer, header_buffer
+        return Request(url, h, method), buffer, header_buffer
 
-    def _parse_response(self, curl, req: Request, buffer, header_buffer):
+    def _parse_response(self, curl, buffer, header_buffer):
         c = curl
-        rsp = Response(c, req)
+        rsp = Response(c)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()  # type: ignore
@@ -361,8 +429,11 @@ class BaseSession:
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
+
+        cookies = self._extract_cookies(c)
+        for cookie in cookies:
+            self.cookies.jar.set_cookie(cookie)
         rsp.cookies = self.cookies
-        self.cookies.extract_cookies(rsp)
         # print("Cookies after extraction", self.cookies)
 
         content_type = rsp.headers.get("Content-Type", default="")
@@ -385,6 +456,7 @@ class BaseSession:
 class Session(BaseSession):
     """A request session, cookies and connections will be reused. This object is thread-safe,
     but it's recommended to use a seperate session for each thread."""
+
     def __init__(
         self, curl: Optional[Curl] = None, thread: Optional[str] = None, **kwargs
     ):
@@ -503,7 +575,8 @@ class Session(BaseSession):
         except CurlError as e:
             raise RequestsError(e)
         else:
-            rsp = self._parse_response(c, req, buffer, header_buffer)
+            rsp = self._parse_response(c, buffer, header_buffer)
+            rsp.request = req
             return rsp
         finally:
             self.curl.reset()
@@ -519,6 +592,7 @@ class Session(BaseSession):
 
 class AsyncSession(BaseSession):
     """An async request session, cookies and connections will be reused."""
+
     def __init__(
         self,
         *,
@@ -651,7 +725,8 @@ class AsyncSession(BaseSession):
         except CurlError as e:
             raise RequestsError(e)
         else:
-            rsp = self._parse_response(curl, req, buffer, header_buffer)
+            rsp = self._parse_response(curl, buffer, header_buffer)
+            rsp.request = req
             return rsp
         finally:
             curl.reset()

@@ -3,20 +3,26 @@ __all__ = [
     "AsyncSession",
     "BrowserType",
     "request",
+    "head",
     "get",
     "post",
     "put",
+    "patch",
     "delete",
+    "options",
     "RequestsError",
     "Cookies",
     "Headers",
+    "Request",
     "Response",
 ]
+
 from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union
 
-from .cookies import Cookies, CookieTypes, Response
+from .cookies import Cookies, CookieTypes
+from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
@@ -49,7 +55,7 @@ def request(
     h11_only: bool = False,
     debug: bool = False,
 ) -> Response:
-    """Send a http request.
+    """Send an http request.
 
     Parameters:
         method: http method for the request: GET/POST/PUT/DELETE etc.

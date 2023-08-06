@@ -48,4 +48,13 @@ with open(CONST_FILE, "w") as f:
     """
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
+    f.write("\n\n")
+
+
+    f.write("class CurlECode(IntEnum):\n")
+    cmd = rf"""
+        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i CURLE_ | sed "s/[, ][=0]*//g" | sed "s/CURLE_/    /g" | awk '{{print $0 " = " NR-1}}'
+    """
+    output = subprocess.check_output(cmd, shell=True)
+    f.write(output.decode())
     f.write("\n")

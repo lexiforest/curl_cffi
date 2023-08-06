@@ -42,7 +42,10 @@ def test_post_str(server):
 
 
 def test_post_no_body(server):
-    r = requests.post(str(server.url.copy_with(path="/")), headers={"Content-Type": "application/json"})
+    r = requests.post(
+        str(server.url.copy_with(path="/")),
+        headers={"Content-Type": "application/json"},
+    )
     assert r.status_code == 200
 
 
@@ -244,6 +247,24 @@ def test_session_preset_cookies(server):
     assert cookies["foo"] == "bar"
     # new cookies should be added
     assert cookies["hello"] == "world"
+    # request cookies should not be added to session cookiejar
+    assert s.cookies.get("hello") is None
+
+
+def test_cookie_domains(server):
+    s = requests.Session()
+    s.cookies.set("foo", "bar", domain="example.com")
+    s.cookies.set("foo2", "bar", domain="127.0.0.1")
+    # send requests with other cookies
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
+    )
+    cookies = r.json()
+    # only specific domains should be there
+    assert "foo" not in cookies
+    assert cookies["foo2"] == "bar"
+    # new cookies should be added
+    assert cookies["hello"] == "world"
 
 
 def test_session_cookies(server):
@@ -260,6 +281,15 @@ def test_session_cookies(server):
     assert cookies["foo"] == "bar"
     # new cookies should be added
     assert cookies["hello"] == "world"
+
+
+def test_cookies_after_redirect(server):
+    s = requests.Session(debug=True)
+    r = s.get(
+        str(server.url.copy_with(path="/redirect_then_echo_cookies")),
+        cookies={"foo": "bar"},
+    )
+    assert r.json()["foo"] == "bar"
 
 
 # https://github.com/yifeikong/curl_cffi/issues/39
