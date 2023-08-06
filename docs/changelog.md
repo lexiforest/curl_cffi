@@ -1,6 +1,17 @@
 # Change Log
 
 - v0.5
+    - v0.5.8
+        - Switched to libcurl's COOKIELIST to sync cookies between python and curl
+        - Add default_headers option for sessions like in curl-impersonate
+        - Add curl_options for extra curl_options in Session
+        - Add http_version option for limiting http version to 1.1 or whatever
+        - Add debug option for extra curl debug info
+        - Add CurlError.code
+        - Bugfix: duplicated header lines for the same header
+        - Bugfix: clearing headers when request fails
+        - Bugfix: fix HEAD request
+        - Bugfix: reset curl options when errors occur
     - v0.5.7
         - Refactor JSON serialization to mimic browser behavior (#66)
         - Add http options to Session classes (#72)
