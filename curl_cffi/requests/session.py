@@ -166,11 +166,13 @@ class BaseSession:
     def _set_cookies(self, curl, cookies: Cookies):
         curl.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
         # Credits: @coletdjnz
-        encoder = SimpleCookie()
+        # encoder = SimpleCookie()
         for cookie in cookies.jar:
             values = []
-            _, value = encoder.value_encode(cookie.value)
-            values.append(f"{cookie.name}={value}")
+            # _, value = encoder.value_encode(cookie.value)
+            # values.append(f"{cookie.name}={value}")
+            # Let curl decide how to encode cookies
+            values.append(f"{cookie.name}={cookie.value}")
             if cookie.domain:
                 values.append(f"Domain={cookie.domain}")
             if cookie.path:

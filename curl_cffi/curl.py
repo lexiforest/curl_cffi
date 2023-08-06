@@ -25,20 +25,17 @@ CURLINFO_DATA_IN = 3
 CURLINFO_DATA_OUT = 4
 CURLINFO_SSL_DATA_IN = 5
 CURLINFO_SSL_DATA_OUT = 6
-CURLINFO_DATA_OUT = 4
 
 
 @ffi.def_extern()
 def debug_function(curl, type: int, data, size, clientp) -> int:
     text = ffi.buffer(data, size)[:]
-    if type == 0:
-        print("CURLINFO", text)
-    elif type == 2:
-        print("HEADER OUT", text)
-    elif type == 4:
-        print("DATA OUT", text)
-    elif type == 6:
+    if type in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
+    elif type in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
+        print(text.decode())
+    else:
+        print(text.decode(), end="")
     return 0
 
 
