@@ -145,6 +145,7 @@ class BaseSession:
         curl_options: Optional[dict] = None,
         http_version: Optional[CurlHttpVersion] = None,
         debug: bool = False,
+        interface: Optional[str] = None,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -160,6 +161,7 @@ class BaseSession:
         self.curl_options = curl_options or {}
         self.http_version = http_version
         self.debug = debug
+        self.interface = interface
 
     def _set_cookies(self, curl, cookies: Cookies):
         curl.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
@@ -250,6 +252,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
+        interface: Optional[str] = None,
     ):
         c = curl
 
@@ -406,6 +409,11 @@ class BaseSession:
         if method == "HEAD":
             c.setopt(CurlOpt.NOBODY, 1)
 
+        # interface
+        interface = interface or self.interface
+        if interface:
+            c.setopt(CurlOpt.INTERFACE, interface.encode())
+        
         return Request(url, h, method), buffer, header_buffer
 
     def _parse_response(self, curl, buffer, header_buffer):
@@ -488,6 +496,7 @@ class Session(BaseSession):
             trust_env: use http_proxy/https_proxy and other environments, default True.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
+            interface: which interface use in request to server.
 
         Notes:
             This class can be used as a context manager.
@@ -555,6 +564,7 @@ class Session(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
+        interface: Optional[str] = None,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         c = self.curl
@@ -580,6 +590,7 @@ class Session(BaseSession):
             impersonate=impersonate,
             default_headers=default_headers,
             http_version=http_version,
+            interface=interface,
         )
         try:
             if self._thread == "eventlet":
@@ -712,6 +723,7 @@ class AsyncSession(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
+        interface: Optional[str] = None,
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
@@ -737,6 +749,7 @@ class AsyncSession(BaseSession):
             impersonate=impersonate,
             default_headers=default_headers,
             http_version=http_version,
+            interface=interface,
         )
         try:
             # curl.debug()

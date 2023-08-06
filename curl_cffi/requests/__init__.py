@@ -55,6 +55,7 @@ def request(
     curl_options: Optional[dict] = None,
     http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
+    interface: Optional[str] = None,
 ) -> Response:
     """Send an http request.
 
@@ -82,6 +83,7 @@ def request(
         curl_options: extra curl options to use.
         http_version: limiting http version, http2 will be tries by default.
         debug: print extra curl debug info.
+        interface: which interface use in request to server.
 
     Returns:
         A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
@@ -110,6 +112,7 @@ def request(
             impersonate=impersonate,
             default_headers=default_headers,
             http_version=http_version,
+            interface=interface,
         )
 
 
