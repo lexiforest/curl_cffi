@@ -3,20 +3,27 @@ __all__ = [
     "AsyncSession",
     "BrowserType",
     "request",
+    "head",
     "get",
     "post",
     "put",
+    "patch",
     "delete",
+    "options",
     "RequestsError",
     "Cookies",
     "Headers",
+    "Request",
     "Response",
 ]
+
 from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union
 
-from .cookies import Cookies, CookieTypes, Response
+from ..const import CurlHttpVersion
+from .cookies import Cookies, CookieTypes
+from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
@@ -46,11 +53,11 @@ def request(
     thread: Optional[str] = None,
     default_headers: Optional[bool] = None,
     curl_options: Optional[dict] = None,
-    h11_only: bool = False,
+    http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
     interface: Optional[str] = None,
 ) -> Response:
-    """Send a http request.
+    """Send an http request.
 
     Parameters:
         method: http method for the request: GET/POST/PUT/DELETE etc.
@@ -72,35 +79,40 @@ def request(
         content_callback: a callback function to receive response body. `def callback(chunk: bytes):`
         impersonate: which browser version to impersonate.
         thread: work with other thread implementations. choices: eventlet, gevent.
+        default_headers: whether to set default browser headers.
+        curl_options: extra curl options to use.
+        http_version: limiting http version, http2 will be tries by default.
+        debug: print extra curl debug info.
         interface: which interface use in request to server.
 
     Returns:
         A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
     """
     with Session(
-        thread=thread, curl_options=curl_options, h11_only=h11_only, debug=debug
+        thread=thread, curl_options=curl_options, debug=debug
     ) as s:
         return s.request(
-            method,
-            url,
-            params,
-            data,
-            json,
-            headers,
-            cookies,
-            files,
-            auth,
-            timeout,
-            allow_redirects,
-            max_redirects,
-            proxies,
-            verify,
-            referer,
-            accept_encoding,
-            content_callback,
-            impersonate,
-            default_headers,
-            interface
+            method=method,
+            url=url,
+            params=params,
+            data=data,
+            json=json,
+            headers=headers,
+            cookies=cookies,
+            files=files,
+            auth=auth,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+            max_redirects=max_redirects,
+            proxies=proxies,
+            verify=verify,
+            referer=referer,
+            accept_encoding=accept_encoding,
+            content_callback=content_callback,
+            impersonate=impersonate,
+            default_headers=default_headers,
+            http_version=http_version,
+            interface=interface,
         )
 
 
