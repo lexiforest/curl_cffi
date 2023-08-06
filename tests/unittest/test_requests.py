@@ -247,6 +247,8 @@ def test_session_preset_cookies(server):
     assert cookies["foo"] == "bar"
     # new cookies should be added
     assert cookies["hello"] == "world"
+    # request cookies should not be added to session cookiejar
+    assert s.cookies.get("hello") is None
 
 
 def test_cookie_domains(server):
