@@ -518,3 +518,11 @@ class CurlECode(IntEnum):
     SSL_CLIENTCERT = 98
     UNRECOVERABLE_POLL = 99
 
+
+class CurlHttpVersion(IntEnum):
+   V1_0 = 1  # please use HTTP 1.0 in the request */
+   V1_1 = 2  # please use HTTP 1.1 in the request */
+   V2_0 = 3  # please use HTTP 2 in the request */
+   V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */
+   V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */
+   V3 = 30  # Makes use of explicit HTTP/3 without fallback.

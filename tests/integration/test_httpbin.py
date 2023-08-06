@@ -1,5 +1,5 @@
 import pytest
-from curl_cffi import requests
+from curl_cffi import requests, CurlHttpVersion, CurlOpt
 
 
 #######################################################################################
@@ -47,16 +47,26 @@ def test_imperonsate_default_headers():
     assert "user-agent" not in headers["headers"]
 
 
-def test_curl_options(server):
+def test_curl_options():
     url = "https://postman-echo.com/headers"
     r = requests.get(url, impersonate="chrome110", default_headers=False)
     headers = r.json()
     print(headers)
+    assert r.http_version == CurlHttpVersion.V2_0
     r = requests.get(
         url,
-        curl_options={CurlOpt.HTTP_VERSION: CURL_HTTP_VERSION_1_1},
+        curl_options={CurlOpt.HTTP_VERSION: CurlHttpVersion.V1_1},
         impersonate="chrome110",
         default_headers=False,
     )
     headers = r.json()
+    assert r.http_version == CurlHttpVersion.V1_1
+    print(headers)
+
+
+def test_http_version():
+    url = "https://postman-echo.com/headers"
+    r = requests.get(url, impersonate="chrome110", http_version=CurlHttpVersion.V1_1)
+    headers = r.json()
+    assert r.http_version == CurlHttpVersion.V1_1
     print(headers)

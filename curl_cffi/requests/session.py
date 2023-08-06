@@ -12,7 +12,7 @@ from json import dumps
 from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
-from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CURL_HTTP_VERSION_1_1
+from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
@@ -143,7 +143,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
         curl_options: Optional[dict] = None,
-        h11_only: bool = False,
+        http_version: Optional[CurlHttpVersion] = None,
         debug: bool = False,
     ):
         self.headers = Headers(headers)
@@ -158,8 +158,7 @@ class BaseSession:
         self.impersonate = impersonate
         self.default_headers = default_headers
         self.curl_options = curl_options or {}
-        if h11_only:
-            self.curl_options[CurlOpt.HTTP_VERSION] = CURL_HTTP_VERSION_1_1
+        self.http_version = http_version
         self.debug = debug
 
     def _set_cookies(self, curl, cookies: Cookies):
@@ -250,6 +249,7 @@ class BaseSession:
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        http_version: Optional[CurlHttpVersion] = None,
     ):
         c = curl
 
@@ -383,6 +383,11 @@ class BaseSession:
             if not BrowserType.has(impersonate):
                 raise RequestsError(f"impersonate {impersonate} is not supported")
             c.impersonate(impersonate, default_headers=default_headers)
+
+        # http_version, after impersonate, which will change this to http2
+        http_version = http_version or self.http_version
+        if http_version:
+            c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
         # set extra curl options, must come after impersonate, because it will alter some options
         for k, v in self.curl_options.items():
@@ -549,30 +554,32 @@ class Session(BaseSession):
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        http_version: Optional[CurlHttpVersion] = None,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         c = self.curl
         req, buffer, header_buffer = self._set_curl_options(
             c,
-            method,
-            url,
-            params,
-            data,
-            json,
-            headers,
-            cookies,
-            files,
-            auth,
-            timeout,
-            allow_redirects,
-            max_redirects,
-            proxies,
-            verify,
-            referer,
-            accept_encoding,
-            content_callback,
-            impersonate,
-            default_headers,
+            method=method,
+            url=url,
+            params=params,
+            data=data,
+            json=json,
+            headers=headers,
+            cookies=cookies,
+            files=files,
+            auth=auth,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+            max_redirects=max_redirects,
+            proxies=proxies,
+            verify=verify,
+            referer=referer,
+            accept_encoding=accept_encoding,
+            content_callback=content_callback,
+            impersonate=impersonate,
+            default_headers=default_headers,
+            http_version=http_version,
         )
         try:
             if self._thread == "eventlet":
@@ -704,30 +711,32 @@ class AsyncSession(BaseSession):
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        http_version: Optional[CurlHttpVersion] = None,
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
         req, buffer, header_buffer = self._set_curl_options(
-            curl,
-            method,
-            url,
-            params,
-            data,
-            json,
-            headers,
-            cookies,
-            files,
-            auth,
-            timeout,
-            allow_redirects,
-            max_redirects,
-            proxies,
-            verify,
-            referer,
-            accept_encoding,
-            content_callback,
-            impersonate,
-            default_headers,
+            curl=curl,
+            method=method,
+            url=url,
+            params=params,
+            data=data,
+            json=json,
+            headers=headers,
+            cookies=cookies,
+            files=files,
+            auth=auth,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+            max_redirects=max_redirects,
+            proxies=proxies,
+            verify=verify,
+            referer=referer,
+            accept_encoding=accept_encoding,
+            content_callback=content_callback,
+            impersonate=impersonate,
+            default_headers=default_headers,
+            http_version=http_version,
         )
         try:
             # curl.debug()
