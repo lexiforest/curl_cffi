@@ -292,6 +292,14 @@ def test_cookies_after_redirect(server):
     assert r.json()["foo"] == "bar"
 
 
+def test_cookies_with_special_chars(server):
+    s = requests.Session(debug=True)
+    r = s.get(str(server.url.copy_with(path="/set_special_cookies")))
+    assert s.cookies["foo"] == "bar space"
+    r = s.get(str(server.url.copy_with(path="/echo_cookies")))
+    assert r.json()["foo"] == "bar space"
+
+
 # https://github.com/yifeikong/curl_cffi/issues/39
 def test_post_body_cleaned(server):
     s = requests.Session()

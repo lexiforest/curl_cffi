@@ -5,7 +5,6 @@ import threading
 import warnings
 from enum import Enum
 from http.cookiejar import Cookie
-from http.cookies import SimpleCookie
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
@@ -415,7 +414,7 @@ class BaseSession:
         interface = interface or self.interface
         if interface:
             c.setopt(CurlOpt.INTERFACE, interface.encode())
-        
+
         return Request(url, h, method), buffer, header_buffer
 
     def _parse_response(self, curl, buffer, header_buffer):
