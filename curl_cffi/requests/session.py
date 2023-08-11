@@ -149,7 +149,7 @@ class BaseSession:
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
         self.auth = auth
-        self.proxies = proxies
+        self.proxies = proxies or {}
         self.params = params
         self.verify = verify
         self.timeout = timeout
