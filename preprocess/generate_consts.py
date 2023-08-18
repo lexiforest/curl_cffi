@@ -61,9 +61,10 @@ with open(CONST_FILE, "w") as f:
 
 
     f.write("class CurlHttpVersion(IntEnum):\n")
-    f.write("   V1_0 = 1  # please use HTTP 1.0 in the request */\n")
-    f.write("   V1_1 = 2  # please use HTTP 1.1 in the request */\n")
-    f.write("   V2_0 = 3  # please use HTTP 2 in the request */\n")
-    f.write("   V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */\n")
-    f.write("   V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */\n")
-    f.write("   V3 = 30  # Makes use of explicit HTTP/3 without fallback.\n")
+    f.write("    NONE = 0\n")
+    f.write("    V1_0 = 1  # please use HTTP 1.0 in the request */\n")
+    f.write("    V1_1 = 2  # please use HTTP 1.1 in the request */\n")
+    f.write("    V2_0 = 3  # please use HTTP 2 in the request */\n")
+    f.write("    V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */\n")
+    f.write("    V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */\n")
+    f.write("    V3 = 30  # Makes use of explicit HTTP/3 without fallback.\n")

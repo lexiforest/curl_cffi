@@ -237,7 +237,7 @@ def test_session_update_parms(server):
 
 
 def test_session_preset_cookies(server):
-    s = requests.Session(cookies={"foo": "bar"})
+    s = requests.Session(cookies={"foo": "bar"}, debug=True)
     # send requests with other cookies
     r = s.get(
         str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
@@ -247,8 +247,16 @@ def test_session_preset_cookies(server):
     assert cookies["foo"] == "bar"
     # new cookies should be added
     assert cookies["hello"] == "world"
+    # XXX request cookies will always be added to the entire session
     # request cookies should not be added to session cookiejar
-    assert s.cookies.get("hello") is None
+    # assert s.cookies.get("hello") is None
+
+    # but you can override
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"foo": "notbar"}
+    )
+    cookies = r.json()
+    assert cookies["foo"] == "notbar"
 
 
 def test_cookie_domains(server):

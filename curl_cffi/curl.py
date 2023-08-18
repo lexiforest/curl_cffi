@@ -2,10 +2,10 @@ import os
 import re
 import warnings
 from http.cookies import SimpleCookie
-from typing import Any, List, Union
+from typing import Any, List, Tuple, Union
 
 from ._wrapper import ffi, lib  # type: ignore
-from .const import CurlInfo, CurlOpt
+from .const import CurlHttpVersion, CurlInfo, CurlOpt
 
 DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
@@ -277,10 +277,30 @@ class Curl:
                 cookie.load(header[12:].decode())  # len("set-cookie: ") == 12
         return cookie
 
-    def get_reason_phrase(self, status_line: bytes) -> bytes:
+    @staticmethod
+    def get_reason_phrase(status_line: bytes) -> bytes:
         """Extract reason phrase, like `OK`, `Not Found` from response status line."""
         m = re.match(rb"HTTP/\d\.\d [0-9]{3} (.*)", status_line)
         return m.group(1) if m else b""
+
+    @staticmethod
+    def parse_status_line(status_line: bytes) -> Tuple[CurlHttpVersion, int, bytes]:
+        """Extract reason phrase, like `OK`, `Not Found` from response status line."""
+        m = re.match(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)", status_line)
+        if not m:
+            return CurlHttpVersion.V1_0, 0, b""
+        if m.group(1) == "2.0":
+            http_version = CurlHttpVersion.V2_0
+        elif m.group(1) == "1.1":
+            http_version = CurlHttpVersion.V1_1
+        elif m.group(1) == "1.0":
+            http_version = CurlHttpVersion.V1_0
+        else:
+            http_version = CurlHttpVersion.NONE
+        status_code = int(m.group(2))
+        reason = m.group(3)
+
+        return http_version, status_code, reason
 
     def close(self):
         """Close and cleanup curl handle, wrapper for curl_easy_cleanup"""
