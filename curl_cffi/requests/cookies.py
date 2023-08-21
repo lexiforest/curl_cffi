@@ -92,17 +92,20 @@ class CurlMorsel:
         )
 
     def to_cookiejar_cookie(self) -> Cookie:
+        # the leading dot actually does not mean anything nowadays
+        # https://stackoverflow.com/a/20884869/1061155
+        # https://github.com/python/cpython/blob/d6555abfa7384b5a40435a11bdd2aa6bbf8f5cfc/Lib/http/cookiejar.py#L1535
         return Cookie(
             version=0,
             name=self.name,
             value=self.value,
             port=None,
             port_specified=False,
-            domain=self.hostname,
+            domain=self.hostname
+            if self.hostname.startswith(".")
+            else "." + self.hostname,
             domain_specified=True,
-            # the leading dot actually does not mean anything nowadays
-            # https://stackoverflow.com/a/20884869/1061155
-            domain_initial_dot=True,
+            domain_initial_dot=bool(self.hostname.startswith(".")),
             path=self.path,
             path_specified=bool(self.path),
             secure=self.secure,
