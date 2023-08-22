@@ -34,7 +34,7 @@ class CurlMorsel:
 
     @staticmethod
     def dump_bool(s):
-        return "TURE" if s else "FALSE"
+        return "TRUE" if s else "FALSE"
 
     @classmethod
     def from_curl_format(cls, set_cookie_line: bytes):
@@ -101,9 +101,7 @@ class CurlMorsel:
             value=self.value,
             port=None,
             port_specified=False,
-            domain=self.hostname
-            if self.hostname.startswith(".")
-            else "." + self.hostname,
+            domain=self.hostname,
             domain_specified=True,
             domain_initial_dot=bool(self.hostname.startswith(".")),
             path=self.path,

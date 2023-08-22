@@ -237,7 +237,7 @@ def test_session_update_parms(server):
 
 
 def test_session_preset_cookies(server):
-    s = requests.Session(cookies={"foo": "bar"}, debug=True)
+    s = requests.Session(cookies={"foo": "bar"})
     # send requests with other cookies
     r = s.get(
         str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
@@ -257,6 +257,14 @@ def test_session_preset_cookies(server):
     )
     cookies = r.json()
     assert cookies["foo"] == "notbar"
+
+
+def test_delete_cookies(server):
+    s = requests.Session()
+    s.get(str(server.url.copy_with(path="/set_cookies")))
+    assert s.cookies["foo"] == "bar"
+    s.get(str(server.url.copy_with(path="/delete_cookies")))
+    assert not s.cookies.get("foo")
 
 
 def test_cookie_domains(server):

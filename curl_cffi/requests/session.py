@@ -241,7 +241,7 @@ class BaseSession:
         c.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
 
         for morsel in self.cookies.get_cookies_for_curl(req):
-            # print("Setting", morsel)
+            # print("Setting", morsel.to_curl_format())
             curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
         if cookies:
             temp_cookies = Cookies(cookies)
@@ -379,9 +379,12 @@ class BaseSession:
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
+        # print("Set-cookie", rsp.headers["set-cookie"])
         morsels = [
             CurlMorsel.from_curl_format(l) for l in c.getinfo(CurlInfo.COOKIELIST)
         ]
+        # for l in c.getinfo(CurlInfo.COOKIELIST):
+        #     print("Curl Cookies", l.decode())
 
         self.cookies.update_cookies_from_curl(morsels)
         rsp.cookies = self.cookies
