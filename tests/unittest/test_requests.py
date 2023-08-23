@@ -247,8 +247,24 @@ def test_session_preset_cookies(server):
     assert cookies["foo"] == "bar"
     # new cookies should be added
     assert cookies["hello"] == "world"
+    # XXX request cookies will always be added to the entire session
     # request cookies should not be added to session cookiejar
-    assert s.cookies.get("hello") is None
+    # assert s.cookies.get("hello") is None
+
+    # but you can override
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"foo": "notbar"}
+    )
+    cookies = r.json()
+    assert cookies["foo"] == "notbar"
+
+
+def test_delete_cookies(server):
+    s = requests.Session()
+    s.get(str(server.url.copy_with(path="/set_cookies")))
+    assert s.cookies["foo"] == "bar"
+    s.get(str(server.url.copy_with(path="/delete_cookies")))
+    assert not s.cookies.get("foo")
 
 
 def test_cookie_domains(server):

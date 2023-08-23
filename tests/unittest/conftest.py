@@ -93,6 +93,8 @@ async def app(scope, receive, send):
         await set_headers(scope, receive, send)
     elif scope["path"].startswith("/set_cookies"):
         await set_cookies(scope, receive, send)
+    elif scope["path"].startswith("/delete_cookies"):
+        await delete_cookies(scope, receive, send)
     elif scope["path"].startswith("/set_special_cookies"):
         await set_special_cookies(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
@@ -297,6 +299,20 @@ async def set_cookies(scope, receive, send):
             "headers": [
                 [b"content-type", b"text/plain"],
                 [b"set-cookie", b"foo=bar"],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Hello, world!"})
+
+
+async def delete_cookies(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/plain"],
+                [b"set-cookie", b'foo=; Max-Age=0'],
             ],
         }
     )

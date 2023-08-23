@@ -1,11 +1,14 @@
-# Adapted from https://github.com/encode/httpx/blob/master/httpx/_models.py,
+# Adapted from: https://github.com/encode/httpx/blob/master/httpx/_models.py,
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
 __all__ = ["Cookies"]
 
+import time
 import typing
-from http.cookiejar import Cookie, CookieJar
+import urllib.request
+from http.cookiejar import Cookie, CookieJar, eff_request_host  # type: ignore
+from dataclasses import dataclass
 
 from .errors import CookieConflict
 
@@ -14,9 +17,109 @@ CookieTypes = typing.Union[
 ]
 
 
+@dataclass
+class CurlMorsel:
+    name: str
+    value: str
+    hostname: str = ""
+    subdomains: bool = False
+    path: str = "/"
+    secure: bool = False
+    expires: int = 0
+    http_only: bool = False
+
+    @staticmethod
+    def parse_bool(s):
+        return s == "TRUE"
+
+    @staticmethod
+    def dump_bool(s):
+        return "TRUE" if s else "FALSE"
+
+    @classmethod
+    def from_curl_format(cls, set_cookie_line: bytes):
+        (
+            hostname,
+            subdomains,
+            path,
+            secure,
+            expires,
+            name,
+            value,
+        ) = set_cookie_line.decode().split("\t")
+        if hostname and hostname[0] == "#":
+            http_only = True
+            # e.g. #HttpOnly_postman-echo.com
+            domain = hostname[10:]  # len("#HttpOnly_") == 10
+        else:
+            http_only = False
+            domain = hostname
+        return cls(
+            hostname=domain,
+            subdomains=cls.parse_bool(subdomains),
+            path=path,
+            secure=cls.parse_bool(secure),
+            expires=int(expires),
+            name=name,
+            value=value,
+            http_only=http_only,
+        )
+
+    def to_curl_format(self):
+        return "\t".join(
+            [
+                self.hostname,
+                self.dump_bool(self.subdomains),
+                self.path,
+                self.dump_bool(self.secure),
+                str(self.expires),
+                self.name,
+                self.value,
+            ]
+        )
+
+    @classmethod
+    def from_cookiejar_cookie(cls, cookie: Cookie):
+        return cls(
+            name=cookie.name,
+            value=cookie.value or "",
+            hostname=cookie.domain,
+            subdomains=cookie.domain_initial_dot,
+            path=cookie.path,
+            secure=cookie.secure,
+            expires=int(cookie.expires or 0),
+            http_only=False,
+        )
+
+    def to_cookiejar_cookie(self) -> Cookie:
+        # the leading dot actually does not mean anything nowadays
+        # https://stackoverflow.com/a/20884869/1061155
+        # https://github.com/python/cpython/blob/d6555abfa7384b5a40435a11bdd2aa6bbf8f5cfc/Lib/http/cookiejar.py#L1535
+        return Cookie(
+            version=0,
+            name=self.name,
+            value=self.value,
+            port=None,
+            port_specified=False,
+            domain=self.hostname,
+            domain_specified=True,
+            domain_initial_dot=bool(self.hostname.startswith(".")),
+            path=self.path,
+            path_specified=bool(self.path),
+            secure=self.secure,
+            # using if explicitly to make it clear.
+            expires=None if self.expires == 0 else self.expires,
+            discard=True if self.expires == 0 else False,
+            comment=None,
+            comment_url=None,
+            rest=dict(http_only=self.http_only),  # type: ignore
+            rfc2109=False,
+        )
+
+
 class Cookies(typing.MutableMapping[str, str]):
     """
-    Cookies, as a mutable mapping. A simple wrapper around `http.cookiejar.CookieJar`.
+    HTTP Cookies, as a mutable mapping.
     """
 
     def __init__(self, cookies: typing.Optional[CookieTypes] = None) -> None:
@@ -36,15 +139,34 @@ class Cookies(typing.MutableMapping[str, str]):
         else:
             self.jar = cookies
 
-    def set(
-        self,
-        name: str,
-        value: str,
-        domain: str = "",
-        path: str = "/",
-        expires: typing.Optional[int] = None,
-        secure: bool = False,
-    ) -> None:
+    def get_cookies_for_curl(self, request) -> typing.List[CurlMorsel]:
+        """the process is similar to `cookiejar.add_cookie_header`"""
+        urllib_request = self._CookieCompatRequest(request)
+        self.jar._cookies_lock.acquire()  # type: ignore
+        try:
+            self.jar._policy._now = self._now = int(time.time())  # type: ignore
+
+            cookies = self.jar._cookies_for_request(urllib_request)  # type: ignore
+            morsels = []
+            for cookie in cookies:
+                morsel = CurlMorsel.from_cookiejar_cookie(cookie)
+                if not morsel.hostname:
+                    _, erhn = eff_request_host(urllib_request)
+                    morsel.hostname = erhn
+                morsels.append(morsel)
+        finally:
+            self.jar._cookies_lock.release()  # type: ignore
+
+        self.jar.clear_expired_cookies()
+        return morsels
+
+    def update_cookies_from_curl(self, morsels: typing.List[CurlMorsel]):
+        for morsel in morsels:
+            cookie = morsel.to_cookiejar_cookie()
+            self.jar.set_cookie(cookie)
+        self.jar.clear_expired_cookies()
+
+    def set(self, name: str, value: str, domain: str = "", path: str = "/") -> None:
         """
         Set a cookie value by name. May optionally include domain and path.
         """
@@ -59,8 +181,8 @@ class Cookies(typing.MutableMapping[str, str]):
             "domain_initial_dot": domain.startswith("."),
             "path": path,
             "path_specified": bool(path),
-            "secure": secure,
-            "expires": expires,
+            "secure": False,
+            "expires": None,
             "discard": True,
             "comment": None,
             "comment_url": None,
@@ -158,14 +280,34 @@ class Cookies(typing.MutableMapping[str, str]):
         return (cookie.name for cookie in self.jar)
 
     def __bool__(self) -> bool:
-        return len(self.jar) > 0
+        for _ in self.jar:
+            return True
+        return False
 
     def __repr__(self) -> str:
         cookies_repr = ", ".join(
             [
-                f"<Cookie {cookie.name}={cookie.value} for {cookie.domain or 'all'} />"
+                f"<Cookie {cookie.name}={cookie.value} for {cookie.domain} />"
                 for cookie in self.jar
             ]
         )
 
         return f"<Cookies[{cookies_repr}]>"
+
+    class _CookieCompatRequest(urllib.request.Request):
+        """
+        Wraps a `Request` instance up in a compatibility interface suitable
+        for use with `CookieJar` operations.
+        """
+
+        def __init__(self, request) -> None:
+            super().__init__(
+                url=str(request.url),
+                headers=dict(request.headers),
+                method=request.method,
+            )
+            self.request = request
+
+        def add_unredirected_header(self, key: str, value: str) -> None:
+            super().add_unredirected_header(key, value)
+            self.request.headers[key] = value

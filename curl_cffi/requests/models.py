@@ -32,8 +32,9 @@ class Response:
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
+        history: history redirections, only headers are available.
     """
-    def __init__(self, curl: Curl, request: Optional[Request] = None):
+    def __init__(self, curl: Optional[Curl] = None, request: Optional[Request] = None):
         self.curl = curl
         self.request = request
         self.url = ""
@@ -49,6 +50,7 @@ class Response:
         self.redirect_count = 0
         self.redirect_url = ""
         self.http_version = 0
+        self.history = []
 
     @property
     def text(self) -> str:

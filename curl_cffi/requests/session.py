@@ -4,7 +4,6 @@ import re
 import threading
 import warnings
 from enum import Enum
-from http.cookiejar import Cookie
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
@@ -12,7 +11,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
-from .cookies import Cookies, CookieTypes
+from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .models import Request, Response
@@ -162,74 +161,6 @@ class BaseSession:
         self.debug = debug
         self.interface = interface
 
-    def _set_cookies(self, curl, cookies: Cookies):
-        curl.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
-        # Credits: @coletdjnz
-        # encoder = SimpleCookie()
-        for cookie in cookies.jar:
-            values = []
-            # _, value = encoder.value_encode(cookie.value)
-            # values.append(f"{cookie.name}={value}")
-            # Let curl decide how to encode cookies
-            values.append(f"{cookie.name}={cookie.value}")
-            if cookie.domain:
-                values.append(f"Domain={cookie.domain}")
-            if cookie.path:
-                values.append(f"Path={cookie.path}")
-            if cookie.secure:
-                values.append("Secure")
-            if cookie.expires:
-                values.append(f"Expires={cookie.expires}")
-            if cookie.version:
-                values.append(f"Version={cookie.version}")
-            cookie_line = "set-cookie: " + ("; ".join(values))
-            # print(cookie_line)
-            # https://curl.se/libcurl/c/CURLOPT_COOKIELIST.html
-            curl.setopt(CurlOpt.COOKIELIST, cookie_line.encode())
-
-    def _extract_cookies(self, curl) -> List[Cookie]:
-        cookie_lines = curl.getinfo(CurlInfo.COOKIELIST)
-        cookies = []
-        for cookie_line in cookie_lines:
-            (
-                hostname,
-                subdomains,
-                path,
-                secure,
-                expires,
-                name,
-                value,
-            ) = cookie_line.decode().split("\t")
-            if hostname and hostname[0] == "#":
-                http_only = True
-                # e.g. #HttpOnly_postman-echo.com
-                domain = hostname[10:]  # len("#HttpOnly_") == 10
-            else:
-                http_only = False
-                domain = hostname
-            cookies.append(
-                Cookie(
-                    version=0,
-                    name=name,
-                    value=value,
-                    port=None,
-                    port_specified=False,
-                    domain=domain,
-                    domain_specified=bool(domain),
-                    domain_initial_dot=(subdomains == "TRUE"),
-                    path=path,
-                    path_specified=bool(path),
-                    secure=(secure == "TRUE"),
-                    expires=int(expires),
-                    discard=False,
-                    comment=None,
-                    comment_url=None,
-                    rest=dict(http_only=http_only),  # type: ignore
-                    rfc2109=False,
-                )
-            )
-        return cookies
-
     def _set_curl_options(
         self,
         curl,
@@ -303,11 +234,19 @@ class BaseSession:
         # print("header lines", header_lines)
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
+        req = Request(url, h, method)
+
         # cookies
         c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
-        co = Cookies(self.cookies)
-        co.update(cookies)
-        self._set_cookies(c, co)
+        c.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
+
+        for morsel in self.cookies.get_cookies_for_curl(req):
+            # print("Setting", morsel.to_curl_format())
+            curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
+        if cookies:
+            temp_cookies = Cookies(cookies)
+            for morsel in temp_cookies.get_cookies_for_curl(req):
+                curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
 
         # files
         if files:
@@ -397,7 +336,6 @@ class BaseSession:
         for k, v in self.curl_options.items():
             c.setopt(k, v)
 
-        # import pdb; pdb.set_trace()
         if content_callback is None:
             buffer = BytesIO()
             c.setopt(CurlOpt.WRITEDATA, buffer)
@@ -415,7 +353,7 @@ class BaseSession:
         if interface:
             c.setopt(CurlOpt.INTERFACE, interface.encode())
 
-        return Request(url, h, method), buffer, header_buffer
+        return req, buffer, header_buffer
 
     def _parse_response(self, curl, buffer, header_buffer):
         c = curl
@@ -437,16 +375,18 @@ class BaseSession:
                 # read header from last response
                 rsp.reason = c.get_reason_phrase(header_line).decode()
                 # empty header list for new redirected response
-                header_list = [
-                    h for h in header_lines if h.lower().startswith(b"set-cookie")
-                ]
+                header_list = []
                 continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
+        # print("Set-cookie", rsp.headers["set-cookie"])
+        morsels = [
+            CurlMorsel.from_curl_format(l) for l in c.getinfo(CurlInfo.COOKIELIST)
+        ]
+        # for l in c.getinfo(CurlInfo.COOKIELIST):
+        #     print("Curl Cookies", l.decode())
 
-        cookies = self._extract_cookies(c)
-        for cookie in cookies:
-            self.cookies.jar.set_cookie(cookie)
+        self.cookies.update_cookies_from_curl(morsels)
         rsp.cookies = self.cookies
         # print("Cookies after extraction", self.cookies)
 
