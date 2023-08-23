@@ -189,7 +189,10 @@ class BaseSession:
         c = curl
 
         # method
-        c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
+        if method == "POST":
+            c.setopt(CurlOpt.POST, 1)
+        elif method != "GET":
+            c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
 
         # url
         if self.params:
@@ -231,6 +234,8 @@ class BaseSession:
             _update_header_line(
                 header_lines, "Content-Type", "application/x-www-form-urlencoded"
             )
+        if body:
+            _update_header_line( header_lines, "Content-Length", str(len(body)))
         # print("header lines", header_lines)
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
