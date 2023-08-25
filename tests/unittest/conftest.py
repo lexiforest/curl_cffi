@@ -101,6 +101,8 @@ async def app(scope, receive, send):
         await redirect_301(scope, receive, send)
     elif scope["path"].startswith("/redirect_then_echo_cookies"):
         await redirect_then_echo_cookies(scope, receive, send)
+    elif scope["path"].startswith("/redirect_then_echo_headers"):
+        await redirect_then_echo_headers(scope, receive, send)
     elif scope["path"].startswith("/json"):
         await hello_world_json(scope, receive, send)
     elif scope["path"].startswith("http://"):
@@ -343,6 +345,15 @@ async def redirect_301(scope, receive, send):
 async def redirect_then_echo_cookies(scope, receive, send):
     await send(
         {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/echo_cookies"]]}
+    )
+    await send({"type": "http.response.body", "body": b"Redirecting..."})
+
+
+async def redirect_then_echo_headers(scope, receive, send):
+    for name, value in scope.get("headers", []):
+        print("Header>>>", name, ":", value)
+    await send(
+        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/echo_headers"]]}
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 

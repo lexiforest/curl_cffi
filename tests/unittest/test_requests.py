@@ -55,6 +55,14 @@ def test_post_json(server):
     assert r.content == b'{"foo":"bar"}'
 
 
+def test_post_redirect_to_get(server):
+    url = str(server.url.copy_with(path="/redirect_then_echo_headers"))
+    r = requests.post(url, data={"foo": "bar"}, allow_redirects=True, debug=True)
+    headers = r.json()
+    # print(headers)
+    assert headers.get("Content-length") is None
+
+
 def test_put_json(server):
     r = requests.put(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
     assert r.status_code == 200

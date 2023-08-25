@@ -230,12 +230,10 @@ class BaseSession:
             header_lines.append(f"{k}: {v}")
         if json:
             _update_header_line(header_lines, "Content-Type", "application/json")
-        if isinstance(data, dict):
+        if isinstance(data, dict) and method != "POST":
             _update_header_line(
                 header_lines, "Content-Type", "application/x-www-form-urlencoded"
             )
-        if body:
-            _update_header_line( header_lines, "Content-Length", str(len(body)))
         # print("header lines", header_lines)
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
