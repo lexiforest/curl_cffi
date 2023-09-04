@@ -214,9 +214,13 @@ class BaseSession:
             body = b""
         else:
             raise TypeError("data must be dict, str, BytesIO or bytes")
-        if json:
+        if json is not None:
             body = dumps(json, separators=(",", ":")).encode()
-        if body:
+
+        # Tell libcurl to be aware of bodies and related headers when,
+        # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do;
+        # 2. GET/DELETE with body, although it's against the RFC, some applications. e.g. Elasticsearch, use this.
+        if body or method in ("POST", "PUT", "PATCH"):
             c.setopt(CurlOpt.POSTFIELDS, body)
             # necessary if body contains '\0'
             c.setopt(CurlOpt.POSTFIELDSIZE, len(body))
@@ -228,7 +232,7 @@ class BaseSession:
         header_lines = []
         for k, v in h.multi_items():
             header_lines.append(f"{k}: {v}")
-        if json:
+        if json is not None:
             _update_header_line(header_lines, "Content-Type", "application/json")
         if isinstance(data, dict) and method != "POST":
             _update_header_line(

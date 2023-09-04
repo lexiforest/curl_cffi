@@ -42,10 +42,9 @@ def test_post_str(server):
 
 
 def test_post_no_body(server):
-    r = requests.post(
-        str(server.url.copy_with(path="/")),
-        headers={"Content-Type": "application/json"},
-    )
+    r = requests.post(str(server.url), headers={"Content-Type": "application/json"})
+    assert r.status_code == 200
+    r = requests.post(str(server.url), headers={"Content-Length": "0"})
     assert r.status_code == 200
 
 
@@ -53,6 +52,9 @@ def test_post_json(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
     assert r.status_code == 200
     assert r.content == b'{"foo":"bar"}'
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), json={})
+    assert r.status_code == 200
+    assert r.content == b"{}"
 
 
 def test_post_redirect_to_get(server):
@@ -144,6 +146,11 @@ def test_auth(server):
 def test_timeout(server):
     with pytest.raises(requests.RequestsError):
         requests.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
+
+
+def test_post_timeout(server):
+    with pytest.raises(requests.RequestsError):
+        requests.post(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
 
 
 def test_not_follow_redirects(server):
