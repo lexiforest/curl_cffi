@@ -204,14 +204,25 @@ class Cookies(typing.MutableMapping[str, str]):
         in order to specify exactly which cookie to retrieve.
         """
         value = None
+        matched_domain = ""
         for cookie in self.jar:
             if cookie.name == name:
                 if domain is None or cookie.domain == domain:
                     if path is None or cookie.path == path:
-                        if value is not None:
-                            message = f"Multiple cookies exist with name={name}"
+                        # if cookies on two different domains do not share a same value
+                        if (
+                            value is not None
+                            and not matched_domain.endswith(cookie.domain)
+                            and not str(cookie.domain).endswith(matched_domain)
+                            and value != cookie.value
+                        ):
+                            message = (
+                                f"Multiple cookies exist with name={name} on "
+                                f"{matched_domain} and {cookie.domain}"
+                            )
                             raise CookieConflict(message)
                         value = cookie.value
+                        matched_domain = cookie.domain or ""
 
         if value is None:
             return default

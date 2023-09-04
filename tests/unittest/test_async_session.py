@@ -12,6 +12,16 @@ async def test_get(server):
         assert r.status_code == 200
 
 
+def test_create_session_out_of_async(server):
+    s = AsyncSession()
+
+    async def get():
+        r = await s.get(str(server.url))
+        assert r.status_code == 200
+
+    asyncio.run(get())
+
+
 async def test_post_dict(server):
     async with AsyncSession() as s:
         r = await s.post(
