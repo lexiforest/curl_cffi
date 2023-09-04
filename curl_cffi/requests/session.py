@@ -606,8 +606,8 @@ class AsyncSession(BaseSession):
             ```
         """
         super().__init__(**kwargs)
-        self.loop = loop if loop is not None else asyncio.get_running_loop()
-        self.acurl = async_curl if async_curl is not None else AsyncCurl(loop=self.loop)
+        self.loop = loop
+        self._acurl = async_curl
         self.max_clients = max_clients
         self.reset()
         if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
@@ -615,6 +615,14 @@ class AsyncSession(BaseSession):
                 asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy
             ):
                 warnings.warn(WINDOWS_WARN)
+
+    @property
+    def acurl(self):
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
+        if self._acurl is None:
+            self._acurl = AsyncCurl(loop=self.loop)
+        return self._acurl
 
     def reset(self):
         self.pool = asyncio.LifoQueue(self.max_clients)
