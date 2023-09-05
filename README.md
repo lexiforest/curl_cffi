@@ -26,6 +26,10 @@ This should work on Linux(x86_64/aarch64), macOS(Intel/Apple Silicon) and Window
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
 
+To install beta releases:
+
+    pip install curl_cffi --pre
+
 ## Usage
 
 ### requests-like
