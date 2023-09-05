@@ -73,7 +73,7 @@ class Headers(typing.MutableMapping[str, str]):
         headers: typing.Optional[HeaderTypes] = None,
         encoding: typing.Optional[str] = None,
     ) -> None:
-        if headers is None:
+        if headers is None or len(headers) == 0:
             self._list = []  # type: typing.List[typing.Tuple[bytes, bytes, bytes]]
         elif isinstance(headers, Headers):
             self._list = list(headers._list)

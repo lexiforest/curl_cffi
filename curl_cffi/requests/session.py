@@ -550,7 +550,9 @@ class Session(BaseSession):
             else:
                 c.perform()
         except CurlError as e:
-            raise RequestsError(str(e), e.code) from e
+            rsp = self._parse_response(c, buffer, header_buffer)
+            rsp.request = req
+            raise RequestsError(str(e), e.code, rsp) from e
         else:
             rsp = self._parse_response(c, buffer, header_buffer)
             rsp.request = req
@@ -712,7 +714,9 @@ class AsyncSession(BaseSession):
             await self.acurl.add_handle(curl)
             # print(curl.getinfo(CurlInfo.CAINFO))
         except CurlError as e:
-            raise RequestsError(str(e), e.code) from e
+            rsp = self._parse_response(curl, buffer, header_buffer)
+            rsp.request = req
+            raise RequestsError(str(e), e.code, rsp) from e
         else:
             rsp = self._parse_response(curl, buffer, header_buffer)
             rsp.request = req

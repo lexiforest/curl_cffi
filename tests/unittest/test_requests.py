@@ -4,6 +4,7 @@ from io import BytesIO
 import pytest
 
 from curl_cffi import requests
+from curl_cffi.const import CurlECode
 
 
 def test_head(server):
@@ -168,6 +169,13 @@ def test_follow_redirects(server):
     )
     assert r.status_code == 200
     assert r.redirect_count == 1
+
+
+def test_too_many_redirects(server):
+    with pytest.raises(requests.RequestsError) as e:
+        requests.get(str(server.url.copy_with(path="/redirect_loop")), max_redirects=2)
+    assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+    assert e.value.response.status_code == 301  # type: ignore
 
 
 def test_verify(https_server):

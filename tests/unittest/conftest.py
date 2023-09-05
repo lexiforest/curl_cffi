@@ -99,6 +99,8 @@ async def app(scope, receive, send):
         await set_special_cookies(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
         await redirect_301(scope, receive, send)
+    elif scope["path"].startswith("/redirect_loop"):
+        await redirect_loop(scope, receive, send)
     elif scope["path"].startswith("/redirect_then_echo_cookies"):
         await redirect_then_echo_cookies(scope, receive, send)
     elif scope["path"].startswith("/redirect_then_echo_headers"):
@@ -338,6 +340,13 @@ async def set_special_cookies(scope, receive, send):
 async def redirect_301(scope, receive, send):
     await send(
         {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/"]]}
+    )
+    await send({"type": "http.response.body", "body": b"Redirecting..."})
+
+
+async def redirect_loop(scope, receive, send):
+    await send(
+        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/redirect_loop"]]}
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 
