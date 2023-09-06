@@ -28,6 +28,7 @@ ffibuilder.set_source(
     sources=[
         os.path.join(os.path.dirname(__file__), "ffi/shim.c"),
     ],
+    extra_compile_args=["-Wno-implicit-function-declaration"],
     # extra_link_args=["-Wl,-rpath,$ORIGIN/../libcurl/" + arch],
 )
 
