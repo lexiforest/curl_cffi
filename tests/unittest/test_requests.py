@@ -3,7 +3,7 @@ from io import BytesIO
 
 import pytest
 
-from curl_cffi import requests
+from curl_cffi import requests, CurlOpt
 from curl_cffi.const import CurlECode
 
 
@@ -332,11 +332,22 @@ def test_cookies_after_redirect(server):
 
 
 def test_cookies_with_special_chars(server):
-    s = requests.Session(debug=True)
+    s = requests.Session()
     r = s.get(str(server.url.copy_with(path="/set_special_cookies")))
     assert s.cookies["foo"] == "bar space"
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar space"
+
+
+def test_cookies_mislead_by_host(server):
+    s = requests.Session(debug=True)
+    s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    s.cookies.set("foo", "bar")
+    print("URL is: ", str(server.url))
+    # TODO replace hard-coded url with server.url.replace(host="example.com")
+    r = s.get("http://example.com:8000", headers={"Host": "example.com"})
+    r = s.get(str(server.url.copy_with(path="/echo_cookies")))
+    assert r.json()["foo"] == "bar"
 
 
 # https://github.com/yifeikong/curl_cffi/issues/39

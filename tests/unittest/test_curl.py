@@ -301,3 +301,11 @@ def test_reason(server):
     headers = buffer.getvalue()
     headers = headers.splitlines()
     assert c.get_reason_phrase(headers[0]) == b"OK"
+
+
+def test_resolve(server):
+    c = Curl()
+    url = "http://example.com:8000"
+    c.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    c.setopt(CurlOpt.URL, url)
+    c.perform()

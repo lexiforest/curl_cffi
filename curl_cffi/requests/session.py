@@ -229,6 +229,18 @@ class BaseSession:
         h = Headers(self.headers)
         h.update(headers)
 
+        # remove Host header if it's unnecessary, otherwise curl maybe confused.
+        # Host header will be automatically add by curl if it's not present.
+        # https://github.com/yifeikong/curl_cffi/issues/119
+        host_header = h.get("Host")
+        if host_header is not None:
+            u = urlparse(url)
+            if host_header == u.netloc or host_header == u.hostname:
+                try:
+                    del h["Host"]
+                except KeyError:
+                    pass
+
         header_lines = []
         for k, v in h.multi_items():
             header_lines.append(f"{k}: {v}")

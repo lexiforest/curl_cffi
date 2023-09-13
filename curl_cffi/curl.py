@@ -79,6 +79,7 @@ class Curl:
         """
         self._curl = lib.curl_easy_init()
         self._headers = ffi.NULL
+        self._resolve = ffi.NULL
         self._cacert = cacert
         self._is_cert_set = False
         self._write_handle = None
@@ -172,6 +173,12 @@ class Curl:
             for header in value:
                 self._headers = lib.curl_slist_append(self._headers, header)
             ret = lib._curl_easy_setopt(self._curl, option, self._headers)
+        elif option == CurlOpt.RESOLVE:
+            for resolve in value:
+                if isinstance(resolve, str):
+                    resolve = resolve.encode()
+                self._resolve = lib.curl_slist_append(self._resolve, resolve)
+            ret = lib._curl_easy_setopt(self._curl, option, self._resolve)
         else:
             ret = lib._curl_easy_setopt(self._curl, option, c_value)
         self._check_error(ret, "setopt(%s, %s)" % (option, value))
@@ -261,6 +268,7 @@ class Curl:
         self._is_cert_set = False
         lib.curl_easy_reset(self._curl)
         self._set_error_buffer()
+        self._resolve = ffi.NULL
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
         """Extract cookies.SimpleCookie from header lines.
@@ -308,3 +316,4 @@ class Curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None
         ffi.release(self._error_buffer)
+        self._resolve = ffi.NULL
