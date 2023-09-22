@@ -3,12 +3,14 @@ import sys
 import re
 import threading
 import warnings
+import queue
 from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
 from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
+from concurrent.futures import ThreadPoolExecutor
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
 from .cookies import Cookies, CookieTypes, CurlMorsel
@@ -185,6 +187,7 @@ class BaseSession:
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
+        stream: bool = False,
     ):
         c = curl
 
@@ -355,12 +358,14 @@ class BaseSession:
         for k, v in self.curl_options.items():
             c.setopt(k, v)
 
-        if content_callback is None:
+        buffer = None
+        if stream:
+            c.setopt(CurlOpt.WRITEFUNCTION, self.queue.put)  # type: ignore
+        elif content_callback is not None:
+            c.setopt(CurlOpt.WRITEFUNCTION, content_callback)
+        else:
             buffer = BytesIO()
             c.setopt(CurlOpt.WRITEDATA, buffer)
-        else:
-            buffer = None
-            c.setopt(CurlOpt.WRITEFUNCTION, content_callback)
         header_buffer = BytesIO()
         c.setopt(CurlOpt.HEADERDATA, header_buffer)
 
@@ -470,6 +475,8 @@ class Session(BaseSession):
         super().__init__(**kwargs)
         self._thread = thread
         self._use_thread_local_curl = use_thread_local_curl
+        self._queue = None
+        self._executor = None
         if use_thread_local_curl:
             self._local = threading.local()
             if curl:
@@ -485,12 +492,29 @@ class Session(BaseSession):
     def curl(self):
         if self._use_thread_local_curl:
             if self._is_customized_curl:
-                warnings.warn("Creating fresh curl in different thread.")
+                warnings.warn("Creating fresh curl handle in different thread.")
             if not getattr(self._local, "curl", None):
                 self._local.curl = Curl(debug=self.debug)
             return self._local.curl
         else:
             return self._curl
+
+    @property
+    def executor(self):
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor()
+        return self._executor
+
+    @property
+    def queue(self):
+        if self._use_thread_local_curl:
+            if getattr(self._local, "queue", None) is None:
+                self._local.queue = queue.Queue()
+            return self._local.queue
+        else:
+            if self._queue is None:
+                self._queue = queue.Queue()
+            return self._queue
 
     def __enter__(self):
         return self
@@ -525,6 +549,7 @@ class Session(BaseSession):
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
+        stream: bool = False,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         c = self.curl
@@ -551,6 +576,7 @@ class Session(BaseSession):
             default_headers=default_headers,
             http_version=http_version,
             interface=interface,
+            stream=stream,
         )
         try:
             if self._thread == "eventlet":
@@ -560,7 +586,16 @@ class Session(BaseSession):
                 # see: https://www.gevent.org/api/gevent.threadpool.html
                 gevent.get_hub().threadpool.spawn(c.perform).get()
             else:
-                c.perform()
+                if stream:
+                    queue = self.queue  # using queue from current thread
+
+                    def perform():
+                        c.perform()
+                        queue.put(None)  # sentinel
+
+                    self.executor.submit(perform)
+                else:
+                    c.perform()
         except CurlError as e:
             rsp = self._parse_response(c, buffer, header_buffer)
             rsp.request = req
@@ -568,9 +603,11 @@ class Session(BaseSession):
         else:
             rsp = self._parse_response(c, buffer, header_buffer)
             rsp.request = req
+            rsp.queue = self.queue
             return rsp
         finally:
-            self.curl.reset()
+            if not stream:
+                self.curl.reset()
 
     head = partialmethod(request, "HEAD")
     get = partialmethod(request, "GET")
@@ -626,7 +663,7 @@ class AsyncSession(BaseSession):
         self.init_pool()
         if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
             if isinstance(
-                asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy
+                asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy  # type: ignore
             ):
                 warnings.warn(WINDOWS_WARN)
 

@@ -405,3 +405,8 @@ def test_session_with_headers(server):
     r = s.get(str(server.url), headers={"Foo": "bar"})
     r = s.get(str(server.url), headers={"Foo": "baz"})
     assert r.status_code == 200
+
+
+def test_stream(server):
+    s = requests.Session()
+
