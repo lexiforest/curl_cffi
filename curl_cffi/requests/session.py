@@ -623,7 +623,7 @@ class AsyncSession(BaseSession):
         self.loop = loop
         self._acurl = async_curl
         self.max_clients = max_clients
-        self.reset()
+        self.init_pool()
         if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
             if isinstance(
                 asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy
@@ -638,20 +638,18 @@ class AsyncSession(BaseSession):
             self._acurl = AsyncCurl(loop=self.loop)
         return self._acurl
 
-    def reset(self):
+    def init_pool(self):
         self.pool = asyncio.LifoQueue(self.max_clients)
         while True:
             try:
                 self.pool.put_nowait(None)
             except asyncio.QueueFull:
                 break
-        self._running_curl = []
 
     async def pop_curl(self):
         curl = await self.pool.get()
         if curl is None:
             curl = Curl(debug=self.debug)
-            self._running_curl.append(curl)
         return curl
 
     def push_curl(self, curl):
