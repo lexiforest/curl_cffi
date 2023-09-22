@@ -88,9 +88,7 @@ def request(
     Returns:
         A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
     """
-    with Session(
-        thread=thread, curl_options=curl_options, debug=debug
-    ) as s:
+    with Session(thread=thread, curl_options=curl_options, debug=debug) as s:
         return s.request(
             method=method,
             url=url,

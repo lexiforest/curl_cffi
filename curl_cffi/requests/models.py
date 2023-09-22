@@ -1,11 +1,19 @@
 import warnings
 from json import loads
 from typing import Optional
+import queue
 
 from .. import Curl
 from .headers import Headers
 from .cookies import Cookies
 from .errors import RequestsError
+
+
+def clear_queue(q: queue.Queue):
+    with q.mutex:
+        q.queue.clear()
+        q.all_tasks_done.notify_all()
+        q.unfinished_tasks = 0
 
 
 class Request:
@@ -34,6 +42,7 @@ class Response:
         http_version: http version used.
         history: history redirections, only headers are available.
     """
+
     def __init__(self, curl: Optional[Curl] = None, request: Optional[Request] = None):
         self.curl = curl
         self.request = request
@@ -51,6 +60,7 @@ class Response:
         self.redirect_url = ""
         self.http_version = 0
         self.history = []
+        self.queue: Optional[queue.Queue] = None
 
     @property
     def text(self) -> str:
@@ -59,6 +69,48 @@ class Response:
     def raise_for_status(self):
         if not self.ok:
             raise RequestsError(f"HTTP Error {self.status_code}: {self.reason}")
+
+    def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
+        """
+        Copied from: https://requests.readthedocs.io/en/latest/_modules/requests/models/
+        which is under the License: Apache 2.0
+        """
+        pending = None
+
+        for chunk in self.iter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
+            if pending is not None:
+                chunk = pending + chunk
+            if delimiter:
+                lines = chunk.split(delimiter)
+            else:
+                lines = chunk.splitlines()
+            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
+                pending = lines.pop()
+            else:
+                pending = None
+
+            yield from lines
+
+        if pending is not None:
+            yield pending
+
+    def iter_content(self, chunk_size=None, decode_unicode=False):
+        if chunk_size:
+            warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
+        if decode_unicode:
+            raise NotImplementedError()
+        try:
+            while True:
+                chunk = self.queue.get()  # type: ignore
+                if chunk is None:
+                    return
+                yield chunk
+        finally:
+            # If anything happens, always free the memory
+            self.curl.reset()  # type: ignore
+            clear_queue(self.queue)  # type: ignore
 
     def json(self, **kw):
         return loads(self.content, **kw)
