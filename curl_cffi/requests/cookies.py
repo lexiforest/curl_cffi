@@ -4,13 +4,14 @@
 
 __all__ = ["Cookies"]
 
+import re
 import time
 import typing
-import urllib.request
-from http.cookiejar import Cookie, CookieJar, eff_request_host  # type: ignore
+from http.cookiejar import Cookie, CookieJar
+from urllib.parse import urlparse
 from dataclasses import dataclass
 
-from .errors import CookieConflict
+from .errors import CookieConflict, RequestsError
 
 CookieTypes = typing.Union[
     "Cookies", CookieJar, typing.Dict[str, str], typing.List[typing.Tuple[str, str]]
@@ -66,6 +67,10 @@ class CurlMorsel:
         )
 
     def to_curl_format(self):
+        if not self.hostname:
+            raise RequestsError(
+                "Domain not found for cookie {}={}".format(self.name, self.value)
+            )
         return "\t".join(
             [
                 self.hostname,
@@ -117,6 +122,10 @@ class CurlMorsel:
         )
 
 
+cut_port_re = re.compile(r":\d+$", re.ASCII)
+IPV4_RE = re.compile(r"\.\d+$", re.ASCII)
+
+
 class Cookies(typing.MutableMapping[str, str]):
     """
     HTTP Cookies, as a mutable mapping.
@@ -139,20 +148,32 @@ class Cookies(typing.MutableMapping[str, str]):
         else:
             self.jar = cookies
 
+    def _eff_request_host(self, request) -> str:
+        """
+        Almost equivalent to the eff_request_host function in:
+            https://github.com/python/cpython/blob/3.11/Lib/http/cookiejar.py#L636
+        """
+        host = urlparse(request.url)[1]
+        if host == "":
+            host = request.headers.get("Host", "")
+
+        # remove port, if present
+        host = cut_port_re.sub("", host, 1)
+        host = host.lower()
+        if host.find(".") == -1 and not IPV4_RE.search(host):
+            host += ".local"
+        return host
+
     def get_cookies_for_curl(self, request) -> typing.List[CurlMorsel]:
-        """the process is similar to `cookiejar.add_cookie_header`"""
-        urllib_request = self._CookieCompatRequest(request)
+        """the process is similar to `cookiejar.add_cookie_header`, but load all cookies"""
         self.jar._cookies_lock.acquire()  # type: ignore
+        morsels = []
         try:
             self.jar._policy._now = self._now = int(time.time())  # type: ignore
-
-            cookies = self.jar._cookies_for_request(urllib_request)  # type: ignore
-            morsels = []
-            for cookie in cookies:
+            for cookie in self.jar:
                 morsel = CurlMorsel.from_cookiejar_cookie(cookie)
                 if not morsel.hostname:
-                    _, erhn = eff_request_host(urllib_request)
-                    morsel.hostname = erhn
+                    morsel.hostname = self._eff_request_host(request)
                 morsels.append(morsel)
         finally:
             self.jar._cookies_lock.release()  # type: ignore
@@ -304,21 +325,3 @@ class Cookies(typing.MutableMapping[str, str]):
         )
 
         return f"<Cookies[{cookies_repr}]>"
-
-    class _CookieCompatRequest(urllib.request.Request):
-        """
-        Wraps a `Request` instance up in a compatibility interface suitable
-        for use with `CookieJar` operations.
-        """
-
-        def __init__(self, request) -> None:
-            super().__init__(
-                url=str(request.url),
-                headers=dict(request.headers),
-                method=request.method,
-            )
-            self.request = request
-
-        def add_unredirected_header(self, key: str, value: str) -> None:
-            super().add_unredirected_header(key, value)
-            self.request.headers[key] = value

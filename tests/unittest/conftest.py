@@ -99,6 +99,8 @@ async def app(scope, receive, send):
         await set_special_cookies(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
         await redirect_301(scope, receive, send)
+    elif scope["path"].startswith("/redirect_to"):
+        await redirect_to(scope, receive, send)
     elif scope["path"].startswith("/redirect_loop"):
         await redirect_loop(scope, receive, send)
     elif scope["path"].startswith("/redirect_then_echo_cookies"):
@@ -214,6 +216,7 @@ async def echo_path(scope, receive, send):
     )
     await send({"type": "http.response.body", "body": json.dumps(body).encode()})
 
+
 async def echo_params(scope, receive, send):
     body = {"params": parse_qs(scope["query_string"].decode())}
     await send(
@@ -224,6 +227,7 @@ async def echo_params(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": json.dumps(body).encode()})
+
 
 async def echo_binary(scope, receive, send):
     body = b""
@@ -248,7 +252,7 @@ async def echo_headers(scope, receive, send):
     body = defaultdict(list)
     # print(scope.get("headers"))
     for name, value in scope.get("headers", []):
-        body[name.capitalize().decode()].append(value.decode() )
+        body[name.capitalize().decode()].append(value.decode())
 
     await send(
         {
@@ -316,7 +320,7 @@ async def delete_cookies(scope, receive, send):
             "status": 200,
             "headers": [
                 [b"content-type", b"text/plain"],
-                [b"set-cookie", b'foo=; Max-Age=0'],
+                [b"set-cookie", b"foo=; Max-Age=0"],
             ],
         }
     )
@@ -344,16 +348,36 @@ async def redirect_301(scope, receive, send):
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 
 
+async def redirect_to(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode())
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 301,
+            "headers": [[b"location", params["to"][0].encode()]],  # type: ignore
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Redirecting..."})
+
+
 async def redirect_loop(scope, receive, send):
     await send(
-        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/redirect_loop"]]}
+        {
+            "type": "http.response.start",
+            "status": 301,
+            "headers": [[b"location", b"/redirect_loop"]],
+        }
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 
 
 async def redirect_then_echo_cookies(scope, receive, send):
     await send(
-        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/echo_cookies"]]}
+        {
+            "type": "http.response.start",
+            "status": 301,
+            "headers": [[b"location", b"/echo_cookies"]],
+        }
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 
@@ -362,7 +386,11 @@ async def redirect_then_echo_headers(scope, receive, send):
     for name, value in scope.get("headers", []):
         print("Header>>>", name, ":", value)
     await send(
-        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/echo_headers"]]}
+        {
+            "type": "http.response.start",
+            "status": 301,
+            "headers": [[b"location", b"/echo_headers"]],
+        }
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 

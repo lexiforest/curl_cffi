@@ -1,6 +1,8 @@
 import pytest
-from curl_cffi.requests.cookies import Cookies
-from curl_cffi.requests.errors import CookieConflict
+from curl_cffi.requests.models import Request
+from curl_cffi.requests.cookies import Cookies, CurlMorsel
+from curl_cffi.requests.headers import Headers
+from curl_cffi.requests.errors import CookieConflict, RequestsError
 
 
 def test_cookies_conflict():
@@ -24,3 +26,18 @@ def test_cookies_conflict_but_same():
     c.set("foo", "bar", domain="example.com")
     c.set("foo", "bar", domain="test.local")
     assert c.get("foo") == "bar"
+
+
+def test_curl_format_with_hostname():
+    m = CurlMorsel(name="foo", value="bar", hostname="example.com")
+    assert m.to_curl_format() == "example.com\tFALSE\t/\tFALSE\t0\tfoo\tbar"
+    m = CurlMorsel(name="foo", value="bar", hostname="example.com", secure=True)
+    assert m.to_curl_format() == "example.com\tFALSE\t/\tTRUE\t0\tfoo\tbar"
+    m = CurlMorsel(name="foo", value="bar", hostname="example.com", path="/path")
+    assert m.to_curl_format() == "example.com\tFALSE\t/path\tFALSE\t0\tfoo\tbar"
+
+
+def test_curl_format_without_hostname():
+    m = CurlMorsel(name="foo", value="bar")
+    with pytest.raises(RequestsError):
+        m.to_curl_format()

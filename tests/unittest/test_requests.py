@@ -339,6 +339,7 @@ def test_cookies_with_special_chars(server):
     assert r.json()["foo"] == "bar space"
 
 
+# https://github.com/yifeikong/curl_cffi/issues/119
 def test_cookies_mislead_by_host(server):
     s = requests.Session(debug=True)
     s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
@@ -348,6 +349,42 @@ def test_cookies_mislead_by_host(server):
     r = s.get("http://example.com:8000", headers={"Host": "example.com"})
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar"
+
+
+# https://github.com/yifeikong/curl_cffi/issues/119
+def test_cookies_redirect_to_another_domain(server):
+    s = requests.Session()
+    s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8000:127.0.0.1"])
+    s.cookies.set("foo", "google.com", domain="google.com")
+    r = s.get(
+        str(server.url.copy_with(path="/redirect_to")),
+        params={"to": "http://google.com:8000/echo_cookies"},
+    )
+    cookies = r.json()
+    assert cookies["foo"] == "google.com"
+
+
+# https://github.com/yifeikong/curl_cffi/issues/119
+def test_cookies_wo_hostname_redirect_to_another_domain(server):
+    s = requests.Session(debug=True)
+    s.curl.setopt(
+        CurlOpt.RESOLVE,
+        [
+            "example.com:8000:127.0.0.1",
+            "google.com:8000:127.0.0.1",
+        ],
+    )
+    s.cookies.set("foo", "bar")
+    s.cookies.set("hello", "world", domain="google.com")
+    r = s.get(
+        # str(server.url.copy_with(path="/redirect_to")),
+        "http://example.com:8000/redirect_to",
+        params={"to": "http://google.com:8000/echo_cookies"},
+    )
+    cookies = r.json()
+    # cookies without domains are bound to the first domain, which is example.com in this case.
+    assert len(cookies) == 1
+    assert cookies["hello"] == "world"
 
 
 # https://github.com/yifeikong/curl_cffi/issues/39
