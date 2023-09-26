@@ -130,7 +130,9 @@ body = buffer.getvalue()
 print(body.decode())
 ```
 
-See the [docs](https://curl-cffi.readthedocs.io) for more details.
+See the [docs](https://curl-cffi.readthedocs.io) for more details. 
+
+If you are using scrapy, check out this middleware: [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
 
 ## Acknowledgement
 

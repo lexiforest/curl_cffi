@@ -82,7 +82,7 @@ async with AsyncSession() as s:
     r = await s.get("https://example.com")
 ```
 
-更多并发:
+更多并发：
 
 ```python
 import asyncio
@@ -124,6 +124,8 @@ print(body.decode())
 ```
 
 更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
+
+如果你用 scrapy 的话，可以参考这个中间件：[tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
 
 有问题和建议请优先提 issue，中英文均可，也可以加微信群交流讨论：
 
