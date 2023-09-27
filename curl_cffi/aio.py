@@ -118,7 +118,7 @@ class AsyncCurl:
             # print("force timeout")
             self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
 
-    async def add_handle(self, curl: Curl, wait=True):
+    def add_handle(self, curl: Curl):
         """Add a curl handle to be managed by curl_multi. This is the equivalent of
         `perform` in the async world."""
         # import pdb; pdb.set_trace()
@@ -127,11 +127,7 @@ class AsyncCurl:
         future = self.loop.create_future()
         self._curl2future[curl] = future
         self._curl2curl[curl._curl] = curl
-        if wait:
-            try:
-                await future
-            finally:
-                curl.clean_after_perform()
+        return future
 
     def socket_action(self, sockfd: int, ev_bitmask: int) -> int:
         """Call libcurl socket_action function"""
@@ -167,24 +163,25 @@ class AsyncCurl:
 
     def _pop_future(self, curl: Curl):
         lib.curl_multi_remove_handle(self._curlm, curl._curl)
-        self._curl2curl.pop(curl._curl)
-        return self._curl2future.pop(curl)
+        self._curl2curl.pop(curl._curl, None)
+        return self._curl2future.pop(curl, None)
 
-    def cancel_handle(self, curl: Curl):
+    def remove_handle(self, curl: Curl):
         """Cancel a future for given curl handle."""
         future = self._pop_future(curl)
-        future.cancel()
+        if future and not future.done() and not future.cancelled():
+            future.cancel()
 
     def set_result(self, curl: Curl):
         """Mark a future as done for given curl handle."""
         future = self._pop_future(curl)
-        if not future.done() and not future.cancelled():
+        if future and not future.done() and not future.cancelled():
             future.set_result(None)
 
     def set_exception(self, curl: Curl, exception):
         """Raise exception of a future for given curl handle."""
         future = self._pop_future(curl)
-        if not future.done() and not future.cancelled():
+        if future and not future.done() and not future.cancelled():
             future.set_exception(exception)
 
     def setopt(self, option, value):

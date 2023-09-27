@@ -1,4 +1,4 @@
-from curl_cffi import AsyncCurl, Curl
+from curl_cffi import AsyncCurl, Curl, CurlOpt
 
 
 async def test_init(server):
@@ -8,7 +8,10 @@ async def test_init(server):
 async def test_add_handle(server):
     ac = AsyncCurl()
     c = Curl()
-    await ac.add_handle(c, wait=False)
+    c.setopt(CurlOpt.URL, "http://example.com")
+    c.setopt(CurlOpt.WRITEFUNCTION, lambda x: x)
+    fut = ac.add_handle(c)
+    await fut
 
 
 async def test_socket_action(server):
@@ -16,12 +19,13 @@ async def test_socket_action(server):
     running = ac.socket_action(-1, 0)
     # assert running == 0
     c = Curl()
-    await ac.add_handle(c, wait=False)
+    c.setopt(CurlOpt.URL, "http://example.com")
+    c.setopt(CurlOpt.WRITEFUNCTION, lambda x: x)
+    fut = ac.add_handle(c)
+    await fut
     running = ac.socket_action(-1, 0)
     # assert running == 1
 
 
 async def test_process_data(server):
     ...
-
-

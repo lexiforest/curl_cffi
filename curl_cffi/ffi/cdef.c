@@ -32,6 +32,7 @@ int curl_multi_remove_handle(void *curlm, void *curl);
 int curl_multi_socket_action(void *curlm, int sockfd, int ev_bitmask, int *running_handle);
 int curl_multi_setopt(void *curlm, int option, void* param);
 int curl_multi_assign(void *curlm, int sockfd, void *sockptr);
+int curl_multi_perform(void *curlm, int *running_handle);
 struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 extern "Python" void socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
 extern "Python" void timer_function(void *curlm, int timeout_ms, void *clientp);
