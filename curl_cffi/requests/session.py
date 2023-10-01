@@ -189,6 +189,7 @@ class BaseSession:
         interface: Optional[str] = None,
         stream: bool = False,
         queue_class: Any = None,
+        event_class: Any = None,
     ):
         c = curl
 
@@ -361,9 +362,17 @@ class BaseSession:
 
         buffer = None
         q = None
+        header_recved = None
         if stream:
             q = queue_class()  # type: ignore
-            c.setopt(CurlOpt.WRITEFUNCTION, q.put_nowait)  # type: ignore
+            header_recved = event_class()
+
+            def qput(chunk):
+                if not header_recved.is_set():
+                    header_recved.set()
+                q.put_nowait(chunk)
+
+            c.setopt(CurlOpt.WRITEFUNCTION, qput)  # type: ignore
         elif content_callback is not None:
             c.setopt(CurlOpt.WRITEFUNCTION, content_callback)
         else:
@@ -380,7 +389,7 @@ class BaseSession:
         if interface:
             c.setopt(CurlOpt.INTERFACE, interface.encode())
 
-        return req, buffer, header_buffer, q
+        return req, buffer, header_buffer, q, header_recved
 
     def _parse_response(self, curl, buffer, header_buffer):
         c = curl
@@ -545,7 +554,7 @@ class Session(BaseSession):
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         c = self.curl
-        req, buffer, header_buffer, q = self._set_curl_options(
+        req, buffer, header_buffer, q, header_recved = self._set_curl_options(
             c,
             method=method,
             url=url,
@@ -570,42 +579,50 @@ class Session(BaseSession):
             interface=interface,
             stream=stream,
             queue_class=queue.Queue,
+            event_class=threading.Event,
         )
-        try:
-            if self._thread == "eventlet":
-                # see: https://eventlet.net/doc/threading.html
-                eventlet.tpool.execute(c.perform)
-            elif self._thread == "gevent":
-                # see: https://www.gevent.org/api/gevent.threadpool.html
-                gevent.get_hub().threadpool.spawn(c.perform).get()
-            else:
-                if stream:
+        if stream:
+            header_parsed = threading.Event()
 
-                    def perform():
-                        c.perform()
-                        # None acts as a sentinel
-                        q.put(None)  # type: ignore
+            def perform():
+                c.perform()
+                # None acts as a sentinel
+                q.put(None)  # type: ignore
 
-                    def cleanup(fut):
-                        c.reset()
+            def cleanup(fut):
+                header_parsed.wait()
+                c.reset()
 
-                    stream_task = self.executor.submit(perform)
-                    stream_task.add_done_callback(cleanup)
-                else:
-                    c.perform()
-        except CurlError as e:
+            stream_task = self.executor.submit(perform)
+            stream_task.add_done_callback(cleanup)
+
+            # Wait for the first chunk
+            header_recved.wait()  # type: ignore
             rsp = self._parse_response(c, buffer, header_buffer)
+            header_parsed.set()
             rsp.request = req
-            raise RequestsError(str(e), e.code, rsp) from e
-        else:
-            rsp = self._parse_response(c, buffer, header_buffer)
-            rsp.request = req
-            if stream:
-                rsp.stream_task = stream_task  # type: ignore
+            rsp.stream_task = stream_task  # type: ignore
             rsp.queue = q
             return rsp
-        finally:
-            if not stream:
+        else:
+            try:
+                if self._thread == "eventlet":
+                    # see: https://eventlet.net/doc/threading.html
+                    eventlet.tpool.execute(c.perform)
+                elif self._thread == "gevent":
+                    # see: https://www.gevent.org/api/gevent.threadpool.html
+                    gevent.get_hub().threadpool.spawn(c.perform).get()
+                else:
+                    c.perform()
+            except CurlError as e:
+                rsp = self._parse_response(c, buffer, header_buffer)
+                rsp.request = req
+                raise RequestsError(str(e), e.code, rsp) from e
+            else:
+                rsp = self._parse_response(c, buffer, header_buffer)
+                rsp.request = req
+                return rsp
+            finally:
                 self.curl.reset()
 
     head = partialmethod(request, "HEAD")
@@ -750,7 +767,7 @@ class AsyncSession(BaseSession):
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
-        req, buffer, header_buffer, q = self._set_curl_options(
+        req, buffer, header_buffer, q, header_recved = self._set_curl_options(
             curl=curl,
             method=method,
             url=url,
@@ -775,38 +792,46 @@ class AsyncSession(BaseSession):
             interface=interface,
             stream=stream,
             queue_class=asyncio.Queue,
+            event_class=asyncio.Event,
         )
-        try:
-            # curl.debug()
+        if stream:
             task = self.acurl.add_handle(curl)
-            if stream:
 
-                async def perform():
-                    await task
-                    # None acts as a sentinel
-                    await q.put(None)  # type: ignore
-
-                def cleanup(fut):
-                    self.release_curl(curl)
-
-                stream_task = asyncio.create_task(perform())
-                stream_task.add_done_callback(cleanup)
-            else:
+            async def perform():
                 await task
-            # print(curl.getinfo(CurlInfo.CAINFO))
-        except CurlError as e:
+                # None acts as a sentinel
+                await q.put(None)  # type: ignore
+
+            def cleanup(fut):
+                self.release_curl(curl)
+
+            stream_task = asyncio.create_task(perform())
+            stream_task.add_done_callback(cleanup)
+
+            await header_recved.wait()  # type: ignore
+            # Unlike threads, coroutines does not use preemptive scheduling.
+            # For asyncio, there is no need for a header_parsed event, the
+            # _parse_response will execute in the foreground, no background tasks running.
             rsp = self._parse_response(curl, buffer, header_buffer)
             rsp.request = req
-            raise RequestsError(str(e), e.code, rsp) from e
-        else:
-            rsp = self._parse_response(curl, buffer, header_buffer)
-            rsp.request = req
+            rsp.stream_task = stream_task  # type: ignore
             rsp.queue = q
-            if stream:
-                rsp.stream_task = stream_task  # type: ignore
             return rsp
-        finally:
-            if not stream:
+        else:
+            try:
+                # curl.debug()
+                task = self.acurl.add_handle(curl)
+                await task
+                # print(curl.getinfo(CurlInfo.CAINFO))
+            except CurlError as e:
+                rsp = self._parse_response(curl, buffer, header_buffer)
+                rsp.request = req
+                raise RequestsError(str(e), e.code, rsp) from e
+            else:
+                rsp = self._parse_response(curl, buffer, header_buffer)
+                rsp.request = req
+                return rsp
+            finally:
                 self.release_curl(curl)
 
     head = partialmethod(request, "HEAD")

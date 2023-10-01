@@ -24,6 +24,8 @@ with requests.Session() as s:
     print("=====================================================================\n")
     r = s.get(URL, stream=True)
     for chunk in r.iter_content():
+        print("Status: ", r.status_code)
+        assert r.status_code == 200
         print("CHUNK", chunk)
     r.close()
 
@@ -33,6 +35,8 @@ with requests.Session() as s:
     print("=====================================================================\n")
     r = s.get(URL, stream=True)
     for line in r.iter_lines():
+        print("Status: ", r.status_code)
+        assert r.status_code == 200
         print("LINE", line.decode())
     r.close()
 
@@ -42,6 +46,8 @@ with requests.Session() as s:
     print("=====================================================================\n")
     with closing(s.get(URL, stream=True)) as r:
         for chunk in r.iter_content():
+            print("Status: ", r.status_code)
+            assert r.status_code == 200
             print("CHUNK", chunk)
 
 
@@ -52,14 +58,18 @@ async def async_examples():
         print("====================================================================\n")
         r = await s.get(URL, stream=True)
         async for chunk in r.aiter_content():
+            print("Status: ", r.status_code)
+            assert r.status_code == 200
             print("CHUNK", chunk)
         await r.aclose()
 
         print("\n====================================================================")
         print("Better, using aclosing to ensure the response is closed")
         print("====================================================================\n")
-        async with aclosing(await s.get(URL, stream=True)) as r:
+        async with aclosing(await s.get(URL.replace("20", "100"), stream=True)) as r:
             async for chunk in r.aiter_content():
+                print("Status: ", r.status_code)
+                assert r.status_code == 200
                 print("CHUNK", chunk)
 
 
