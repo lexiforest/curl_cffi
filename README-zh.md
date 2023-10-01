@@ -67,6 +67,7 @@ print(r.json())
 - chrome104
 - chrome107
 - chrome110
+- chrome116
 - chrome99_android
 - edge99
 - edge101

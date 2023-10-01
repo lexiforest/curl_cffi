@@ -6,7 +6,7 @@ from urllib.request import urlretrieve
 
 uname = platform.uname()
 
-VERSION = "0.5.4"
+VERSION = sys.argv[1]
 
 if uname.system == "Windows":
     LIBDIR = "./lib"

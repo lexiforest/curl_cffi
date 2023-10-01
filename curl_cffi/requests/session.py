@@ -47,6 +47,7 @@ class BrowserType(str, Enum):
     chrome104 = "chrome104"
     chrome107 = "chrome107"
     chrome110 = "chrome110"
+    chrome116 = "chrome116"
     chrome99_android = "chrome99_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"

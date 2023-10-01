@@ -82,6 +82,7 @@ Supported impersonate versions, as supported by [curl-impersonate](https://githu
 - chrome104
 - chrome107
 - chrome110
+- chrome116
 - chrome99_android
 - edge99
 - edge101
