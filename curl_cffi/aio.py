@@ -8,7 +8,7 @@ import warnings
 
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
-from .curl import Curl, CurlError, CurlInfo
+from .curl import Curl
 
 DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
@@ -72,6 +72,7 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
 class AsyncCurl:
     """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
     socket_action APIs."""
+
     def __init__(self, cacert: str = DEFAULT_CACERT, loop=None):
         self._curlm = lib.curl_multi_init()
         self._cacert = cacert
@@ -103,7 +104,7 @@ class AsyncCurl:
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
         # Remove add readers and writers
-        for sockfd in  self._sockfds:
+        for sockfd in self._sockfds:
             self.loop.remove_reader(sockfd)
             self.loop.remove_writer(sockfd)
         # Cancel all time functions
