@@ -61,6 +61,7 @@ class Response:
         self.http_version = 0
         self.history = []
         self.queue: Optional[queue.Queue] = None
+        self.stream_task = None
 
     @property
     def text(self) -> str:
@@ -101,19 +102,55 @@ class Response:
             warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
         if decode_unicode:
             raise NotImplementedError()
-        try:
-            while True:
-                chunk = self.queue.get()  # type: ignore
-                if chunk is None:
-                    return
-                yield chunk
-        finally:
-            # If anything happens, always free the memory
-            self.curl.reset()  # type: ignore
-            clear_queue(self.queue)  # type: ignore
+        while True:
+            chunk = self.queue.get()  # type: ignore
+            if chunk is None:
+                return
+            yield chunk
 
     def json(self, **kw):
         return loads(self.content, **kw)
 
     def close(self):
-        warnings.warn("Deprecated, use Session.close")
+        self.stream_task.result()  # type: ignore
+
+    async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
+        """
+        Copied from: https://requests.readthedocs.io/en/latest/_modules/requests/models/
+        which is under the License: Apache 2.0
+        """
+        pending = None
+
+        async for chunk in self.aiter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
+            if pending is not None:
+                chunk = pending + chunk
+            if delimiter:
+                lines = chunk.split(delimiter)
+            else:
+                lines = chunk.splitlines()
+            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
+                pending = lines.pop()
+            else:
+                pending = None
+
+            for line in lines:
+                yield line
+
+        if pending is not None:
+            yield pending
+
+    async def aiter_content(self, chunk_size=None, decode_unicode=False):
+        if chunk_size:
+            warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
+        if decode_unicode:
+            raise NotImplementedError()
+        while True:
+            chunk = await self.queue.get()  # type: ignore
+            if chunk is None:
+                return
+            yield chunk
+
+    async def aclose(self):
+        await self.stream_task  # type: ignore
