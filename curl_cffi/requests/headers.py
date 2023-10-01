@@ -85,6 +85,7 @@ class Headers(typing.MutableMapping[str, str]):
                     normalize_header_value(v, encoding),
                 )
                 for k, v in headers.items()
+                if v is not None
             ]
         else:
             if isinstance(headers[0], (str, bytes)):
