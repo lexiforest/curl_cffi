@@ -107,6 +107,10 @@ class Curl:
             self.setopt(CurlOpt.VERBOSE, 1)
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
 
+    def debug(self):
+        self.setopt(CurlOpt.VERBOSE, 1)
+        lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+
     def __del__(self):
         self.close()
 

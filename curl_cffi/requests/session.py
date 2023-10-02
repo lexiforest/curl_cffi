@@ -20,7 +20,7 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .models import Request, Response
-from .websockets import WebSocket, AsyncWebSocket
+from .websockets import WebSocket
 
 try:
     import gevent
@@ -587,7 +587,7 @@ class Session(BaseSession):
         # https://curl.se/docs/websocket.html
         self.curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         self.curl.perform()
-        return WebSocket(self)
+        return WebSocket(self, self.curl)
 
     def request(
         self,
@@ -761,7 +761,7 @@ class AsyncSession(BaseSession):
             ```
         """
         super().__init__(**kwargs)
-        self.loop = loop
+        self._loop = loop
         self._acurl = async_curl
         self.max_clients = max_clients
         self._closed = False
@@ -773,9 +773,13 @@ class AsyncSession(BaseSession):
                 warnings.warn(WINDOWS_WARN)
 
     @property
+    def loop(self):
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+        return self._loop
+
+    @property
     def acurl(self):
-        if self.loop is None:
-            self.loop = asyncio.get_running_loop()
         if self._acurl is None:
             self._acurl = AsyncCurl(loop=self.loop)
         return self._acurl
@@ -836,13 +840,13 @@ class AsyncSession(BaseSession):
         finally:
             await rsp.aclose()
 
-    async def connect(self, *args, **kwargs):
+    async def connect(self, url, *args, **kwargs):
         curl = await self.pop_curl()
-        self._set_curl_options(*args, **kwargs)
+        # curl.debug()
+        self._set_curl_options(curl, "GET", url, *args, **kwargs)
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
-        task = self.acurl.add_handle(curl)
-        await task
-        return AsyncWebSocket(self, curl)
+        await self.loop.run_in_executor(None, curl.perform)
+        return WebSocket(self, curl)
 
     async def request(
         self,
