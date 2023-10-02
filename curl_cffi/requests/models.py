@@ -152,5 +152,14 @@ class Response:
                 return
             yield chunk
 
+    async def atext(self) -> str:
+        return (await self.acontent()).decode(self.charset)
+
+    async def acontent(self) -> bytes:
+        chunks = []
+        async for chunk in self.aiter_content():
+            chunks.append(chunk)
+        return b"".join(chunks)
+
     async def aclose(self):
         await self.stream_task  # type: ignore

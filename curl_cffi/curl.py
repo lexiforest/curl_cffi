@@ -266,8 +266,9 @@ class Curl:
     def reset(self):
         """Reset all curl options, wrapper for curl_easy_reset."""
         self._is_cert_set = False
-        lib.curl_easy_reset(self._curl)
-        self._set_error_buffer()
+        if self._curl is not None:
+            lib.curl_easy_reset(self._curl)
+            self._set_error_buffer()
         self._resolve = ffi.NULL
 
     def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:

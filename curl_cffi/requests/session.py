@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import contextmanager, asynccontextmanager
 import sys
 import re
 import threading
@@ -527,6 +528,14 @@ class Session(BaseSession):
         """Close the session."""
         self.curl.close()
 
+    @contextmanager
+    def stream(self, *args, **kwargs):
+        rsp = self.request(*args, **kwargs, stream=True)
+        try:
+            yield rsp
+        finally:
+            rsp.close()
+
     def request(
         self,
         method: str,
@@ -586,6 +595,8 @@ class Session(BaseSession):
 
             def perform():
                 c.perform()
+                if not header_recved.is_set():  # type: ignore
+                    header_recved.set()  # type: ignore
                 # None acts as a sentinel
                 q.put(None)  # type: ignore
 
@@ -740,6 +751,14 @@ class AsyncSession(BaseSession):
         else:
             curl.close()
 
+    @asynccontextmanager
+    async def stream(self, *args, **kwargs):
+        rsp = await self.request(*args, **kwargs, stream=True)
+        try:
+            yield rsp
+        finally:
+            await rsp.aclose()
+
     async def request(
         self,
         method: str,
@@ -799,6 +818,8 @@ class AsyncSession(BaseSession):
 
             async def perform():
                 await task
+                if not header_recved.is_set():  # type: ignore
+                    header_recved.set()  # type: ignore
                 # None acts as a sentinel
                 await q.put(None)  # type: ignore
 
