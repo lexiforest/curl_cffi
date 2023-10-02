@@ -46,3 +46,14 @@ struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 extern "Python" void socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
 extern "Python" void timer_function(void *curlm, int timeout_ms, void *clientp);
 
+// websocket
+struct curl_ws_frame {
+  int age;              /* zero */
+  int flags;            /* See the CURLWS_* defines */
+  long offset;    /* the offset of this data into the frame */
+  long bytesleft; /* number of pending bytes left of the payload */
+  ...;
+};
+
+int curl_ws_recv(void *curl, void *buffer, int buflen, int *recv, struct curl_ws_frame **meta);
+int curl_ws_send(void *curl, void *buffer, int buflen, int *sent, int fragsize, unsigned int sendflags);

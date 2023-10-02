@@ -20,6 +20,7 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .models import Request, Response
+from .websockets import WebSocket, AsyncWebSocket
 
 try:
     import gevent
@@ -581,6 +582,13 @@ class Session(BaseSession):
         finally:
             rsp.close()
 
+    def connect(self, url, *args, **kwargs):
+        self._set_curl_options(self.curl, "GET", url, *args, **kwargs)
+        # https://curl.se/docs/websocket.html
+        self.curl.setopt(CurlOpt.CONNECT_ONLY, 2)
+        self.curl.perform()
+        return WebSocket(self)
+
     def request(
         self,
         method: str,
@@ -827,6 +835,14 @@ class AsyncSession(BaseSession):
             yield rsp
         finally:
             await rsp.aclose()
+
+    async def connect(self, *args, **kwargs):
+        curl = await self.pop_curl()
+        self._set_curl_options(*args, **kwargs)
+        curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
+        task = self.acurl.add_handle(curl)
+        await task
+        return AsyncWebSocket(self, curl)
 
     async def request(
         self,

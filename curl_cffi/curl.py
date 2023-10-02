@@ -5,7 +5,7 @@ from http.cookies import SimpleCookie
 from typing import Any, List, Tuple, Union
 
 from ._wrapper import ffi, lib  # type: ignore
-from .const import CurlHttpVersion, CurlInfo, CurlOpt
+from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 
 try:
     import certifi
@@ -335,3 +335,25 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
         self._resolve = ffi.NULL
+
+    def ws_recv(self, n: int = 1024):
+        buffer = ffi.new("char[]", n)
+        n_recv = ffi.new("int *")
+        p_frame = ffi.new("struct curl_ws_frame **")
+
+        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
+        self._check_error(ret, "WS_RECV")
+        frame = p_frame[0]
+        # print(frame.offset, frame.bytesleft)
+
+        return ffi.buffer(buffer)[: n_recv[0]], frame
+
+    def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
+        n_sent = ffi.new("int *")
+        buffer = ffi.from_buffer(payload)
+        ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
+        self._check_error(ret, "WS_SEND")
+        return n_sent
+
+    def ws_close(self):
+        self.ws_send(b"", CurlWsFlag.CLOSE)

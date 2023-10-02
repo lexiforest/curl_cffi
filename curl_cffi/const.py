@@ -527,3 +527,12 @@ class CurlHttpVersion(IntEnum):
     V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */
     V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */
     V3 = 30  # Makes use of explicit HTTP/3 without fallback.
+
+
+class CurlWsFlag(IntEnum):
+    TEXT = 1 << 0
+    BINARY = 1 << 1
+    CONT = 1 << 2
+    CLOSE = 1 << 3
+    PING = 1 << 4
+    OFFSET = 1 << 5
