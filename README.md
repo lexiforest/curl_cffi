@@ -12,11 +12,19 @@ website for no obvious reason, you can give this package a try.
 ## Features
 
 - Supports JA3/TLS and http2 fingerprints impersonation.
-- Much faster than requests/httpx/tls_client, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/master/benchmark).
+- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/master/benchmark).
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
 - Supports http 2.0, which requests does not.
+
+|library|requests|aiohttp|httpx|pycurl|curl_cffi|
+|---|---|---|---|---|---|
+|http2|❌|❌|✅|✅|✅|
+|sync|✅|❌|✅|✅|✅|
+|async|❌|✅|✅|❌|✅|
+|fingerprints|❌|❌|❌|❌|✅|
+|speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
 ## Install
 
