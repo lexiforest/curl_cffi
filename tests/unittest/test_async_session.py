@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 
 import pytest
 
@@ -303,3 +304,58 @@ async def test_parallel(server):
         for idx, r in enumerate(rs):
             assert r.status_code == 200
             assert r.json()["Foo"][0] == str(idx)
+
+
+async def test_stream_iter_content(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        async with s.stream("GET", url, params={"n": "20"}) as r:
+            async for chunk in r.aiter_content():
+                assert b"path" in chunk
+
+
+async def test_stream_iter_content_break(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        async with s.stream("GET", url, params={"n": "20"}) as r:
+            idx = 0
+            async for chunk in r.aiter_content():
+                idx += 1
+                assert b"path" in chunk
+                if idx == 3:
+                    break
+            assert r.status_code == 200
+
+
+async def test_stream_iter_lines(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        async with s.stream("GET", url, params={"n": "20"}) as r:
+            async for chunk in r.aiter_lines():
+                data = json.loads(chunk)
+                assert data["path"] == "/stream"
+
+
+async def test_stream_status_code(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        async with s.stream("GET", url, params={"n": "20"}) as r:
+            assert r.status_code == 200
+
+
+async def test_stream_empty_body(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/empty_body"))
+        async with s.stream("GET", url) as r:
+            assert r.status_code == 200
+
+
+async def test_stream_atext(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        async with s.stream("GET", url, params={"n": "20"}) as r:
+            text = await r.atext()
+            chunks = text.split("\n")
+            assert len(chunks) == 20
+
+

@@ -1,5 +1,6 @@
 import base64
 from io import BytesIO
+import json
 
 import pytest
 
@@ -82,7 +83,7 @@ def test_options(server):
     assert r.status_code == 200
 
 
-def test_parms(server):
+def test_params(server):
     r = requests.get(
         str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"}
     )
@@ -407,6 +408,43 @@ def test_session_with_headers(server):
     assert r.status_code == 200
 
 
-def test_stream(server):
-    s = requests.Session()
+def test_stream_iter_content(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with s.stream("GET", url, params={"n": "20"}) as r:
+            for chunk in r.iter_content():
+                assert b"path" in chunk
 
+
+def test_stream_iter_content_break(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with s.stream("GET", url, params={"n": "20"}) as r:
+            for idx, chunk in enumerate(r.iter_content()):
+                assert b"path" in chunk
+                if idx == 3:
+                    break
+            assert r.status_code == 200
+
+
+def test_stream_iter_lines(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with s.stream("GET", url, params={"n": "20"}) as r:
+            for chunk in r.iter_lines():
+                data = json.loads(chunk)
+                assert data["path"] == "/stream"
+
+
+def test_stream_status_code(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with s.stream("GET", url, params={"n": "20"}) as r:
+            assert r.status_code == 200
+
+
+def test_stream_empty_body(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/empty_body"))
+        with s.stream("GET", url) as r:
+            assert r.status_code == 200

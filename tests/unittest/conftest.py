@@ -81,6 +81,10 @@ async def app(scope, receive, send):
         await echo_path(scope, receive, send)
     elif scope["path"].startswith("/echo_params"):
         await echo_params(scope, receive, send)
+    elif scope["path"].startswith("/stream"):
+        await stream(scope, receive, send)
+    elif scope["path"].startswith("/empty_body"):
+        await empty_body(scope, receive, send)
     elif scope["path"].startswith("/echo_body"):
         await echo_body(scope, receive, send)
     elif scope["path"].startswith("/echo_binary"):
@@ -227,6 +231,38 @@ async def echo_params(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": json.dumps(body).encode()})
+
+
+async def stream(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [[b"content-type", b"application/json"]],
+        }
+    )
+    body = {"path": scope["path"], "params": parse_qs(scope["query_string"].decode())}
+    n = int(parse_qs(scope["query_string"].decode()).get("n", [10])[0])
+    for _ in range(n - 1):
+        await send(
+            {
+                "type": "http.response.body",
+                "body": json.dumps(body).encode() + b"\n",
+                "more_body": True,
+            }
+        )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": json.dumps(body).encode(),
+            "more_body": False,
+        }
+    )
+
+
+async def empty_body(scope, receive, send):
+    await send({"type": "http.response.start", "status": 200})
+    await send({"type": "http.response.body", "body": b""})
 
 
 async def echo_binary(scope, receive, send):
