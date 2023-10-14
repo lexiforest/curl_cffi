@@ -594,11 +594,13 @@ class Session(BaseSession):
             header_parsed = threading.Event()
 
             def perform():
-                c.perform()
-                if not header_recved.is_set():  # type: ignore
-                    header_recved.set()  # type: ignore
-                # None acts as a sentinel
-                q.put(None)  # type: ignore
+                try:
+                    c.perform()
+                finally:
+                    if not header_recved.is_set():  # type: ignore
+                        header_recved.set()  # type: ignore
+                    # None acts as a sentinel
+                    q.put(None)  # type: ignore
 
             def cleanup(fut):
                 header_parsed.wait()
@@ -817,11 +819,13 @@ class AsyncSession(BaseSession):
             task = self.acurl.add_handle(curl)
 
             async def perform():
-                await task
-                if not header_recved.is_set():  # type: ignore
-                    header_recved.set()  # type: ignore
-                # None acts as a sentinel
-                await q.put(None)  # type: ignore
+                try:
+                    await task
+                finally:
+                    if not header_recved.is_set():  # type: ignore
+                        header_recved.set()  # type: ignore
+                    # None acts as a sentinel
+                    await q.put(None)  # type: ignore
 
             def cleanup(fut):
                 self.release_curl(curl)
