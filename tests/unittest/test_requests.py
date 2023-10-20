@@ -35,6 +35,13 @@ def test_callback(server):
     assert buffer.getvalue() == b"foo=bar"
 
 
+def test_post_large_body(server):
+    bar = "a" * 100000
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": bar})
+    assert r.status_code == 200
+    assert r.json()["foo"] == bar
+
+
 def test_post_str(server):
     r = requests.post(
         str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}'
@@ -133,6 +140,16 @@ def test_cookies(server):
     )
     cookies = r.json()
     assert cookies["foo"] == "bar"
+
+
+def test_secure_cookies(server):
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_cookies")),
+        cookies={"__Secure-foo": "bar", "__Host-hello": "world"},
+    )
+    cookies = r.json()
+    assert cookies["__Secure-foo"] == "bar"
+    assert cookies["__Host-hello"] == "world"
 
 
 def test_auth(server):
@@ -447,4 +464,15 @@ def test_stream_empty_body(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/empty_body"))
         with s.stream("GET", url) as r:
+            assert r.status_code == 200
+
+
+def test_stream_large_body(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with s.stream("GET", url, params={"n": "100000"}) as r:
+            for chunk in r.iter_lines():
+                data = json.loads(chunk)
+                assert data["path"] == "/stream"
+                print(data["path"])
             assert r.status_code == 200

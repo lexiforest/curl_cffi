@@ -10,6 +10,7 @@ import typing
 from http.cookiejar import Cookie, CookieJar
 from urllib.parse import urlparse
 from dataclasses import dataclass
+import warnings
 
 from .errors import CookieConflict, RequestsError
 
@@ -187,10 +188,24 @@ class Cookies(typing.MutableMapping[str, str]):
             self.jar.set_cookie(cookie)
         self.jar.clear_expired_cookies()
 
-    def set(self, name: str, value: str, domain: str = "", path: str = "/") -> None:
+    def set(
+        self, name: str, value: str, domain: str = "", path: str = "/", secure=False
+    ) -> None:
         """
         Set a cookie value by name. May optionally include domain and path.
         """
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
+        if name.startswith("__Secure-") and secure is False:
+            warnings.warn("`secure` changed to True for `__Secure-` prefixed cookies")
+            secure = True
+        elif name.startswith("__Host-") and (secure is False or domain or path != "/"):
+            warnings.warn(
+                "`host` changed to True, `domain` removed, `path` changed to `/` "
+                "for `__Host-` prefixed cookies"
+            )
+            secure = True
+            domain = ""
+            path = "/"
         kwargs = {
             "version": 0,
             "name": name,
@@ -202,7 +217,7 @@ class Cookies(typing.MutableMapping[str, str]):
             "domain_initial_dot": domain.startswith("."),
             "path": path,
             "path_specified": bool(path),
-            "secure": False,
+            "secure": secure,
             "expires": None,
             "discard": True,
             "comment": None,
