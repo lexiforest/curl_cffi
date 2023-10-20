@@ -182,7 +182,7 @@ class Headers(typing.MutableMapping[str, str]):
         """
         return [
             (key.decode(self.encoding), value.decode(self.encoding))
-            for _, key, value in self._list
+            for key, _, value in self._list
         ]
 
     def get(self, key: str, default: typing.Any = None) -> typing.Any:
