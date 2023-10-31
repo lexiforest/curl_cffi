@@ -476,3 +476,19 @@ def test_stream_empty_body(server):
 #                 assert data["path"] == "/stream"
 #                 # print(data["path"])
 #             assert r.status_code == 200
+
+
+def test_stream_incomplete_read(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/incomplete_read"))
+        with s.stream("GET", url) as r:
+            for _ in r.iter_content():
+                continue
+
+
+def test_stream_redirect_loop(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/redirect_loop"))
+        with s.stream("GET", url, max_redirects=2) as r:
+            for _ in r.iter_content():
+                continue

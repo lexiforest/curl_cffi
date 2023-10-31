@@ -113,6 +113,8 @@ async def app(scope, receive, send):
         await redirect_then_echo_headers(scope, receive, send)
     elif scope["path"].startswith("/json"):
         await hello_world_json(scope, receive, send)
+    elif scope["path"].startswith("/incomplete_read"):
+        await incomplete_read(scope, receive, send)
     elif scope["path"].startswith("http://"):
         await http_proxy(scope, receive, send)
     elif scope["method"] == "CONNECT":
@@ -429,6 +431,20 @@ async def redirect_then_echo_headers(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
+
+
+async def incomplete_read(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/html; charset=utf-8"],
+                [b"content-length", b"234234"],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"<html></html>"})
 
 
 @pytest.fixture(scope="session")

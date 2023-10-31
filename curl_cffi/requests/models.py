@@ -3,7 +3,7 @@ from json import loads
 from typing import Optional
 import queue
 
-from .. import Curl
+from .. import Curl, CurlError
 from .headers import Headers
 from .cookies import Cookies
 from .errors import RequestsError
@@ -115,7 +115,12 @@ class Response:
         return loads(self.content, **kw)
 
     def close(self):
-        self.stream_task.result()  # type: ignore
+        try:
+            self.stream_task.result()  # type: ignore
+        except CurlError as e:
+            rsp = self._parse_response(c, buffer, header_buffer)
+            rsp.request = req
+            raise RequestsError(str(e), e.code, rsp) from e
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
