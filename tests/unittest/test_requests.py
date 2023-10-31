@@ -474,5 +474,5 @@ def test_stream_large_body(server):
             for chunk in r.iter_lines():
                 data = json.loads(chunk)
                 assert data["path"] == "/stream"
-                print(data["path"])
+                # print(data["path"])
             assert r.status_code == 200
