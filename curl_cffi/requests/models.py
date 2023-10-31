@@ -65,7 +65,10 @@ class Response:
 
     @property
     def text(self) -> str:
-        return self.content.decode(self.charset)
+        try:
+            return self.content.decode(self.charset, errors="replace")
+        except (UnicodeDecodeError, LookupError):
+            return self.content.decode("utf-8-sig")
 
     def raise_for_status(self):
         if not self.ok:
