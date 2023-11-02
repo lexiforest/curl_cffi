@@ -481,14 +481,19 @@ def test_stream_empty_body(server):
 def test_stream_incomplete_read(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/incomplete_read"))
-        with s.stream("GET", url) as r:
-            for _ in r.iter_content():
-                continue
+        with pytest.raises(requests.RequestsError) as e:
+            with s.stream("GET", url) as r:
+                for _ in r.iter_content():
+                    continue
+        assert e.value.code == CurlECode.PARTIAL_FILE
 
 
 def test_stream_redirect_loop(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/redirect_loop"))
-        with s.stream("GET", url, max_redirects=2) as r:
-            for _ in r.iter_content():
-                continue
+        with pytest.raises(requests.RequestsError) as e:
+            with s.stream("GET", url, max_redirects=2) as r:
+                for _ in r.iter_content():
+                    continue
+        assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+        assert e.value.response.status_code == 301  # type: ignore

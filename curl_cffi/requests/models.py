@@ -115,12 +115,7 @@ class Response:
         return loads(self.content, **kw)
 
     def close(self):
-        try:
-            self.stream_task.result()  # type: ignore
-        except CurlError as e:
-            rsp = self._parse_response(c, buffer, header_buffer)
-            rsp.request = req
-            raise RequestsError(str(e), e.code, rsp) from e
+        self.stream_task.result()  # type: ignore
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """

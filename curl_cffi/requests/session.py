@@ -596,6 +596,10 @@ class Session(BaseSession):
             def perform():
                 try:
                     c.perform()
+                except CurlError as e:
+                    rsp = self._parse_response(c, buffer, header_buffer)
+                    rsp.request = req
+                    raise RequestsError(str(e), e.code, rsp) from e
                 finally:
                     if not header_recved.is_set():  # type: ignore
                         header_recved.set()  # type: ignore
