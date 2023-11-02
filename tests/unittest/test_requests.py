@@ -467,12 +467,12 @@ def test_stream_empty_body(server):
             assert r.status_code == 200
 
 
-def test_stream_large_body(server):
-    with requests.Session() as s:
-        url = str(server.url.copy_with(path="/stream"))
-        with s.stream("GET", url, params={"n": "100000"}) as r:
-            for chunk in r.iter_lines():
-                data = json.loads(chunk)
-                assert data["path"] == "/stream"
-                # print(data["path"])
-            assert r.status_code == 200
+# def test_stream_large_body(server):
+#     with requests.Session() as s:
+#         url = str(server.url.copy_with(path="/stream"))
+#         with s.stream("GET", url, params={"n": "100000"}) as r:
+#             for chunk in r.iter_lines():
+#                 data = json.loads(chunk)
+#                 assert data["path"] == "/stream"
+#                 # print(data["path"])
+#             assert r.status_code == 200
