@@ -3,7 +3,7 @@ from json import loads
 from typing import Optional
 import queue
 
-from .. import Curl, CurlError
+from .. import Curl
 from .headers import Headers
 from .cookies import Cookies
 from .errors import RequestsError
@@ -63,12 +63,15 @@ class Response:
         self.queue: Optional[queue.Queue] = None
         self.stream_task = None
 
+    def _decode(self, content: bytes) -> str:
+        try:
+            return content.decode(self.charset, errors="replace")
+        except (UnicodeDecodeError, LookupError):
+            return content.decode("utf-8-sig")
+
     @property
     def text(self) -> str:
-        try:
-            return self.content.decode(self.charset, errors="replace")
-        except (UnicodeDecodeError, LookupError):
-            return self.content.decode("utf-8-sig")
+        return self._decode(self.content)
 
     def raise_for_status(self):
         if not self.ok:
@@ -156,7 +159,7 @@ class Response:
             yield chunk
 
     async def atext(self) -> str:
-        return (await self.acontent()).decode(self.charset)
+        return self._decode(await self.acontent())
 
     async def acontent(self) -> bytes:
         chunks = []
