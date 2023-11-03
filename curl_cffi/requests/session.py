@@ -414,6 +414,9 @@ class BaseSession:
                 # empty header list for new redirected response
                 header_list = []
                 continue
+            if header_line.startswith(b" ") or header_line.startswith(b"\t"):
+                header_list[-1] += header_line
+                continue
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
         # print("Set-cookie", rsp.headers["set-cookie"])
@@ -825,6 +828,10 @@ class AsyncSession(BaseSession):
             async def perform():
                 try:
                     await task
+                except CurlError as e:
+                    rsp = self._parse_response(curl, buffer, header_buffer)
+                    rsp.request = req
+                    raise RequestsError(str(e), e.code, rsp) from e
                 finally:
                     if not header_recved.is_set():  # type: ignore
                         header_recved.set()  # type: ignore
