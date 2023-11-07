@@ -309,3 +309,13 @@ def test_resolve(server):
     c.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
     c.setopt(CurlOpt.URL, url)
     c.perform()
+
+
+def test_duphandle(server):
+    c = Curl()
+    c.setopt(CurlOpt.URL, str(server.url.copy_with(path="/redirect_loop")).encode())
+    c.setopt(CurlOpt.FOLLOWLOCATION, 1)
+    c.setopt(CurlOpt.MAXREDIRS, 2)
+    c = c.duphandle()
+    with pytest.raises(CurlError):
+        c.perform()

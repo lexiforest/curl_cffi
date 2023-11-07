@@ -112,6 +112,20 @@ def _update_header_line(header_lines: List[str], key: str, value: str):
         header_lines.append(f"{key}: {value}")
 
 
+def _peek_queue(q: queue.Queue, default=None):
+    try:
+        return q.queue[0]
+    except IndexError:
+        return default
+
+
+def _peek_aio_queue(q: asyncio.Queue, default=None):
+    try:
+        return q._queue[0]  # type: ignore
+    except IndexError:
+        return default
+
+
 class BaseSession:
     """Provide common methods for setting curl options and reading info in sessions."""
 
@@ -447,6 +461,27 @@ class BaseSession:
 # ThreadType = Literal["eventlet", "gevent", None]
 
 
+class CurlSetoptProxy:
+    def __init__(self, curl: Curl, debug: bool = False):
+        self._real_curl = curl
+        self._debug = debug
+        self._options = {}
+
+    def setopt(self, option: CurlOpt, value: Any):
+        self._options[option] = value
+
+    def unwrap(self, clone: bool=False) -> Curl:
+        if not clone:
+            c = self._real_curl
+        else:
+            c = Curl(debug=self._debug)
+
+        for opt, value in self._options.items():
+            c.setopt(opt, value)
+
+        return c
+
+
 class Session(BaseSession):
     """A request session, cookies and connections will be reused. This object is thread-safe,
     but it's recommended to use a seperate session for each thread."""
@@ -497,12 +532,12 @@ class Session(BaseSession):
             self._local = threading.local()
             if curl:
                 self._is_customized_curl = True
-                self._local.curl = curl
+                self._local.curl = CurlSetoptProxy(curl)
             else:
                 self._is_customized_curl = False
-                self._local.curl = Curl(debug=self.debug)
+                self._local.curl = CurlSetoptProxy(Curl(debug=self.debug))
         else:
-            self._curl = curl if curl else Curl(debug=self.debug)
+            self._curl = CurlSetoptProxy(curl if curl else Curl(debug=self.debug))
 
     @property
     def curl(self):
@@ -510,7 +545,7 @@ class Session(BaseSession):
             if self._is_customized_curl:
                 warnings.warn("Creating fresh curl handle in different thread.")
             if not getattr(self._local, "curl", None):
-                self._local.curl = Curl(debug=self.debug)
+                self._local.curl = CurlSetoptProxy(Curl(debug=self.debug))
             return self._local.curl
         else:
             return self._curl
@@ -529,7 +564,7 @@ class Session(BaseSession):
 
     def close(self):
         """Close the session."""
-        self.curl.close()
+        self.curl.unwrap().close()
 
     @contextmanager
     def stream(self, *args, **kwargs):
@@ -565,7 +600,10 @@ class Session(BaseSession):
         stream: bool = False,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
-        c = self.curl
+
+        # clone a new curl instance for streaming response
+        c = self.curl.unwrap(clone=stream)
+
         req, buffer, header_buffer, q, header_recved = self._set_curl_options(
             c,
             method=method,
@@ -593,6 +631,7 @@ class Session(BaseSession):
             queue_class=queue.Queue,
             event_class=threading.Event,
         )
+
         if stream:
             header_parsed = threading.Event()
 
@@ -602,7 +641,7 @@ class Session(BaseSession):
                 except CurlError as e:
                     rsp = self._parse_response(c, buffer, header_buffer)
                     rsp.request = req
-                    raise RequestsError(str(e), e.code, rsp) from e
+                    q.put_nowait(RequestsError(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not header_recved.is_set():  # type: ignore
                         header_recved.set()  # type: ignore
@@ -620,6 +659,13 @@ class Session(BaseSession):
             header_recved.wait()  # type: ignore
             rsp = self._parse_response(c, buffer, header_buffer)
             header_parsed.set()
+
+            # Raise the exception if something wrong happens when receiving the header.
+            first_element = _peek_queue(q)  # type: ignore
+            if isinstance(first_element, RequestsError):
+                c.reset()
+                raise first_element
+
             rsp.request = req
             rsp.stream_task = stream_task  # type: ignore
             rsp.queue = q
@@ -643,7 +689,7 @@ class Session(BaseSession):
                 rsp.request = req
                 return rsp
             finally:
-                self.curl.reset()
+                c.reset()
 
     head = partialmethod(request, "HEAD")
     get = partialmethod(request, "GET")
@@ -831,7 +877,7 @@ class AsyncSession(BaseSession):
                 except CurlError as e:
                     rsp = self._parse_response(curl, buffer, header_buffer)
                     rsp.request = req
-                    raise RequestsError(str(e), e.code, rsp) from e
+                    q.put_nowait(RequestsError(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not header_recved.is_set():  # type: ignore
                         header_recved.set()  # type: ignore
@@ -845,10 +891,17 @@ class AsyncSession(BaseSession):
             stream_task.add_done_callback(cleanup)
 
             await header_recved.wait()  # type: ignore
+
             # Unlike threads, coroutines does not use preemptive scheduling.
             # For asyncio, there is no need for a header_parsed event, the
             # _parse_response will execute in the foreground, no background tasks running.
             rsp = self._parse_response(curl, buffer, header_buffer)
+
+            first_element = _peek_aio_queue(q)  # type: ignore
+            if isinstance(first_element, RequestsError):
+                self.release_curl(curl)
+                raise first_element
+
             rsp.request = req
             rsp.stream_task = stream_task  # type: ignore
             rsp.queue = q

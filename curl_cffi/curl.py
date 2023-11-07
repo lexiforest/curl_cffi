@@ -71,13 +71,13 @@ class Curl:
     Wrapper for `curl_easy_*` functions of libcurl.
     """
 
-    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False):
+    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False, handle = None):
         """
         Parameters:
             cacert: CA cert path to use, by default, curl_cffi uses its own bundled cert.
             debug: whether to show curl debug messages.
         """
-        self._curl = lib.curl_easy_init()
+        self._curl = lib.curl_easy_init() if not handle else handle
         self._headers = ffi.NULL
         self._resolve = ffi.NULL
         self._cacert = cacert
@@ -262,6 +262,10 @@ class Curl:
             if self._headers != ffi.NULL:
                 lib.curl_slist_free_all(self._headers)
             self._headers = ffi.NULL
+
+    def duphandle(self):
+        new_handle = lib.curl_easy_duphandle(self._curl)
+        return Curl(cacert=self._cacert, debug=self._debug, handle=new_handle)
 
     def reset(self):
         """Reset all curl options, wrapper for curl_easy_reset."""

@@ -1,17 +1,24 @@
+// easy interfaces
 void *curl_easy_init();
 int _curl_easy_setopt(void *curl, int option, void *param);
 int curl_easy_getinfo(void *curl, int option, void *ret);
 int curl_easy_perform(void *curl);
 void curl_easy_cleanup(void *curl);
 void curl_easy_reset(void *curl);
-char *curl_version();
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
+void *curl_easy_duphandle(void *curl);
+
+char *curl_version();
+
+// slist interfaces
 struct curl_slist {
    char *data;
    struct curl_slist *next;
 };
 struct curl_slist *curl_slist_append(struct curl_slist *list, char *string);
 void curl_slist_free_all(struct curl_slist *list);
+
+// callbacks
 extern "Python" size_t buffer_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" int debug_function(void *curl, int type, char *data, size_t size, void *clientp);
@@ -34,6 +41,8 @@ int curl_multi_setopt(void *curlm, int option, void* param);
 int curl_multi_assign(void *curlm, int sockfd, void *sockptr);
 int curl_multi_perform(void *curlm, int *running_handle);
 struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
+
+// multi callbacks
 extern "Python" void socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
 extern "Python" void timer_function(void *curlm, int timeout_ms, void *clientp);
 

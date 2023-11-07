@@ -110,8 +110,17 @@ class Response:
             raise NotImplementedError()
         while True:
             chunk = self.queue.get()  # type: ignore
+
+            # re-raise the exception if something wrong happened.
+            if isinstance(chunk, RequestsError):
+                self.curl.reset()  # type: ignore
+                raise chunk
+
+            # end of stream.
             if chunk is None:
+                self.curl.reset()  # type: ignore
                 return
+
             yield chunk
 
     def json(self, **kw):
@@ -152,10 +161,20 @@ class Response:
             warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
         if decode_unicode:
             raise NotImplementedError()
+
         while True:
             chunk = await self.queue.get()  # type: ignore
+
+            # re-raise the exception if something wrong happened.
+            if isinstance(chunk, RequestsError):
+                await self.aclose()
+                raise chunk
+
+            # end of stream.
             if chunk is None:
+                await self.aclose()
                 return
+
             yield chunk
 
     async def atext(self) -> str:

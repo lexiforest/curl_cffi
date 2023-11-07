@@ -411,7 +411,7 @@ def test_post_body_cleaned(server):
     # POST with body
     r = s.post(str(server.url), json={"foo": "bar"})
     # GET request with echo_body
-    assert s.curl._is_cert_set is False
+    assert s.curl.unwrap()._is_cert_set is False
     r = s.get(str(server.url.copy_with(path="/echo_body")))
     # ensure body is empty
     assert r.content == b""
@@ -488,12 +488,82 @@ def test_stream_incomplete_read(server):
         assert e.value.code == CurlECode.PARTIAL_FILE
 
 
+def test_stream_incomplete_read_without_close(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/incomplete_read"))
+        with pytest.raises(requests.RequestsError) as e:
+            r = s.get(url, stream=True)
+
+            # The error will only be raised when you try to read it.
+            for _ in r.iter_content():
+                continue
+
+        assert e.value.code == CurlECode.PARTIAL_FILE
+
+
 def test_stream_redirect_loop(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/redirect_loop"))
         with pytest.raises(requests.RequestsError) as e:
-            with s.stream("GET", url, max_redirects=2) as r:
-                for _ in r.iter_content():
-                    continue
+            with s.stream("GET", url, max_redirects=2):
+                pass
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert e.value.response.status_code == 301  # type: ignore
+
+
+def test_stream_redirect_loop_without_close(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/redirect_loop"))
+        with pytest.raises(requests.RequestsError) as e:
+            # if the error happens receiving header, it's raised right away
+            s.get(url, max_redirects=2, stream=True)
+
+        assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+        assert e.value.response.status_code == 301  # type: ignore
+
+
+def test_stream_auto_close_plain(server):
+    s = requests.Session()
+    url = str(server.url.copy_with(path="/stream"))
+    s.get(url, stream=True)
+    url = str(server.url.copy_with(path="/"))
+    s.get(url)
+
+
+def test_stream_auto_close_with_content_errors(server):
+    s = requests.Session()
+
+    # Silently fails, since the content is not read at all.
+    url = str(server.url.copy_with(path="/incomplete_read"))
+    s.get(url, stream=True)
+
+    url = str(server.url.copy_with(path="/"))
+    s.get(url, stream=True)
+
+
+def test_stream_auto_close_with_header_errors(server):
+    s = requests.Session()
+
+    url = str(server.url.copy_with(path="/redirect_loop"))
+    with pytest.raises(requests.RequestsError) as e:
+        s.get(url, max_redirects=2, stream=True)
+    assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+    assert e.value.response.status_code == 301  # type: ignore
+
+    url = str(server.url.copy_with(path="/"))
+    s.get(url, stream=True)
+
+
+def test_stream_options_persist(server):
+    s = requests.Session()
+
+    # set here instead of when requesting
+    s.curl.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
+
+    url = str(server.url.copy_with(path="/echo_headers"))
+    r = s.get(url, stream=True)
+    buffer = []
+    for line in r.iter_lines():
+        buffer.append(line)
+    data = json.loads(b"".join(buffer))
+    assert data["Foo"][0] == "bar"
