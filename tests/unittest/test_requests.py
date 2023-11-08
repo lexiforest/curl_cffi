@@ -411,7 +411,7 @@ def test_post_body_cleaned(server):
     # POST with body
     r = s.post(str(server.url), json={"foo": "bar"})
     # GET request with echo_body
-    assert s.curl.unwrap()._is_cert_set is False
+    assert s.curl._is_cert_set is False
     r = s.get(str(server.url.copy_with(path="/echo_body")))
     # ensure body is empty
     assert r.content == b""
@@ -558,7 +558,7 @@ def test_stream_options_persist(server):
     s = requests.Session()
 
     # set here instead of when requesting
-    s.curl.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
+    s.curl.setopt(CurlOpt.USERAGENT, b"foo/1.0")
 
     url = str(server.url.copy_with(path="/echo_headers"))
     r = s.get(url, stream=True)
@@ -566,4 +566,4 @@ def test_stream_options_persist(server):
     for line in r.iter_lines():
         buffer.append(line)
     data = json.loads(b"".join(buffer))
-    assert data["Foo"][0] == "bar"
+    assert data["User-agent"][0] == "foo/1.0"

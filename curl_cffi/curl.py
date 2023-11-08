@@ -84,6 +84,7 @@ class Curl:
         self._is_cert_set = False
         self._write_handle = None
         self._header_handle = None
+        self._body_handle = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
@@ -264,8 +265,11 @@ class Curl:
             self._headers = ffi.NULL
 
     def duphandle(self):
+        """This is not a full copy of entire curl object in python. For example, headers
+        handle is not copied, you have to set them again."""
         new_handle = lib.curl_easy_duphandle(self._curl)
-        return Curl(cacert=self._cacert, debug=self._debug, handle=new_handle)
+        c = Curl(cacert=self._cacert, debug=self._debug, handle=new_handle)
+        return c
 
     def reset(self):
         """Reset all curl options, wrapper for curl_easy_reset."""

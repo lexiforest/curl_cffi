@@ -461,27 +461,6 @@ class BaseSession:
 # ThreadType = Literal["eventlet", "gevent", None]
 
 
-class CurlSetoptProxy:
-    def __init__(self, curl: Curl, debug: bool = False):
-        self._real_curl = curl
-        self._debug = debug
-        self._options = {}
-
-    def setopt(self, option: CurlOpt, value: Any):
-        self._options[option] = value
-
-    def unwrap(self, clone: bool=False) -> Curl:
-        if not clone:
-            c = self._real_curl
-        else:
-            c = Curl(debug=self._debug)
-
-        for opt, value in self._options.items():
-            c.setopt(opt, value)
-
-        return c
-
-
 class Session(BaseSession):
     """A request session, cookies and connections will be reused. This object is thread-safe,
     but it's recommended to use a seperate session for each thread."""
@@ -532,12 +511,12 @@ class Session(BaseSession):
             self._local = threading.local()
             if curl:
                 self._is_customized_curl = True
-                self._local.curl = CurlSetoptProxy(curl)
+                self._local.curl = curl
             else:
                 self._is_customized_curl = False
-                self._local.curl = CurlSetoptProxy(Curl(debug=self.debug))
+                self._local.curl = Curl(debug=self.debug)
         else:
-            self._curl = CurlSetoptProxy(curl if curl else Curl(debug=self.debug))
+            self._curl = curl if curl else Curl(debug=self.debug)
 
     @property
     def curl(self):
@@ -545,7 +524,7 @@ class Session(BaseSession):
             if self._is_customized_curl:
                 warnings.warn("Creating fresh curl handle in different thread.")
             if not getattr(self._local, "curl", None):
-                self._local.curl = CurlSetoptProxy(Curl(debug=self.debug))
+                self._local.curl = Curl(debug=self.debug)
             return self._local.curl
         else:
             return self._curl
@@ -564,7 +543,7 @@ class Session(BaseSession):
 
     def close(self):
         """Close the session."""
-        self.curl.unwrap().close()
+        self.curl.close()
 
     @contextmanager
     def stream(self, *args, **kwargs):
@@ -602,7 +581,11 @@ class Session(BaseSession):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
 
         # clone a new curl instance for streaming response
-        c = self.curl.unwrap(clone=stream)
+        if stream:
+            c = self.curl.duphandle()
+            self.curl.reset()
+        else:
+            c = self.curl
 
         req, buffer, header_buffer, q, header_recved = self._set_curl_options(
             c,
