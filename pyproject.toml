@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.5.10b3"
+version = "0.5.10b4"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
