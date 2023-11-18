@@ -5,7 +5,7 @@ import json
 import pytest
 
 from curl_cffi import requests, CurlOpt
-from curl_cffi.const import CurlECode
+from curl_cffi.const import CurlECode, CurlInfo
 
 
 def test_head(server):
@@ -567,3 +567,11 @@ def test_stream_options_persist(server):
         buffer.append(line)
     data = json.loads(b"".join(buffer))
     assert data["User-agent"][0] == "foo/1.0"
+
+
+def test_curl_infos(server):
+    s = requests.Session(curl_infos=[CurlInfo.PRIMARY_IP])
+
+    r = s.get(str(server.url))
+
+    assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"

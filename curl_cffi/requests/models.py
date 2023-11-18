@@ -60,6 +60,7 @@ class Response:
         self.redirect_url = ""
         self.http_version = 0
         self.history = []
+        self.infos = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task = None
 

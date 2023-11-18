@@ -161,6 +161,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
         curl_options: Optional[dict] = None,
+        curl_infos: Optional[list] = None,
         http_version: Optional[CurlHttpVersion] = None,
         debug: bool = False,
         interface: Optional[str] = None,
@@ -177,6 +178,7 @@ class BaseSession:
         self.impersonate = impersonate
         self.default_headers = default_headers
         self.curl_options = curl_options or {}
+        self.curl_infos = curl_infos or []
         self.http_version = http_version
         self.debug = debug
         self.interface = interface
@@ -320,7 +322,6 @@ class BaseSession:
                 c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))  # type: ignore
             else:
                 c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(timeout * 1000))  # type: ignore
-
 
         # allow_redirects
         c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
@@ -466,6 +467,9 @@ class BaseSession:
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
         rsp.redirect_url = cast(bytes, c.getinfo(CurlInfo.REDIRECT_URL)).decode()
+
+        for info in self.curl_infos:
+            rsp.infos[info] = c.getinfo(info)
 
         return rsp
 
