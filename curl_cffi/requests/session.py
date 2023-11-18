@@ -126,6 +126,9 @@ def _peek_aio_queue(q: asyncio.Queue, default=None):
         return default
 
 
+not_set = object()
+
+
 class BaseSession:
     """Provide common methods for setting curl options and reading info in sessions."""
 
@@ -136,11 +139,11 @@ class BaseSession:
         "proxies",
         "params",
         "verify",
+        "timeout",
         "cert",
         "trust_env",  # TODO
         "max_redirects",
         "impersonate",
-        "timeout",
     ]
 
     def __init__(
@@ -190,7 +193,7 @@ class BaseSession:
         cookies: Optional[CookieTypes] = None,
         files: Optional[Dict] = None,
         auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
         allow_redirects: bool = True,
         max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
@@ -301,14 +304,23 @@ class BaseSession:
             c.setopt(CurlOpt.PASSWORD, password.encode())  # type: ignore
 
         # timeout
-        timeout = timeout or self.timeout
+        if timeout is not_set:
+            timeout = self.timeout
+        if timeout is None:
+            timeout = 0  # indefinitely
+
         if isinstance(timeout, tuple):
             connect_timeout, read_timeout = timeout
             all_timeout = connect_timeout + read_timeout
             c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(connect_timeout * 1000))
-            c.setopt(CurlOpt.TIMEOUT_MS, int(all_timeout * 1000))
+            if not stream:
+                c.setopt(CurlOpt.TIMEOUT_MS, int(all_timeout * 1000))
         else:
-            c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))
+            if not stream:
+                c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))  # type: ignore
+            else:
+                c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(timeout * 1000))  # type: ignore
+
 
         # allow_redirects
         c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
@@ -487,7 +499,7 @@ class Session(BaseSession):
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
             params: query string for the session.
             verify: whether to verify https certs.
-            timeout: how many seconds to wait before giving up.
+            timeout: how many seconds to wait before giving up. In stream mode, only connect_timeout will be set.
             trust_env: use http_proxy/https_proxy and other environments, default True.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
