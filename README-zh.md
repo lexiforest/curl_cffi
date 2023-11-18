@@ -15,6 +15,14 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 - 支持 `asyncio`，并且每个请求都可以换代理。
 - 支持 http 2.0，requests 不支持。
 
+|库|requests|aiohttp|httpx|pycurl|curl_cffi|
+|---|---|---|---|---|---|
+|http2|❌|❌|✅|✅|✅|
+|sync|✅|❌|✅|✅|✅|
+|async|❌|✅|✅|❌|✅|
+|指纹|❌|❌|❌|❌|✅|
+|速度|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
+
 ## 安装
 
     pip install curl_cffi --upgrade
@@ -23,7 +31,13 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 在其他小众平台，你可能需要先编译并安装 `curl-impersonate` 并且设置 `LD_LIBRARY_PATH` 这些
 环境变量。
 
+安装测试版:
+
+    pip install curl_cffi --pre
+
 ## 使用
+
+尽量模仿比较新的浏览器，不要直接从下边的例子里复制 `chrome110` 去用。
 
 ### 类 requests
 
@@ -59,7 +73,9 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-支持模拟的浏览器版本，和 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 一致：
+支持模拟的浏览器版本，和我 [fork](https://github.com/yifeikong/curl-impersonate) 的 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 一致：
+
+不过只支持类似 Chrome 的浏览器。
 
 - chrome99
 - chrome100
@@ -68,6 +84,10 @@ print(r.json())
 - chrome107
 - chrome110
 - chrome116
+- chrome117
+- chrome118
+- chrome119
+- chrome120
 - chrome99_android
 - edge99
 - edge101
@@ -126,7 +146,10 @@ print(body.decode())
 
 更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
 
-如果你用 scrapy 的话，可以参考这个中间件：[tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+如果你用 scrapy 的话，可以参考这些中间件：
+
+- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
 
 有问题和建议请优先提 issue，中英文均可，也可以加微信群交流讨论：
 

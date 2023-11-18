@@ -40,6 +40,8 @@ To install beta releases:
 
 ## Usage
 
+Use the latest impersonate versions, do NOT copy `chrome110` here without changing.
+
 ### requests-like
 
 ```python
@@ -74,7 +76,9 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-Supported impersonate versions, as supported by [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+
+However, only Chrome-like browsers are supported.
 
 - chrome99
 - chrome100
@@ -83,6 +87,10 @@ Supported impersonate versions, as supported by [curl-impersonate](https://githu
 - chrome107
 - chrome110
 - chrome116
+- chrome117
+- chrome118
+- chrome119
+- chrome120
 - chrome99_android
 - edge99
 - edge101
@@ -141,7 +149,10 @@ print(body.decode())
 
 See the [docs](https://curl-cffi.readthedocs.io) for more details. 
 
-If you are using scrapy, check out this middleware: [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+If you are using scrapy, check out these middlewares:
+
+- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
 
 ## Acknowledgement
 
