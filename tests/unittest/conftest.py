@@ -83,6 +83,8 @@ async def app(scope, receive, send):
         await echo_params(scope, receive, send)
     elif scope["path"].startswith("/stream"):
         await stream(scope, receive, send)
+    elif scope["path"].startswith("/large"):
+        await large(scope, receive, send)
     elif scope["path"].startswith("/empty_body"):
         await empty_body(scope, receive, send)
     elif scope["path"].startswith("/echo_body"):
@@ -257,6 +259,23 @@ async def stream(scope, receive, send):
         {
             "type": "http.response.body",
             "body": json.dumps(body).encode(),
+            "more_body": False,
+        }
+    )
+
+
+async def large(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+        }
+    )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": os.urandom(20 * 1024 * 1024),  # 20MiB
             "more_body": False,
         }
     )

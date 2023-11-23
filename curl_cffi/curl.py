@@ -26,6 +26,9 @@ CURLINFO_DATA_OUT = 4
 CURLINFO_SSL_DATA_IN = 5
 CURLINFO_SSL_DATA_OUT = 6
 
+CURL_WRITEFUNC_PAUSE = 0x10000001
+CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
+
 
 @ffi.def_extern()
 def debug_function(curl, type: int, data, size, clientp) -> int:
@@ -51,7 +54,9 @@ def buffer_callback(ptr, size, nmemb, userdata):
 def write_callback(ptr, size, nmemb, userdata):
     # although similar enough to the function above, kept here for performance reasons
     callback = ffi.from_handle(userdata)
-    callback(ffi.buffer(ptr, nmemb)[:])
+    wrote = callback(ffi.buffer(ptr, nmemb)[:])
+    if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:
+        return wrote
     return nmemb * size
 
 

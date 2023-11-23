@@ -13,7 +13,9 @@ from typing import Callable, Dict, List, Any, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 from concurrent.futures import ThreadPoolExecutor
 
+
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
+from ..curl import CURL_WRITEFUNC_ERROR
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
@@ -208,6 +210,7 @@ class BaseSession:
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         stream: bool = False,
+        max_recv_speed: int = 0,
         queue_class: Any = None,
         event_class: Any = None,
     ):
@@ -391,13 +394,17 @@ class BaseSession:
         buffer = None
         q = None
         header_recved = None
+        quit_now = None
         if stream:
             q = queue_class()  # type: ignore
             header_recved = event_class()
+            quit_now = event_class()
 
             def qput(chunk):
                 if not header_recved.is_set():
                     header_recved.set()
+                if quit_now.is_set():
+                    return CURL_WRITEFUNC_ERROR
                 q.put_nowait(chunk)
 
             c.setopt(CurlOpt.WRITEFUNCTION, qput)  # type: ignore
@@ -417,7 +424,11 @@ class BaseSession:
         if interface:
             c.setopt(CurlOpt.INTERFACE, interface.encode())
 
-        return req, buffer, header_buffer, q, header_recved
+        # max_recv_speed
+        # do not check, since 0 is a valid value to disable it
+        c.setopt(CurlOpt.MAX_RECV_SPEED_LARGE, max_recv_speed)
+
+        return req, buffer, header_buffer, q, header_recved, quit_now
 
     def _parse_response(self, curl, buffer, header_buffer):
         c = curl
@@ -593,6 +604,7 @@ class Session(BaseSession):
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         stream: bool = False,
+        max_recv_speed: int = 0,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
 
@@ -603,7 +615,7 @@ class Session(BaseSession):
         else:
             c = self.curl
 
-        req, buffer, header_buffer, q, header_recved = self._set_curl_options(
+        req, buffer, header_buffer, q, header_recved, quit_now = self._set_curl_options(
             c,
             method=method,
             url=url,
@@ -627,6 +639,7 @@ class Session(BaseSession):
             http_version=http_version,
             interface=interface,
             stream=stream,
+            max_recv_speed=max_recv_speed,
             queue_class=queue.Queue,
             event_class=threading.Event,
         )
@@ -667,6 +680,7 @@ class Session(BaseSession):
 
             rsp.request = req
             rsp.stream_task = stream_task  # type: ignore
+            rsp.quit_now = quit_now  # type: ignore
             rsp.queue = q
             return rsp
         else:
@@ -837,10 +851,11 @@ class AsyncSession(BaseSession):
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         stream: bool = False,
+        max_recv_speed: int = 0,
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
-        req, buffer, header_buffer, q, header_recved = self._set_curl_options(
+        req, buffer, header_buffer, q, header_recved, quit_now = self._set_curl_options(
             curl=curl,
             method=method,
             url=url,
@@ -864,6 +879,7 @@ class AsyncSession(BaseSession):
             http_version=http_version,
             interface=interface,
             stream=stream,
+            max_recv_speed=max_recv_speed,
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
@@ -903,6 +919,7 @@ class AsyncSession(BaseSession):
 
             rsp.request = req
             rsp.stream_task = stream_task  # type: ignore
+            rsp.quit_now = quit_now
             rsp.queue = q
             return rsp
         else:

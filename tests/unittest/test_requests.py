@@ -1,4 +1,5 @@
 import base64
+import time
 from io import BytesIO
 import json
 
@@ -567,6 +568,35 @@ def test_stream_options_persist(server):
         buffer.append(line)
     data = json.loads(b"".join(buffer))
     assert data["User-agent"][0] == "foo/1.0"
+
+
+def test_stream_close_early(server):
+    s = requests.Session()
+    # url = str(server.url.copy_with(path="/large"))
+    # from http://xcal1.vodafone.co.uk/
+    url = "http://212.183.159.230/10MB.zip"
+    r = s.get(url, max_recv_speed=1024 * 1024, stream=True)
+    counter = 0
+    start = time.time()
+    for _ in r.iter_content():
+        counter += 1
+        if counter > 10:
+            break
+    r.close()
+    end = time.time()
+    assert end - start < 10
+
+
+def test_max_recv_speed(server):
+    s = requests.Session()
+    url = str(server.url.copy_with(path="/large"))
+    # from http://xcal1.vodafone.co.uk/
+    url = "http://212.183.159.230/10MB.zip"
+    start = time.time()
+    r = s.get(url, max_recv_speed=1024 * 1024)
+    end = time.time()
+    # assert len(r.content) == 20 * 1024 * 1024
+    assert end - start > 10
 
 
 def test_curl_infos(server):

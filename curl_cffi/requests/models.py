@@ -63,6 +63,7 @@ class Response:
         self.infos = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task = None
+        self.quit_now = None
 
     def _decode(self, content: bytes) -> str:
         try:
@@ -128,6 +129,7 @@ class Response:
         return loads(self.content, **kw)
 
     def close(self):
+        self.quit_now.set()  # type: ignore
         self.stream_task.result()  # type: ignore
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
