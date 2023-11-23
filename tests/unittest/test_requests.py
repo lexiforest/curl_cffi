@@ -574,7 +574,7 @@ def test_stream_close_early(server):
     s = requests.Session()
     # url = str(server.url.copy_with(path="/large"))
     # from http://xcal1.vodafone.co.uk/
-    url = "http://212.183.159.230/10MB.zip"
+    url = "http://212.183.159.230/200MB.zip"
     r = s.get(url, max_recv_speed=1024 * 1024, stream=True)
     counter = 0
     start = time.time()
@@ -584,19 +584,19 @@ def test_stream_close_early(server):
             break
     r.close()
     end = time.time()
-    assert end - start < 10
+    assert end - start < 50
 
 
 def test_max_recv_speed(server):
     s = requests.Session()
     url = str(server.url.copy_with(path="/large"))
     # from http://xcal1.vodafone.co.uk/
-    url = "http://212.183.159.230/10MB.zip"
+    url = "http://212.183.159.230/200MB.zip"
     start = time.time()
-    r = s.get(url, max_recv_speed=1024 * 1024)
+    r = s.get(url, max_recv_speed=5 * 1024 * 1024)
     end = time.time()
     # assert len(r.content) == 20 * 1024 * 1024
-    assert end - start > 10
+    assert end - start > 30
 
 
 def test_curl_infos(server):
