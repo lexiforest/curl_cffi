@@ -1,7 +1,15 @@
 # Change Log
 
 - v0.5
-    - v0.5.8
+    - v0.5.10
+        - Add stream support
+        - Add support for secure cookies
+        - Add curl_infos to extract extra info after performing
+        - Bugfix: `timeout=None` not working
+    - v0.5.9
+        - Add interface support
+        - Make POST work as in real world
+        - Add support for custom resolve
         - Switched to libcurl's COOKIELIST to sync cookies between python and curl
         - Add default_headers option for sessions like in curl-impersonate
         - Add curl_options for extra curl_options in Session
