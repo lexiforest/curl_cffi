@@ -17,3 +17,5 @@ from ._wrapper import ffi, lib
 from .const import CurlInfo, CurlMOpt, CurlOpt, CurlECode, CurlHttpVersion
 from .curl import Curl, CurlError
 from .aio import AsyncCurl
+
+from .__version__ import __title__, __version__, __description__, __curl_version__
