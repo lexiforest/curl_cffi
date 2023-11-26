@@ -136,3 +136,7 @@ print(body.decode())
 - 该项目 fork 自：[multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), MIT 协议发布。
 - Headers/Cookies 代码来自 [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), BSD 协议发布。
 - Asyncio 支持是受 Tornado 的 curl http client 启发而做。
+
+## 赞助
+
+<img src="alipay.jpg" style="width: 512px;" />
