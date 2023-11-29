@@ -286,6 +286,16 @@ async def test_post_body_cleaned(server):
         assert r.content == b""
 
 
+async def test_timers_leak(server):
+    async with AsyncSession() as sess:
+        for _ in range(3):
+            try:
+                await sess.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
+            except:
+                pass
+            assert len(sess.acurl._timers) == 0
+
+
 #######################################################################################
 # async parallel
 #######################################################################################

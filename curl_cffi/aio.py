@@ -5,6 +5,7 @@ import asyncio
 import os
 from typing import Any
 import warnings
+from weakref import WeakSet
 
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
@@ -38,7 +39,7 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
     if timeout_ms == -1:
         for timer in async_curl._timers:
             timer.cancel()
-        async_curl._timers = []
+        async_curl._timers = WeakSet()
     else:
         timer = async_curl.loop.call_later(
             timeout_ms / 1000,
@@ -46,7 +47,7 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
             CURL_SOCKET_TIMEOUT,  # -1
             CURL_POLL_NONE,  # 0
         )
-        async_curl._timers.append(timer)
+        async_curl._timers.add(timer)
 
 
 @ffi.def_extern()
@@ -81,7 +82,7 @@ class AsyncCurl:
         self._sockfds = set()  # sockfds
         self.loop = loop if loop is not None else asyncio.get_running_loop()
         self._checker = self.loop.create_task(self._force_timeout())
-        self._timers = []
+        self._timers = WeakSet()
         self._setup()
 
     def _setup(self):
