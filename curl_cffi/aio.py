@@ -9,9 +9,8 @@ from weakref import WeakSet
 
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
-from .curl import Curl
+from .curl import Curl, DEFAULT_CACERT
 
-DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 CURL_POLL_NONE = 0
 CURL_POLL_IN = 1

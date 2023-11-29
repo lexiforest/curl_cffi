@@ -7,7 +7,11 @@ from typing import Any, List, Tuple, Union
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlHttpVersion, CurlInfo, CurlOpt
 
-DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
+try:
+    import certifi
+    DEFAULT_CACERT = certifi.where()
+except ImportError:
+    DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 
 class CurlError(Exception):
