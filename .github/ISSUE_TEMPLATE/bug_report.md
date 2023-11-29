@@ -2,7 +2,7 @@
 name: Bug report
 about: Create a report to help us improve
 title: "[BUG]"
-labels: ''
+labels: bug
 assignees: yifeikong
 
 ---
@@ -25,4 +25,5 @@ A clear and concise description of what you expected to happen.
  - `pip freeze` dump
 
 **Additional context**
-Which session are you using? async or sync? Which loop implementation are you using
+- Which session are you using? async or sync?
+- If using async session, which loop implementation are you using?
