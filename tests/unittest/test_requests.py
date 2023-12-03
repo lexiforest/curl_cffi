@@ -144,13 +144,14 @@ def test_cookies(server):
 
 
 def test_secure_cookies(server):
-    r = requests.get(
-        str(server.url.copy_with(path="/echo_cookies")),
-        cookies={"__Secure-foo": "bar", "__Host-hello": "world"},
-    )
-    cookies = r.json()
-    assert cookies["__Secure-foo"] == "bar"
-    assert cookies["__Host-hello"] == "world"
+    with pytest.warns(UserWarning, match="changed"):
+        r = requests.get(
+            str(server.url.copy_with(path="/echo_cookies")),
+            cookies={"__Secure-foo": "bar", "__Host-hello": "world"},
+        )
+        cookies = r.json()
+        assert cookies["__Secure-foo"] == "bar"
+        assert cookies["__Host-hello"] == "world"
 
 
 def test_auth(server):
