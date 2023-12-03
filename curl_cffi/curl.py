@@ -53,14 +53,22 @@ def buffer_callback(ptr, size, nmemb, userdata):
     buffer.write(ffi.buffer(ptr, nmemb)[:])
     return nmemb * size
 
+def ensure_int(s):
+    if not s:
+        return 0
+    return int(s)
 
 @ffi.def_extern()
 def write_callback(ptr, size, nmemb, userdata):
     # although similar enough to the function above, kept here for performance reasons
     callback = ffi.from_handle(userdata)
     wrote = callback(ffi.buffer(ptr, nmemb)[:])
+    wrote = ensure_int(wrote)
     if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:
         return wrote
+    # should make this an exception in future versions
+    if wrote != nmemb * size:
+        warnings.warn("Wrote bytes != received bytes.", RuntimeWarning)
     return nmemb * size
 
 
@@ -110,14 +118,15 @@ class Curl:
     def __del__(self):
         self.close()
 
-    def _check_error(self, errcode: int, action: str):
-        error = self._get_error(errcode, action)
+    def _check_error(self, errcode: int, *args):
+        error = self._get_error(errcode, *args)
         if error is not None:
             raise error
 
-    def _get_error(self, errcode: int, action: str):
+    def _get_error(self, errcode: int, *args):
         if errcode != 0:
             errmsg = ffi.string(self._error_buffer).decode()
+            action = " ".join([str(a) for a in args])
             return CurlError(
                 f"Failed to {action}, ErrCode: {errcode}, Reason: '{errmsg}'. "
                 "This may be a libcurl error, "
@@ -191,7 +200,7 @@ class Curl:
             ret = lib._curl_easy_setopt(self._curl, option, self._resolve)
         else:
             ret = lib._curl_easy_setopt(self._curl, option, c_value)
-        self._check_error(ret, "setopt(%s, %s)" % (option, value))
+        self._check_error(ret, "setopt", option, value)
 
         if option == CurlOpt.CAINFO:
             self._is_cert_set = True
@@ -217,7 +226,7 @@ class Curl:
         }
         c_value = ffi.new(ret_option[option & 0xF00000])
         ret = lib.curl_easy_getinfo(self._curl, option, c_value)
-        self._check_error(ret, action="getinfo(%s)" % option)
+        self._check_error(ret, "getinfo", option)
         # cookielist and ssl_engines starts with 0x400000, see also: const.py
         if option & 0xF00000 == 0x400000:
             return slist_to_list(c_value[0])
@@ -243,7 +252,7 @@ class Curl:
     def _ensure_cacert(self):
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
-            self._check_error(ret, action="set cacert")
+            self._check_error(ret, "set cacert")
 
     def perform(self, clear_headers: bool = True):
         """Wrapper for curl_easy_perform, performs a curl request.
@@ -258,7 +267,7 @@ class Curl:
         ret = lib.curl_easy_perform(self._curl)
 
         try:
-            self._check_error(ret, action="perform")
+            self._check_error(ret, "perform")
         finally:
             # cleaning
             self.clean_after_perform(clear_headers)

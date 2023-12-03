@@ -9,7 +9,7 @@ async def test_add_handle(server):
     ac = AsyncCurl()
     c = Curl()
     c.setopt(CurlOpt.URL, "http://example.com")
-    c.setopt(CurlOpt.WRITEFUNCTION, lambda x: x)
+    c.setopt(CurlOpt.WRITEFUNCTION, lambda x: len(x))
     fut = ac.add_handle(c)
     await fut
 
@@ -20,7 +20,7 @@ async def test_socket_action(server):
     # assert running == 0
     c = Curl()
     c.setopt(CurlOpt.URL, "http://example.com")
-    c.setopt(CurlOpt.WRITEFUNCTION, lambda x: x)
+    c.setopt(CurlOpt.WRITEFUNCTION, lambda x: len(x))
     fut = ac.add_handle(c)
     await fut
     running = ac.socket_action(-1, 0)

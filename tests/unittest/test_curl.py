@@ -99,6 +99,7 @@ def test_write_function(server):
 
     def write(data: bytes):
         buffer.write(data)
+        return len(data)
 
     c.setopt(CurlOpt.WRITEFUNCTION, write)
     c.perform()

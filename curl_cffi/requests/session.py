@@ -406,6 +406,7 @@ class BaseSession:
                 if quit_now.is_set():
                     return CURL_WRITEFUNC_ERROR
                 q.put_nowait(chunk)
+                return len(chunk)
 
             c.setopt(CurlOpt.WRITEFUNCTION, qput)  # type: ignore
         elif content_callback is not None:

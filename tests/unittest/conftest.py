@@ -209,7 +209,7 @@ async def echo_body(scope, receive, send):
             "headers": [[b"content-type", b"text/plain"]],
         }
     )
-    print("server: received:", body)
+    # print("server: received:", body)
     await send({"type": "http.response.body", "body": body})
 
 
@@ -440,8 +440,8 @@ async def redirect_then_echo_cookies(scope, receive, send):
 
 
 async def redirect_then_echo_headers(scope, receive, send):
-    for name, value in scope.get("headers", []):
-        print("Header>>>", name, ":", value)
+    # for name, value in scope.get("headers", []):
+    #     print("Header>>>", name, ":", value)
     await send(
         {
             "type": "http.response.start",
