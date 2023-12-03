@@ -80,7 +80,7 @@ build-backend = "setuptools.build_meta"
 build = ["cp37-macosx_x86_64", "cp37-win_amd64", "cp37-manylinux_x86_64", "cp37-manylinux_aarch64"]
 before-all = "make preprocess"
 test-requires = "pytest"
-test-command = "pytest {project}/tests/unittest"
+test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
 
