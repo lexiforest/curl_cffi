@@ -127,7 +127,7 @@ print(body.decode())
 
 如果你用 scrapy 的话，可以参考这个中间件：[tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
 
-有问题和建议请优先提 issue，中英文均可，也可以加微信群交流讨论：
+有问题和建议请优先提 issue，中英文均可，也可以加 [TG 群](https://t.me/+lL9n33eZp480MGM1) 或微信群讨论：
 
 <img src="wechat.jpg" style="width: 512px;" />
 
