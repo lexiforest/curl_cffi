@@ -3,13 +3,76 @@ __all__ = ["AsyncCurl"]
 
 import asyncio
 import os
-from typing import Any
+import sys
 import warnings
+from typing import Any
 from weakref import WeakSet
 
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
 from .curl import Curl, DEFAULT_CACERT
+
+from typing import Union
+from weakref import WeakKeyDictionary
+
+import curl_cffi as _curl_cffi
+
+# registry of asyncio loop : selector thread
+_selectors: WeakKeyDictionary = WeakKeyDictionary()
+
+
+def _get_selector_windows(
+    io_loop,
+) -> Union[asyncio.AbstractEventLoop, "_curl_cffi._asyncio_selector.SelectorThread"]:
+    """Get selector-compatible loop
+    Returns an object with ``add_reader`` family of methods,
+    either the loop itself or a SelectorThread instance.
+    Workaround Windows proactor removal of
+    *reader methods, which we need for curl_cffi sockets.
+    """
+
+    if io_loop in _selectors:
+        return _selectors[io_loop]
+
+    # detect add_reader instead of checking for proactor?
+    if hasattr(asyncio, "ProactorEventLoop") and isinstance(
+        io_loop, asyncio.ProactorEventLoop  # type: ignore
+    ):
+        from ._asyncio_selector import SelectorThread
+
+        warnings.warn(
+            "Proactor event loop does not implement add_reader family of methods required for curl_cffi."
+            " Registering an additional selector thread for add_reader support."
+            " Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())`"
+            " to avoid this warning.",
+            RuntimeWarning,
+        )
+
+        selector = _selectors[io_loop] = SelectorThread(io_loop)
+
+        # patch loop.close to also close the selector thread
+        loop_close = io_loop.close
+
+        def _close_selector_and_loop():
+            _selectors.pop(io_loop, None)
+            selector.close()
+            loop_close()
+
+        io_loop.close = _close_selector_and_loop
+        return selector
+    else:
+        return io_loop
+
+
+def _get_selector_noop(loop) -> asyncio.AbstractEventLoop:
+    """no-op on non-Windows"""
+    return loop
+
+
+if sys.platform == "win32":
+    _get_selector = _get_selector_windows
+else:
+    _get_selector = _get_selector_noop
 
 
 CURL_POLL_NONE = 0
@@ -53,17 +116,18 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
 def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     async_curl = ffi.from_handle(clientp)
     loop = async_curl.loop
+    selector = _get_selector(loop)
 
     # Always remove and readd fd
     if sockfd in async_curl._sockfds:
-        loop.remove_reader(sockfd)
-        loop.remove_writer(sockfd)
+        selector.remove_reader(sockfd)
+        selector.remove_writer(sockfd)
 
     if what & CURL_POLL_IN:
-        loop.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
+        selector.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
         async_curl._sockfds.add(sockfd)
     if what & CURL_POLL_OUT:
-        loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
+        selector.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
         async_curl._sockfds.add(sockfd)
     if what & CURL_POLL_REMOVE:
         async_curl._sockfds.remove(sockfd)
@@ -80,6 +144,7 @@ class AsyncCurl:
         self._curl2curl = {}  # c curl to Curl
         self._sockfds = set()  # sockfds
         self.loop = loop if loop is not None else asyncio.get_running_loop()
+        self._selector = _get_selector(self.loop)
         self._checker = self.loop.create_task(self._force_timeout())
         self._timers = WeakSet()
         self._setup()
@@ -105,8 +170,8 @@ class AsyncCurl:
         self._curlm = None
         # Remove add readers and writers
         for sockfd in self._sockfds:
-            self.loop.remove_reader(sockfd)
-            self.loop.remove_writer(sockfd)
+            self._selector.remove_reader(sockfd)
+            self._selector.remove_writer(sockfd)
         # Cancel all time functions
         for timer in self._timers:
             timer.cancel()
