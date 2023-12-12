@@ -114,10 +114,10 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     loop = async_curl.loop
     selector = _get_selector(loop)
 
-    # Always remove and readd fd
-    if sockfd in async_curl._sockfds:
-        selector.remove_reader(sockfd)
-        selector.remove_writer(sockfd)
+    # # Always remove and readd fd
+    # if sockfd in async_curl._sockfds:
+    #     selector.remove_reader(sockfd)
+    #     selector.remove_writer(sockfd)
 
     if what & CURL_POLL_IN:
         selector.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
