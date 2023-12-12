@@ -15,15 +15,11 @@ from .curl import Curl, DEFAULT_CACERT
 from typing import Union
 from weakref import WeakKeyDictionary
 
-import curl_cffi as _curl_cffi
-
 # registry of asyncio loop : selector thread
 _selectors: WeakKeyDictionary = WeakKeyDictionary()
 
 
-def _get_selector_windows(
-    io_loop,
-) -> Union[asyncio.AbstractEventLoop, "_curl_cffi._asyncio_selector.SelectorThread"]:
+def _get_selector_windows(io_loop):
     """Get selector-compatible loop
     Returns an object with ``add_reader`` family of methods,
     either the loop itself or a SelectorThread instance.
