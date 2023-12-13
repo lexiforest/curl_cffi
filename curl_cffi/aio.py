@@ -121,22 +121,28 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
 def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     async_curl = ffi.from_handle(clientp)
     loop = async_curl.loop
-    selector = _get_selector(loop)
-
-    # # Always remove and readd fd
-    # if sockfd in async_curl._sockfds:
-    #     selector.remove_reader(sockfd)
-    #     selector.remove_writer(sockfd)
 
     if what & CURL_POLL_IN:
-        selector.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
+        # Also remove if already exist
+        if sockfd in async_curl._sockfds:
+            loop.remove_reader(sockfd)
+            loop.remove_writer(sockfd)
+            async_curl._sockfds.remove(sockfd)
+        loop.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
         async_curl._sockfds.add(sockfd)
+
     if what & CURL_POLL_OUT:
-        selector.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
+        # Also remove if already exist
+        if sockfd in async_curl._sockfds:
+            loop.remove_reader(sockfd)
+            loop.remove_writer(sockfd)
+            async_curl._sockfds.remove(sockfd)
+        loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
         async_curl._sockfds.add(sockfd)
+
     if what & CURL_POLL_REMOVE:
-        selector.remove_reader(sockfd)
-        selector.remove_writer(sockfd)
+        loop.remove_reader(sockfd)
+        loop.remove_writer(sockfd)
         async_curl._sockfds.remove(sockfd)
 
 
@@ -150,8 +156,9 @@ class AsyncCurl:
         self._curl2future = {}  # curl to future map
         self._curl2curl = {}  # c curl to Curl
         self._sockfds = set()  # sockfds
-        self.loop = loop if loop is not None else asyncio.get_running_loop()
-        self._selector = _get_selector(self.loop)
+        self.loop = _get_selector(
+            loop if loop is not None else asyncio.get_running_loop()
+        )
         self._checker = self.loop.create_task(self._force_timeout())
         self._timers = WeakSet()
         self._setup()
@@ -177,8 +184,8 @@ class AsyncCurl:
         self._curlm = None
         # Remove add readers and writers
         for sockfd in self._sockfds:
-            self._selector.remove_reader(sockfd)
-            self._selector.remove_writer(sockfd)
+            self.loop.remove_reader(sockfd)
+            self.loop.remove_writer(sockfd)
         # Cancel all time functions
         for timer in self._timers:
             timer.cancel()
