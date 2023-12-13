@@ -215,7 +215,7 @@ class SelectorThread:
                     if rs:
                         ws = []
                     else:
-                        return
+                        raise
                 else:
                     raise
 

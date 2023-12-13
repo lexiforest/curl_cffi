@@ -135,6 +135,8 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
         selector.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
         async_curl._sockfds.add(sockfd)
     if what & CURL_POLL_REMOVE:
+        selector.remove_reader(sockfd)
+        selector.remove_writer(sockfd)
         async_curl._sockfds.remove(sockfd)
 
 
