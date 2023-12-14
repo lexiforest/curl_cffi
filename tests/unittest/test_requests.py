@@ -193,7 +193,11 @@ def test_follow_redirects(server):
 
 def test_too_many_redirects(server):
     with pytest.raises(requests.RequestsError) as e:
-        requests.get(str(server.url.copy_with(path="/redirect_loop")), max_redirects=2)
+        requests.get(
+            str(server.url.copy_with(path="/redirect_loop")),
+            allow_redirects=True,
+            max_redirects=2,
+        )
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert e.value.response.status_code == 301  # type: ignore
 
@@ -347,6 +351,7 @@ def test_cookies_after_redirect(server):
     r = s.get(
         str(server.url.copy_with(path="/redirect_then_echo_cookies")),
         cookies={"foo": "bar"},
+        allow_redirects=True,
     )
     assert r.json()["foo"] == "bar"
 
@@ -379,6 +384,7 @@ def test_cookies_redirect_to_another_domain(server):
     r = s.get(
         str(server.url.copy_with(path="/redirect_to")),
         params={"to": "http://google.com:8000/echo_cookies"},
+        allow_redirects=True,
     )
     cookies = r.json()
     assert cookies["foo"] == "google.com"
@@ -400,6 +406,7 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
         # str(server.url.copy_with(path="/redirect_to")),
         "http://example.com:8000/redirect_to",
         params={"to": "http://google.com:8000/echo_cookies"},
+        allow_redirects=True,
     )
     cookies = r.json()
     # cookies without domains are bound to the first domain, which is example.com in this case.
@@ -507,7 +514,7 @@ def test_stream_redirect_loop(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/redirect_loop"))
         with pytest.raises(requests.RequestsError) as e:
-            with s.stream("GET", url, max_redirects=2):
+            with s.stream("GET", url, allow_redirects=True, max_redirects=2):
                 pass
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert e.value.response.status_code == 301  # type: ignore
@@ -518,7 +525,7 @@ def test_stream_redirect_loop_without_close(server):
         url = str(server.url.copy_with(path="/redirect_loop"))
         with pytest.raises(requests.RequestsError) as e:
             # if the error happens receiving header, it's raised right away
-            s.get(url, max_redirects=2, stream=True)
+            s.get(url, allow_redirects=True, max_redirects=2, stream=True)
 
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert e.value.response.status_code == 301  # type: ignore
@@ -548,7 +555,7 @@ def test_stream_auto_close_with_header_errors(server):
 
     url = str(server.url.copy_with(path="/redirect_loop"))
     with pytest.raises(requests.RequestsError) as e:
-        s.get(url, max_redirects=2, stream=True)
+        s.get(url, allow_redirects=True, max_redirects=2, stream=True)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert e.value.response.status_code == 301  # type: ignore
 
