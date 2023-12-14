@@ -107,29 +107,21 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     async_curl = ffi.from_handle(clientp)
     loop = async_curl.loop
 
-    if what & CURL_POLL_IN:
-        # Also remove if already exist
+    if what & CURL_POLL_IN or what & CURL_POLL_OUT or what & CURL_POLL_REMOVE:
         if sockfd in async_curl._sockfds:
             loop.remove_reader(sockfd)
             loop.remove_writer(sockfd)
             async_curl._sockfds.remove(sockfd)
+        elif what & CURL_POLL_REMOVE:
+            message = f"File descriptor {sockfd} not found."
+            raise TypeError(message)
+
+    if what & CURL_POLL_IN:
         loop.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
         async_curl._sockfds.add(sockfd)
-
     if what & CURL_POLL_OUT:
-        # Also remove if already exist
-        if sockfd in async_curl._sockfds:
-            loop.remove_reader(sockfd)
-            loop.remove_writer(sockfd)
-            async_curl._sockfds.remove(sockfd)
         loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
         async_curl._sockfds.add(sockfd)
-
-    if what & CURL_POLL_REMOVE:
-        loop.remove_reader(sockfd)
-        loop.remove_writer(sockfd)
-        async_curl._sockfds.remove(sockfd)
-
 
 class AsyncCurl:
     """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
