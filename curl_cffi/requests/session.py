@@ -127,20 +127,6 @@ not_set = object()
 class BaseSession:
     """Provide common methods for setting curl options and reading info in sessions."""
 
-    __attrs__ = [
-        "headers",
-        "cookies",
-        "auth",
-        "proxies",
-        "params",
-        "verify",
-        "timeout",
-        "cert",
-        "trust_env",  # TODO
-        "max_redirects",
-        "impersonate",
-    ]
-
     def __init__(
         self,
         *,
@@ -152,6 +138,7 @@ class BaseSession:
         verify: bool = True,
         timeout: Union[float, Tuple[float, float]] = 30,
         trust_env: bool = True,
+        allow_redirects: bool = False,
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
@@ -169,6 +156,7 @@ class BaseSession:
         self.verify = verify
         self.timeout = timeout
         self.trust_env = trust_env
+        self.allow_redirects = allow_redirects
         self.max_redirects = max_redirects
         self.impersonate = impersonate
         self.default_headers = default_headers
@@ -191,7 +179,7 @@ class BaseSession:
         files: Optional[Dict] = None,
         auth: Optional[Tuple[str, str]] = None,
         timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
-        allow_redirects: bool = True,
+        allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
         verify: Optional[Union[bool, str]] = None,
@@ -320,10 +308,16 @@ class BaseSession:
                 c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(timeout * 1000))  # type: ignore
 
         # allow_redirects
-        c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
+        c.setopt(
+            CurlOpt.FOLLOWLOCATION,
+            int(self.allow_redirects if allow_redirects is None else allow_redirects),
+        )
 
         # max_redirects
-        c.setopt(CurlOpt.MAXREDIRS, max_redirects or self.max_redirects)
+        c.setopt(
+            CurlOpt.MAXREDIRS,
+            self.max_redirects if max_redirects is None else max_redirects,
+        )
 
         # proxies
         if self.proxies:
@@ -510,6 +504,7 @@ class Session(BaseSession):
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up. In stream mode, only connect_timeout will be set.
             trust_env: use http_proxy/https_proxy and other environments, default True.
+            allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
             interface: which interface use in request to server.
@@ -586,7 +581,7 @@ class Session(BaseSession):
         files: Optional[Dict] = None,
         auth: Optional[Tuple[str, str]] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
-        allow_redirects: bool = True,
+        allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
         verify: Optional[bool] = None,
@@ -733,6 +728,7 @@ class AsyncSession(BaseSession):
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
             trust_env: use http_proxy/https_proxy and other environments, default True.
+            allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
 
@@ -828,7 +824,7 @@ class AsyncSession(BaseSession):
         files: Optional[Dict] = None,
         auth: Optional[Tuple[str, str]] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
-        allow_redirects: bool = True,
+        allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[dict] = None,
         verify: Optional[bool] = None,
