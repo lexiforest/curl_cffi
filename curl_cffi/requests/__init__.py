@@ -42,7 +42,7 @@ def request(
     files: Optional[Dict] = None,
     auth: Optional[Tuple[str, str]] = None,
     timeout: Union[float, Tuple[float, float]] = 30,
-    allow_redirects: bool = False,
+    allow_redirects: bool = True,
     max_redirects: int = -1,
     proxies: Optional[dict] = None,
     verify: Optional[bool] = None,

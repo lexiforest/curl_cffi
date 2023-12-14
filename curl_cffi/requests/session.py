@@ -138,7 +138,7 @@ class BaseSession:
         verify: bool = True,
         timeout: Union[float, Tuple[float, float]] = 30,
         trust_env: bool = True,
-        allow_redirects: bool = False,
+        allow_redirects: bool = True,
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
