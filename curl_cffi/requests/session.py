@@ -1,6 +1,5 @@
 import asyncio
 from contextlib import contextmanager, asynccontextmanager
-import sys
 import re
 import threading
 import warnings
@@ -30,12 +29,6 @@ try:
     import eventlet.tpool
 except ImportError:
     pass
-
-
-WINDOWS_WARN = """
-WindowsProactorEventLoopPolicy is not supported, you can use the selector loop by:
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-"""
 
 
 class BrowserType(str, Enum):
@@ -758,11 +751,6 @@ class AsyncSession(BaseSession):
         self.max_clients = max_clients
         self._closed = False
         self.init_pool()
-        if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
-            if isinstance(
-                asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy  # type: ignore
-            ):
-                warnings.warn(WINDOWS_WARN)
 
     @property
     def acurl(self):
