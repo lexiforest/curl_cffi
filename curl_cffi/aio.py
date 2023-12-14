@@ -1,8 +1,4 @@
-__all__ = ["AsyncCurl"]
-
-
 import asyncio
-import os
 import sys
 import warnings
 from typing import Any
@@ -12,9 +8,16 @@ from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
 from .curl import Curl, DEFAULT_CACERT
 
+__all__ = ["AsyncCurl"]
+
 # registry of asyncio loop : selector thread
 _selectors: WeakKeyDictionary = WeakKeyDictionary()
-
+PROACTOR_WARNING = """
+Proactor event loop does not implement add_reader family of methods required.
+Registering an additional selector thread for add_reader support.
+To avoid this warning use:
+    asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+"""
 
 def _get_selector_windows(asyncio_loop) -> asyncio.AbstractEventLoop:
     """Get selector-compatible loop
@@ -22,51 +25,33 @@ def _get_selector_windows(asyncio_loop) -> asyncio.AbstractEventLoop:
     Returns an object with ``add_reader`` family of methods,
     either the loop itself or a SelectorThread instance.
 
-    Workaround Windows proactor removal of
-    *reader methods, which we need for curl-cffi sockets.
+    Workaround Windows proactor removal of *reader methods.
     """
 
     if asyncio_loop in _selectors:
         return _selectors[asyncio_loop]
 
-    # detect add_reader instead of checking for proactor?
-    if hasattr(asyncio, "ProactorEventLoop") and isinstance(
-        asyncio_loop, asyncio.ProactorEventLoop  # type: ignore
-    ):
-        try:
-            from ._asyncio_selector import AddThreadSelectorEventLoop
-        except ImportError:
-            raise RuntimeError(
-                "Proactor event loop does not implement add_reader family of methods required for curl-cffi."
-                " curl-cffi will work with proactor if tornado >= 6.1 can be found."
-                " Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())`"
-                " or install 'tornado>=6.1' to avoid this error."
-            )
-
-        warnings.warn(
-            "Proactor event loop does not implement add_reader family of methods required for curl-cffi."
-            " Registering an additional selector thread for add_reader support via tornado."
-            " Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())`"
-            " to avoid this warning.",
-            RuntimeWarning,
-        )
-
-        selector_loop = _selectors[asyncio_loop] = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
-
-        # patch loop.close to also close the selector thread
-        loop_close = asyncio_loop.close
-
-        def _close_selector_and_loop():
-            # restore original before calling selector.close,
-            # which in turn calls eventloop.close!
-            asyncio_loop.close = loop_close
-            _selectors.pop(asyncio_loop, None)
-            selector_loop.close()
-
-        asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
-        return selector_loop
-    else:
+    if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
         return asyncio_loop
+
+    from ._asyncio_selector import AddThreadSelectorEventLoop
+
+    warnings.warn(PROACTOR_WARNING, RuntimeWarning)
+
+    selector_loop = _selectors[asyncio_loop] = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
+
+    # patch loop.close to also close the selector thread
+    loop_close = asyncio_loop.close
+
+    def _close_selector_and_loop():
+        # restore original before calling selector.close,
+        # which in turn calls eventloop.close!
+        asyncio_loop.close = loop_close
+        _selectors.pop(asyncio_loop, None)
+        selector_loop.close()
+
+    asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
+    return selector_loop
 
 
 def _get_selector_noop(loop) -> asyncio.AbstractEventLoop:
