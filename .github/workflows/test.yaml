@@ -6,6 +6,7 @@ on:
       - master
       - bugfix/*
       - feature/*
+      - allow_redirects
 jobs:
   bdist:
     name: build bdist wheels and test
