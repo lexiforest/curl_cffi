@@ -9,24 +9,11 @@ uname = platform.uname()
 VERSION = "0.5.4"
 
 if uname.system == "Windows":
-    LIBDIR = "./curl_cffi"
+    LIBDIR = "./lib"
 elif uname.system == "Darwin" and uname.machine == "x86_64":
     LIBDIR = "/Users/runner/work/_temp/install/lib"
 else:
     LIBDIR = "/usr/local/lib"
-print(os.listdir())
-
-def reporthook(blocknum, blocksize, totalsize):
-    readsofar = blocknum * blocksize
-    if totalsize > 0:
-        percent = readsofar * 1e2 / totalsize
-        s = "\r%5.1f%% %*d / %d" % (percent, len(str(totalsize)), readsofar, totalsize)
-        sys.stderr.write(s)
-        if readsofar >= totalsize:  # near the end
-            sys.stderr.write("\n")
-    else:  # total size is unknown
-        sys.stderr.write("read %d\n" % (readsofar,))
-
 
 if uname.system == "Darwin":
     if uname.machine == "arm64":
@@ -45,5 +32,5 @@ else:
 
 if url:
     print(f"Download libcurl-impersonate-chrome from {url}")
-    urlretrieve(url, filename, reporthook)
+    urlretrieve(url, filename)
     shutil.unpack_archive(filename, LIBDIR)
