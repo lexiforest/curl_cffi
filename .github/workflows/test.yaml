@@ -9,7 +9,7 @@ on:
       - master
       - bugfix/*
       - feature/*
-      - stanalone
+      - standalone
 jobs:
   bdist:
     name: build bdist wheels and test
