@@ -54,7 +54,6 @@ if sys.platform == "win32":
 
         asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
         return selector_loop
-    _get_selector = _get_selector_windows
 
 else:
     def _get_selector(loop) -> asyncio.AbstractEventLoop:
