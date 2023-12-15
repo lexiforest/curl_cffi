@@ -67,7 +67,6 @@ test = [
 
 [tool.setuptools]
 packages = ["curl_cffi", "curl_cffi.requests"]
-package-data = { curl_cffi = ["libcurl.dll"] }  # for windows-only - TODO
 
 
 [build-system]

@@ -1,3 +1,5 @@
 include curl_cffi/cacert.pem
 include curl_cffi/_wrapper.*
+exclude curl_cffi/ffi/*
 exclude curl_cffi/build.py
+include curl_cffi/libcurl.dll
