@@ -3,7 +3,7 @@ SHELL := bash
 VERSION := 0.5.4
 CURL_VERSION := curl-7.84.0
 
-.preprocessed: curl_cffi/include/curl/curl.h curl_cffi/const.py curl_cffi/cacert.pem .so_downloaded
+.preprocessed: curl_cffi/const.py curl_cffi/include/curl/curl.h curl_cffi/cacert.pem .so_downloaded
 	touch .preprocessed
 
 curl_cffi/const.py: curl_cffi/include
