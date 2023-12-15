@@ -67,6 +67,7 @@ test = [
 
 [tool.setuptools]
 packages = ["curl_cffi", "curl_cffi.requests"]
+exclude-package-data = { curl_cffi = ["include", "ffi"] }
 package-data = { curl_cffi = ["libcurl.dll"] }  # for windows-only - TODO
 
 
