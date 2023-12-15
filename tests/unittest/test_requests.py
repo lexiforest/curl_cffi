@@ -427,6 +427,39 @@ def test_session_with_headers(server):
     assert r.status_code == 200
 
 
+# https://github.com/yifeikong/curl_cffi/pull/171
+def test_session_with_hostname_proxies(server, proxy_server):
+    proxies = {
+        f'all://{server.url.host}': f'http://{proxy_server.flags.hostname}:{proxy_server.flags.port}'
+    }
+    s = requests.Session(proxies=proxies)
+    url = str(server.url.copy_with(path="/echo_headers"))
+    r = s.get(url)
+    assert r.text == 'Hello from man in the middle'
+
+
+# https://github.com/yifeikong/curl_cffi/pull/171
+def test_session_with_http_proxies(server, proxy_server):
+    proxies = {
+        'http': f'http://{proxy_server.flags.hostname}:{proxy_server.flags.port}'
+    }
+    s = requests.Session(proxies=proxies)
+    url = str(server.url.copy_with(path="/echo_headers"))
+    r = s.get(url)
+    assert r.text == 'Hello from man in the middle'
+
+
+# https://github.com/yifeikong/curl_cffi/pull/171
+def test_session_with_all_proxies(server, proxy_server):
+    proxies = {
+        'all': f'http://{proxy_server.flags.hostname}:{proxy_server.flags.port}'
+    }
+    s = requests.Session(proxies=proxies)
+    url = str(server.url.copy_with(path="/echo_headers"))
+    r = s.get(url)
+    assert r.text == 'Hello from man in the middle'
+
+
 def test_stream_iter_content(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/stream"))
