@@ -34,3 +34,5 @@ if url:
     print(f"Download libcurl-impersonate-chrome from {url}")
     urlretrieve(url, filename)
     shutil.unpack_archive(filename, LIBDIR)
+    if uname.system == "Windows":
+        shutil.copy2(f"{LIBDIR}/libcurl.dll", "curl_cffi")
