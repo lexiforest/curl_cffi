@@ -9,12 +9,12 @@ uname = platform.uname()
 VERSION = "0.5.4"
 
 if uname.system == "Windows":
-    LIBDIR = "./lib"
+    LIBDIR = "./curl_cffi"
 elif uname.system == "Darwin" and uname.machine == "x86_64":
     LIBDIR = "/Users/runner/work/_temp/install/lib"
 else:
     LIBDIR = "/usr/local/lib"
-
+print(os.listdir())
 
 def reporthook(blocknum, blocksize, totalsize):
     readsofar = blocknum * blocksize

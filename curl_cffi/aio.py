@@ -4,65 +4,61 @@ import warnings
 from typing import Any
 from weakref import WeakSet, WeakKeyDictionary
 
+import _cffi_backend  # required by _wrapper
+
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlMOpt
 from .curl import Curl, DEFAULT_CACERT
 
 __all__ = ["AsyncCurl"]
 
-# registry of asyncio loop : selector thread
-_selectors: WeakKeyDictionary = WeakKeyDictionary()
-PROACTOR_WARNING = """
-Proactor event loop does not implement add_reader family of methods required.
-Registering an additional selector thread for add_reader support.
-To avoid this warning use:
-    asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
-"""
-
-def _get_selector_windows(asyncio_loop) -> asyncio.AbstractEventLoop:
-    """Get selector-compatible loop
-
-    Returns an object with ``add_reader`` family of methods,
-    either the loop itself or a SelectorThread instance.
-
-    Workaround Windows proactor removal of *reader methods.
-    """
-
-    if asyncio_loop in _selectors:
-        return _selectors[asyncio_loop]
-
-    if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
-        return asyncio_loop
-
-    from ._asyncio_selector import AddThreadSelectorEventLoop
-
-    warnings.warn(PROACTOR_WARNING, RuntimeWarning)
-
-    selector_loop = _selectors[asyncio_loop] = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
-
-    # patch loop.close to also close the selector thread
-    loop_close = asyncio_loop.close
-
-    def _close_selector_and_loop():
-        # restore original before calling selector.close,
-        # which in turn calls eventloop.close!
-        asyncio_loop.close = loop_close
-        _selectors.pop(asyncio_loop, None)
-        selector_loop.close()
-
-    asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
-    return selector_loop
-
-
-def _get_selector_noop(loop) -> asyncio.AbstractEventLoop:
-    """no-op on non-Windows"""
-    return loop
-
-
 if sys.platform == "win32":
+    PROACTOR_WARNING = """
+    Proactor event loop does not implement add_reader family of methods required.
+    Registering an additional selector thread for add_reader support.
+    To avoid this warning use:
+        asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+    """
+    _selectors: WeakKeyDictionary = WeakKeyDictionary()
+
+    def _get_selector(asyncio_loop) -> asyncio.AbstractEventLoop:
+        """Get selector-compatible loop
+
+        Returns an object with ``add_reader`` family of methods,
+        either the loop itself or a SelectorThread instance.
+
+        Workaround Windows proactor removal of *reader methods.
+        """
+
+        if asyncio_loop in _selectors:
+            return _selectors[asyncio_loop]
+
+        if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
+            return asyncio_loop
+
+        from ._asyncio_selector import AddThreadSelectorEventLoop
+
+        warnings.warn(PROACTOR_WARNING, RuntimeWarning)
+
+        selector_loop = _selectors[asyncio_loop] = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
+
+        # patch loop.close to also close the selector thread
+        loop_close = asyncio_loop.close
+
+        def _close_selector_and_loop():
+            # restore original before calling selector.close,
+            # which in turn calls eventloop.close!
+            asyncio_loop.close = loop_close
+            _selectors.pop(asyncio_loop, None)
+            selector_loop.close()
+
+        asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
+        return selector_loop
     _get_selector = _get_selector_windows
+
 else:
-    _get_selector = _get_selector_noop
+    def _get_selector(loop) -> asyncio.AbstractEventLoop:
+        return loop
 
 
 CURL_POLL_NONE = 0
@@ -122,6 +118,7 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     if what & CURL_POLL_OUT:
         loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
         async_curl._sockfds.add(sockfd)
+
 
 class AsyncCurl:
     """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
