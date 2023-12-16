@@ -11,8 +11,9 @@ __all__ = [
     "lib",
 ]
 
+import _cffi_backend  # noqa: F401  # required by _wrapper
 # This line includes _wrapper.so into the wheel
-from ._wrapper import ffi, lib
+from ._wrapper import ffi, lib  # type: ignore
 
 from .const import CurlInfo, CurlMOpt, CurlOpt, CurlECode, CurlHttpVersion
 from .curl import Curl, CurlError
