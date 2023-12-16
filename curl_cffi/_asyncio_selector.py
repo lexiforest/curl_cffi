@@ -28,7 +28,7 @@ from typing import Set  # noqa: F401
 
 try:
     from typing import Protocol
-except ModuleNotFoundError:
+except ImportError:
     from typing_extensions import Protocol
 
 
