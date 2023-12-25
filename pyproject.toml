@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.6.0b1"
+version = "0.6.0b2"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -85,7 +85,6 @@ test-requires = "pytest"
 test-command = "pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
-manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
