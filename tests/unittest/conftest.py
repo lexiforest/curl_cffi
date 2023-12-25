@@ -569,12 +569,12 @@ async def echo(websocket):
 
 class TestWebsocketServer:
     def __init__(self, port):
-        self.url = f"ws://localhost:{port}"
+        self.url = f"ws://127.0.0.1:{port}"
         self.port = port
 
     def run(self):
         async def serve(port):
-            async with websockets.serve(echo, "localhost", port):
+            async with websockets.serve(echo, "127.0.0.1", port):
                 await asyncio.Future()  # run forever
 
         asyncio.run(serve(self.port))
