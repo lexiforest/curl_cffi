@@ -11,4 +11,4 @@ def test_hello(ws_server):
         ws = s.ws_connect(ws_server.url)
         ws.send(b"foo")
         content = ws.recv()
-        assert content == "foo"
+        assert content == b"foo"
