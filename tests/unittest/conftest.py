@@ -574,6 +574,7 @@ class TestWebsocketServer:
 
     def run(self):
         async def serve(port):
+            # GitHub actions only likes 127, not localhost, wtf...
             async with websockets.serve(echo, "127.0.0.1", port):
                 await asyncio.Future()  # run forever
 
