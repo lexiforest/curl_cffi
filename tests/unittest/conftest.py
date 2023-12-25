@@ -559,14 +559,12 @@ class TestServer(Server):
             await self.startup()
 
 
-async def hello(websocket):
+async def echo(websocket):
     name = (await websocket.recv()).decode()
-    print(f"<<< {name}")
+    # print(f"<<< {name}")
 
-    greeting = f"Hello {name}!"
-
-    await websocket.send(greeting)
-    print(f">>> {greeting}")
+    await websocket.send(name)
+    # print(f">>> {name}")
 
 
 class TestWebsocketServer:
@@ -576,7 +574,7 @@ class TestWebsocketServer:
 
     def run(self):
         async def serve(port):
-            async with websockets.serve(hello, "localhost", port):
+            async with websockets.serve(echo, "localhost", port):
                 await asyncio.Future()  # run forever
 
         asyncio.run(serve(self.port))
