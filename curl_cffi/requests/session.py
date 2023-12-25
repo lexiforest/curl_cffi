@@ -49,17 +49,21 @@ class BrowserType(str, Enum):
     chrome107 = "chrome107"
     chrome110 = "chrome110"
     chrome116 = "chrome116"
-    chrome117 = "chrome117"
-    chrome118 = "chrome118"
     chrome119 = "chrome119"
-    chrome120 = "chrome120"
     chrome99_android = "chrome99_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
 
+    chrome = "chrome119"
+
     @classmethod
     def has(cls, item):
         return item in cls.__members__
+
+
+class BrowserSpec:
+    """A more structured way of selecting browsers """
+    # TODO
 
 
 def _update_url_params(url: str, params: Dict) -> str:
@@ -586,7 +590,7 @@ class Session(BaseSession):
         finally:
             rsp.close()
 
-    def connect(self, url, *args, **kwargs):
+    def ws_connect(self, url, *args, **kwargs):
         self._set_curl_options(self.curl, "GET", url, *args, **kwargs)
         # https://curl.se/docs/websocket.html
         self.curl.setopt(CurlOpt.CONNECT_ONLY, 2)
@@ -844,7 +848,7 @@ class AsyncSession(BaseSession):
         finally:
             await rsp.aclose()
 
-    async def connect(self, url, *args, **kwargs):
+    async def ws_connect(self, url, *args, **kwargs):
         curl = await self.pop_curl()
         # curl.debug()
         self._set_curl_options(curl, "GET", url, *args, **kwargs)

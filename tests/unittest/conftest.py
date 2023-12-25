@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import typing
+import websockets
 from asyncio import sleep
 from collections import defaultdict
 from urllib.parse import parse_qs
@@ -558,6 +559,29 @@ class TestServer(Server):
             await self.startup()
 
 
+async def hello(websocket):
+    name = (await websocket.recv()).decode()
+    print(f"<<< {name}")
+
+    greeting = f"Hello {name}!"
+
+    await websocket.send(greeting)
+    print(f">>> {greeting}")
+
+
+class TestWebsocketServer:
+    def __init__(self, port):
+        self.url = f"ws://localhost:{port}"
+        self.port = port
+
+    def run(self):
+        async def serve(port):
+            async with websockets.serve(hello, "localhost", port):
+                await asyncio.Future()  # run forever
+
+        asyncio.run(serve(self.port))
+
+
 def serve_in_thread(server: Server):
     thread = threading.Thread(target=server.run)
     thread.start()
@@ -568,6 +592,19 @@ def serve_in_thread(server: Server):
     finally:
         server.should_exit = True
         thread.join()
+
+
+@pytest.fixture(scope="session")
+def ws_server():
+    server = TestWebsocketServer(port=8964)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        time.sleep(2)  # FIXME find a reliable way to check the server is up
+        yield server
+    finally:
+        pass
+        # thread.join()
 
 
 @pytest.fixture(scope="session")
