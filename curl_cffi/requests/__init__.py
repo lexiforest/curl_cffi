@@ -21,6 +21,7 @@ from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union
 
+from ..curl import Curl
 from ..const import CurlHttpVersion
 from .cookies import Cookies, CookieTypes
 from .models import Request, Response
@@ -56,6 +57,7 @@ def request(
     http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
     interface: Optional[str] = None,
+    curl: Optional[Curl] = None
 ) -> Response:
     """Send an http request.
 
@@ -88,7 +90,7 @@ def request(
     Returns:
         A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
     """
-    with Session(thread=thread, curl_options=curl_options, debug=debug) as s:
+    with Session(thread=thread, curl_options=curl_options, debug=debug, curl=curl) as s:
         return s.request(
             method=method,
             url=url,

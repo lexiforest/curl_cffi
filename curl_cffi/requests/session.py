@@ -13,7 +13,7 @@ from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 from concurrent.futures import ThreadPoolExecutor
 
 
-from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
+from .. import AsyncCurl, Curl, CurlFirefox, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
 from ..curl import CURL_WRITEFUNC_ERROR
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
@@ -43,6 +43,13 @@ class BrowserType(str, Enum):
     chrome99_android = "chrome99_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
+    ff91esr = "ff91esr"
+    ff95 = "ff95"
+    ff98 = "ff98"
+    f100 = "ff100"
+    ff102 = "ff102"
+    ff109 = "ff109"
+    ff117 = "ff117"
 
     @classmethod
     def has(cls, item):
@@ -367,6 +374,9 @@ class BaseSession:
         if impersonate:
             if not BrowserType.has(impersonate):
                 raise RequestsError(f"impersonate {impersonate} is not supported")
+            if impersonate.startswith("ff"):
+                if not isinstance(c, CurlFirefox):
+                    raise RequestsError(f"CurlFirefox required to impersonate {impersonate}, got {type(c)}")
             c.impersonate(impersonate, default_headers=default_headers)
 
         # http_version, after impersonate, which will change this to http2

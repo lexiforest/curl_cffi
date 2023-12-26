@@ -4,7 +4,8 @@ import warnings
 from typing import Any
 from weakref import WeakSet, WeakKeyDictionary
 
-from ._wrapper import ffi, lib  # type: ignore
+from ._wrapper_chrome import ffi as ffi_chrome, lib as lib_chrome  # type: ignore
+from ._wrapper_ff import ffi as ffi_ff, lib as lib_ff  # type: ignore
 from .const import CurlMOpt
 from .curl import Curl, DEFAULT_CACERT
 
@@ -81,54 +82,60 @@ CURL_CSELECT_ERR = 0x04
 CURLMSG_DONE = 1
 
 
-@ffi.def_extern()
-def timer_function(curlm, timeout_ms: int, clientp: Any):
-    """
-    see: https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html
-    """
-    async_curl = ffi.from_handle(clientp)
-    # print("time out in %sms" % timeout_ms)
-    if timeout_ms == -1:
-        for timer in async_curl._timers:
-            timer.cancel()
-        async_curl._timers = WeakSet()
-    else:
-        timer = async_curl.loop.call_later(
-            timeout_ms / 1000,
-            async_curl.process_data,
-            CURL_SOCKET_TIMEOUT,  # -1
-            CURL_POLL_NONE,  # 0
-        )
-        async_curl._timers.add(timer)
+for linked in [(ffi_chrome, lib_chrome), (ffi_ff, lib_ff)]:
+    ffi, lib = linked
+
+    @ffi.def_extern()
+    def timer_function(curlm, timeout_ms: int, clientp: Any):
+        """
+        see: https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html
+        """
+        async_curl = ffi.from_handle(clientp)
+        # print("time out in %sms" % timeout_ms)
+        if timeout_ms == -1:
+            for timer in async_curl._timers:
+                timer.cancel()
+            async_curl._timers = WeakSet()
+        else:
+            timer = async_curl.loop.call_later(
+                timeout_ms / 1000,
+                async_curl.process_data,
+                CURL_SOCKET_TIMEOUT,  # -1
+                CURL_POLL_NONE,  # 0
+            )
+            async_curl._timers.add(timer)
 
 
-@ffi.def_extern()
-def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
-    async_curl = ffi.from_handle(clientp)
-    loop = async_curl.loop
+    @ffi.def_extern()
+    def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
+        async_curl = ffi.from_handle(clientp)
+        loop = async_curl.loop
 
-    if what & CURL_POLL_IN or what & CURL_POLL_OUT or what & CURL_POLL_REMOVE:
-        if sockfd in async_curl._sockfds:
-            loop.remove_reader(sockfd)
-            loop.remove_writer(sockfd)
-            async_curl._sockfds.remove(sockfd)
-        elif what & CURL_POLL_REMOVE:
-            message = f"File descriptor {sockfd} not found."
-            raise TypeError(message)
+        if what & CURL_POLL_IN or what & CURL_POLL_OUT or what & CURL_POLL_REMOVE:
+            if sockfd in async_curl._sockfds:
+                loop.remove_reader(sockfd)
+                loop.remove_writer(sockfd)
+                async_curl._sockfds.remove(sockfd)
+            elif what & CURL_POLL_REMOVE:
+                message = f"File descriptor {sockfd} not found."
+                raise TypeError(message)
 
-    if what & CURL_POLL_IN:
-        loop.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
-        async_curl._sockfds.add(sockfd)
-    if what & CURL_POLL_OUT:
-        loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
-        async_curl._sockfds.add(sockfd)
+        if what & CURL_POLL_IN:
+            loop.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
+            async_curl._sockfds.add(sockfd)
+        if what & CURL_POLL_OUT:
+            loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
+            async_curl._sockfds.add(sockfd)
+
 
 class AsyncCurl:
     """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
     socket_action APIs."""
 
-    def __init__(self, cacert: str = DEFAULT_CACERT, loop=None):
-        self._curlm = lib.curl_multi_init()
+    def __init__(self, cacert: str = DEFAULT_CACERT, loop = None, _ffi = ffi_chrome, _lib = lib_chrome):
+        self._ffi = _ffi
+        self._lib = _lib
+        self._curlm = self._lib.curl_multi_init()
         self._cacert = cacert
         self._curl2future = {}  # curl to future map
         self._curl2curl = {}  # c curl to Curl
@@ -141,9 +148,9 @@ class AsyncCurl:
         self._setup()
 
     def _setup(self):
-        self.setopt(CurlMOpt.TIMERFUNCTION, lib.timer_function)
-        self.setopt(CurlMOpt.SOCKETFUNCTION, lib.socket_function)
-        self._self_handle = ffi.new_handle(self)
+        self.setopt(CurlMOpt.TIMERFUNCTION, self._lib.timer_function)
+        self.setopt(CurlMOpt.SOCKETFUNCTION, self._lib.socket_function)
+        self._self_handle = self._ffi.new_handle(self)
         self.setopt(CurlMOpt.SOCKETDATA, self._self_handle)
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
 
@@ -153,11 +160,11 @@ class AsyncCurl:
         self._checker.cancel()
         # Close all pending futures
         for curl, future in self._curl2future.items():
-            lib.curl_multi_remove_handle(self._curlm, curl._curl)
+            self._lib.curl_multi_remove_handle(self._curlm, curl._curl)
             if not future.done() and not future.cancelled():
                 future.set_result(None)
         # Cleanup curl_multi handle
-        lib.curl_multi_cleanup(self._curlm)
+        self._lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
         # Remove add readers and writers
         for sockfd in self._sockfds:
@@ -180,7 +187,7 @@ class AsyncCurl:
         `perform` in the async world."""
         # import pdb; pdb.set_trace()
         curl._ensure_cacert()
-        lib.curl_multi_add_handle(self._curlm, curl._curl)
+        self._lib.curl_multi_add_handle(self._curlm, curl._curl)
         future = self.loop.create_future()
         self._curl2future[curl] = future
         self._curl2curl[curl._curl] = curl
@@ -188,8 +195,8 @@ class AsyncCurl:
 
     def socket_action(self, sockfd: int, ev_bitmask: int) -> int:
         """Call libcurl socket_action function"""
-        running_handle = ffi.new("int *")
-        lib.curl_multi_socket_action(self._curlm, sockfd, ev_bitmask, running_handle)
+        running_handle = self._ffi.new("int *")
+        self._lib.curl_multi_socket_action(self._curlm, sockfd, ev_bitmask, running_handle)
         return running_handle[0]
 
     def process_data(self, sockfd: int, ev_bitmask: int):
@@ -200,11 +207,11 @@ class AsyncCurl:
 
         self.socket_action(sockfd, ev_bitmask)
 
-        msg_in_queue = ffi.new("int *")
+        msg_in_queue = self._ffi.new("int *")
         while True:
-            curl_msg = lib.curl_multi_info_read(self._curlm, msg_in_queue)
+            curl_msg = self._lib.curl_multi_info_read(self._curlm, msg_in_queue)
             # print("message in queue", msg_in_queue[0], curl_msg)
-            if curl_msg == ffi.NULL:
+            if curl_msg == self._ffi.NULL:
                 break
             if curl_msg.msg == CURLMSG_DONE:
                 # print("curl_message", curl_msg.msg, curl_msg.data.result)
@@ -219,7 +226,7 @@ class AsyncCurl:
                 print("NOT DONE")  # Will not reach, for no other code being defined.
 
     def _pop_future(self, curl: Curl):
-        lib.curl_multi_remove_handle(self._curlm, curl._curl)
+        self._lib.curl_multi_remove_handle(self._curlm, curl._curl)
         self._curl2curl.pop(curl._curl, None)
         return self._curl2future.pop(curl, None)
 
@@ -243,4 +250,14 @@ class AsyncCurl:
 
     def setopt(self, option, value):
         """Wrapper around curl_multi_setopt."""
-        return lib.curl_multi_setopt(self._curlm, option, value)
+        return self._lib.curl_multi_setopt(self._curlm, option, value)
+
+
+class AsyncCurlChrome(AsyncCurl):
+    pass
+
+
+class AsyncCurlFirefox(AsyncCurl):
+
+    def __init__(self, loop = None):
+        super().__init__(cacert=None, loop=loop, _ffi=ffi_ff, _lib=lib_ff)
