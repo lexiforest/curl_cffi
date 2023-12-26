@@ -13,7 +13,6 @@ dist/
 wheelhouse/
 curl.egg-info/
 curl_cffi.egg-info/
-curl_cffi/cacert.pem
 # curl_cffi/const.py
 curl-*/
 *.tar.xz

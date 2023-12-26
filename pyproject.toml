@@ -6,6 +6,7 @@ description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
 dependencies = [
     "cffi >=1.12.0",
+    "certifi",
     "typing_extensions; python_version < '3.8'",
 ]
 readme = "README.md"

@@ -3,7 +3,7 @@ SHELL := bash
 VERSION := 0.5.4
 CURL_VERSION := curl-7.84.0
 
-.preprocessed: curl_cffi/include/curl/curl.h curl_cffi/cacert.pem .so_downloaded
+.preprocessed: curl_cffi/include/curl/curl.h .so_downloaded
 	touch .preprocessed
 
 curl_cffi/const.py: curl_cffi/include
@@ -26,10 +26,6 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	autoreconf -fi
 	mkdir -p ../curl_cffi/include/curl
 	cp -R include/curl/* ../curl_cffi/include/curl/
-
-curl_cffi/cacert.pem:
-	# https://curl.se/docs/caextract.html
-	curl https://curl.se/ca/cacert.pem -o curl_cffi/cacert.pem
 
 .so_downloaded:
 	python preprocess/download_so.py
@@ -55,7 +51,7 @@ build: .preprocessed
 
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
-	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c curl_cffi/cacert.pem
+	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c
 	rm -rf .preprocessed .so_downloaded $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
 	rm -rf curl_cffi/include/
 
