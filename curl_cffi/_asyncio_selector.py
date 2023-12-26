@@ -16,8 +16,6 @@ import threading
 import typing
 from typing import (
     Any,
-    TypeVar,
-    Awaitable,
     Callable,
     Union,
     Optional,
@@ -27,17 +25,23 @@ from typing import (
 )  # noqa: F401
 
 from typing import Set  # noqa: F401
-from typing_extensions import Protocol
+
+try:
+    from typing import Protocol
+except ImportError:
+    from typing_extensions import Protocol
+
 
 class _HasFileno(Protocol):
     def fileno(self) -> int:
         pass
 
+
 _FileDescriptorLike = Union[int, _HasFileno]
 
 
 # Collection of selector thread event loops to shut down on exit.
-_selector_loops = set()  # type: Set[SelectorThread]
+_selector_loops: Set["SelectorThread"] = set()
 
 
 def _atexit_callback() -> None:
@@ -327,17 +331,17 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
         self._real_loop.close()
 
     def add_reader(
-        self, fd: "_FileDescriptorLike", callback: Callable[..., None], *args: Any
+        self, fd: _FileDescriptorLike, callback: Callable[..., None], *args: Any
     ) -> None:
         return self._selector.add_reader(fd, callback, *args)
 
     def add_writer(
-        self, fd: "_FileDescriptorLike", callback: Callable[..., None], *args: Any
+        self, fd: _FileDescriptorLike, callback: Callable[..., None], *args: Any
     ) -> None:
         return self._selector.add_writer(fd, callback, *args)
 
-    def remove_reader(self, fd: "_FileDescriptorLike") -> bool:
+    def remove_reader(self, fd: _FileDescriptorLike) -> bool:
         return self._selector.remove_reader(fd)
 
-    def remove_writer(self, fd: "_FileDescriptorLike") -> bool:
+    def remove_writer(self, fd: _FileDescriptorLike) -> bool:
         return self._selector.remove_writer(fd)
