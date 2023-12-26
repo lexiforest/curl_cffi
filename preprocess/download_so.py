@@ -47,3 +47,5 @@ if url:
     print(f"Download libcurl-impersonate-chrome from {url}")
     urlretrieve(url, filename, (None if os.getenv("GITHUB_ACTIONS") else reporthook))
     shutil.unpack_archive(filename, LIBDIR)
+    if uname.system == "Windows":
+        shutil.copy2(f"{LIBDIR}/libcurl.dll", "curl_cffi")
