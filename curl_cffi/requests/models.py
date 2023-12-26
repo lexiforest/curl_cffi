@@ -190,7 +190,4 @@ class Response:
         return b"".join(chunks)
 
     async def aclose(self):
-        import time
-        print(time.time())
         await self.stream_task  # type: ignore
-        print(time.time())
