@@ -322,21 +322,27 @@ class BaseSession:
         # proxies
         if self.proxies:
             proxies = {**self.proxies, **(proxies or {})}
+
         if proxies:
-            if url.startswith("http://"):
-                if proxies["http"] is not None:
-                    c.setopt(CurlOpt.PROXY, proxies["http"])
-            elif url.startswith("https://"):
-                if proxies["https"] is not None:
-                    if proxies["https"].startswith("https://"):
-                        raise RequestsError(
-                            "You are using http proxy WRONG, the prefix should be 'http://' not 'https://',"
-                            "see: https://github.com/yifeikong/curl_cffi/issues/6"
-                        )
-                    c.setopt(CurlOpt.PROXY, proxies["https"])
-                    # for http proxy, need to tell curl to enable tunneling
-                    if not proxies["https"].startswith("socks"):
-                        c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
+            parts = urlparse(url)
+            proxy = proxies.get(parts.scheme, proxies.get("all"))
+            if parts.hostname:
+                proxy = proxies.get(
+                    f"{parts.scheme}://{parts.hostname}",
+                    proxies.get(f"all://{parts.hostname}"),
+                ) or proxy
+
+            if proxy is not None:
+                if parts.scheme == "https" and proxy.startswith("https://"):
+                    raise RequestsError(
+                        "You are using http proxy WRONG, the prefix should be 'http://' not 'https://',"
+                        "see: https://github.com/yifeikong/curl_cffi/issues/6"
+                    )
+
+                c.setopt(CurlOpt.PROXY, proxy)
+                # for http proxy, need to tell curl to enable tunneling
+                if not proxy.startswith("socks"):
+                    c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
 
         # verify
         if verify is False or not self.verify and verify is None:
