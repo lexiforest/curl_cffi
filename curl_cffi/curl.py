@@ -1,17 +1,14 @@
-import os
 import re
 import warnings
 from http.cookies import SimpleCookie
 from typing import Any, List, Tuple, Union
 
+import certifi
+
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlHttpVersion, CurlInfo, CurlOpt
 
-try:
-    import certifi
-    DEFAULT_CACERT = certifi.where()
-except ImportError:
-    DEFAULT_CACERT = os.path.join(os.path.dirname(__file__), "cacert.pem")
+DEFAULT_CACERT = certifi.where()
 
 
 class CurlError(Exception):
