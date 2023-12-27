@@ -560,11 +560,12 @@ class TestServer(Server):
 
 
 async def echo(websocket):
-    name = (await websocket.recv()).decode()
-    # print(f"<<< {name}")
+    while True:
+        name = (await websocket.recv()).decode()
+        # print(f"<<< {name}")
 
-    await websocket.send(name)
-    # print(f">>> {name}")
+        await websocket.send(name)
+        # print(f">>> {name}")
 
 
 class TestWebsocketServer:

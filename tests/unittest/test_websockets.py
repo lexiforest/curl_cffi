@@ -16,8 +16,7 @@ def test_hello(ws_server):
 
 def test_hello_twice(ws_server):
     with Session() as s:
-        # w = s.ws_connect(ws_server.url)
-        w = s.ws_connect("ws://echo.websocket.events")
+        w = s.ws_connect(ws_server.url)
 
         w.send(b"Bar")
         reply, _ = w.recv()
