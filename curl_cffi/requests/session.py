@@ -64,7 +64,8 @@ class BrowserType(str, Enum):
 
 
 class BrowserSpec:
-    """A more structured way of selecting browsers """
+    """A more structured way of selecting browsers"""
+
     # TODO
 
 
@@ -270,7 +271,7 @@ class BaseSession:
         h.update(headers)
 
         # remove Host header if it's unnecessary, otherwise curl maybe confused.
-        # Host header will be automatically add by curl if it's not present.
+        # Host header will be automatically added by curl if it's not present.
         # https://github.com/yifeikong/curl_cffi/issues/119
         host_header = h.get("Host")
         if host_header is not None:
@@ -592,12 +593,30 @@ class Session(BaseSession):
         finally:
             rsp.close()
 
-    def ws_connect(self, url, *args, **kwargs):
+    def ws_connect(
+        self,
+        url,
+        *args,
+        on_message: Optional[Callable[[WebSocket, str], None]] = None,
+        on_error: Optional[Callable[[WebSocket, str], None]] = None,
+        on_open: Optional[Callable] = None,
+        on_close: Optional[Callable] = None,
+        **kwargs,
+    ):
         self._set_curl_options(self.curl, "GET", url, *args, **kwargs)
+
         # https://curl.se/docs/websocket.html
         self.curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         self.curl.perform()
-        return WebSocket(self, self.curl)
+
+        return WebSocket(
+            self,
+            self.curl,
+            on_message=on_message,
+            on_error=on_error,
+            on_open=on_open,
+            on_close=on_close,
+        )
 
     def request(
         self,

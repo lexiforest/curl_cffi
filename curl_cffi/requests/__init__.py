@@ -15,6 +15,7 @@ __all__ = [
     "Headers",
     "Request",
     "Response",
+    "WebSocket",
 ]
 
 from functools import partial
@@ -27,6 +28,7 @@ from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
+from .websockets import WebSocket
 
 # ThreadType = Literal["eventlet", "gevent", None]
 

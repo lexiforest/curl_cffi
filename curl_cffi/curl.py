@@ -347,8 +347,9 @@ class Curl:
 
         ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
         self._check_error(ret, "WS_RECV")
+
+        # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
         frame = p_frame[0]
-        # print(frame.offset, frame.bytesleft)
 
         return ffi.buffer(buffer)[: n_recv[0]], frame
 

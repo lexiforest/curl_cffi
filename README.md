@@ -156,6 +156,7 @@ If you are using scrapy, check out these middlewares:
 - Originally forked from [multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), which is under the MIT license.
 - Headers/Cookies files are copied from [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), which is under the BSD license.
 - Asyncio support is inspired by Tornado's curl http client.
+- The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client)
 
 ## Sponsor
 
