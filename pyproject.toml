@@ -69,7 +69,6 @@ test = [
 [tool.setuptools]
 packages = ["curl_cffi", "curl_cffi.requests"]
 # package-data = { curl_cffi = ["libcurl/*/*"] }
-exclude-package-data = { curl_cffi = ["include/*", "ffi/*"] }
 
 
 [build-system]

@@ -24,8 +24,8 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
 	autoreconf -fi
-	mkdir -p ../curl_cffi/include/curl
-	cp -R include/curl/* ../curl_cffi/include/curl/
+	mkdir -p ../include/curl
+	cp -R include/curl/* ../include/curl/
 
 .so_downloaded:
 	python preprocess/download_so.py
@@ -53,6 +53,6 @@ clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
 	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c
 	rm -rf .preprocessed .so_downloaded $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
-	rm -rf curl_cffi/include/
+	rm -rf include/
 
 .PHONY: clean build test install-local upload preprocess
