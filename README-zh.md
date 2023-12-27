@@ -14,12 +14,14 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 - 预编译，不需要再自己机器上再弄一遍。
 - 支持 `asyncio`，并且每个请求都可以换代理。
 - 支持 http 2.0，requests 不支持。
+- 支持 websocket。
 
 |库|requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
 |http2|❌|❌|✅|✅|✅|
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
+|websocket|❌|✅|❌|❌|✅|
 |指纹|❌|❌|❌|❌|✅|
 |速度|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
@@ -75,7 +77,7 @@ print(r.json())
 
 支持模拟的浏览器版本，和我 [fork](https://github.com/yifeikong/curl-impersonate) 的 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 一致：
 
-不过只支持类似 Chrome 的浏览器。
+不过只支持类似 Chrome 的浏览器。Firefox 的支持进展可以查看 #55
 
 - chrome99
 - chrome100
@@ -85,11 +87,13 @@ print(r.json())
 - chrome110
 - chrome116
 - chrome119
+- chrome120
 - chrome99_android
 - edge99
 - edge101
 - safari15_3
 - safari15_5
+- safari17_2_ios
 
 ### asyncio
 
@@ -118,6 +122,22 @@ async with AsyncSession() as s:
         task = s.get("https://example.com")
         tasks.append(task)
     results = await asyncio.gather(*tasks)
+```
+
+### WebSockets
+
+```python
+from curl_cffi.requests import Session, WebSocket
+
+def on_message(ws: WebSocket, message):
+    print(message)
+
+with Session() as s:
+    ws = s.ws_connect(
+        "wss://api.gemini.com/v1/marketdata/BTCUSD",
+        on_message=on_message,
+    )
+    ws.run_forever()
 ```
 
 ### 类 curl

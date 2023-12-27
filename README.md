@@ -17,12 +17,14 @@ website for no obvious reason, you can give this package a try.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
 - Supports http 2.0, which requests does not.
+- Supports websocket.
 
 |library|requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
 |http2|❌|❌|✅|✅|✅|
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
+|websocket|❌|✅|❌|❌|✅|
 |fingerprints|❌|❌|❌|❌|✅|
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
@@ -78,7 +80,7 @@ print(r.json())
 
 Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-However, only Chrome-like browsers are supported.
+However, only Chrome-like browsers are supported. Firefox support is tracked in #55
 
 - chrome99
 - chrome100
@@ -88,11 +90,13 @@ However, only Chrome-like browsers are supported.
 - chrome110
 - chrome116
 - chrome119
+- chrome120
 - chrome99_android
 - edge99
 - edge101
 - safari15_3
 - safari15_5
+- safari17_2_ios
 
 ### asyncio
 
@@ -121,6 +125,22 @@ async with AsyncSession() as s:
         task = s.get("https://example.com")
         tasks.append(task)
     results = await asyncio.gather(*tasks)
+```
+
+### WebSockets
+
+```python
+from curl_cffi.requests import Session, WebSocket
+
+def on_message(ws: WebSocket, message):
+    print(message)
+
+with Session() as s:
+    ws = s.ws_connect(
+        "wss://api.gemini.com/v1/marketdata/BTCUSD",
+        on_message=on_message,
+    )
+    ws.run_forever()
 ```
 
 ### curl-like
