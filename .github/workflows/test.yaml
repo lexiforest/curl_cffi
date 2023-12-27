@@ -10,6 +10,18 @@ on:
       - bugfix/*
       - feature/*
 jobs:
+  sdist:
+    name: build sdist wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install build setuptools wheel
+          python -m build --sdist
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./dist/*.tar.gz
   bdist:
     name: build bdist wheels and test
     runs-on: ${{ matrix.os }}

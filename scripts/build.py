@@ -6,7 +6,7 @@ from cffi import FFI
 ffibuilder = FFI()
 # arch = "%s-%s" % (os.uname().sysname, os.uname().machine)
 uname = platform.uname()
-
+parent_dir = os.path.dirname(os.path.dirname(__file__))
 
 ffibuilder.set_source(
     "curl_cffi._wrapper",
@@ -23,11 +23,11 @@ ffibuilder.set_source(
     ],
     source_extension=".c",
     include_dirs=[
-        os.path.join(os.path.dirname(__file__), "include"),
-        os.path.join(os.path.dirname(__file__), "ffi"),
+        os.path.join(parent_dir, "include"),
+        os.path.join(parent_dir, "ffi"),
     ],
     sources=[
-        os.path.join(os.path.dirname(__file__), "ffi/shim.c"),
+        os.path.join(parent_dir, "ffi/shim.c"),
     ],
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if uname.system == "Darwin" else []
@@ -35,7 +35,7 @@ ffibuilder.set_source(
     # extra_link_args=["-Wl,-rpath,$ORIGIN/../libcurl/" + arch],
 )
 
-with open(os.path.join(os.path.dirname(__file__), "ffi/cdef.c")) as f:
+with open(os.path.join(parent_dir, "ffi/cdef.c")) as f:
     cdef_content = f.read()
     ffibuilder.cdef(cdef_content)
 

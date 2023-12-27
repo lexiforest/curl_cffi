@@ -1,0 +1,6 @@
+recursive-include tests/*
+
+include ffi/*
+include preprocess/*
+include scripts/build.py
+include Makefile

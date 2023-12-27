@@ -1,3 +1,4 @@
+import sys
 from setuptools import setup
 from wheel.bdist_wheel import bdist_wheel
 
@@ -13,8 +14,12 @@ class bdist_wheel_abi3(bdist_wheel):
         return python, abi, plat
 
 
+# this option is only valid in setup.py
+kwargs = {"cffi_modules": ["scripts/build.py:ffibuilder"]}
+if len(sys.argv) > 1 and sys.argv[1] != 'bdist_wheel':
+    kwargs = {}
+
 setup(
-    # this option is only valid in setup.py
-    cffi_modules=["./build.py:ffibuilder"],
     cmdclass={"bdist_wheel": bdist_wheel_abi3},  # type: ignore
+    **kwargs,
 )
