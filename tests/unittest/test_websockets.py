@@ -9,6 +9,22 @@ def test_websocket(ws_server):
 def test_hello(ws_server):
     with Session() as s:
         ws = s.ws_connect(ws_server.url)
-        ws.send(b"foo")
-        content = ws.recv()
-        assert content == b"foo"
+        ws.send(b"Foo me once")
+        content, _ = ws.recv()
+        assert content == b"Foo me once"
+
+
+def test_hello_twice(ws_server):
+    with Session() as s:
+        # w = s.ws_connect(ws_server.url)
+        w = s.ws_connect("ws://echo.websocket.events")
+
+        w.send(b"Bar")
+        reply, _ = w.recv()
+        print(reply)
+
+        for _ in range(10):
+            w.send(b"Bar")
+            reply, _ = w.recv()
+            assert reply == b"Bar"
+            print(reply)
