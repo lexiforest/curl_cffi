@@ -4,7 +4,10 @@ version = "0.5.10"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
-dependencies = ["cffi>=1.12.0"]
+dependencies = [
+    "cffi >=1.12.0",
+    "typing_extensions; python_version < '3.8'",
+]
 readme = "README.md"
 requires-python = ">=3.7"
 urls = { "repository" = "https://github.com/yifeikong/curl_cffi" }
@@ -58,6 +61,7 @@ test = [
     "trio-typing==0.7.0",
     "trustme==0.9.0",
     "uvicorn==0.18.3",
+    "proxy.py==2.4.3",
 ]
 
 

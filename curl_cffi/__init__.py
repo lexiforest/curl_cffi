@@ -17,9 +17,12 @@ __all__ = [
     "lib_ff",
 ]
 
+
+import _cffi_backend  # noqa: F401  # required by _wrapper
 # This line includes _wrapper_{chrome,ff}.so into the wheel
 from ._wrapper_chrome import ffi, lib
 from ._wrapper_ff import ffi as ffi_ff, lib as lib_ff
+
 
 from .const import CurlInfo, CurlMOpt, CurlOpt, CurlECode, CurlHttpVersion
 from .curl import Curl, CurlChrome, CurlFirefox, CurlError

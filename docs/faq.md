@@ -1,22 +1,5 @@
 # Frequently Asked Questions
 
-## Pyinstaller `ModuleNotFoundError: No module named '_cffi_backend'`
-
-You need to tell pyinstaller to pack cffi and data files inside the package:
-
-    pyinstaller -F .\example.py --hidden-import=_cffi_backend --collect-all curl_cffi
-
-See also [issue #48](https://github.com/yifeikong/curl_cffi/issues/48) for additional parameters.
-
-## Using https proxy, error: `OPENSSL_internal:WRONG_VERSION_NUMBER`
-
-You are messing up https-over-http proxy and https-over-https proxy, for most cases, you
-should change `{"https": "https://localhost:3128"}` to `{"https": "http://localhost:3128"}`.
-Note the protocol in the url for https proxy is `http` not `https`.
-
-See [this issue](https://github.com/yifeikong/curl_cffi/issues/6#issuecomment-1415162495)
-for a detailed explanation.
-
 ## Why does the JA3 fingerprints change for Chrome 110+ impersonation?
 
 This is intended.
@@ -50,20 +33,3 @@ Or, you can just force curl to use http 1.1 only.
     from curl_cffi import requests, CurlHttpVersion
 
     r = requests.get("https://postman-echo.com", http_version=CurlHttpVersion.v1_1)
-
-## Not working on Windows, `NotImplementedError`
-
-Accroding to the [Python docs](https://docs.python.org/3/library/asyncio-platforms.html#windows):
-
-> Changed in version 3.8: On Windows, [ProactorEventLoop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.ProactorEventLoop) is now the default event loop.
-> The [loop.add_reader()](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.add_reader) and [loop.add_writer()](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.add_writer) methods are not supported.
-
-You can use the SelectorEventLoop instead.
-
-```python
-import sys, asyncio
-
-if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-```
-

@@ -8,6 +8,7 @@ from asyncio import sleep
 from collections import defaultdict
 from urllib.parse import parse_qs
 
+import proxy
 import pytest
 import trustme
 from cryptography.hazmat.backends import default_backend
@@ -589,3 +590,10 @@ def https_server(cert_pem_file, cert_private_key_file):
     )
     server = TestServer(config=config)
     yield from serve_in_thread(server)
+
+
+@pytest.fixture(scope="session")
+def proxy_server(request):
+    ps = proxy.Proxy(port=8002, plugins=['proxy.plugin.ManInTheMiddlePlugin'])
+    request.addfinalizer(ps.__exit__)
+    return ps.__enter__()

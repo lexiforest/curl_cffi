@@ -11,59 +11,53 @@ from .curl import Curl, DEFAULT_CACERT
 
 __all__ = ["AsyncCurl"]
 
-# registry of asyncio loop : selector thread
-_selectors: WeakKeyDictionary = WeakKeyDictionary()
-PROACTOR_WARNING = """
-Proactor event loop does not implement add_reader family of methods required.
-Registering an additional selector thread for add_reader support.
-To avoid this warning use:
-    asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
-"""
-
-def _get_selector_windows(asyncio_loop) -> asyncio.AbstractEventLoop:
-    """Get selector-compatible loop
-
-    Returns an object with ``add_reader`` family of methods,
-    either the loop itself or a SelectorThread instance.
-
-    Workaround Windows proactor removal of *reader methods.
+if sys.platform == "win32":
+    # registry of asyncio loop : selector thread
+    _selectors: WeakKeyDictionary = WeakKeyDictionary()
+    PROACTOR_WARNING = """
+    Proactor event loop does not implement add_reader family of methods required.
+    Registering an additional selector thread for add_reader support.
+    To avoid this warning use:
+        asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
     """
 
-    if asyncio_loop in _selectors:
-        return _selectors[asyncio_loop]
+    def _get_selector(asyncio_loop) -> asyncio.AbstractEventLoop:
+        """Get selector-compatible loop
 
-    if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
-        return asyncio_loop
+        Returns an object with ``add_reader`` family of methods,
+        either the loop itself or a SelectorThread instance.
 
-    from ._asyncio_selector import AddThreadSelectorEventLoop
+        Workaround Windows proactor removal of *reader methods.
+        """
 
-    warnings.warn(PROACTOR_WARNING, RuntimeWarning)
+        if asyncio_loop in _selectors:
+            return _selectors[asyncio_loop]
 
-    selector_loop = _selectors[asyncio_loop] = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
+        if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
+            return asyncio_loop
 
-    # patch loop.close to also close the selector thread
-    loop_close = asyncio_loop.close
+        warnings.warn(PROACTOR_WARNING, RuntimeWarning)
 
-    def _close_selector_and_loop():
-        # restore original before calling selector.close,
-        # which in turn calls eventloop.close!
-        asyncio_loop.close = loop_close
-        _selectors.pop(asyncio_loop, None)
-        selector_loop.close()
+        from ._asyncio_selector import AddThreadSelectorEventLoop
 
-    asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
-    return selector_loop
+        selector_loop = _selectors[asyncio_loop] = AddThreadSelectorEventLoop(asyncio_loop)  # type: ignore
 
+        # patch loop.close to also close the selector thread
+        loop_close = asyncio_loop.close
 
-def _get_selector_noop(loop) -> asyncio.AbstractEventLoop:
-    """no-op on non-Windows"""
-    return loop
+        def _close_selector_and_loop():
+            # restore original before calling selector.close,
+            # which in turn calls eventloop.close!
+            asyncio_loop.close = loop_close
+            _selectors.pop(asyncio_loop, None)
+            selector_loop.close()
 
+        asyncio_loop.close = _close_selector_and_loop  # type: ignore # mypy bug - assign a function to method
+        return selector_loop
 
-if sys.platform == "win32":
-    _get_selector = _get_selector_windows
 else:
-    _get_selector = _get_selector_noop
+    def _get_selector(loop) -> asyncio.AbstractEventLoop:
+        return loop
 
 
 CURL_POLL_NONE = 0
