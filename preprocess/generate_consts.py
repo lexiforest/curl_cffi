@@ -68,6 +68,7 @@ with open(CONST_FILE, "w") as f:
     f.write("    V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */\n")
     f.write("    V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */\n")
     f.write("    V3 = 30  # Makes use of explicit HTTP/3 without fallback.\n")
+    f.write("\n\n")
 
 
     f.write("class CurlWsFlag(IntEnum):\n")

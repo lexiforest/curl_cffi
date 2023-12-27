@@ -1,6 +1,6 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.6.0b2
+VERSION := 0.6.0b4
 CURL_VERSION := curl-8.1.1
 
 .preprocessed: curl_cffi/include/curl/curl.h curl_cffi/cacert.pem .so_downloaded
