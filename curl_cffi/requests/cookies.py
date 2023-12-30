@@ -8,6 +8,7 @@ import re
 import time
 import typing
 from http.cookiejar import Cookie, CookieJar
+from http.cookies import _unquote
 from urllib.parse import urlparse
 from dataclasses import dataclass
 import warnings
@@ -63,7 +64,7 @@ class CurlMorsel:
             secure=cls.parse_bool(secure),
             expires=int(expires),
             name=name,
-            value=value,
+            value=_unquote(value),
             http_only=http_only,
         )
 
