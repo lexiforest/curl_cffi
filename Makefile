@@ -1,9 +1,9 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.5.4
-CURL_VERSION := curl-7.84.0
+VERSION := 0.6.0b7
+CURL_VERSION := curl-8.1.1
 
-.preprocessed: curl_cffi/include/curl/curl.h curl_cffi/cacert.pem .so_downloaded
+.preprocessed: curl_cffi/include/curl/curl.h .so_downloaded
 	touch .preprocessed
 
 curl_cffi/const.py: curl_cffi/include
@@ -15,7 +15,7 @@ $(CURL_VERSION):
 	tar -xf $(CURL_VERSION).tar.xz
 
 curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
-	curl -L "https://github.com/lwthiker/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
+	curl -L "https://github.com/yifeikong/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
@@ -27,12 +27,8 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	mkdir -p ../curl_cffi/include/curl
 	cp -R include/curl/* ../curl_cffi/include/curl/
 
-curl_cffi/cacert.pem:
-	# https://curl.se/docs/caextract.html
-	curl https://curl.se/ca/cacert.pem -o curl_cffi/cacert.pem
-
 .so_downloaded:
-	python preprocess/download_so.py
+	python preprocess/download_so.py $(VERSION)
 	touch .so_downloaded
 
 preprocess: .preprocessed
@@ -41,8 +37,8 @@ preprocess: .preprocessed
 upload: dist/*.whl
 	twine upload dist/*.whl
 
-test: install-local
-	pytest tests/unittest
+test:
+	python -bb -m pytest tests/unittest
 
 install-local: .preprocessed
 	pip install -e .
@@ -55,7 +51,7 @@ build: .preprocessed
 
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
-	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c curl_cffi/cacert.pem
+	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c
 	rm -rf .preprocessed .so_downloaded $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
 	rm -rf curl_cffi/include/
 

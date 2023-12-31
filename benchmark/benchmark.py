@@ -8,11 +8,11 @@ import tls_client
 import httpx
 import curl_cffi
 import curl_cffi.requests
-import uvloop
 import queue
 import threading
 from io import BytesIO
 
+# import uvloop
 # uvloop.install()
 
 results = []
@@ -25,7 +25,6 @@ class FakePycurlSession:
         buffer = BytesIO()
         self.c.setopt(pycurl.URL, url)
         self.c.setopt(pycurl.WRITEDATA, buffer)
-        # self.c.setopt(pycurl.CAINFO, certifi.where())
         self.c.perform()
 
     def __del__(self):
@@ -40,7 +39,6 @@ class FakeCurlCffiSession:
         buffer = BytesIO()
         self.c.setopt(curl_cffi.CurlOpt.URL, url)
         self.c.setopt(curl_cffi.CurlOpt.WRITEDATA, buffer)
-        # self.c.setopt(pycurl.CAINFO, certifi.where())
         self.c.perform()
 
     def __del__(self):
