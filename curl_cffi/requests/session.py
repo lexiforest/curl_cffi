@@ -19,6 +19,7 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .models import Request, Response
+from .websockets import WebSocket
 
 try:
     import gevent
@@ -40,13 +41,25 @@ class BrowserType(str, Enum):
     chrome104 = "chrome104"
     chrome107 = "chrome107"
     chrome110 = "chrome110"
+    chrome116 = "chrome116"
+    chrome119 = "chrome119"
+    chrome120 = "chrome120"
     chrome99_android = "chrome99_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
+    safari17_2_ios = "safari17_2_ios"
+
+    chrome = "chrome120"
 
     @classmethod
     def has(cls, item):
         return item in cls.__members__
+
+
+class BrowserSpec:
+    """A more structured way of selecting browsers"""
+
+    # TODO
 
 
 def _update_url_params(url: str, params: Dict) -> str:
@@ -239,7 +252,7 @@ class BaseSession:
         h.update(headers)
 
         # remove Host header if it's unnecessary, otherwise curl maybe confused.
-        # Host header will be automatically add by curl if it's not present.
+        # Host header will be automatically added by curl if it's not present.
         # https://github.com/yifeikong/curl_cffi/issues/119
         host_header = h.get("Host")
         if host_header is not None:
@@ -575,6 +588,31 @@ class Session(BaseSession):
         finally:
             rsp.close()
 
+    def ws_connect(
+        self,
+        url,
+        *args,
+        on_message: Optional[Callable[[WebSocket, str], None]] = None,
+        on_error: Optional[Callable[[WebSocket, str], None]] = None,
+        on_open: Optional[Callable] = None,
+        on_close: Optional[Callable] = None,
+        **kwargs,
+    ):
+        self._set_curl_options(self.curl, "GET", url, *args, **kwargs)
+
+        # https://curl.se/docs/websocket.html
+        self.curl.setopt(CurlOpt.CONNECT_ONLY, 2)
+        self.curl.perform()
+
+        return WebSocket(
+            self,
+            self.curl,
+            on_message=on_message,
+            on_error=on_error,
+            on_open=on_open,
+            on_close=on_close,
+        )
+
     def request(
         self,
         method: str,
@@ -748,16 +786,20 @@ class AsyncSession(BaseSession):
             ```
         """
         super().__init__(**kwargs)
-        self.loop = loop
+        self._loop = loop
         self._acurl = async_curl
         self.max_clients = max_clients
         self._closed = False
         self.init_pool()
 
     @property
+    def loop(self):
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+        return self._loop
+
+    @property
     def acurl(self):
-        if self.loop is None:
-            self.loop = asyncio.get_running_loop()
         if self._acurl is None:
             self._acurl = AsyncCurl(loop=self.loop)
         return self._acurl
@@ -817,6 +859,14 @@ class AsyncSession(BaseSession):
             yield rsp
         finally:
             await rsp.aclose()
+
+    async def ws_connect(self, url, *args, **kwargs):
+        curl = await self.pop_curl()
+        # curl.debug()
+        self._set_curl_options(curl, "GET", url, *args, **kwargs)
+        curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
+        await self.loop.run_in_executor(None, curl.perform)
+        return WebSocket(self, curl)
 
     async def request(
         self,

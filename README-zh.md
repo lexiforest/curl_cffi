@@ -14,6 +14,16 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 - 预编译，不需要再自己机器上再弄一遍。
 - 支持 `asyncio`，并且每个请求都可以换代理。
 - 支持 http 2.0，requests 不支持。
+- 支持 websocket。
+
+|库|requests|aiohttp|httpx|pycurl|curl_cffi|
+|---|---|---|---|---|---|
+|http2|❌|❌|✅|✅|✅|
+|sync|✅|❌|✅|✅|✅|
+|async|❌|✅|✅|❌|✅|
+|websocket|❌|✅|❌|❌|✅|
+|指纹|❌|❌|❌|❌|✅|
+|速度|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
 ## 安装
 
@@ -23,7 +33,13 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 在其他小众平台，你可能需要先编译并安装 `curl-impersonate` 并且设置 `LD_LIBRARY_PATH` 这些
 环境变量。
 
+安装测试版:
+
+    pip install curl_cffi --pre
+
 ## 使用
+
+尽量模仿比较新的浏览器，不要直接从下边的例子里复制 `chrome110` 去用。
 
 ### 类 requests
 
@@ -59,7 +75,9 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-支持模拟的浏览器版本，和 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 一致：
+支持模拟的浏览器版本，和我 [fork](https://github.com/yifeikong/curl-impersonate) 的 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 一致：
+
+不过只支持类似 Chrome 的浏览器。Firefox 的支持进展可以查看 #55
 
 - chrome99
 - chrome100
@@ -67,11 +85,15 @@ print(r.json())
 - chrome104
 - chrome107
 - chrome110
+- chrome116
+- chrome119
+- chrome120
 - chrome99_android
 - edge99
 - edge101
 - safari15_3
 - safari15_5
+- safari17_2_ios
 
 ### asyncio
 
@@ -102,6 +124,22 @@ async with AsyncSession() as s:
     results = await asyncio.gather(*tasks)
 ```
 
+### WebSockets
+
+```python
+from curl_cffi.requests import Session, WebSocket
+
+def on_message(ws: WebSocket, message):
+    print(message)
+
+with Session() as s:
+    ws = s.ws_connect(
+        "wss://api.gemini.com/v1/marketdata/BTCUSD",
+        on_message=on_message,
+    )
+    ws.run_forever()
+```
+
 ### 类 curl
 
 另外，你还可以使用类似 curl 的底层 API：
@@ -125,7 +163,10 @@ print(body.decode())
 
 更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
 
-如果你用 scrapy 的话，可以参考这个中间件：[tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+如果你用 scrapy 的话，可以参考这些中间件：
+
+- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
 
 有问题和建议请优先提 issue，中英文均可，也可以加 [TG 群](https://t.me/+lL9n33eZp480MGM1) 或微信群讨论：
 
@@ -136,6 +177,7 @@ print(body.decode())
 - 该项目 fork 自：[multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), MIT 协议发布。
 - Headers/Cookies 代码来自 [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), BSD 协议发布。
 - Asyncio 支持是受 Tornado 的 curl http client 启发而做。
+- WebSocket API 的设计来自 [websocket_client](https://github.com/websocket-client/websocket-client)。
 
 ## 赞助
 

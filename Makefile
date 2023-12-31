@@ -1,7 +1,7 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.5.4
-CURL_VERSION := curl-7.84.0
+VERSION := 0.6.0b7
+CURL_VERSION := curl-8.1.1
 
 .preprocessed: curl_cffi/include/curl/curl.h .so_downloaded
 	touch .preprocessed
@@ -15,7 +15,7 @@ $(CURL_VERSION):
 	tar -xf $(CURL_VERSION).tar.xz
 
 curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
-	curl -L "https://github.com/lwthiker/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
+	curl -L "https://github.com/yifeikong/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
@@ -28,7 +28,7 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	cp -R include/curl/* ../include/curl/
 
 .so_downloaded:
-	python preprocess/download_so.py
+	python preprocess/download_so.py $(VERSION)
 	touch .so_downloaded
 
 preprocess: .preprocessed
@@ -37,8 +37,8 @@ preprocess: .preprocessed
 upload: dist/*.whl
 	twine upload dist/*.whl
 
-test: install-local
-	pytest tests/unittest
+test:
+	python -bb -m pytest tests/unittest
 
 install-local: .preprocessed
 	pip install -e .
