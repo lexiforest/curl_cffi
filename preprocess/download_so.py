@@ -35,7 +35,7 @@ if uname.system == "Darwin":
     else:
         url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-macos.tar.gz"
 elif uname.system == "Windows":
-    url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.AMD64-win32.tar.gz"
+    url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.x86_64-win32.tar.gz"
 else:
     url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-linux-gnu.tar.gz"
 
