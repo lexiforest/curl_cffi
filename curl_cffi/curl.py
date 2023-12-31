@@ -6,7 +6,7 @@ from typing import Any, List, Tuple, Union
 import certifi
 
 from ._wrapper import ffi, lib  # type: ignore
-from .const import CurlHttpVersion, CurlInfo, CurlOpt
+from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 
 DEFAULT_CACERT = certifi.where()
 
@@ -111,6 +111,10 @@ class Curl:
         if self._debug:
             self.setopt(CurlOpt.VERBOSE, 1)
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+
+    def debug(self):
+        self.setopt(CurlOpt.VERBOSE, 1)
+        lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
 
     def __del__(self):
         self.close()
@@ -341,3 +345,26 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
         self._resolve = ffi.NULL
+
+    def ws_recv(self, n: int = 1024):
+        buffer = ffi.new("char[]", n)
+        n_recv = ffi.new("int *")
+        p_frame = ffi.new("struct curl_ws_frame **")
+
+        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
+        self._check_error(ret, "WS_RECV")
+
+        # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
+        frame = p_frame[0]
+
+        return ffi.buffer(buffer)[: n_recv[0]], frame
+
+    def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
+        n_sent = ffi.new("int *")
+        buffer = ffi.from_buffer(payload)
+        ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
+        self._check_error(ret, "WS_SEND")
+        return n_sent[0]
+
+    def ws_close(self):
+        self.ws_send(b"", CurlWsFlag.CLOSE)

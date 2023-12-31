@@ -17,12 +17,14 @@ website for no obvious reason, you can give this package a try.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
 - Supports http 2.0, which requests does not.
+- Supports websocket.
 
 |library|requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
 |http2|❌|❌|✅|✅|✅|
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
+|websocket|❌|✅|❌|❌|✅|
 |fingerprints|❌|❌|❌|❌|✅|
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
@@ -39,6 +41,8 @@ To install beta releases:
     pip install curl_cffi --pre
 
 ## Usage
+
+Use the latest impersonate versions, do NOT copy `chrome110` here without changing.
 
 ### requests-like
 
@@ -74,7 +78,9 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-Supported impersonate versions, as supported by [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+
+However, only Chrome-like browsers are supported. Firefox support is tracked in #55
 
 - chrome99
 - chrome100
@@ -82,11 +88,15 @@ Supported impersonate versions, as supported by [curl-impersonate](https://githu
 - chrome104
 - chrome107
 - chrome110
+- chrome116
+- chrome119
+- chrome120
 - chrome99_android
 - edge99
 - edge101
 - safari15_3
 - safari15_5
+- safari17_2_ios
 
 ### asyncio
 
@@ -117,6 +127,22 @@ async with AsyncSession() as s:
     results = await asyncio.gather(*tasks)
 ```
 
+### WebSockets
+
+```python
+from curl_cffi.requests import Session, WebSocket
+
+def on_message(ws: WebSocket, message):
+    print(message)
+
+with Session() as s:
+    ws = s.ws_connect(
+        "wss://api.gemini.com/v1/marketdata/BTCUSD",
+        on_message=on_message,
+    )
+    ws.run_forever()
+```
+
 ### curl-like
 
 Alternatively, you can use the low-level curl-like API:
@@ -140,13 +166,17 @@ print(body.decode())
 
 See the [docs](https://curl-cffi.readthedocs.io) for more details. 
 
-If you are using scrapy, check out this middleware: [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+If you are using scrapy, check out these middlewares:
+
+- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
+- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
 
 ## Acknowledgement
 
 - Originally forked from [multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), which is under the MIT license.
 - Headers/Cookies files are copied from [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), which is under the BSD license.
 - Asyncio support is inspired by Tornado's curl http client.
+- The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client)
 
 ## Sponsor
 
