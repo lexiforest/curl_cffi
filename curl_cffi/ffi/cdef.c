@@ -52,7 +52,7 @@ struct curl_ws_frame {
   int flags;            /* See the CURLWS_* defines */
   long offset;    /* the offset of this data into the frame */
   long bytesleft; /* number of pending bytes left of the payload */
-  ...;
+  size_t len;
 };
 
 int curl_ws_recv(void *curl, void *buffer, int buflen, int *recv, struct curl_ws_frame **meta);
