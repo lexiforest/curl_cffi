@@ -37,8 +37,8 @@ preprocess: .preprocessed
 upload: dist/*.whl
 	twine upload dist/*.whl
 
-test: install-local
-	pytest tests/unittest
+test:
+	python -bb -m pytest tests/unittest
 
 install-local: .preprocessed
 	pip install -e .

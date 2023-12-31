@@ -20,10 +20,8 @@ def test_hello_twice(ws_server):
 
         w.send(b"Bar")
         reply, _ = w.recv()
-        print(reply)
 
         for _ in range(10):
             w.send(b"Bar")
             reply, _ = w.recv()
             assert reply == b"Bar"
-            print(reply)
