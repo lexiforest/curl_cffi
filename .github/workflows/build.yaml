@@ -18,8 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # os: [ubuntu-22.04, macos-11, windows-2019]
-        os: [ubuntu-22.04, macos-11]
+        os: [ubuntu-22.04, macos-11, windows-2019]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -51,4 +50,3 @@ jobs:
     - uses: pypa/gh-action-pypi-publish@v1.5.0
       with:
         password: ${{ secrets.PYPI_TOKEN }}
-
