@@ -17,6 +17,7 @@ __all__ = [
     "Request",
     "Response",
     "WebSocket",
+    "WebSocketError",
     "WsCloseCode",
 ]
 
@@ -30,7 +31,7 @@ from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
-from .websockets import WebSocket, WsCloseCode
+from .websockets import WebSocket, WebSocketError, WsCloseCode
 
 # ThreadType = Literal["eventlet", "gevent", None]
 
