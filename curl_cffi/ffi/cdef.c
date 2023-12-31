@@ -50,8 +50,8 @@ extern "Python" void timer_function(void *curlm, int timeout_ms, void *clientp);
 struct curl_ws_frame {
   int age;              /* zero */
   int flags;            /* See the CURLWS_* defines */
-  long offset;    /* the offset of this data into the frame */
-  long bytesleft; /* number of pending bytes left of the payload */
+  uint64_t offset;    /* the offset of this data into the frame */
+  uint64_t bytesleft; /* number of pending bytes left of the payload */
   size_t len;
   ...;
 };
