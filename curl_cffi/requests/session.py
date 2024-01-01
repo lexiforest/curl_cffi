@@ -47,9 +47,12 @@ class BrowserType(str, Enum):
     chrome99_android = "chrome99_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
+    safari17_0 = "safari17_0"
     safari17_2_ios = "safari17_2_ios"
 
     chrome = "chrome120"
+    safari = "safari17_0"
+    safari_ios = "safari17_2_ios"
 
     @classmethod
     def has(cls, item):
