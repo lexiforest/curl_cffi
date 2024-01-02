@@ -93,6 +93,7 @@ print(r.json())
 - edge101
 - safari15_3
 - safari15_5
+- safari17_0
 - safari17_2_ios
 
 ### asyncio
