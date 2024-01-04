@@ -6,7 +6,7 @@ from enum import IntEnum
 from json import loads, dumps
 from typing import Any, Callable, Optional, Tuple, TYPE_CHECKING, TypeVar, Union
 
-from .utils import _set_curl_options
+from .utils import _set_curl_options, not_set
 from ..const import CurlECode, CurlOpt, CurlWsFlag
 from ..curl import CurlError
 
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from .cookies import CookieTypes
     from .headers import HeaderTypes
     from .session import BrowserType, ProxySpec
-    from .utils import not_set
     from ..const import CurlHttpVersion
     from ..curl import Curl, CurlWsFrame
 
