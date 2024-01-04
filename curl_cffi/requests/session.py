@@ -8,7 +8,7 @@ from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
-from typing import Callable, Dict, List, Any, Optional, Tuple, TypedDict, Union, cast
+from typing import Callable, Dict, List, Any, Optional, Tuple, Union, cast, TYPE_CHECKING
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 from concurrent.futures import ThreadPoolExecutor
 
@@ -30,6 +30,19 @@ try:
     import eventlet.tpool
 except ImportError:
     pass
+
+if TYPE_CHECKING:
+    from typing_extensions import TypedDict
+
+    class ProxySpec(TypedDict, total=False):
+        all: str
+        http: str
+        https: str
+        ws: str
+        wss: str
+
+else:
+    ProxySpec = Dict[str, str]
 
 
 class BrowserType(str, Enum):
@@ -63,14 +76,6 @@ class BrowserSpec:
     """A more structured way of selecting browsers"""
 
     # TODO
-
-
-class ProxySpec(TypedDict, total=False):
-    all: str
-    http: str
-    https: str
-    ws: str
-    wss: str
 
 
 def _update_url_params(url: str, params: Dict) -> str:
