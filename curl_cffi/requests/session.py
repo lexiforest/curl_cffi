@@ -168,9 +168,6 @@ class BaseSession:
         headers = Headers(self.headers)
         headers.update(headers)
 
-        cookies = Cookies(self.cookies)
-        cookies.update(cookies)
-
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
         if proxy:
@@ -183,6 +180,7 @@ class BaseSession:
             method,
             url,
             headers=headers,
+            session_cookies=self.cookies,
             cookies=cookies,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,

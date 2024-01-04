@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..const import CurlHttpVersion
     from .cookies import CookieTypes
     from .headers import HeaderTypes
-    from .session import BrowserType
+    from .session import BrowserType, ProxySpec
 
 not_set: Any = object()
 
@@ -87,6 +87,7 @@ def _set_curl_options(
     data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
     json: Optional[dict] = None,
     headers: Optional[HeaderTypes] = None,
+    session_cookies: Optional[Cookies] = None,
     cookies: Optional[CookieTypes] = None,
     files: Optional[Dict] = None,
     auth: Optional[Tuple[str, str]] = None,
@@ -178,6 +179,10 @@ def _set_curl_options(
     c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
     c.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
 
+    if session_cookies:
+        for morsel in session_cookies.get_cookies_for_curl(req):
+            # print("Setting", morsel.to_curl_format())
+            curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
     if cookies:
         temp_cookies = Cookies(cookies)
         for morsel in temp_cookies.get_cookies_for_curl(req):
