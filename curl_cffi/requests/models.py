@@ -1,7 +1,8 @@
-import warnings
+from enum import Enum
 from json import loads
 from typing import Optional
 import queue
+import warnings
 
 from .. import Curl
 from .headers import Headers
@@ -14,6 +15,33 @@ def clear_queue(q: queue.Queue):
         q.queue.clear()
         q.all_tasks_done.notify_all()
         q.unfinished_tasks = 0
+
+
+class BrowserType(str, Enum):
+    edge99 = "edge99"
+    edge101 = "edge101"
+    chrome99 = "chrome99"
+    chrome100 = "chrome100"
+    chrome101 = "chrome101"
+    chrome104 = "chrome104"
+    chrome107 = "chrome107"
+    chrome110 = "chrome110"
+    chrome116 = "chrome116"
+    chrome119 = "chrome119"
+    chrome120 = "chrome120"
+    chrome99_android = "chrome99_android"
+    safari15_3 = "safari15_3"
+    safari15_5 = "safari15_5"
+    safari17_0 = "safari17_0"
+    safari17_2_ios = "safari17_2_ios"
+
+    chrome = "chrome120"
+    safari = "safari17_0"
+    safari_ios = "safari17_2_ios"
+
+    @classmethod
+    def has(cls, item):
+        return item in cls.__members__
 
 
 class Request:
@@ -86,9 +114,7 @@ class Response:
         """
         pending = None
 
-        for chunk in self.iter_content(
-            chunk_size=chunk_size, decode_unicode=decode_unicode
-        ):
+        for chunk in self.iter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
             if pending is not None:
                 chunk = pending + chunk
             if delimiter:
@@ -139,9 +165,7 @@ class Response:
         """
         pending = None
 
-        async for chunk in self.aiter_content(
-            chunk_size=chunk_size, decode_unicode=decode_unicode
-        ):
+        async for chunk in self.aiter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
             if pending is not None:
                 chunk = pending + chunk
             if delimiter:

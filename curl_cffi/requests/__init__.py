@@ -28,10 +28,10 @@ from typing import Callable, Dict, Optional, Tuple, Union
 
 from ..const import CurlHttpVersion, CurlWsFlag
 from .cookies import Cookies, CookieTypes
-from .models import Request, Response
+from .models import BrowserType, Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .session import AsyncSession, BrowserType, Session, ProxySpec
+from .session import AsyncSession, Session, ProxySpec
 from .websockets import AsyncWebSocket, WebSocket, WebSocketError, WsCloseCode
 
 # ThreadType = Literal["eventlet", "gevent", None]

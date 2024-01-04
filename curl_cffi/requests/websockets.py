@@ -15,7 +15,8 @@ if TYPE_CHECKING:
 
     from .cookies import CookieTypes
     from .headers import HeaderTypes
-    from .session import BrowserType, ProxySpec
+    from .models import BrowserType
+    from .session import ProxySpec
     from ..const import CurlHttpVersion
     from ..curl import CurlWsFrame
 

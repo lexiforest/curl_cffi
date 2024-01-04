@@ -562,7 +562,9 @@ class TestServer(Server):
 
 async def echo(websocket):
     while True:
-        name = (await websocket.recv()).decode()
+        name = await websocket.recv()
+        if isinstance(name, bytes):
+            name = name.decode()
         # print(f"<<< {name}")
 
         await websocket.send(name)

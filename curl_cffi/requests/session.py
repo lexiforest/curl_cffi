@@ -4,7 +4,6 @@ import re
 import threading
 import warnings
 import queue
-from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union, cast, TYPE_CHECKING
@@ -14,7 +13,7 @@ from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .models import Response
+from .models import BrowserType, Response
 from .utils import _set_curl_options, _update_url_params, not_set
 from .websockets import AsyncWebSocket
 
@@ -40,33 +39,6 @@ if TYPE_CHECKING:
 
 else:
     ProxySpec = Dict[str, str]
-
-
-class BrowserType(str, Enum):
-    edge99 = "edge99"
-    edge101 = "edge101"
-    chrome99 = "chrome99"
-    chrome100 = "chrome100"
-    chrome101 = "chrome101"
-    chrome104 = "chrome104"
-    chrome107 = "chrome107"
-    chrome110 = "chrome110"
-    chrome116 = "chrome116"
-    chrome119 = "chrome119"
-    chrome120 = "chrome120"
-    chrome99_android = "chrome99_android"
-    safari15_3 = "safari15_3"
-    safari15_5 = "safari15_5"
-    safari17_0 = "safari17_0"
-    safari17_2_ios = "safari17_2_ios"
-
-    chrome = "chrome120"
-    safari = "safari17_0"
-    safari_ios = "safari17_2_ios"
-
-    @classmethod
-    def has(cls, item):
-        return item in cls.__members__
 
 
 class BrowserSpec:

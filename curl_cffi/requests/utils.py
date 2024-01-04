@@ -11,13 +11,13 @@ from ..curl import CURL_WRITEFUNC_ERROR
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .models import Request
+from .models import BrowserType, Request
 
 if TYPE_CHECKING:
     from ..const import CurlHttpVersion
     from .cookies import CookieTypes
     from .headers import HeaderTypes
-    from .session import BrowserType, ProxySpec
+    from .session import ProxySpec
 
 not_set: Any = object()
 
