@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from select import select
 import struct
 from enum import IntEnum
 from json import loads, dumps
@@ -258,7 +259,7 @@ class WebSocket(BaseWebSocket):
                 self._close_code, self._close_reason = self._unpack_close_frame(chunk)
             except WebSocketError as e:
                 # Follow the spec to close the connection
-                # TODO: Should this respect autoclose?
+                # Errors do not respect autoclose
                 self._close_code = e.code
                 self.close(e.code)
                 raise
@@ -361,6 +362,7 @@ class WebSocket(BaseWebSocket):
                         try:
                             msg = msg.decode()
                         except UnicodeDecodeError:
+                            self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)
                             raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA)
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
@@ -373,7 +375,7 @@ class WebSocket(BaseWebSocket):
                 if e.code == CurlECode.AGAIN:
                     pass
                 else:
-                    if not self.closed and self.autoclose:
+                    if not self.closed:
                         code = 1000
                         if isinstance(e, WebSocketError):
                             code = e.code
@@ -439,7 +441,7 @@ class AsyncWebSocket(BaseWebSocket):
                     self._close_code, self._close_reason = self._unpack_close_frame(chunk)
                 except WebSocketError as e:
                     # Follow the spec to close the connection
-                    # TODO: Should this respect autoclose?
+                    # Errors do not respect autoclose
                     self._close_code = e.code
                     await self.close(e.code)
                     raise
