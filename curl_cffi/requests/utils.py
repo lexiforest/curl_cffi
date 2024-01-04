@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from io import BytesIO
 from json import dumps
 from typing import Callable, Dict, List, Any, Optional, Tuple, Union, TYPE_CHECKING
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
+import warnings
 
 from .. import CurlOpt
 from ..curl import CURL_WRITEFUNC_ERROR
@@ -90,7 +93,8 @@ def _set_curl_options(
     timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
     allow_redirects: bool = True,
     max_redirects: int = -1,
-    proxies: Optional[dict] = None,
+    proxies: Optional[ProxySpec] = None,
+    proxy_auth: Optional[Tuple[str, str]] = None,
     session_verify: Union[bool, str] = True,
     verify: Optional[Union[bool, str]] = None,
     referer: Optional[str] = None,
@@ -226,15 +230,23 @@ def _set_curl_options(
 
         if proxy is not None:
             if parts.scheme == "https" and proxy.startswith("https://"):
-                raise RequestsError(
-                    "You are using http proxy WRONG, the prefix should be 'http://' not 'https://',"
-                    "see: https://github.com/yifeikong/curl_cffi/issues/6"
+                warnings.warn(
+                    "You may be using http proxy WRONG, the prefix should be 'http://' not 'https://',"
+                    "see: https://github.com/yifeikong/curl_cffi/issues/6",
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
 
             c.setopt(CurlOpt.PROXY, proxy)
             # for http proxy, need to tell curl to enable tunneling
             if not proxy.startswith("socks"):
                 c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
+
+            # proxy_auth
+            if proxy_auth:
+                username, password = proxy_auth
+                c.setopt(CurlOpt.PROXYUSERNAME, username.encode())
+                c.setopt(CurlOpt.PROXYPASSWORD, password.encode())
 
     # verify
     if verify is False or not session_verify and verify is None:

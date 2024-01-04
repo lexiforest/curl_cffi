@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from .cookies import CookieTypes
     from .headers import HeaderTypes
-    from .session import BrowserType
+    from .session import BrowserType, ProxySpec
     from .utils import not_set
     from ..const import CurlHttpVersion
     from ..curl import Curl, CurlWsFrame
@@ -172,7 +172,9 @@ class WebSocket(BaseWebSocket):
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         allow_redirects: bool = True,
         max_redirects: int = -1,
-        proxies: Optional[dict] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[Tuple[str, str]] = None,
         verify: Optional[Union[bool, str]] = True,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -197,6 +199,8 @@ class WebSocket(BaseWebSocket):
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
             verify: whether to verify https certs.
             referer: shortcut for setting referer header.
             accept_encoding: shortcut for setting accept-encoding header.
@@ -210,6 +214,11 @@ class WebSocket(BaseWebSocket):
         if not self.closed:
             raise TypeError("WebSocket is already connected")
 
+        if proxy and proxies:
+            raise TypeError("Cannot specify both 'proxy' and 'proxies'")
+        if proxy:
+            proxies = {"all": proxy}
+
         self.curl = curl = Curl(debug=self.debug)
         _set_curl_options(
             curl,
@@ -222,6 +231,7 @@ class WebSocket(BaseWebSocket):
             allow_redirects=allow_redirects,
             max_redirects=max_redirects,
             proxies=proxies,
+            proxy_auth=proxy_auth,
             verify=verify,
             referer=referer,
             accept_encoding=accept_encoding,
@@ -387,6 +397,7 @@ class WebSocket(BaseWebSocket):
 
 class AsyncWebSocket(BaseWebSocket):
     """A pseudo-async WebSocket implementation using libcurl."""
+
     def __init__(self, curl: Curl, *, autoclose: bool = True):
         super().__init__(curl, autoclose=autoclose)
         self._loop: Optional[asyncio.AbstractEventLoop] = None

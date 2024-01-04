@@ -7,8 +7,7 @@ import queue
 from enum import Enum
 from functools import partialmethod
 from io import BytesIO
-from json import dumps
-from typing import Callable, Dict, Optional, Tuple, Union, cast
+from typing import Callable, Dict, Optional, Tuple, Union, cast, TYPE_CHECKING
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
@@ -28,6 +27,19 @@ try:
     import eventlet.tpool
 except ImportError:
     pass
+
+if TYPE_CHECKING:
+    from typing_extensions import TypedDict
+
+    class ProxySpec(TypedDict, total=False):
+        all: str
+        http: str
+        https: str
+        ws: str
+        wss: str
+
+else:
+    ProxySpec = Dict[str, str]
 
 
 class BrowserType(str, Enum):
@@ -86,7 +98,9 @@ class BaseSession:
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         auth: Optional[Tuple[str, str]] = None,
-        proxies: Optional[dict] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[Tuple[str, str]] = None,
         params: Optional[dict] = None,
         verify: Union[bool, str] = True,
         timeout: Union[float, Tuple[float, float]] = 30,
@@ -104,7 +118,6 @@ class BaseSession:
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
         self.auth = auth
-        self.proxies = proxies or {}
         self.params = params
         self.verify = verify
         self.timeout = timeout
@@ -119,6 +132,13 @@ class BaseSession:
         self.debug = debug
         self.interface = interface
 
+        if proxy and proxies:
+            raise TypeError("Cannot specify both 'proxy' and 'proxies'")
+        if proxy:
+            proxies = {"all": proxy}
+        self.proxies: ProxySpec = proxies or {}
+        self.proxy_auth = proxy_auth
+
     def _merge_curl_options(
         self,
         curl,
@@ -131,7 +151,9 @@ class BaseSession:
         timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
-        proxies: Optional[dict] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[Tuple[str, str]] = None,
         verify: Optional[Union[bool, str]] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
@@ -149,6 +171,13 @@ class BaseSession:
         cookies = Cookies(self.cookies)
         cookies.update(cookies)
 
+        if proxy and proxies:
+            raise TypeError("Cannot specify both 'proxy' and 'proxies'")
+        if proxy:
+            proxies = {"all": proxy}
+        if proxies is None:
+            proxies = self.proxies
+
         return _set_curl_options(
             curl,
             method,
@@ -160,6 +189,7 @@ class BaseSession:
             allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
             max_redirects=self.max_redirects if max_redirects is None else max_redirects,
             proxies=proxies,
+            proxy_auth=proxy_auth or self.proxy_auth,
             session_verify=self.verify,  # Not possible to merge verify parameter
             verify=verify,
             impersonate=impersonate or self.impersonate,
@@ -250,6 +280,8 @@ class Session(BaseSession):
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
             params: query string for the session.
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up. In stream mode, only connect_timeout will be set.
@@ -333,7 +365,9 @@ class Session(BaseSession):
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
-        proxies: Optional[dict] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[Tuple[str, str]] = None,
         verify: Optional[Union[bool, str]] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -369,6 +403,8 @@ class Session(BaseSession):
             allow_redirects=allow_redirects,
             max_redirects=max_redirects,
             proxies=proxies,
+            proxy=proxy,
+            proxy_auth=proxy_auth,
             verify=verify,
             referer=referer,
             accept_encoding=accept_encoding,
@@ -474,6 +510,8 @@ class AsyncSession(BaseSession):
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
             params: query string for the session.
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
@@ -577,7 +615,9 @@ class AsyncSession(BaseSession):
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
-        proxies: Optional[dict] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[Tuple[str, str]] = None,
         verify: Optional[Union[bool, str]] = True,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -602,6 +642,8 @@ class AsyncSession(BaseSession):
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
             verify: whether to verify https certs.
             referer: shortcut for setting referer header.
             accept_encoding: shortcut for setting accept-encoding header.
@@ -624,6 +666,8 @@ class AsyncSession(BaseSession):
             allow_redirects=allow_redirects,
             max_redirects=max_redirects,
             proxies=proxies,
+            proxy=proxy,
+            proxy_auth=proxy_auth,
             verify=verify,
             referer=referer,
             accept_encoding=accept_encoding,
@@ -651,8 +695,10 @@ class AsyncSession(BaseSession):
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
-        proxies: Optional[dict] = None,
-        verify: Optional[Union[bool, str]] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[Tuple[str, str]] = None,
+        verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
@@ -680,6 +726,8 @@ class AsyncSession(BaseSession):
             allow_redirects=allow_redirects,
             max_redirects=max_redirects,
             proxies=proxies,
+            proxy=proxy,
+            proxy_auth=proxy_auth,
             verify=verify,
             referer=referer,
             accept_encoding=accept_encoding,
