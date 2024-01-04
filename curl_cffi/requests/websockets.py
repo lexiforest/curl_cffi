@@ -141,6 +141,17 @@ class WebSocket(BaseWebSocket):
     def closed(self) -> bool:
         return self.curl is not_set
 
+    def __iter__(self) -> WebSocket:
+        if self.closed:
+            raise TypeError("WebSocket is closed")
+        return self
+
+    def __next__(self) -> bytes:
+        msg, flags = self.recv()
+        if flags & CurlWsFlag.CLOSE:
+            raise StopIteration
+        return msg
+
     def _emit(self, event_type: str, *args) -> None:
         callback = self._emitters.get(event_type)
         if callback:
@@ -393,6 +404,8 @@ class AsyncWebSocket(BaseWebSocket):
         return self.curl is not_set
 
     async def __aiter__(self) -> Self:
+        if self.closed:
+            raise TypeError("WebSocket is closed")
         return self
 
     async def __anext__(self) -> bytes:
