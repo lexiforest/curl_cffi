@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import ctypes
 import re
 import warnings
 from http.cookies import SimpleCookie
-from typing import Any, List, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Tuple, Union
 
 import certifi
 
@@ -14,12 +15,21 @@ from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 DEFAULT_CACERT = certifi.where()
 
 
-class CurlWsFrame(ffi.CData):
-    age: int
-    flags: int
-    offset: int
-    bytesleft: int
-    len: int
+class CurlWsFrame(ctypes.Structure):
+    _fields_ = [
+        ("age", ctypes.c_int),
+        ("flags", ctypes.c_int),
+        ("offset", ctypes.c_uint64),
+        ("bytesleft", ctypes.c_uint64),
+        ("len", ctypes.c_size_t),
+    ]
+
+    if TYPE_CHECKING:
+        age: int
+        flags: int
+        offset: int
+        bytesleft: int
+        len: int
 
 
 class CurlError(Exception):
