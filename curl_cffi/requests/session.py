@@ -377,9 +377,11 @@ class BaseSession:
 
             if proxy is not None:
                 if parts.scheme == "https" and proxy.startswith("https://"):
-                    raise RequestsError(
-                        "You are using http proxy WRONG, the prefix should be 'http://' not 'https://',"
-                        "see: https://github.com/yifeikong/curl_cffi/issues/6"
+                    warnings.warn(
+                        "You may be using http proxy WRONG, the prefix should be 'http://' not 'https://',"
+                        "see: https://github.com/yifeikong/curl_cffi/issues/6",
+                        RuntimeWarning,
+                        stacklevel=2,
                     )
 
                 c.setopt(CurlOpt.PROXY, proxy)
