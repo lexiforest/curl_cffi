@@ -8,7 +8,7 @@ from typing import Any, Callable, Optional, Tuple, TYPE_CHECKING, TypeVar, Union
 
 from .utils import _set_curl_options, not_set
 from ..const import CurlECode, CurlOpt, CurlWsFlag
-from ..curl import CurlError
+from ..curl import Curl, CurlError
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .headers import HeaderTypes
     from .session import BrowserType, ProxySpec
     from ..const import CurlHttpVersion
-    from ..curl import Curl, CurlWsFrame
+    from ..curl import CurlWsFrame
 
     T = TypeVar("T")
 
