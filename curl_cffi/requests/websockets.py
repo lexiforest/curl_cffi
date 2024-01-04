@@ -455,25 +455,21 @@ class AsyncWebSocket(BaseWebSocket):
         libcurl split frames into fragments, so we have to collect all the chunks for
         a frame.
         """
-        if self._recv_lock.locked():
-            raise TypeError("Concurrent call to recv() is not allowed")
-
-        async with self._recv_lock:
-            chunks = []
-            flags = 0
-            # TODO use select here
-            while True:
-                try:
-                    chunk, frame = await self.recv_fragment(timeout=timeout)
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
-                except CurlError as e:
-                    if e.code == CurlECode.AGAIN:
-                        pass
-                    else:
-                        raise
+        chunks = []
+        flags = 0
+        # TODO use select here
+        while True:
+            try:
+                chunk, frame = await self.recv_fragment(timeout=timeout)
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
+            except CurlError as e:
+                if e.code == CurlECode.AGAIN:
+                    pass
+                else:
+                    raise
 
         return b"".join(chunks), flags
 
