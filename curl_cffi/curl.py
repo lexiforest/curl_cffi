@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 import warnings
 from http.cookies import SimpleCookie
@@ -8,7 +10,16 @@ import certifi
 from ._wrapper import ffi, lib  # type: ignore
 from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 
+
 DEFAULT_CACERT = certifi.where()
+
+
+class CurlWsFrame(ffi.CData):
+    age: int
+    flags: int
+    offset: int
+    bytesleft: int
+    len: int
 
 
 class CurlError(Exception):
@@ -50,10 +61,12 @@ def buffer_callback(ptr, size, nmemb, userdata):
     buffer.write(ffi.buffer(ptr, nmemb)[:])
     return nmemb * size
 
+
 def ensure_int(s):
     if not s:
         return 0
     return int(s)
+
 
 @ffi.def_extern()
 def write_callback(ptr, size, nmemb, userdata):
@@ -85,7 +98,7 @@ class Curl:
     Wrapper for `curl_easy_*` functions of libcurl.
     """
 
-    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False, handle = None):
+    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False, handle=None):
         """
         Parameters:
             cacert: CA cert path to use, by default, curl_cffi uses its own bundled cert.
@@ -159,15 +172,11 @@ class Curl:
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback)
         elif option == CurlOpt.HEADERDATA:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback)
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -246,9 +255,7 @@ class Curl:
             target: browser to impersonate.
             default_headers: whether to add default headers, like User-Agent.
         """
-        return lib.curl_easy_impersonate(
-            self._curl, target.encode(), int(default_headers)
-        )
+        return lib.curl_easy_impersonate(self._curl, target.encode(), int(default_headers))
 
     def _ensure_cacert(self):
         if not self._is_cert_set:
@@ -346,7 +353,7 @@ class Curl:
         ffi.release(self._error_buffer)
         self._resolve = ffi.NULL
 
-    def ws_recv(self, n: int = 1024):
+    def ws_recv(self, n: int = 1024) -> Tuple[bytes, CurlWsFrame]:
         buffer = ffi.new("char[]", n)
         n_recv = ffi.new("int *")
         p_frame = ffi.new("struct curl_ws_frame **")
@@ -365,6 +372,3 @@ class Curl:
         ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
         return n_sent[0]
-
-    def ws_close(self):
-        self.ws_send(b"", CurlWsFlag.CLOSE)

@@ -16,6 +16,7 @@ __all__ = [
     "Headers",
     "Request",
     "Response",
+    "AsyncWebSocket",
     "WebSocket",
     "WebSocketError",
     "WsCloseCode",
@@ -31,7 +32,7 @@ from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .session import AsyncSession, BrowserType, Session
-from .websockets import WebSocket, WebSocketError, WsCloseCode
+from .websockets import AsyncWebSocket, WebSocket, WebSocketError, WsCloseCode
 
 # ThreadType = Literal["eventlet", "gevent", None]
 
@@ -50,7 +51,7 @@ def request(
     allow_redirects: bool = True,
     max_redirects: int = -1,
     proxies: Optional[dict] = None,
-    verify: Optional[bool] = None,
+    verify: Optional[Union[bool, str]] = None,
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br",
     content_callback: Optional[Callable] = None,
