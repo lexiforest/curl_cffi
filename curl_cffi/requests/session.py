@@ -165,8 +165,8 @@ class BaseSession:
         if self.params:
             url = _update_url_params(url, self.params)
 
-        headers = Headers(self.headers)
-        headers.update(headers)
+        _headers = Headers(self.headers)
+        _headers.update(headers)
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -179,7 +179,7 @@ class BaseSession:
             curl,
             method,
             url,
-            headers=headers,
+            headers=_headers,
             session_cookies=self.cookies,
             cookies=cookies,
             auth=auth or self.auth,
