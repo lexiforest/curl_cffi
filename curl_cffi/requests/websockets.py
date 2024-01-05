@@ -59,6 +59,11 @@ class BaseWebSocket:
         self._close_reason: Optional[str] = None
 
     @property
+    def closed(self) -> bool:
+        """Whether the WebSocket is closed."""
+        return self.curl is not_set
+
+    @property
     def close_code(self) -> Optional[int]:
         """The WebSocket close code, if the connection is closed."""
         return self._close_code
@@ -89,6 +94,13 @@ class BaseWebSocket:
                 if code < 3000 and (code not in WsCloseCode or code == 1005):
                     raise WebSocketError("Invalid close code", WsCloseCode.PROTOCOL_ERROR)
         return code, reason
+
+    def terminate(self):
+        """Terminate the underlying connection."""
+        if self.curl is not_set:
+            return
+        self.curl.close()
+        self.curl = not_set
 
 
 class WebSocket(BaseWebSocket):
@@ -137,10 +149,6 @@ class WebSocket(BaseWebSocket):
             self._emitters["message"] = on_message
         if on_error:
             self._emitters["error"] = on_error
-
-    @property
-    def closed(self) -> bool:
-        return self.curl is not_set
 
     def __iter__(self) -> WebSocket:
         if self.closed:
@@ -397,8 +405,7 @@ class WebSocket(BaseWebSocket):
         self.send(msg, CurlWsFlag.CLOSE)
         # The only way to close the connection appears to be curl_easy_cleanup
         # But this renders the curl handle unusable, so we do not push it back to the pool
-        self.curl.close()
-        self.curl = not_set
+        self.terminate()
 
 
 class AsyncWebSocket(BaseWebSocket):
@@ -415,10 +422,6 @@ class AsyncWebSocket(BaseWebSocket):
         if self._loop is None:
             self._loop = asyncio.get_running_loop()
         return self._loop
-
-    @property
-    def closed(self) -> bool:
-        return self.curl is not_set
 
     async def __aiter__(self) -> Self:
         if self.closed:
@@ -533,5 +536,4 @@ class AsyncWebSocket(BaseWebSocket):
         await self.send(msg, CurlWsFlag.CLOSE)
         # The only way to close the connection appears to be curl_easy_cleanup
         # But this renders the curl handle unusable, so we do not push it back to the pool
-        self.curl.close()
-        self.curl = not_set
+        self.terminate()
