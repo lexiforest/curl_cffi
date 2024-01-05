@@ -331,6 +331,10 @@ class WebSocket(BaseWebSocket):
         """Send a JSON frame."""
         return self.send_str(dumps(payload))
 
+    def ping(self, payload: Union[str, bytes]):
+        """Send a ping frame."""
+        return self.send(payload, CurlWsFlag.PING)
+
     def run_forever(self, url: str, **kwargs):
         """
         libcurl automatically handles pings and pongs.
@@ -513,6 +517,10 @@ class AsyncWebSocket(BaseWebSocket):
     async def send_json(self, payload: Any, *, dumps: Callable[[Any], str] = dumps):
         """Send a JSON frame."""
         return await self.send_str(dumps(payload))
+
+    async def ping(self, payload: Union[str, bytes]):
+        """Send a ping frame."""
+        return await self.send(payload, CurlWsFlag.PING)
 
     async def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
         """Close the connection."""
