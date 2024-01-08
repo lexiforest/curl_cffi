@@ -85,16 +85,20 @@ print(r.json())
 - chrome104
 - chrome107
 - chrome110
-- chrome116, since 0.6.0
-- chrome119, since 0.6.0
-- chrome120, since 0.6.0
+- chrome116 <sup>[1]</sup>
+- chrome119 <sup>[1]</sup>
+- chrome120 <sup>[1]</sup>
 - chrome99_android
 - edge99
 - edge101
-- safari15_3, fixed in 0.6.0
-- safari15_5, fixed in 0.6.0
-- safari17_0, since 0.6.0
-- safari17_2_ios, since 0.6.0
+- safari15_3 <sup>[2]</sup>
+- safari15_5 <sup>[2]</sup>
+- safari17_0 <sup>[1]</sup>
+- safari17_2_ios <sup>[1]</sup>
+
+注意:
+1. 自 `0.6.0` 起添加。
+2. 在 `0.6.0` 中修复, 之前的 http2 指纹是[错误的](https://github.com/lwthiker/curl-impersonate/issues/215)。
 
 ### asyncio
 
@@ -173,19 +177,21 @@ print(body.decode())
 
 有问题和建议请优先提 issue，中英文均可，也可以加 [TG 群](https://t.me/+lL9n33eZp480MGM1) 或微信群讨论：
 
-<img src="wechat.jpg" style="width: 512px;" />
+<img src="assets/wechat.jpg" style="width: 512px;" />
 
 ## 致谢
 
-- 该项目 fork 自：[multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), MIT 协议发布。
+- 该项目起初 fork 自：[multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), MIT 协议发布。
 - Headers/Cookies 代码来自 [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), BSD 协议发布。
 - Asyncio 支持是受 Tornado 的 curl http client 启发而做。
 - WebSocket API 的设计来自 [websocket_client](https://github.com/websocket-client/websocket-client)。
 
 ## [赞助商] Cloudflare 5s 盾接口
 
+<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
+
 Yescaptcha 是一个可以识别 Cloudflare 盾的接口，直接返回识别完成的 Cookies （`cf_clearance` 等） [点此](https://yescaptcha.com/i/stfnIO)注册：https://yescaptcha.com/i/stfnIO
 
 ## 赞助
 
-<img src="alipay.jpg" style="width: 512px;" />
+<img src="assets/alipay.jpg" style="width: 512px;" />

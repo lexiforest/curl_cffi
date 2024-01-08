@@ -88,16 +88,20 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 - chrome104
 - chrome107
 - chrome110
-- chrome116, since 0.6.0
-- chrome119, since 0.6.0
-- chrome120, since 0.6.0
+- chrome116 <sup>[1]</sup>
+- chrome119 <sup>[1]</sup>
+- chrome120 <sup>[1]</sup>
 - chrome99_android
 - edge99
 - edge101
-- safari15_3, fixed in 0.6.0
-- safari15_5, fixed in 0.6.0
-- safari17_0, since 0.6.0
-- safari17_2_ios, since 0.6.0
+- safari15_3 <sup>[2]</sup>
+- safari15_5 <sup>[2]</sup>
+- safari17_0 <sup>[1]</sup>
+- safari17_2_ios <sup>[1]</sup>
+
+Notes:
+1. Added in version `0.6.0`.
+2. fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 
 ### asyncio
 
@@ -182,6 +186,8 @@ If you are using scrapy, check out these middlewares:
 - The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
 
 ## [Sponsor] Bypass Cloudflare with API
+
+<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO) to register: https://yescaptcha.com/i/stfnIO
 
