@@ -3,7 +3,7 @@
 Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
 via [cffi](https://cffi.readthedocs.io/en/latest/).
 
-[Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/master/README-zh.md) | [Discuss on Telegram](https://t.me/+lL9n33eZp480MGM1)
+[Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/main/README-zh.md) | [Discuss on Telegram](https://t.me/+lL9n33eZp480MGM1)
 
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
@@ -38,7 +38,7 @@ first and set some environment variables like `LD_LIBRARY_PATH`.
 
 To install beta releases:
 
-    pip install curl_cffi --pre
+    pip install curl_cffi --upgrade --pre
 
 ## Usage
 
@@ -80,7 +80,7 @@ print(r.json())
 
 Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-However, only Chrome-like browsers are supported. Firefox support is tracked in #55
+However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
 
 - chrome99
 - chrome100
@@ -88,16 +88,16 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 - chrome104
 - chrome107
 - chrome110
-- chrome116
-- chrome119
-- chrome120
+- chrome116, since 0.6.0
+- chrome119, since 0.6.0
+- chrome120, since 0.6.0
 - chrome99_android
 - edge99
 - edge101
-- safari15_3
-- safari15_5
-- safari17_0
-- safari17_2_ios
+- safari15_3, fixed in 0.6.0
+- safari15_5, fixed in 0.6.0
+- safari17_0, since 0.6.0
+- safari17_2_ios, since 0.6.0
 
 ### asyncio
 
@@ -115,7 +115,7 @@ import asyncio
 from curl_cffi.requests import AsyncSession
 
 urls = [
-    "https://googel.com/",
+    "https://google.com/",
     "https://facebook.com/",
     "https://twitter.com/",
 ]
@@ -123,7 +123,7 @@ urls = [
 async with AsyncSession() as s:
     tasks = []
     for url in urls:
-        task = s.get("https://example.com")
+        task = s.get(url)
         tasks.append(task)
     results = await asyncio.gather(*tasks)
 ```
@@ -165,7 +165,9 @@ body = buffer.getvalue()
 print(body.decode())
 ```
 
-See the [docs](https://curl-cffi.readthedocs.io) for more details. 
+See the [docs](https://curl-cffi.readthedocs.io) for more details.
+
+### scrapy
 
 If you are using scrapy, check out these middlewares:
 
@@ -177,7 +179,11 @@ If you are using scrapy, check out these middlewares:
 - Originally forked from [multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), which is under the MIT license.
 - Headers/Cookies files are copied from [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), which is under the BSD license.
 - Asyncio support is inspired by Tornado's curl http client.
-- The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client)
+- The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
+
+## [Sponsor] Bypass Cloudflare with API
+
+Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO) to register: https://yescaptcha.com/i/stfnIO
 
 ## Sponsor
 
