@@ -3,7 +3,7 @@
 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 的 Python 绑定，基于
 [cffi](https://cffi.readthedocs.io/en/latest/).
 
-不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，这个库可以模拟浏览器的
+不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi `可以模拟浏览器的
 TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试这个库。
 
 ## 功能
@@ -33,9 +33,9 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 在其他小众平台，你可能需要先编译并安装 `curl-impersonate` 并且设置 `LD_LIBRARY_PATH` 这些
 环境变量。
 
-安装测试版:
+安装测试版：
 
-    pip install curl_cffi --pre
+    pip install curl_cffi --upgrade --pre
 
 ## 使用
 
@@ -77,7 +77,7 @@ print(r.json())
 
 支持模拟的浏览器版本，和我 [fork](https://github.com/yifeikong/curl-impersonate) 的 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 一致：
 
-不过只支持类似 Chrome 的浏览器。Firefox 的支持进展可以查看 #55
+不过只支持类似 Chrome 的浏览器。Firefox 的支持进展可以查看 [#59](https://github.com/yifeikong/curl_cffi/issues/59)。
 
 - chrome99
 - chrome100
@@ -85,16 +85,20 @@ print(r.json())
 - chrome104
 - chrome107
 - chrome110
-- chrome116
-- chrome119
-- chrome120
+- chrome116 <sup>[1]</sup>
+- chrome119 <sup>[1]</sup>
+- chrome120 <sup>[1]</sup>
 - chrome99_android
 - edge99
 - edge101
-- safari15_3
-- safari15_5
-- safari17_0
-- safari17_2_ios
+- safari15_3 <sup>[2]</sup>
+- safari15_5 <sup>[2]</sup>
+- safari17_0 <sup>[1]</sup>
+- safari17_2_ios <sup>[1]</sup>
+
+注意:
+1. 自 `0.6.0` 起添加。
+2. 在 `0.6.0` 中修复, 之前的 http2 指纹是[错误的](https://github.com/lwthiker/curl-impersonate/issues/215)。
 
 ### asyncio
 
@@ -112,7 +116,7 @@ import asyncio
 from curl_cffi.requests import AsyncSession
 
 urls = [
-    "https://googel.com/",
+    "https://google.com/",
     "https://facebook.com/",
     "https://twitter.com/",
 ]
@@ -120,7 +124,7 @@ urls = [
 async with AsyncSession() as s:
     tasks = []
     for url in urls:
-        task = s.get("https://example.com")
+        task = s.get(url)
         tasks.append(task)
     results = await asyncio.gather(*tasks)
 ```
@@ -164,6 +168,8 @@ print(body.decode())
 
 更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
 
+### scrapy
+
 如果你用 scrapy 的话，可以参考这些中间件：
 
 - [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
@@ -171,15 +177,21 @@ print(body.decode())
 
 有问题和建议请优先提 issue，中英文均可，也可以加 [TG 群](https://t.me/+lL9n33eZp480MGM1) 或微信群讨论：
 
-<img src="wechat.jpg" style="width: 512px;" />
+<img src="assets/wechat.jpg" style="width: 512px;" />
 
 ## 致谢
 
-- 该项目 fork 自：[multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), MIT 协议发布。
+- 该项目起初 fork 自：[multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), MIT 协议发布。
 - Headers/Cookies 代码来自 [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), BSD 协议发布。
 - Asyncio 支持是受 Tornado 的 curl http client 启发而做。
 - WebSocket API 的设计来自 [websocket_client](https://github.com/websocket-client/websocket-client)。
 
+## [赞助商] Cloudflare 5s 盾接口
+
+<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
+
+Yescaptcha 是一个可以识别 Cloudflare 盾的接口，直接返回识别完成的 Cookies （`cf_clearance` 等） [点此](https://yescaptcha.com/i/stfnIO)注册：https://yescaptcha.com/i/stfnIO
+
 ## 赞助
 
-<img src="alipay.jpg" style="width: 512px;" />
+<img src="assets/alipay.jpg" style="width: 512px;" />
