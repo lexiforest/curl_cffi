@@ -70,11 +70,11 @@ test = [
 
 [tool.setuptools]
 packages = ["curl_cffi", "curl_cffi.requests"]
-# package-data = { curl_cffi = ["libcurl/*/*"] }
+package-data = { curl_cffi = ["libcurl.dll"] }
 
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi>=1.12.0"]
+requires = ["wheel", "setuptools", "cffi >=1.12.0"]
 build-backend = "setuptools.build_meta"
 
 
@@ -92,10 +92,6 @@ test-skip = "pp*"
 
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
-
-[tool.cibuildwheel.windows]
-before-build = "pip install delvewheel"
-repair-wheel-command = "delvewheel repair --add-path ./lib -w {dest_dir} {wheel}"
 
 
 [tool.isort]
