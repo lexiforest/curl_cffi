@@ -4,6 +4,7 @@ import re
 import threading
 import warnings
 import queue
+import math
 from enum import Enum
 from functools import partialmethod
 from io import BytesIO
@@ -338,13 +339,15 @@ class BaseSession:
             connect_timeout, read_timeout = timeout
             all_timeout = connect_timeout + read_timeout
             c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(connect_timeout * 1000))
-            if not stream:
-                c.setopt(CurlOpt.TIMEOUT_MS, int(all_timeout * 1000))
         else:
-            if not stream:
-                c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))  # type: ignore
-            else:
-                c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(timeout * 1000))  # type: ignore
+            all_timeout = cast(int, timeout)
+
+        if stream:
+            # trick from: https://github.com/yifeikong/curl_cffi/issues/156
+            c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
+            c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(all_timeout))
+        else:
+            c.setopt(CurlOpt.TIMEOUT_MS, int(all_timeout * 1000))
 
         # allow_redirects
         c.setopt(
@@ -562,7 +565,7 @@ class Session(BaseSession):
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
             params: query string for the session.
             verify: whether to verify https certs.
-            timeout: how many seconds to wait before giving up. In stream mode, only connect_timeout will be set.
+            timeout: how many seconds to wait before giving up.
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
