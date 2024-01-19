@@ -4,16 +4,9 @@ import shutil
 import sys
 from urllib.request import urlretrieve
 
-uname = platform.uname()
 
+SYSTEMS_MAP = {"Darwin": "macos", "Windows": "win32"}
 VERSION = sys.argv[1]
-
-if uname.system == "Windows":
-    LIBDIR = "./lib"
-elif uname.system == "Darwin" and uname.machine == "x86_64":
-    LIBDIR = "/Users/runner/work/_temp/install/lib"
-else:
-    LIBDIR = "/usr/local/lib"
 
 
 def reporthook(blocknum, blocksize, totalsize):
@@ -28,21 +21,35 @@ def reporthook(blocknum, blocksize, totalsize):
         sys.stderr.write("read %d\n" % (readsofar,))
 
 
-if uname.system == "Darwin":
-    if uname.machine == "arm64":
-        # TODO Download my own build of libcurl-impersonate for M1 Mac
-        url = ""
-    else:
-        url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-macos.tar.gz"
-elif uname.system == "Windows":
-    url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.x86_64-win32.tar.gz"
-else:
-    url = f"https://github.com/yifeikong/curl-impersonate/releases/download/v{VERSION}/libcurl-impersonate-v{VERSION}.{uname.machine}-linux-gnu.tar.gz"
+_uname = platform.uname()
+system = _uname.system
+machine = _uname.machine
 
-filename = "./curl-impersonate.tar.gz"
-if url:
-    print(f"Download libcurl-impersonate-chrome from {url}")
-    urlretrieve(url, filename, (None if os.getenv("GITHUB_ACTIONS") else reporthook))
-    shutil.unpack_archive(filename, LIBDIR)
-    if uname.system == "Windows":
-        shutil.copy2(f"{LIBDIR}/libcurl.dll", "curl_cffi")
+if system == "Windows":
+    libdir = "./lib"
+elif system == "Darwin" and machine == "x86_64":
+    libdir = "/Users/runner/work/_temp/install/lib"
+else:
+    libdir = "/usr/local/lib"
+
+if len(sys.argv) == 3 and sys.argv[2] == '1':  # i686 32-bit flag
+    machine = 'i686'
+elif machine == 'AMD64':  # normalize 64-bit arch
+    machine = 'x86_64'
+
+url = (
+    f"https://github.com/yifeikong/curl-impersonate/releases/download/"
+    f"v{VERSION}/libcurl-impersonate-v{VERSION}"
+    f".{machine}-{SYSTEMS_MAP.get(system, 'linux-gnu')}.tar.gz"
+)
+
+print(f"Download libcurl-impersonate-chrome from {url}")
+urlretrieve(
+    url,
+    "curl-impersonate.tar.gz",
+    None if os.getenv("GITHUB_ACTIONS") else reporthook,
+)
+
+shutil.unpack_archive("curl-impersonate.tar.gz", libdir)
+if system == "Windows":
+    shutil.copy2(f"{libdir}/libcurl.dll", "curl_cffi")

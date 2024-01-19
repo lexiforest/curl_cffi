@@ -1,6 +1,6 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.6.0b7
+VERSION := 0.6.0b8
 CURL_VERSION := curl-8.1.1
 
 .preprocessed: curl_cffi/include/curl/curl.h .so_downloaded
@@ -28,7 +28,7 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	cp -R include/curl/* ../curl_cffi/include/curl/
 
 .so_downloaded:
-	python preprocess/download_so.py $(VERSION)
+	python preprocess/download_so.py $(VERSION) $(win32)
 	touch .so_downloaded
 
 preprocess: .preprocessed
