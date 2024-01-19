@@ -21,9 +21,9 @@ def reporthook(blocknum, blocksize, totalsize):
         sys.stderr.write("read %d\n" % (readsofar,))
 
 
-_uname = platform.uname()
-system = _uname.system
-machine = _uname.machine
+uname = platform.uname()
+system = uname.system
+machine = uname.machine
 
 if system == "Windows":
     libdir = "./lib"
@@ -32,10 +32,10 @@ elif system == "Darwin" and machine == "x86_64":
 else:
     libdir = "/usr/local/lib"
 
-if len(sys.argv) == 3 and sys.argv[2] == '1':  # i686 32-bit flag
-    machine = 'i686'
-elif machine == 'AMD64':  # normalize 64-bit arch
-    machine = 'x86_64'
+if len(sys.argv) == 3 and sys.argv[2] == "win32":  # i686 32-bit flag
+    machine = "i686"
+elif machine == "AMD64":  # normalize 64-bit arch
+    machine = "x86_64"
 
 url = (
     f"https://github.com/yifeikong/curl-impersonate/releases/download/"

@@ -28,7 +28,7 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	cp -R include/curl/* ../curl_cffi/include/curl/
 
 .so_downloaded:
-	python preprocess/download_so.py $(VERSION) $(win32)
+	python preprocess/download_so.py $(VERSION) $(ARCH)
 	touch .so_downloaded
 
 preprocess: .preprocessed
