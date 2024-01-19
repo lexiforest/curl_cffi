@@ -381,6 +381,7 @@ class CurlMime:
     def addpart(
         self,
         name: str,
+        *,
         type: Optional[str] = None,
         filename: Optional[str] = None,
         filepath: Optional[Union[str, bytes, Path]] = None,
@@ -418,9 +419,19 @@ class CurlMime:
         if fileobj is not None:
             ret = lib.curl_mime_data(part, fileobj.read())
 
+    @classmethod
+    def from_list(cls, files: List[dict]):
+        form = cls()
+        for file in files:
+            form.addpart(**file)
+        return form
+
     def attach(self, curl: Optional[Curl] = None):
         c = curl if curl else self._curl
         c.setopt(CurlOpt.MIMEPOST, self._form)
 
     def close(self):
         lib.curl_mime_free(self._form)
+
+    def __del__(self):
+        self.close()

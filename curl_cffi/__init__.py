@@ -3,6 +3,7 @@ __all__ = [
     "CurlInfo",
     "CurlOpt",
     "CurlMOpt",
+    "CurlMime",
     "CurlECode",
     "CurlHttpVersion",
     "CurlError",
@@ -16,7 +17,7 @@ import _cffi_backend  # noqa: F401  # required by _wrapper
 from ._wrapper import ffi, lib  # type: ignore
 
 from .const import CurlInfo, CurlMOpt, CurlOpt, CurlECode, CurlHttpVersion
-from .curl import Curl, CurlError
+from .curl import Curl, CurlError, CurlMime
 from .aio import AsyncCurl
 
 from .__version__ import __title__, __version__, __description__, __curl_version__
