@@ -14,24 +14,40 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-11, windows-2019]
+        include:
+          - os: ubuntu-22.04
+          - os: macos-11
+          - os: windows-2019
+            arch: auto64
+          - os: windows-2019
+            arch: auto32
     steps:
       - uses: actions/checkout@v3
+
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+
       - if: runner.os == 'Linux'
         uses: docker/setup-qemu-action@v2
         with:
           platforms: all
+
       # macOS make is too old
       - if: runner.os == 'macOS'
         run: brew install make
+
+      # build the x64 Windows wheel
+      - if: runner.os == 'Windows' and runner.arch == 'auto64'
+        run: echo "{CIBW_ARCHS_WINDOWS}={auto64}" >> $GITHUB_ENV
+
+      # build the x32 Windows wheel
+      - if: runner.os == 'Windows' and runner.arch == 'auto32'
+        run: echo "{CIBW_ARCHS_WINDOWS}={auto32} {ARCH}={win32}" >> $GITHUB_ENV
+
       - name: Build
         uses: pypa/cibuildwheel@v2.12.0
-        env:
-          # configure cibuildwheel to build native archs ('auto'), and some emulated ones
-          CIBW_ARCHS_LINUX: auto aarch64
+
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
