@@ -58,3 +58,13 @@ struct curl_ws_frame {
 
 int curl_ws_recv(void *curl, void *buffer, int buflen, int *recv, struct curl_ws_frame **meta);
 int curl_ws_send(void *curl, void *buffer, int buflen, int *sent, int fragsize, unsigned int sendflags);
+
+// mime
+void *curl_mime_init(void* curl);  // -> form
+void *curl_mime_addpart(void *form);  // -> part/field
+int curl_mime_name(void *field, char *name);
+int curl_mime_data(void *field, char *name, int datasize);
+int curl_mime_type(void *field, char *type);
+int curl_mime_filename(void *field, char *filename);
+int curl_mime_filedata(void *field, char *filename);
+void curl_mime_free(void *form);
