@@ -25,6 +25,14 @@ machine = uname.machine
 SYSTEMS_MAP = {"Darwin": "macos", "Windows": "win32"}
 VERSION = sys.argv[1]
 
+if system == "Windows":
+    libdir = "./lib"
+    machine = "x86_64" if struct.calcsize("P") * 8 == 64 else "i686"
+elif system == "Darwin" and machine == "x86_64":
+    libdir = "/Users/runner/work/_temp/install/lib"
+else:
+    libdir = "/usr/local/lib"
+
 url = (
     f"https://github.com/yifeikong/curl-impersonate/releases/download/"
     f"v{VERSION}/libcurl-impersonate-v{VERSION}"
@@ -36,14 +44,6 @@ print(f"Downloading libcurl-impersonate-chrome from {url}")
 urlretrieve(url, file, None if os.getenv("GITHUB_ACTIONS") else reporthook)
 
 print("Unpacking downloaded files")
-if system == "Windows":
-    libdir = "./lib"
-    machine = "x86_64" if struct.calcsize("P") * 8 == 64 else "i686"
-elif system == "Darwin" and machine == "x86_64":
-    libdir = "/Users/runner/work/_temp/install/lib"
-else:
-    libdir = "/usr/local/lib"
-
 shutil.unpack_archive(file, libdir)
 if system == "Windows":
     shutil.copy2(f"{libdir}/libcurl.dll", "curl_cffi")
