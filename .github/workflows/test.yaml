@@ -14,13 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        include:
-          - os: ubuntu-22.04
-          - os: macos-11
-          - os: windows-2019
-            arch: auto64
-          - os: windows-2019
-            arch: auto32
+        os: [ubuntu-22.04, macos-11, windows-2019]
     steps:
       - uses: actions/checkout@v3
 
@@ -37,7 +31,7 @@ jobs:
       - if: runner.os == 'macOS'
         run: brew install make
 
-      - name: Build
+      - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.12.0
 
       - uses: actions/upload-artifact@v3

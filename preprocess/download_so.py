@@ -37,7 +37,7 @@ urlretrieve(url, file, None if os.getenv("GITHUB_ACTIONS") else reporthook)
 
 print("Unpacking downloaded files")
 if system == "Windows":
-    libdir = "./curl_cffi"
+    libdir = "./lib"
     machine = "x86_64" if struct.calcsize("P") * 8 == 64 else "i686"
 elif system == "Darwin" and machine == "x86_64":
     libdir = "/Users/runner/work/_temp/install/lib"
@@ -45,3 +45,5 @@ else:
     libdir = "/usr/local/lib"
 
 shutil.unpack_archive(file, libdir)
+if system == "Windows":
+    shutil.copy2(f"{libdir}/libcurl.dll", "curl_cffi")
