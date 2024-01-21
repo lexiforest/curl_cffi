@@ -37,14 +37,6 @@ jobs:
       - if: runner.os == 'macOS'
         run: brew install make
 
-      # build the x64 Windows wheel
-      - if: runner.os == 'Windows' && matrix.arch == 'auto64'
-        run: echo "{CIBW_ARCHS_WINDOWS}={auto64}" >> $GITHUB_ENV
-
-      # build the x32 Windows wheel
-      - if: runner.os == 'Windows' && matrix.arch == 'auto32'
-        run: echo "{CIBW_ARCHS_WINDOWS}={auto32} {ARCH}={win32}" >> $GITHUB_ENV
-
       - name: Build
         uses: pypa/cibuildwheel@v2.12.0
 
