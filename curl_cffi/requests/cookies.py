@@ -255,7 +255,8 @@ class Cookies(typing.MutableMapping[str, str]):
                         ):
                             message = (
                                 f"Multiple cookies exist with name={name} on "
-                                f"{matched_domain} and {cookie.domain}"
+                                f"{matched_domain} and {cookie.domain}, add domain "
+                                "parameter to suppress this error."
                             )
                             raise CookieConflict(message)
                         value = cookie.value

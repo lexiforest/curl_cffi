@@ -1,9 +1,9 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.6.0b7
+VERSION := 0.6.0b8
 CURL_VERSION := curl-8.1.1
 
-.preprocessed: curl_cffi/include/curl/curl.h .so_downloaded
+.preprocessed: curl_cffi/include/curl/curl.h
 	touch .preprocessed
 
 curl_cffi/const.py: curl_cffi/include
@@ -19,6 +19,7 @@ curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
+# TODO add the headers to sdist package
 curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	cd $(CURL_VERSION)
 	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
@@ -26,10 +27,6 @@ curl_cffi/include/curl/curl.h: curl-impersonate-$(VERSION)/chrome/patches
 	autoreconf -fi
 	mkdir -p ../curl_cffi/include/curl
 	cp -R include/curl/* ../curl_cffi/include/curl/
-
-.so_downloaded:
-	python preprocess/download_so.py $(VERSION)
-	touch .so_downloaded
 
 preprocess: .preprocessed
 	@echo preprocess
