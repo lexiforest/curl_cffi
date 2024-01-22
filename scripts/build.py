@@ -1,4 +1,5 @@
 import os
+import struct
 import platform
 
 from cffi import FFI
@@ -8,19 +9,27 @@ ffibuilder = FFI()
 uname = platform.uname()
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 
+if uname.system == "Windows":
+    if struct.calcsize("P") * 8 == 64:
+        libdir = "./lib64"
+    else:
+        libdir = "./lib32"
+elif uname.system == "Darwin":
+    if uname.machine == "x86_64":
+        libdir = "/Users/runner/work/_temp/install/lib"
+    else:
+        libdir = "/usr/local/lib"
+else:
+    libdir = "/usr/local/lib"
+
+
 ffibuilder.set_source(
     "curl_cffi._wrapper",
     """
         #include "shim.h"
     """,
     libraries=["curl-impersonate-chrome"] if uname.system != "Windows" else ["libcurl"],
-    library_dirs=[
-        "/Users/runner/work/_temp/install/lib"
-        if uname.system == "Darwin" and uname.machine == "x86_64"
-        else "./lib"
-        if uname.system == "Windows"
-        else "/usr/local/lib"  # Linux and macOS arm64
-    ],
+    library_dirs=[libdir],
     source_extension=".c",
     include_dirs=[
         os.path.join(parent_dir, "include"),

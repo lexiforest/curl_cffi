@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.6.0b7"
+version = "0.6.0b8"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -83,19 +83,29 @@ build-backend = "setuptools.build_meta"
 # TODO build binaries inside musllinux/manylinux
 # skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 # Building for these platforms is enough since we are using abi3 packages
-build = ["cp37-macosx_x86_64", "cp37-win_amd64", "cp37-manylinux_x86_64", "cp37-manylinux_aarch64"]
+build = [
+    "cp37-macosx_x86_64",
+    "cp37-win_amd64",
+    "cp37-win32",
+    "cp37-manylinux_x86_64",
+    "cp37-manylinux_aarch64",
+]
 before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
 
+# configure cibuildwheel to build native archs ('auto'), and some emulated ones
+[tool.cibuildwheel.linux]
+archs = ["auto", "aarch64"]
+
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
 
-
-[tool.isort]
-profile = "black"
+[tool.ruff.lint]
+# Enable the isort rules.
+extend-select = ["I"]
 
 [tool.pytest.ini_options]
 # pythonpath = [ "." ]

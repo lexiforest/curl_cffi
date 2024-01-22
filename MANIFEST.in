@@ -1,6 +1,6 @@
 recursive-include tests/*
 
 include ffi/*
-include preprocess/*
+include include/curl/*
 include scripts/build.py
 include Makefile
