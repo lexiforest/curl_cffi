@@ -48,7 +48,6 @@ def download_so():
     else:
         sysname = "linux-gnu"
         libdir = "/usr/local/lib"
-        sysname = "win32"
         so_name = "libcurl-impersonate-chrome.so"
 
     if so_name == "SKIP":
