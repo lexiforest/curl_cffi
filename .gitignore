@@ -18,6 +18,4 @@ curl-*/
 *.tar.xz
 *.tar.gz
 .patched
-.preprocessed
-.so_downloaded
 include/
