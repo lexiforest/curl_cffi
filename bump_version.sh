@@ -10,3 +10,6 @@ gsed "s/^__version__ = .*/__version__ = \"${VERSION}\"/g" -i curl_cffi/__version
 
 # pyproject.toml
 gsed "s/^version = .*/version = \"${VERSION}\"/g" -i pyproject.toml
+
+# setup.py
+gsed "s/^__version__ = .*/__version__ = \"${VERSION}\"/g" -i setup.py

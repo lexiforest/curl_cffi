@@ -37,6 +37,13 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 
     pip install curl_cffi --upgrade --pre
 
+从 GitHub 安装最新不稳定版本：
+
+    git clone https://github.com/yifeikong/curl_cffi/
+    cd curl_cffi
+    make preprocess
+    pip install .
+
 ## 使用
 
 尽量模仿比较新的浏览器，不要直接从下边的例子里复制 `chrome110` 去用。

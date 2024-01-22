@@ -40,6 +40,13 @@ To install beta releases:
 
     pip install curl_cffi --upgrade --pre
 
+To install unstable version from GitHub:
+
+    git clone https://github.com/yifeikong/curl_cffi/
+    cd curl_cffi
+    make preprocess
+    pip install .
+
 ## Usage
 
 Use the latest impersonate versions, do NOT copy `chrome110` here without changing.

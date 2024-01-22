@@ -107,6 +107,10 @@ before-all = "gmake preprocess"
 [tool.isort]
 profile = "black"
 
+[tool.ruff.lint]
+# Enable the isort rules.
+extend-select = ["I"]
+
 [tool.pytest.ini_options]
 # pythonpath = [ "." ]
 asyncio_mode = "auto"
