@@ -24,30 +24,57 @@ class bdist_wheel_abi3(bdist_wheel):
         return python, abi, plat
 
 
-def download_so():
-    uname = platform.uname()
-    machine = uname.machine
+def abs_machine():
+    machine = platform.machine()
 
-    if uname.system == "Windows":
+    pointer_bits = struct.calcsize("P") * 8
+    if pointer_bits not in (32, 64):
+        raise Exception("Unsupported pointer size")
+
+    is_64 = pointer_bits == 64
+
+    # x86 based archs
+    if machine in ('AMD64', 'x86_64', 'i686-64', 'i386', 'i686', 'x86'):
+        return "x86_64" if is_64 else "i686"
+    # arm based archs
+    elif machine in ('aarch64', 'arm64', 'armv6l', 'armv7l'):
+        return "aarch64" if is_64 else "arm"
+    else:
+        raise Exception("Unsupported processor")
+
+
+def download_so():
+    system = platform.system()
+    machine = abs_machine()
+
+    if system == "Windows":
         sysname = "win32"
-        if struct.calcsize("P") * 8 == 64:
-            machine = "x86_64"
+        so_name = "libcurl.dll"
+
+        if machine == "x86_64":
+            libdir = "./lib32"
+        elif machine == "i686":
             libdir = "./lib64"
         else:
-            machine = "i686"
-            libdir = "./lib32"
-        so_name = "libcurl.dll"
-    elif uname.system == "Darwin":
+            so_name = "SKIP"
+
+    elif system == "Darwin":
         sysname = "macos"
-        libdir = "/Users/runner/work/_temp/install/lib"
+        so_name = "libcurl-impersonate-chrome.4.dylib"
+
         if machine == "x86_64":
-            so_name = "libcurl-impersonate-chrome.4.dylib"
+            libdir = "/Users/runner/work/_temp/install/lib"
         else:
             so_name = "SKIP"
+
     else:
         sysname = "linux-gnu"
-        libdir = "/usr/local/lib"
         so_name = "libcurl-impersonate-chrome.so"
+
+        if machine in ("x86_64", "arm", "aarch64"):
+            libdir = "/usr/local/lib"
+        else:
+            so_name = "SKIP"
 
     if so_name == "SKIP":
         print(".so file for platform is not available on github.")
@@ -70,7 +97,8 @@ def download_so():
     print("Unpacking downloaded files...")
     os.makedirs(libdir, exist_ok=True)
     shutil.unpack_archive(file, libdir)
-    if uname.system == "Windows":
+
+    if system == "Windows":
         shutil.copy2(f"{libdir}/libcurl.dll", "curl_cffi")
 
 
