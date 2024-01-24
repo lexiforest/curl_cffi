@@ -43,7 +43,7 @@ elif system == "Darwin":
         libdir = "ERROR"
 else:
     if machine in ("x86_64", "arm", "aarch64"):
-        libdir = "/usr/local/lib"
+        libdir = f"./libcurl_{machine}"
     else:
         libdir = "ERROR"
 

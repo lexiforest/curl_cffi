@@ -14,6 +14,17 @@ __version__ = "0.6.0b8"
 
 
 class bdist_wheel_abi3(bdist_wheel):
+    def run(self):
+        super().run()
+
+        impl_tag, abi_tag, plat_tag = self.get_tag()
+        archive_basename = f"{self.wheel_dist_name}-{impl_tag}-{abi_tag}-{plat_tag}"
+
+        wheel_path = os.path.join(self.dist_dir, archive_basename + ".whl")
+
+        os.system(f'python3 -m auditwheel repair -w "{self.dist_dir}" "{wheel_path}"')
+        os.remove(wheel_path)
+
     def get_tag(self):
         python, abi, plat = super().get_tag()
 
@@ -72,7 +83,7 @@ def download_so():
         so_name = "libcurl-impersonate-chrome.so"
 
         if machine in ("x86_64", "arm", "aarch64"):
-            libdir = "/usr/local/lib"
+            libdir = f"./libcurl_{machine}"
         else:
             so_name = "SKIP"
 
@@ -97,6 +108,7 @@ def download_so():
     print("Unpacking downloaded files...")
     os.makedirs(libdir, exist_ok=True)
     shutil.unpack_archive(file, libdir)
+    print(f"Unpacked downloaded files into {libdir}.")
 
     if system == "Windows":
         shutil.copy2(f"{libdir}/libcurl.dll", "curl_cffi")
