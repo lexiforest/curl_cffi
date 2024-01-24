@@ -74,7 +74,7 @@ package-data = { curl_cffi = ["libcurl.dll"] }
 
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi >=1.12.0", "auditwheel"]
+requires = ["wheel", "setuptools", "cffi >=1.12.0"]
 build-backend = "setuptools.build_meta"
 
 
