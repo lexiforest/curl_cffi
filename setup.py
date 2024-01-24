@@ -34,7 +34,7 @@ def abs_machine():
     is_64 = pointer_bits == 64
 
     # x86 based archs
-    if machine in ('AMD64', 'x86_64', 'i686-64', 'i386', 'i686', 'x86'):
+    if machine in ('AMD64', 'x86_64', 'i686'):
         return "x86_64" if is_64 else "i686"
     # arm based archs
     elif machine in ('aarch64', 'arm64', 'armv6l', 'armv7l'):
