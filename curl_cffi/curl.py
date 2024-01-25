@@ -382,10 +382,10 @@ class CurlMime:
         self,
         name: str,
         *,
-        type: Optional[str] = None,
+        content_type: Optional[str] = None,
         filename: Optional[str] = None,
-        filepath: Optional[Union[str, bytes, Path]] = None,
-        fileobj: Optional[Any] = None,
+        local_path: Optional[Union[str, bytes, Path]] = None,
+        data: Optional[bytes] = None,
     ):
         part = lib.curl_mime_addpart(self._form)
 
@@ -394,30 +394,34 @@ class CurlMime:
             raise CurlError("Add field failed.")
 
         # mime type
-        if type is not None:
-            ret = lib.curl_mime_type(part, type)
+        if content_type is not None:
+            ret = lib.curl_mime_type(part, content_type.encode())
             if ret != 0:
                 raise CurlError("Add field failed.")
 
         # remote file name
         if filename is not None:
-            ret = lib.curl_mime_filename(part, filename)
+            ret = lib.curl_mime_filename(part, filename.encode())
             if ret != 0:
                 raise CurlError("Add field failed.")
 
-        if filepath and fileobj:
-            raise CurlError("Can not use filepath and fileobj at the same time.")
+        if local_path and data:
+            raise CurlError("Can not use local_path and data at the same time.")
 
         # this is a filename
-        if filepath is not None:
-            if not isinstance(filepath, bytes):
-                filepath = str(filepath).encode()
-            ret = lib.curl_mime_filedata(part, filepath)
+        if local_path is not None:
+            if not isinstance(local_path, bytes):
+                local_path = str(local_path).encode()
+            if not Path(local_path.decode()).exists():
+                raise FileNotFoundError(f"File not found at {local_path}")
+            ret = lib.curl_mime_filedata(part, local_path)
             if ret != 0:
                 raise CurlError("Add field failed.")
 
-        if fileobj is not None:
-            ret = lib.curl_mime_data(part, fileobj.read())
+        if data is not None:
+            if not isinstance(data, bytes):
+                data = str(data).encode()
+            ret = lib.curl_mime_data(part, data, len(data))
 
     @classmethod
     def from_list(cls, files: List[dict]):
@@ -432,6 +436,7 @@ class CurlMime:
 
     def close(self):
         lib.curl_mime_free(self._form)
+        self._form = ffi.NULL
 
     def __del__(self):
         self.close()

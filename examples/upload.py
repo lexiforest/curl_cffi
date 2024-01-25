@@ -9,36 +9,43 @@ You use the multipart instead, it's very simple and straightforward.
 from curl_cffi import requests, CurlMime
 
 
-form = CurlMime()
-form.addpart(
-    "image",  # form field name
-    type="image/png",  # mime type
+mp = CurlMime()
+mp.addpart(
+    name="image",  # form field name
+    content_type="image/png",  # mime type
     filename="image.png",  # filename seen by remote server
-    filepath="./image.png",  # local file to upload
+    local_path="./image.png",  # local file to upload
 )
 
 # you can add multiple files under the same field name
-form.addpart(
-    "image",
-    type="image/jpg",
+mp.addpart(
+    name="image",
+    content_type="image/jpg",
     filename="image.jpg",
-    fileobj=open("./image.jpg"),  # local file to upload, not the difference vs above
+    data=open("./image.jpg", "rb").read(),  # note the difference vs above
 )
 
 # from a list
-form = CurlMime.from_list(
+mp = CurlMime.from_list(
     [
         {
-            "name": "image",
-            "type": "image/png",
-            "filename": "image.png",
-            "filepath": "./image.png",
+            "name": "text",
+            "content_type": "text/plain",
+            "filename": "test.txt",
+            "local_path": "./test.txt",
         },
+        {
+            "name": "foo",
+            "content_type": "text/plain",
+            "filename": "another.txt",
+            "data": "bar"
+        }
     ]
 )
 
-r = requests.get(url, multipart=form)
+r = requests.post("https://httpbin.org/post", data={"foo": "bar"}, multipart=mp)
+print(r.json())
 
 # close the form object, otherwise you have to wait for GC to recycle it. If you files
 # are too large, you may run out of memory quickly.
-form.close()
+mp.close()

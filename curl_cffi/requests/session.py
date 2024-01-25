@@ -323,6 +323,9 @@ class BaseSession:
 
         # multipart
         if multipart:
+            # multipart will overrides postfields
+            for k, v in cast(dict, data or {}).items():
+                multipart.addpart(name=k, data=v)
             c.setopt(CurlOpt.MIMEPOST, multipart._form)
 
         # auth
