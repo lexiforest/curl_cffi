@@ -460,6 +460,14 @@ def test_session_with_all_proxies(server, proxy_server):
     assert r.text == 'Hello from man in the middle'
 
 
+def test_closed_session_throws_error():
+    with requests.Session() as s:
+        pass
+
+    with pytest.raises(requests.SessionClosed):
+        s.get('https://example.com')
+
+
 def test_stream_iter_content(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/stream"))

@@ -275,6 +275,14 @@ async def test_session_too_many_headers(server):
         assert headers["Foo"][0] == "2"
 
 
+async def test_closed_session_throws_error():
+    async with requests.AsyncSession() as s:
+        pass
+
+    with pytest.raises(requests.SessionClosed):
+        await s.get('https://example.com')
+
+
 # https://github.com/yifeikong/curl_cffi/issues/39
 async def test_post_body_cleaned(server):
     async with AsyncSession() as s:
