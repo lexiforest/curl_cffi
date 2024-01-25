@@ -284,6 +284,27 @@ async def test_closed_session_throws_error():
     with pytest.raises(SessionClosed):
         await s.get('https://example.com')
 
+    with pytest.raises(SessionClosed):
+        await s.post('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.put('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.delete('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.options('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.head('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.patch('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.ws_connect('wss://example.com')
+
 
 # https://github.com/yifeikong/curl_cffi/issues/39
 async def test_post_body_cleaned(server):

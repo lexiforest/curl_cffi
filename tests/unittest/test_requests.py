@@ -469,6 +469,27 @@ def test_closed_session_throws_error():
     with pytest.raises(SessionClosed):
         s.get('https://example.com')
 
+    with pytest.raises(SessionClosed):
+        s.post('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.put('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.delete('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.options('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.head('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.patch('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.ws_connect('wss://example.com')
+
 
 def test_stream_iter_content(server):
     with requests.Session() as s:
