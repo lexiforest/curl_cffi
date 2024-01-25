@@ -7,6 +7,7 @@ import pytest
 
 from curl_cffi import requests, CurlOpt
 from curl_cffi.const import CurlECode, CurlInfo
+from curl_cffi.requests.errors import SessionClosed
 
 
 def test_head(server):
@@ -465,7 +466,7 @@ def test_closed_session_throws_error():
     with requests.Session() as s:
         pass
 
-    with pytest.raises(requests.SessionClosed):
+    with pytest.raises(SessionClosed):
         s.get('https://example.com')
 
 

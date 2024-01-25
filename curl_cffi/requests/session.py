@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
-from .errors import RequestsError
+from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
 from .models import Request, Response
 from .websockets import WebSocket
@@ -205,6 +205,8 @@ class BaseSession:
             proxies = {"all": proxy}
         self.proxies: ProxySpec = proxies or {}
         self.proxy_auth = proxy_auth
+
+        self._closed = False
 
     def _set_curl_options(
         self,
@@ -647,6 +649,7 @@ class Session(BaseSession):
 
     def close(self):
         """Close the session."""
+        self._closed = True
         self.curl.close()
 
     @contextmanager
@@ -872,7 +875,6 @@ class AsyncSession(BaseSession):
         self._loop = loop
         self._acurl = async_curl
         self.max_clients = max_clients
-        self._closed = False
         self.init_pool()
 
     @property
