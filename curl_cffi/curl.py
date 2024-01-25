@@ -1,7 +1,8 @@
 import re
 import warnings
 from http.cookies import SimpleCookie
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Tuple, Union, Optional
+from pathlib import Path
 
 import certifi
 
@@ -50,10 +51,12 @@ def buffer_callback(ptr, size, nmemb, userdata):
     buffer.write(ffi.buffer(ptr, nmemb)[:])
     return nmemb * size
 
+
 def ensure_int(s):
     if not s:
         return 0
     return int(s)
+
 
 @ffi.def_extern()
 def write_callback(ptr, size, nmemb, userdata):
@@ -85,7 +88,7 @@ class Curl:
     Wrapper for `curl_easy_*` functions of libcurl.
     """
 
-    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False, handle = None):
+    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False, handle=None):
         """
         Parameters:
             cacert: CA cert path to use, by default, curl_cffi uses its own bundled cert.
@@ -368,3 +371,72 @@ class Curl:
 
     def ws_close(self):
         self.ws_send(b"", CurlWsFlag.CLOSE)
+
+
+class CurlMime:
+    def __init__(self, curl: Optional[Curl] = None):
+        self._curl = curl if curl else Curl()
+        self._form = lib.curl_mime_init(self._curl._curl)
+
+    def addpart(
+        self,
+        name: str,
+        *,
+        content_type: Optional[str] = None,
+        filename: Optional[str] = None,
+        local_path: Optional[Union[str, bytes, Path]] = None,
+        data: Optional[bytes] = None,
+    ):
+        part = lib.curl_mime_addpart(self._form)
+
+        ret = lib.curl_mime_name(part, name.encode())
+        if ret != 0:
+            raise CurlError("Add field failed.")
+
+        # mime type
+        if content_type is not None:
+            ret = lib.curl_mime_type(part, content_type.encode())
+            if ret != 0:
+                raise CurlError("Add field failed.")
+
+        # remote file name
+        if filename is not None:
+            ret = lib.curl_mime_filename(part, filename.encode())
+            if ret != 0:
+                raise CurlError("Add field failed.")
+
+        if local_path and data:
+            raise CurlError("Can not use local_path and data at the same time.")
+
+        # this is a filename
+        if local_path is not None:
+            if not isinstance(local_path, bytes):
+                local_path = str(local_path).encode()
+            if not Path(local_path.decode()).exists():
+                raise FileNotFoundError(f"File not found at {local_path}")
+            ret = lib.curl_mime_filedata(part, local_path)
+            if ret != 0:
+                raise CurlError("Add field failed.")
+
+        if data is not None:
+            if not isinstance(data, bytes):
+                data = str(data).encode()
+            ret = lib.curl_mime_data(part, data, len(data))
+
+    @classmethod
+    def from_list(cls, files: List[dict]):
+        form = cls()
+        for file in files:
+            form.addpart(**file)
+        return form
+
+    def attach(self, curl: Optional[Curl] = None):
+        c = curl if curl else self._curl
+        c.setopt(CurlOpt.MIMEPOST, self._form)
+
+    def close(self):
+        lib.curl_mime_free(self._form)
+        self._form = ffi.NULL
+
+    def __del__(self):
+        self.close()

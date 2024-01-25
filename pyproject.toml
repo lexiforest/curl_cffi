@@ -47,6 +47,7 @@ dev = [
     "trustme==0.9.0",
     "uvicorn==0.18.3",
     "websockets==11.0.3",
+    "ruff==0.1.14",
 ]
 build = [
     "cibuildwheel",
@@ -65,7 +66,13 @@ test = [
     "uvicorn==0.18.3",
     "proxy.py==2.4.3",
     "websockets==11.0.3",
+    "python-multipart==0.0.6",
+    "fastapi==0.100.0",
 ]
+
+[tool.ruff.lint]
+# Enable the isort rules.
+extend-select = ["I"]
 
 
 [tool.setuptools]
@@ -101,15 +108,10 @@ test-skip = "pp*"
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64"]
 
+
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
 
-[tool.isort]
-profile = "black"
-
-[tool.ruff.lint]
-# Enable the isort rules.
-extend-select = ["I"]
 
 [tool.pytest.ini_options]
 # pythonpath = [ "." ]

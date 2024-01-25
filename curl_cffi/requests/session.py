@@ -9,13 +9,13 @@ from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
-from typing import Callable, Dict, List, Any, Optional, Tuple, Union, cast, TYPE_CHECKING
+from typing import Callable, Dict, List, Any, Optional, Sequence, Tuple, Union, cast, TYPE_CHECKING
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 from concurrent.futures import ThreadPoolExecutor
 
 
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
-from ..curl import CURL_WRITEFUNC_ERROR
+from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
@@ -232,6 +232,7 @@ class BaseSession:
         interface: Optional[str] = None,
         stream: bool = False,
         max_recv_speed: int = 0,
+        multipart: Optional[CurlMime] = None,
         queue_class: Any = None,
         event_class: Any = None,
     ):
@@ -318,7 +319,14 @@ class BaseSession:
 
         # files
         if files:
-            raise NotImplementedError("Files has not been implemented.")
+            raise NotImplementedError("files is not supported, use `multipart`.")
+
+        # multipart
+        if multipart:
+            # multipart will overrides postfields
+            for k, v in cast(dict, data or {}).items():
+                multipart.addpart(name=k, data=v)
+            c.setopt(CurlOpt.MIMEPOST, multipart._form)
 
         # auth
         if self.auth or auth:
@@ -684,6 +692,7 @@ class Session(BaseSession):
         interface: Optional[str] = None,
         stream: bool = False,
         max_recv_speed: int = 0,
+        multipart: Optional[CurlMime] = None,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
 
@@ -721,6 +730,7 @@ class Session(BaseSession):
             interface=interface,
             stream=stream,
             max_recv_speed=max_recv_speed,
+            multipart=multipart,
             queue_class=queue.Queue,
             event_class=threading.Event,
         )
@@ -945,6 +955,7 @@ class AsyncSession(BaseSession):
         interface: Optional[str] = None,
         stream: bool = False,
         max_recv_speed: int = 0,
+        multipart: Optional[CurlMime] = None,
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
         curl = await self.pop_curl()
@@ -975,6 +986,7 @@ class AsyncSession(BaseSession):
             interface=interface,
             stream=stream,
             max_recv_speed=max_recv_speed,
+            multipart=multipart,
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )

@@ -25,6 +25,8 @@ from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union
 
+
+from ..curl import CurlMime
 from ..const import CurlHttpVersion, CurlWsFlag
 from .cookies import Cookies, CookieTypes
 from .models import Request, Response
@@ -63,6 +65,7 @@ def request(
     http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
     interface: Optional[str] = None,
+    multipart: Optional[CurlMime] = None,
 ) -> Response:
     """Send an http request.
 
@@ -122,6 +125,7 @@ def request(
             default_headers=default_headers,
             http_version=http_version,
             interface=interface,
+            multipart=multipart,
         )
 
 
