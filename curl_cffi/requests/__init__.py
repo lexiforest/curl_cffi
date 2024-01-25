@@ -66,6 +66,7 @@ def request(
     debug: bool = False,
     interface: Optional[str] = None,
     multipart: Optional[CurlMime] = None,
+    cert: Optional[Union[str, Tuple[str, str]]] = None,
 ) -> Response:
     """Send an http request.
 
@@ -126,6 +127,7 @@ def request(
             http_version=http_version,
             interface=interface,
             multipart=multipart,
+            cert=cert,
         )
 
 

@@ -179,6 +179,7 @@ class BaseSession:
         http_version: Optional[CurlHttpVersion] = None,
         debug: bool = False,
         interface: Optional[str] = None,
+        cert: Optional[Union[str, Tuple[str, str]]] = None,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -196,6 +197,7 @@ class BaseSession:
         self.http_version = http_version
         self.debug = debug
         self.interface = interface
+        self.cert = cert
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -230,6 +232,7 @@ class BaseSession:
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
+        cert: Optional[Union[str, Tuple[str, str]]] = None,
         stream: bool = False,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
@@ -427,6 +430,16 @@ class BaseSession:
         # accept_encoding
         if accept_encoding is not None:
             c.setopt(CurlOpt.ACCEPT_ENCODING, accept_encoding.encode())
+
+        # cert
+        cert = cert or self.cert
+        if cert:
+            if isinstance(cert, str):
+                c.setopt(CurlOpt.SSLCERT, cert)
+            else:
+                cert, key = cert
+                c.setopt(CurlOpt.SSLCERT, cert)
+                c.setopt(CurlOpt.SSLKEY, key)
 
         # impersonate
         impersonate = impersonate or self.impersonate
@@ -690,6 +703,7 @@ class Session(BaseSession):
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
+        cert: Optional[Union[str, Tuple[str, str]]] = None,
         stream: bool = False,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
@@ -731,6 +745,7 @@ class Session(BaseSession):
             stream=stream,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
+            cert=cert,
             queue_class=queue.Queue,
             event_class=threading.Event,
         )
@@ -953,6 +968,7 @@ class AsyncSession(BaseSession):
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
+        cert: Optional[Union[str, Tuple[str, str]]] = None,
         stream: bool = False,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
@@ -987,6 +1003,7 @@ class AsyncSession(BaseSession):
             stream=stream,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
+            cert=cert,
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
