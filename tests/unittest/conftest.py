@@ -660,10 +660,10 @@ class FileServer(uvicorn.Server):
         return f"http://{self.config.host}:{self.config.port}"
 
 
-app = FastAPI()
+file_app = FastAPI()
 
 
-@app.post("/file")
+@file_app.post("/file")
 def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)):
     content = image.file.read()
     return {
@@ -674,7 +674,7 @@ def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)
     }
 
 
-@app.post("/files")
+@file_app.post("/files")
 def upload_multi_files(images: typing.List[UploadFile]):
     files = []
     for image in images:
@@ -688,7 +688,7 @@ def upload_multi_files(images: typing.List[UploadFile]):
 
     return {"files": files}
 
-@app.post("/two-files")
+@file_app.post("/two-files")
 def upload_two_files(image1: UploadFile, image2: UploadFile):
     return {
         "size1": len(image1.file.read()),
@@ -699,7 +699,7 @@ def upload_two_files(image1: UploadFile, image2: UploadFile):
 @pytest.fixture(scope="session")
 def file_server():
     FastAPI()
-    config = uvicorn.Config(app, host="127.0.0.1", port=2952, log_level="info")
+    config = uvicorn.Config(file_app, host="127.0.0.1", port=2952, log_level="info")
     server = FileServer(config=config)
     with server.run_in_thread():
         yield server
