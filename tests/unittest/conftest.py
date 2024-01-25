@@ -689,7 +689,7 @@ def upload_multi_files(images: typing.List[UploadFile]):
     return {"files": files}
 
 @app.post("/two-files")
-def upload_single_file(image1: UploadFile, image2: UploadFile):
+def upload_two_files(image1: UploadFile, image2: UploadFile):
     return {
         "size1": len(image1.file.read()),
         "size2": len(image2.file.read()),

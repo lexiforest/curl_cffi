@@ -67,7 +67,7 @@ test = [
     "proxy.py==2.4.3",
     "websockets==11.0.3",
     "python-multipart==0.0.6",
-    "fastapi==0.109.0",
+    "fastapi==0.100.0",
 ]
 
 [tool.ruff.lint]
