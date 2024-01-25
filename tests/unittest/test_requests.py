@@ -460,6 +460,7 @@ def test_session_with_all_proxies(server, proxy_server):
     assert r.text == 'Hello from man in the middle'
 
 
+# https://github.com/yifeikong/curl_cffi/issues/222
 def test_closed_session_throws_error():
     with requests.Session() as s:
         pass

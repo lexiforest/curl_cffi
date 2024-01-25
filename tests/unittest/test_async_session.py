@@ -5,6 +5,7 @@ import json
 import pytest
 
 from curl_cffi.requests import AsyncSession, RequestsError
+from curl_cffi.requests.errors import SessionClosed
 
 
 async def test_get(server):
@@ -275,11 +276,12 @@ async def test_session_too_many_headers(server):
         assert headers["Foo"][0] == "2"
 
 
+# https://github.com/yifeikong/curl_cffi/issues/222
 async def test_closed_session_throws_error():
-    async with requests.AsyncSession() as s:
+    async with AsyncSession() as s:
         pass
 
-    with pytest.raises(requests.SessionClosed):
+    with pytest.raises(SessionClosed):
         await s.get('https://example.com')
 
 
