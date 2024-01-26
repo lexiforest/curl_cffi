@@ -7,6 +7,7 @@ import pytest
 
 from curl_cffi import requests, CurlOpt
 from curl_cffi.const import CurlECode, CurlInfo
+from curl_cffi.requests.errors import SessionClosed
 
 
 def test_head(server):
@@ -458,6 +459,36 @@ def test_session_with_all_proxies(server, proxy_server):
     url = str(server.url.copy_with(path="/echo_headers"))
     r = s.get(url)
     assert r.text == 'Hello from man in the middle'
+
+
+# https://github.com/yifeikong/curl_cffi/issues/222
+def test_closed_session_throws_error():
+    with requests.Session() as s:
+        pass
+
+    with pytest.raises(SessionClosed):
+        s.get('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.post('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.put('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.delete('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.options('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.head('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.patch('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        s.ws_connect('wss://example.com')
 
 
 def test_stream_iter_content(server):

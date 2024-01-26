@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .. import AsyncCurl, Curl, CurlError, CurlInfo, CurlOpt, CurlHttpVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
-from .errors import RequestsError
+from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
 from .models import Request, Response
 from .websockets import WebSocket
@@ -205,6 +205,8 @@ class BaseSession:
             proxies = {"all": proxy}
         self.proxies: ProxySpec = proxies or {}
         self.proxy_auth = proxy_auth
+
+        self._closed = False
 
     def _set_curl_options(
         self,
@@ -554,6 +556,10 @@ class BaseSession:
 
         return rsp
 
+    def _check_session_closed(self):
+        if self._closed:
+            raise SessionClosed("Session is closed, cannot send request.")
+
 
 # ThreadType = Literal["eventlet", "gevent", None]
 
@@ -643,6 +649,7 @@ class Session(BaseSession):
 
     def close(self):
         """Close the session."""
+        self._closed = True
         self.curl.close()
 
     @contextmanager
@@ -663,6 +670,8 @@ class Session(BaseSession):
         on_close: Optional[Callable] = None,
         **kwargs,
     ):
+        self._check_session_closed()
+
         self._set_curl_options(self.curl, "GET", url, *args, **kwargs)
 
         # https://curl.se/docs/websocket.html
@@ -709,6 +718,8 @@ class Session(BaseSession):
         multipart: Optional[CurlMime] = None,
     ) -> Response:
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
+
+        self._check_session_closed()
 
         # clone a new curl instance for streaming response
         if stream:
@@ -864,7 +875,6 @@ class AsyncSession(BaseSession):
         self._loop = loop
         self._acurl = async_curl
         self.max_clients = max_clients
-        self._closed = False
         self.init_pool()
 
     @property
@@ -936,6 +946,8 @@ class AsyncSession(BaseSession):
             await rsp.aclose()
 
     async def ws_connect(self, url, *args, **kwargs):
+        self._check_session_closed()
+
         curl = await self.pop_curl()
         # curl.debug()
         self._set_curl_options(curl, "GET", url, *args, **kwargs)
@@ -974,6 +986,8 @@ class AsyncSession(BaseSession):
         multipart: Optional[CurlMime] = None,
     ):
         """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
+        self._check_session_closed()
+
         curl = await self.pop_curl()
         req, buffer, header_buffer, q, header_recved, quit_now = self._set_curl_options(
             curl=curl,

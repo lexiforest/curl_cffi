@@ -5,6 +5,7 @@ import json
 import pytest
 
 from curl_cffi.requests import AsyncSession, RequestsError
+from curl_cffi.requests.errors import SessionClosed
 
 
 async def test_get(server):
@@ -273,6 +274,36 @@ async def test_session_too_many_headers(server):
         headers = r.json()
         assert len(headers["Foo"]) == 1
         assert headers["Foo"][0] == "2"
+
+
+# https://github.com/yifeikong/curl_cffi/issues/222
+async def test_closed_session_throws_error():
+    async with AsyncSession() as s:
+        pass
+
+    with pytest.raises(SessionClosed):
+        await s.get('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.post('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.put('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.delete('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.options('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.head('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.patch('https://example.com')
+
+    with pytest.raises(SessionClosed):
+        await s.ws_connect('wss://example.com')
 
 
 # https://github.com/yifeikong/curl_cffi/issues/39

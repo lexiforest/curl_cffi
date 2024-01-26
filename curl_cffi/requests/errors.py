@@ -11,3 +11,7 @@ class RequestsError(CurlError):
 
 class CookieConflict(RequestsError):
     pass
+
+
+class SessionClosed(RequestsError):
+    pass
