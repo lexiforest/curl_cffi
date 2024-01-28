@@ -38,7 +38,7 @@ def debug_function(curl, type: int, data, size, clientp) -> int:
     if type in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
     elif type in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
-        print(text.decode())
+        print(text.decode("utf-8", "replace"))
     else:
         print(text.decode(), end="")
     return 0
