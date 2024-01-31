@@ -8,7 +8,6 @@ import re
 import time
 import typing
 from http.cookiejar import Cookie, CookieJar
-from http.cookies import _unquote
 from urllib.parse import urlparse
 from dataclasses import dataclass
 import warnings
@@ -64,7 +63,7 @@ class CurlMorsel:
             secure=cls.parse_bool(secure),
             expires=int(expires),
             name=name,
-            value=_unquote(value),
+            value=value,
             http_only=http_only,
         )
 
@@ -190,7 +189,7 @@ class Cookies(typing.MutableMapping[str, str]):
         self.jar.clear_expired_cookies()
 
     def set(
-        self, name: str, value: str, domain: str = "", path: str = "/", secure=False
+            self, name: str, value: str, domain: str = "", path: str = "/", secure=False
     ) -> None:
         """
         Set a cookie value by name. May optionally include domain and path.
@@ -230,11 +229,11 @@ class Cookies(typing.MutableMapping[str, str]):
         self.jar.set_cookie(cookie)
 
     def get(  # type: ignore
-        self,
-        name: str,
-        default: typing.Optional[str] = None,
-        domain: typing.Optional[str] = None,
-        path: typing.Optional[str] = None,
+            self,
+            name: str,
+            default: typing.Optional[str] = None,
+            domain: typing.Optional[str] = None,
+            path: typing.Optional[str] = None,
     ) -> typing.Optional[str]:
         """
         Get a cookie by name. May optionally include domain and path
@@ -248,15 +247,14 @@ class Cookies(typing.MutableMapping[str, str]):
                     if path is None or cookie.path == path:
                         # if cookies on two different domains do not share a same value
                         if (
-                            value is not None
-                            and not matched_domain.endswith(cookie.domain)
-                            and not str(cookie.domain).endswith(matched_domain)
-                            and value != cookie.value
+                                value is not None
+                                and not matched_domain.endswith(cookie.domain)
+                                and not str(cookie.domain).endswith(matched_domain)
+                                and value != cookie.value
                         ):
                             message = (
                                 f"Multiple cookies exist with name={name} on "
-                                f"{matched_domain} and {cookie.domain}, add domain "
-                                "parameter to suppress this error."
+                                f"{matched_domain} and {cookie.domain}"
                             )
                             raise CookieConflict(message)
                         value = cookie.value
@@ -267,10 +265,10 @@ class Cookies(typing.MutableMapping[str, str]):
         return value
 
     def delete(
-        self,
-        name: str,
-        domain: typing.Optional[str] = None,
-        path: typing.Optional[str] = None,
+            self,
+            name: str,
+            domain: typing.Optional[str] = None,
+            path: typing.Optional[str] = None,
     ) -> None:
         """
         Delete a cookie by name. May optionally include domain and path
@@ -283,15 +281,30 @@ class Cookies(typing.MutableMapping[str, str]):
             cookie
             for cookie in self.jar
             if cookie.name == name
-            and (domain is None or cookie.domain == domain)
-            and (path is None or cookie.path == path)
+               and (domain is None or cookie.domain == domain)
+               and (path is None or cookie.path == path)
         ]
 
         for cookie in remove:
             self.jar.clear(cookie.domain, cookie.path, cookie.name)
 
+    def get_dict(self, domain=None, path=None):
+        """Takes as an argument an optional domain and path and returns a plain
+        old Python dict of name-value pairs of cookies that meet the
+        requirements.
+
+        :rtype: dict
+        """
+        dictionary = {}
+        for cookie in self.jar:
+            if (domain is None or cookie.domain == domain) and (
+                    path is None or cookie.path == path
+            ):
+                dictionary[cookie.name] = cookie.value
+        return dictionary
+
     def clear(
-        self, domain: typing.Optional[str] = None, path: typing.Optional[str] = None
+            self, domain: typing.Optional[str] = None, path: typing.Optional[str] = None
     ) -> None:
         """
         Delete all cookies. Optionally include a domain and path in
