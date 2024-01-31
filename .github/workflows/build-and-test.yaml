@@ -47,6 +47,7 @@ jobs:
       - if: runner.os == 'macOS'
         run: |
           brew install make automake
+          brew link --force --overwrite libtool
           which pipx || brew install pipx && pipx ensurepath
 
       - name: Build and test wheels
