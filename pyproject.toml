@@ -92,12 +92,12 @@ build-backend = "setuptools.build_meta"
 # skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 # Building for these platforms is enough since we are using abi3 packages
 build = [
-    "cp37-macosx_x86_64",
+    "cp38-macosx_x86_64",
     "cp38-macosx_arm64",
-    "cp37-win_amd64",
-    "cp37-win32",
-    "cp37-manylinux_x86_64",
-    "cp37-manylinux_aarch64",
+    "cp38-win_amd64",
+    "cp38-win32",
+    "cp38-manylinux_x86_64",
+    "cp38-manylinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
