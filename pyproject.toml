@@ -93,6 +93,7 @@ build-backend = "setuptools.build_meta"
 # Building for these platforms is enough since we are using abi3 packages
 build = [
     "cp37-macosx_x86_64",
+    "cp38-macosx_arm64",
     "cp37-win_amd64",
     "cp37-win32",
     "cp37-manylinux_x86_64",

@@ -47,7 +47,7 @@ jobs:
       - if: runner.os == 'macOS'
         run: |
           brew install make
-          which pipx || brew install pipx
+          which pipx || brew install pipx && pipx ensurepath
 
       - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.12.0
