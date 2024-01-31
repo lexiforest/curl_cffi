@@ -76,7 +76,7 @@ CURLMSG_DONE = 1
 
 
 @ffi.def_extern()
-def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
+def timer_function(curlm, timeout_ms: int, clientp: Any):
     """
     see: https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html
     """
@@ -96,7 +96,6 @@ def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
         )
         async_curl._timers.add(timer)
 
-    return 0
 
 
 @ffi.def_extern()
@@ -104,14 +103,10 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     async_curl = ffi.from_handle(clientp)
     loop = async_curl.loop
 
-    if what & CURL_POLL_IN or what & CURL_POLL_OUT or what & CURL_POLL_REMOVE:
-        if sockfd in async_curl._sockfds:
-            loop.remove_reader(sockfd)
-            loop.remove_writer(sockfd)
-            async_curl._sockfds.remove(sockfd)
-        elif what & CURL_POLL_REMOVE:
-            message = f"File descriptor {sockfd} not found."
-            raise TypeError(message)
+    # Always remove and readd fd
+    if sockfd in async_curl._sockfds:
+        loop.remove_reader(sockfd)
+        loop.remove_writer(sockfd)
 
     if what & CURL_POLL_IN:
         loop.add_reader(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_IN)
@@ -119,6 +114,8 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any):
     if what & CURL_POLL_OUT:
         loop.add_writer(sockfd, async_curl.process_data, sockfd, CURL_CSELECT_OUT)
         async_curl._sockfds.add(sockfd)
+    if what & CURL_POLL_REMOVE:
+        async_curl._sockfds.remove(sockfd)
 
 class AsyncCurl:
     """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
