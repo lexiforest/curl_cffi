@@ -3,8 +3,8 @@ from curl_cffi import requests
 
 
 URLS = [
-    "https://www.zhihu.com",
-    "https://www.weibo.com",
+    "https://www.baidu.com",
+    "https://www.qq.com",
 ]
 
 

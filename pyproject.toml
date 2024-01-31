@@ -16,7 +16,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -81,7 +80,7 @@ package-data = { curl_cffi = ["libcurl.dll"] }
 
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi >=1.12.0"]
+requires = ["wheel", "setuptools", "cffi>=1.12.0"]
 build-backend = "setuptools.build_meta"
 
 
