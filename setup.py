@@ -9,7 +9,7 @@ from wheel.bdist_wheel import bdist_wheel
 from distutils.command.build import build
 
 
-__version__ = "0.6.0b8"
+__version__ = "0.6.0b9"
 
 
 class bdist_wheel_abi3(bdist_wheel):
@@ -41,18 +41,11 @@ def download_so():
     elif uname.system == "Darwin":
         sysname = "macos"
         libdir = "/Users/runner/work/_temp/install/lib"
-        if machine == "x86_64":
-            so_name = "libcurl-impersonate-chrome.4.dylib"
-        else:
-            so_name = "SKIP"
+        so_name = "libcurl-impersonate-chrome.4.dylib"
     else:
         sysname = "linux-gnu"
         libdir = "/usr/local/lib"
         so_name = "libcurl-impersonate-chrome.so"
-
-    if so_name == "SKIP":
-        print(".so file for platform is not available on github.")
-        return
 
     if (Path(libdir) / so_name).exists():
         print(".so files alreay downloaded.")
