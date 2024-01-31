@@ -45,7 +45,9 @@ jobs:
 
       # macOS make is too old
       - if: runner.os == 'macOS'
-        run: brew install make
+        run: |
+          brew install make
+          which pipx || brew install pipx
 
       - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.12.0
