@@ -46,8 +46,7 @@ jobs:
       # macOS make is too old
       - if: runner.os == 'macOS'
         run: |
-          brew install make automake
-          brew link --force --overwrite libtool
+          brew install make automake libtool
           which pipx || brew install pipx && pipx ensurepath
 
       - name: Build and test wheels
