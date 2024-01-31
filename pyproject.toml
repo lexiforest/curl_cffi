@@ -7,10 +7,9 @@ license = { file = "LICENSE" }
 dependencies = [
     "cffi >=1.12.0",
     "certifi",
-    "typing_extensions; python_version < '3.8'",
 ]
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 urls = { "repository" = "https://github.com/yifeikong/curl_cffi" }
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -93,7 +92,7 @@ build-backend = "setuptools.build_meta"
 # Building for these platforms is enough since we are using abi3 packages
 build = [
     "cp38-macosx_x86_64",
-    "cp38-macosx_arm64",
+    "cp39-macosx_arm64",
     "cp38-win_amd64",
     "cp38-win32",
     "cp38-manylinux_x86_64",
