@@ -322,9 +322,10 @@ async def test_timers_leak(server):
         for _ in range(3):
             try:
                 await sess.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
-            except:
+            except Exception:
                 pass
-            assert len(sess.acurl._timers) == 0
+        await asyncio.sleep(0.2)
+        assert len(sess.acurl._timers) == 0
 
 
 #######################################################################################

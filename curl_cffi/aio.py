@@ -76,12 +76,13 @@ CURLMSG_DONE = 1
 
 
 @ffi.def_extern()
-def timer_function(curlm, timeout_ms: int, clientp: Any):
+def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
     """
     see: https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html
     """
     async_curl = ffi.from_handle(clientp)
-    # print("time out in %sms" % timeout_ms)
+
+    # A timeout_ms value of -1 means you should delete the timer.
     if timeout_ms == -1:
         for timer in async_curl._timers:
             timer.cancel()
@@ -94,6 +95,8 @@ def timer_function(curlm, timeout_ms: int, clientp: Any):
             CURL_POLL_NONE,  # 0
         )
         async_curl._timers.add(timer)
+
+    return 0
 
 
 @ffi.def_extern()
