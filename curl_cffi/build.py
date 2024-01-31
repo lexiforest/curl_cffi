@@ -15,10 +15,7 @@ if uname.system == "Windows":
     else:
         libdir = "./lib32"
 elif uname.system == "Darwin":
-    if uname.machine == "x86_64":
-        libdir = "/Users/runner/work/_temp/install/lib"
-    else:
-        libdir = "/usr/local/lib"
+    libdir = "/Users/runner/work/_temp/install/lib"
 else:
     libdir = "/usr/local/lib"
 
