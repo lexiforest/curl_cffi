@@ -106,6 +106,8 @@ test-skip = "pp*"
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64"]
+environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
+environment-pass = ["LD_LIBRARY_PATH"]
 
 
 [tool.cibuildwheel.macos]

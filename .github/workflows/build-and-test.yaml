@@ -53,8 +53,6 @@ jobs:
 
       - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.16.5
-        env:
-          LD_LIBRARY_PATH: /home/runner/.local/lib
 
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
