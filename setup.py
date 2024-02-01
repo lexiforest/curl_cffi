@@ -64,6 +64,9 @@ def download_so():
 
         if machine in ("x86_64", "aarch64"):
             libdir = "/Users/runner/work/_temp/install/lib"
+            # FIXME from `curl-impersonate`
+            if machine == "aarch64":
+                machine = "arm64"
         else:
             so_name = "SKIP"
 

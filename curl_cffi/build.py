@@ -55,6 +55,7 @@ ffibuilder.set_source(
     """
         #include "shim.h"
     """,
+    # FIXME from `curl-impersonate`
     libraries=["curl-impersonate-chrome"] if system != "Windows" else ["libcurl"],
     library_dirs=[libdir],
     source_extension=".c",
