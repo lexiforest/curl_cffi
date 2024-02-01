@@ -44,7 +44,7 @@ def download_so():
         so_name = "libcurl-impersonate-chrome.4.dylib"
     else:
         sysname = "linux-gnu"
-        libdir = "/usr/local/lib"
+        libdir = os.path.expanduser("~/.local/lib")
         so_name = "libcurl-impersonate-chrome.so"
 
     if (Path(libdir) / so_name).exists():
