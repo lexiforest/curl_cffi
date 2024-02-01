@@ -290,7 +290,7 @@ class Cookies(typing.MutableMapping[str, str]):
         for cookie in remove:
             self.jar.clear(cookie.domain, cookie.path, cookie.name)
 
-    def get_dict(self, domain=None, path=None):
+    def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict:
         """Takes as an argument an optional domain and path and returns a plain
         old Python dict of name-value pairs of cookies that meet the
         requirements.
