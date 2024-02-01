@@ -17,5 +17,5 @@ curl_cffi.egg-info/
 curl-*/
 *.tar.xz
 *.tar.gz
-.patched
+.preprocessed
 include/
