@@ -20,7 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: pipx run build --sdist
+      - run: |
+          make preprocess
+          pipx run build --sdist
       - uses: actions/upload-artifact@v3
         with:
           path: ./dist/*.tar.gz
@@ -51,6 +53,8 @@ jobs:
 
       - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.16.5
+        env:
+          LD_LIBRARY_PATH: /home/runner/.local/lib
 
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
