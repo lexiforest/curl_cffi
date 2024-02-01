@@ -3,7 +3,7 @@ SHELL := bash
 VERSION := 0.6.0b9
 CURL_VERSION := curl-8.1.1
 
-curl_artifacts:
+$(CURL_VERSION):
 	curl -L "https://curl.se/download/$(CURL_VERSION).tar.xz" \
 		-o "$(CURL_VERSION).tar.xz"
 	tar -xf $(CURL_VERSION).tar.xz
@@ -12,8 +12,7 @@ curl_artifacts:
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
-# TODO add the headers to sdist package
-curl_cffi/include/curl/curl.h: curl_artifacts
+curl_cffi/include/curl/curl.h: $(CURL_VERSION)
 	cd $(CURL_VERSION)
 	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
@@ -22,22 +21,18 @@ curl_cffi/include/curl/curl.h: curl_artifacts
 	cp -R include/curl/* ../curl_cffi/include/curl/
 
 preprocess: curl_cffi/include/curl/curl.h
-	@echo preprocess
+	@echo generating patched libcurl header files
 
-upload: dist/*.whl
-	twine upload dist/*.whl
+install-editable: curl_cffi/include/curl/curl.h
+	pip install -e .
+
+build: curl_cffi/include/curl/curl.h
+	rm -rf dist/
+	pip install build
+	python -m build --wheel
 
 test:
 	python -bb -m pytest tests/unittest
-
-install-local: preprocess
-	pip install -e .
-
-build: preprocess
-	rm -rf dist/
-	pip install build delocate twine
-	python -m build --wheel
-	delocate-wheel dist/*.whl
 
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
@@ -45,4 +40,4 @@ clean:
 	rm -rf $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
 	rm -rf curl_cffi/include/
 
-.PHONY: clean build test install-local upload preprocess
+.PHONY: clean build test install-editable preprocess
