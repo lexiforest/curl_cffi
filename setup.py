@@ -1,14 +1,13 @@
 import os
-import sys
 import platform
 import shutil
 import struct
-from pathlib import Path
-from setuptools import setup
-from urllib.request import urlretrieve
-from wheel.bdist_wheel import bdist_wheel
 from distutils.command.build import build
+from pathlib import Path
+from urllib.request import urlretrieve
 
+from setuptools import setup
+from wheel.bdist_wheel import bdist_wheel
 
 __version__ = "0.6.0b9"
 
@@ -111,15 +110,11 @@ class my_build(build):
         super().run()
 
 
-# this option is only valid in setup.py
-kwargs = {"cffi_modules": ["curl_cffi/build.py:ffibuilder"]}
-if len(sys.argv) > 1 and sys.argv[1] != 'bdist_wheel':
-    kwargs = {}
-
 setup(
+    # this option is only valid in setup.py
+    cffi_modules=["curl_cffi/build.py:ffibuilder"],
     cmdclass={
         "bdist_wheel": bdist_wheel_abi3,  # type: ignore
         "build": my_build,  # type: ignore
     },
-    **kwargs,
 )
