@@ -17,7 +17,7 @@ if uname.system == "Windows":
 elif uname.system == "Darwin":
     libdir = "/Users/runner/work/_temp/install/lib"
 else:
-    libdir = "/usr/local/lib"
+    libdir = os.path.expanduser("~/.local/lib")
 
 
 ffibuilder.set_source(
