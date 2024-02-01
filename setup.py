@@ -1,4 +1,5 @@
 import os
+import sys
 import platform
 import shutil
 import struct
@@ -23,33 +24,66 @@ class bdist_wheel_abi3(bdist_wheel):
         return python, abi, plat
 
 
+def abs_machine():
+    machine = platform.machine()
+
+    pointer_bits = struct.calcsize("P") * 8
+    if pointer_bits not in (32, 64):
+        raise Exception("Unsupported pointer size")
+
+    is_64 = pointer_bits == 64
+
+    # x86 based archs
+    if machine in ('AMD64', 'x86_64', 'i686'):
+        return "x86_64" if is_64 else "i686"
+    # arm based archs
+    elif machine in ('aarch64', 'arm64', 'armv6l', 'armv7l'):
+        return "aarch64" if is_64 else "arm"
+    else:
+        raise Exception("Unsupported processor")
+
+
 def download_so():
-    uname = platform.uname()
-    machine = uname.machine
+    system = platform.system()
+    machine = abs_machine()
 
-    # do not download if target platfrom dll not found
-
-    if uname.system == "Windows":
+    if system == "Windows":
         sysname = "win32"
-        if struct.calcsize("P") * 8 == 64:
-            machine = "x86_64"
-            libdir = "./lib64"
-        else:
-            machine = "i686"
-            libdir = "./lib32"
         so_name = "libcurl.dll"
-    elif uname.system == "Darwin":
+
+        if machine == "x86_64":
+            libdir = "./lib64"
+        elif machine == "i686":
+            libdir = "./lib32"
+        else:
+            so_name = "SKIP"
+
+    elif system == "Darwin":
         sysname = "macos"
-        libdir = "/Users/runner/work/_temp/install/lib"
         so_name = "libcurl-impersonate-chrome.4.dylib"
+
+        if machine in ("x86_64", "aarch64"):
+            libdir = "/Users/runner/work/_temp/install/lib"
+        else:
+            so_name = "SKIP"
+
     else:
         sysname = "linux-gnu"
-        libdir = os.path.expanduser("~/.local/lib")
         so_name = "libcurl-impersonate-chrome.so"
+
+        if machine in ("x86_64", "arm", "aarch64"):
+            libdir = os.path.expanduser("~/.local/lib")
+        else:
+            so_name = "SKIP"
+
+    if so_name == "SKIP":
+        print(f"libcurl for {sysname} platform is not available on github.")
+        return
 
     if (Path(libdir) / so_name).exists():
         print(".so files alreay downloaded.")
         return
+
     file = "libcurl-impersonate.tar.gz"
     url = (
         f"https://github.com/yifeikong/curl-impersonate/releases/download/"
@@ -63,7 +97,8 @@ def download_so():
     print("Unpacking downloaded files...")
     os.makedirs(libdir, exist_ok=True)
     shutil.unpack_archive(file, libdir)
-    if uname.system == "Windows":
+
+    if system == "Windows":
         shutil.copy2(f"{libdir}/libcurl.dll", "curl_cffi")
 
 
@@ -73,11 +108,15 @@ class my_build(build):
         super().run()
 
 
+# this option is only valid in setup.py
+kwargs = {"cffi_modules": ["curl_cffi/build.py:ffibuilder"]}
+if len(sys.argv) > 1 and sys.argv[1] != 'bdist_wheel':
+    kwargs = {}
+
 setup(
-    # this option is only valid in setup.py
-    cffi_modules=["curl_cffi/build.py:ffibuilder"],
     cmdclass={
         "bdist_wheel": bdist_wheel_abi3,  # type: ignore
         "build": my_build,  # type: ignore
     },
+    **kwargs,
 )

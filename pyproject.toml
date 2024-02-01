@@ -5,7 +5,7 @@ authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
 dependencies = [
-    "cffi >=1.12.0",
+    "cffi>=1.12.0",
     "certifi",
 ]
 readme = "README.md"
@@ -27,14 +27,12 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "autoflake==1.4",
-    "black==22.8.0",
     "coverage==6.4.1",
     "cryptography==38.0.3",
     "flake8==6.0.0",
     "flake8-bugbear==22.7.1",
     "flake8-pie==0.15.0",
     "httpx==0.23.1",
-    "isort==5.10.1",
     "mypy==0.971",
     "types-certifi==2021.10.8.2",
     "pytest==7.1.2",
@@ -49,7 +47,7 @@ dev = [
 ]
 build = [
     "cibuildwheel",
-    "wheel"
+    "wheel",
 ]
 test = [
     "cryptography==38.0.3",
@@ -68,20 +66,15 @@ test = [
     "fastapi==0.100.0",
 ]
 
-[tool.ruff.lint]
-# Enable the isort rules.
-extend-select = ["I"]
+
+[build-system]
+requires = ["wheel", "setuptools", "cffi>=1.12.0"]
+build-backend = "setuptools.build_meta"
 
 
 [tool.setuptools]
 packages = ["curl_cffi", "curl_cffi.requests"]
 package-data = { curl_cffi = ["libcurl.dll"] }
-# include-package-data = true
-
-
-[build-system]
-requires = ["wheel", "setuptools", "cffi>=1.12.0"]
-build-backend = "setuptools.build_meta"
 
 
 [tool.cibuildwheel]
@@ -103,6 +96,7 @@ test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
 
+
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64"]
@@ -117,3 +111,8 @@ before-all = "gmake preprocess"
 [tool.pytest.ini_options]
 # pythonpath = [ "." ]
 asyncio_mode = "auto"
+
+
+[tool.ruff.lint]
+# Enable the isort rules.
+extend-select = ["I"]
