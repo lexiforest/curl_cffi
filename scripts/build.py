@@ -31,9 +31,9 @@ parent_dir = os.path.dirname(os.path.dirname(__file__))
 
 if system == "Windows":
     if machine == "x86_64":
-        libdir = "./lib32"
-    elif machine == "i686":
         libdir = "./lib64"
+    elif machine == "i686":
+        libdir = "./lib32"
     else:
         libdir = "ERROR"
 elif system == "Darwin":
