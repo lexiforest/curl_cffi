@@ -295,7 +295,6 @@ class Cookies(typing.MutableMapping[str, str]):
         old Python dict of name-value pairs of cookies that meet the
         requirements.
 
-        :rtype: dict
         """
         dictionary = {}
         for cookie in self.jar:
