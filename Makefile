@@ -43,7 +43,7 @@ test:
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
 	rm -rf curl_cffi/*.o curl_cffi/*.so curl_cffi/_wrapper.c
-	rm -rf $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
+	rm -rf .preprocessed $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
 	rm -rf curl_cffi/include/
 
 .PHONY: clean build test install-editable preprocess gen-const

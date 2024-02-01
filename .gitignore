@@ -19,3 +19,4 @@ curl-*/
 *.tar.gz
 .preprocessed
 include/
+.DS_Store
