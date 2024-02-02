@@ -1,6 +1,7 @@
 import os
 import struct
 import platform
+from pathlib import Path
 
 from cffi import FFI
 
@@ -19,6 +20,7 @@ elif uname.system == "Darwin":
 else:
     libdir = os.path.expanduser("~/.local/lib")
 
+root_dir = Path(__file__).parent.parent
 
 ffibuilder.set_source(
     "curl_cffi._wrapper",
@@ -29,11 +31,11 @@ ffibuilder.set_source(
     library_dirs=[libdir],
     source_extension=".c",
     include_dirs=[
-        os.path.join(os.path.dirname(__file__), "include"),
-        os.path.join(os.path.dirname(__file__), "ffi"),
+        str(root_dir / "curl_cffi/include"),
+        str(root_dir / "ffi"),
     ],
     sources=[
-        os.path.join(os.path.dirname(__file__), "ffi/shim.c"),
+        str(root_dir / "ffi/shim.c"),
     ],
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if uname.system == "Darwin" else []
@@ -41,7 +43,7 @@ ffibuilder.set_source(
     # extra_link_args=["-Wl,-rpath,$ORIGIN/../libcurl/" + arch],
 )
 
-with open(os.path.join(os.path.dirname(__file__), "ffi/cdef.c")) as f:
+with open(root_dir / "ffi/cdef.c") as f:
     cdef_content = f.read()
     ffibuilder.cdef(cdef_content)
 
