@@ -75,7 +75,7 @@ class my_build(build):
 
 setup(
     # this option is only valid in setup.py
-    cffi_modules=["curl_cffi/build.py:ffibuilder"],
+    cffi_modules=["scripts/build.py:ffibuilder"],
     cmdclass={
         "bdist_wheel": bdist_wheel_abi3,  # type: ignore
         "build": my_build,  # type: ignore
