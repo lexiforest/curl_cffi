@@ -1,6 +1,7 @@
 import os
 import platform
 import struct
+from pathlib import Path
 
 from cffi import FFI
 
@@ -27,7 +28,7 @@ def abs_machine():
 ffibuilder = FFI()
 system = platform.system()
 machine = abs_machine()
-parent_dir = os.path.dirname(os.path.dirname(__file__))
+root_dir = Path(__file__).parent.parent
 
 if system == "Windows":
     if machine == "x86_64":
@@ -60,18 +61,18 @@ ffibuilder.set_source(
     library_dirs=[libdir],
     source_extension=".c",
     include_dirs=[
-        os.path.join(parent_dir, "include"),
-        os.path.join(parent_dir, "ffi"),
+        str(root_dir / "include"),
+        str(root_dir / "ffi"),
     ],
     sources=[
-        os.path.join(parent_dir, "ffi/shim.c"),
+        str(root_dir / "ffi/shim.c"),
     ],
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
     ),
 )
 
-with open(os.path.join(parent_dir, "ffi/cdef.c")) as f:
+with open(root_dir / "ffi/cdef.c") as f:
     cdef_content = f.read()
     ffibuilder.cdef(cdef_content)
 
