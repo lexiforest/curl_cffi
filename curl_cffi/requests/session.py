@@ -9,7 +9,7 @@ from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
-from typing import Callable, Dict, List, Any, Optional, Sequence, Tuple, Union, cast, TYPE_CHECKING
+from typing import Callable, Dict, List, Any, Optional, TypedDict, Tuple, Union, cast, TYPE_CHECKING, Literal
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
 from concurrent.futures import ThreadPoolExecutor
 
@@ -33,7 +33,6 @@ except ImportError:
     pass
 
 if TYPE_CHECKING:
-    from typing_extensions import TypedDict
 
     class ProxySpec(TypedDict, total=False):
         all: str
@@ -45,6 +44,7 @@ if TYPE_CHECKING:
 else:
     ProxySpec = Dict[str, str]
 
+ThreadType = Literal["eventlet", "gevent"]
 
 class BrowserType(str, Enum):
     edge99 = "edge99"
@@ -561,9 +561,6 @@ class BaseSession:
             raise SessionClosed("Session is closed, cannot send request.")
 
 
-# ThreadType = Literal["eventlet", "gevent", None]
-
-
 class Session(BaseSession):
     """A request session, cookies and connections will be reused. This object is thread-safe,
     but it's recommended to use a seperate session for each thread."""
@@ -571,7 +568,7 @@ class Session(BaseSession):
     def __init__(
         self,
         curl: Optional[Curl] = None,
-        thread: Optional[str] = None,
+        thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
         **kwargs,
     ):
