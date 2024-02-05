@@ -22,6 +22,7 @@ def detect_arch():
             and arch["machine"] == uname.machine
             and arch["pointer_size"] == pointer_size
         ):
+            arch["libdir"] = os.path.expanduser(arch["libdir"])
             return arch
     raise Exception(f"Unsupported arch: {uname}")
 
