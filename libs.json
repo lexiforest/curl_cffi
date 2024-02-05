@@ -10,7 +10,7 @@
     },
     {
         "system": "Windows",
-        "machine": "i686",
+        "machine": "AMD64",
         "pointer_size": 32,
         "libdir": "./lib32",
         "sysname": "win32",
