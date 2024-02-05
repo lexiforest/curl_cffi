@@ -1,0 +1,74 @@
+[
+    {
+        "system": "Windows",
+        "machine": "AMD64",
+        "pointer_size": 64,
+        "libdir": "./lib64",
+        "sysname": "win32",
+        "so_name": "libcurl.dll",
+        "so_arch": "x86_64"
+    },
+    {
+        "system": "Windows",
+        "machine": "AMD64",
+        "pointer_size": 32,
+        "libdir": "./lib32",
+        "sysname": "win32",
+        "so_name": "libcurl.dll",
+        "so_arch": "i686"
+    },
+    {
+        "system": "Darwin",
+        "machine": "x86_64",
+        "pointer_size": 64,
+        "libdir": "/Users/runner/work/_temp/install/lib",
+        "sysname": "macos",
+        "so_name": "libcurl-impersonate-chrome.4.dylib",
+        "so_arch": "x86_64"
+    },
+    {
+        "system": "Darwin",
+        "machine": "arm64",
+        "pointer_size": 64,
+        "libdir": "/Users/runner/work/_temp/install/lib",
+        "sysname": "macos",
+        "so_name": "libcurl-impersonate-chrome.4.dylib",
+        "so_arch": "arm64"
+    },
+    {
+        "system": "Linux",
+        "machine": "x86_64",
+        "pointer_size": 64,
+        "libdir": "~/.local/lib",
+        "sysname": "linux-gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "x86_64"
+    },
+    {
+        "system": "Linux",
+        "machine": "aarch64",
+        "pointer_size": 64,
+        "libdir": "~/.local/lib",
+        "sysname": "linux-gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "aarch64"
+    },
+    {
+        "system": "Linux",
+        "machine": "armv6l",
+        "pointer_size": 32,
+        "libdir": "~/.local/lib",
+        "sysname": "linux-gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "armv6l"
+    },
+    {
+        "system": "Linux",
+        "machine": "armv7l",
+        "pointer_size": 32,
+        "libdir": "~/.local/lib",
+        "sysname": "linux-gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "armv7l"
+    }
+]

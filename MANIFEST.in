@@ -1,4 +1,7 @@
+recursive-include tests *
+
 include ffi/*
-include curl_cffi/_wrapper.*
-include curl_cffi/include/curl/*
+include include/curl/*
 include scripts/build.py
+include Makefile
+include libs.json
