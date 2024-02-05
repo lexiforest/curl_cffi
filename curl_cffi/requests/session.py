@@ -352,15 +352,20 @@ class BaseSession:
             connect_timeout, read_timeout = timeout
             all_timeout = connect_timeout + read_timeout
             c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(connect_timeout * 1000))
-        else:
-            all_timeout = cast(int, timeout)
+            if not stream:
+                c.setopt(CurlOpt.TIMEOUT_MS, int(all_timeout * 1000))
+            else:
+                # trick from: https://github.com/yifeikong/curl_cffi/issues/156
+                c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
+                c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(all_timeout))  # type: ignore
 
-        if stream:
-            # trick from: https://github.com/yifeikong/curl_cffi/issues/156
-            c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
-            c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(all_timeout))
         else:
-            c.setopt(CurlOpt.TIMEOUT_MS, int(all_timeout * 1000))
+            if not stream:
+                c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))  # type: ignore
+            else:
+                c.setopt(CurlOpt.CONNECTTIMEOUT_MS, int(timeout * 1000))  # type: ignore
+                c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
+                c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(timeout))  # type: ignore
 
         # allow_redirects
         c.setopt(
