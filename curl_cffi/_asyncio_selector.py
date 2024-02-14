@@ -26,10 +26,7 @@ from typing import (
 
 from typing import Set  # noqa: F401
 
-try:
-    from typing import Protocol
-except ImportError:
-    from typing_extensions import Protocol
+from typing import Protocol
 
 
 class _HasFileno(Protocol):

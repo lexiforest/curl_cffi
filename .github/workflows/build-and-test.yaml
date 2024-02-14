@@ -20,10 +20,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: pipx run build --sdist
+      - run: |
+          make preprocess
+          pipx run build --sdist
       - uses: actions/upload-artifact@v3
         with:
           path: ./dist/*.tar.gz
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - run: |
+          pip install ./dist/*.tar.gz
 
   bdist:
     name: Build bdist wheels and test

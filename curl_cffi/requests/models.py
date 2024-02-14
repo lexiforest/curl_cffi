@@ -129,8 +129,10 @@ class Response:
         return loads(self.content, **kw)
 
     def close(self):
-        self.quit_now.set()  # type: ignore
-        self.stream_task.result()  # type: ignore
+        if self.quit_now:
+            self.quit_now.set()
+        if self.stream_task:
+            self.stream_task.result()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
@@ -190,4 +192,5 @@ class Response:
         return b"".join(chunks)
 
     async def aclose(self):
-        await self.stream_task  # type: ignore
+        if self.stream_task:
+            await self.stream_task  # type: ignore

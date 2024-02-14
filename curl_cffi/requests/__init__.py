@@ -23,7 +23,7 @@ __all__ = [
 
 from functools import partial
 from io import BytesIO
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union, Literal
 
 
 from ..curl import CurlMime
@@ -32,10 +32,8 @@ from .cookies import Cookies, CookieTypes
 from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .session import AsyncSession, BrowserType, Session, ProxySpec
+from .session import AsyncSession, BrowserType, Session, ProxySpec, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
-
-# ThreadType = Literal["eventlet", "gevent", None]
 
 
 def request(
@@ -59,7 +57,7 @@ def request(
     accept_encoding: Optional[str] = "gzip, deflate, br",
     content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
-    thread: Optional[str] = None,
+    thread: Optional[ThreadType] = None,
     default_headers: Optional[bool] = None,
     curl_options: Optional[dict] = None,
     http_version: Optional[CurlHttpVersion] = None,
