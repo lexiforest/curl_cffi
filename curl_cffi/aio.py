@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import warnings
+from contextlib import suppress
 from typing import Any
 from weakref import WeakSet, WeakKeyDictionary
 
@@ -145,6 +146,9 @@ class AsyncCurl:
         """Close and cleanup running timers, readers, writers and handles."""
         # Close force timeout checker
         self._checker.cancel()
+        # Wait for the force timeout checker to finish
+        with suppress(asyncio.CancelledError):
+            self.loop.run_until_complete(self._checker)
         # Close all pending futures
         for curl, future in self._curl2future.items():
             lib.curl_multi_remove_handle(self._curlm, curl._curl)

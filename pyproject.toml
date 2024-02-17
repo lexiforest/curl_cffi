@@ -44,6 +44,7 @@ dev = [
     "uvicorn==0.18.3",
     "websockets==11.0.3",
     "ruff==0.1.14",
+    "nest_asyncio==1.6.0",
 ]
 build = [
     "cibuildwheel",
@@ -64,6 +65,7 @@ test = [
     "websockets==11.0.3",
     "python-multipart==0.0.6",
     "fastapi==0.100.0",
+    "nest_asyncio==1.6.0",
 ]
 
 

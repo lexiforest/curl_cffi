@@ -1,11 +1,13 @@
 import asyncio
 import base64
 import json
-
+import nest_asyncio
 import pytest
 
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
+
+nest_asyncio.apply()
 
 
 async def test_get(server):
