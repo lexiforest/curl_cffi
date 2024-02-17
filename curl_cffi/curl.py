@@ -85,10 +85,10 @@ def slist_to_list(head) -> List[bytes]:
 
 class Curl:
     """
-    Wrapper for `curl_easy_*` functions of libcurl.
+    Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
-    def __init__(self, cacert: str = DEFAULT_CACERT, debug: bool = False, handle=None):
+    def __init__(self, cacert: str = "", debug: bool = False, handle=None):
         """
         Parameters:
             cacert: CA cert path to use, by default, curl_cffi uses its own bundled cert.
@@ -97,7 +97,7 @@ class Curl:
         self._curl = lib.curl_easy_init() if not handle else handle
         self._headers = ffi.NULL
         self._resolve = ffi.NULL
-        self._cacert = cacert
+        self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
         self._write_handle = None
         self._header_handle = None

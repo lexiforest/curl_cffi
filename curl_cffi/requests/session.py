@@ -580,7 +580,7 @@ class Session(BaseSession):
         """
         Parameters set in the init method will be override by the same parameter in request method.
 
-        Parameters:
+        Args:
             curl: curl object to use in the session. If not provided, a new one will be
                 created. Also, a fresh curl object will always be created when accessed
                 from another thread.

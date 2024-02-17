@@ -1,6 +1,8 @@
-# Change Log
+Change Log
+==========
 
-## v0.6
+v0.6
+----
 
 The minimum Python version is now 3.8.
 
@@ -19,7 +21,8 @@ The minimum Python version is now 3.8.
     - Incorporated build time files for sdist
     - Bugfix: async curl timer leak
 
-## v0.5
+v0.5
+----
 
 - v0.5.10
     - Add stream support
@@ -61,12 +64,14 @@ The minimum Python version is now 3.8.
 - 0.5.0
     - Added asyncio support
 
-## v0.4
+v0.4
+----
 
 - 0.4.0
     - Removed c shim callback function, use cffi native callback function
 
-## v0.3
+v0.3
+----
 
 - 0.3.6
     - Updated to curl-impersonate v0.5.4, supported chrome107 and chrome110
@@ -75,14 +80,3 @@ The minimum Python version is now 3.8.
     - Breaking change: `Response.cookies` changed from `http.cookies.SimpleCookie` to `curl_cffi.requests.Cookies`
     - Using ABI3 wheels to reduce package size.
 
-TODOs:
-
-- [x] Write docs.
-- [x] Binary package for macOS(Intel/AppleSilicon) and Windows.
-- [ ] Support musllinux(alpine) bdist by building from source.
-- [x] Exclude the curl headers from source, download them when building.
-- [x] Update curl header files and constants via scripts.
-- [x] Implement `requests.Session/httpx.Client`.
-- [x] Create [ABI3 wheels](https://cibuildwheel.readthedocs.io/en/stable/faq/#abi3) to reduce package size and build time.
-- [x] Set default headers as in curl-impersonate wrapper scripts.
-- [x] Support stream

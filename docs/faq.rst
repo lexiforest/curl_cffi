@@ -1,6 +1,8 @@
-# Frequently Asked Questions
+FAQ
+==========================
 
-## Why does the JA3 fingerprints change for Chrome 110+ impersonation?
+Why does the JA3 fingerprints change for Chrome 110+ impersonation?
+------
 
 This is intended.
 
@@ -18,13 +20,15 @@ Roughly, this can be mitigated like:
 See more from [this article](https://www.fastly.com/blog/a-first-look-at-chromes-tls-clienthello-permutation-in-the-wild)
 and [curl-impersonate notes](https://github.com/lwthiker/curl-impersonate/pull/148).
 
-## I'm getting certs errors
+I'm getting certs errors
+------
 
 The simplest way is to turn off cert verification by `verify=False`:
 
     r = requests.get("https://example.com", verify=False)
 
-## curl_cffi.CurlError: Failed to perform, ErrCode: 92, Reason: 'HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR (err 1)'
+curl_cffi.CurlError: Failed to perform, ErrCode: 92, Reason: 'HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR (err 1)'
+------
 
 Try remove the `Content-Length` header from you request. see [#19](https://github.com/yifeikong/curl_cffi/issues/19).
 

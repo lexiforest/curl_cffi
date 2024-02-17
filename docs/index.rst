@@ -1,21 +1,41 @@
-# curl_cffi
+.. curl_cffi documentation master file, created by
+   sphinx-quickstart on Sat Feb 17 22:22:59 2024.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
 
-Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
-via [cffi](https://cffi.readthedocs.io/en/latest/).
+Welcome to curl_cffi's documentation!
+=====================================
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   install
+   impersonate
+   compile
+   cookies
+   vs-requests
+   faq
+   api
+   changelog
 
 [Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/main/README-zh.md) | [Discuss on Telegram](https://t.me/+lL9n33eZp480MGM1)
 
-Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
+curl_cffi is a Python binding for [curl-impersonate](https://github.com/yifeikong/curl-impersonate)
+via [cffi](https://cffi.readthedocs.io/en/latest/).
+
+Unlike other pure Python http clients like ``httpx`` or ``requests``, ``curl_cffi`` can
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
 website for no obvious reason, you can give this package a try.
 
-## Features
+Features
+------
 
 - Supports JA3/TLS and http2 fingerprints impersonation.
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/main/benchmark).
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
-- Supports `asyncio` with proxy rotation on each request.
+- Supports ``asyncio`` with proxy rotation on each request.
 - Supports http 2.0, which requests does not.
 - Supports websocket.
 
@@ -28,36 +48,24 @@ website for no obvious reason, you can give this package a try.
 |fingerprints|❌|❌|❌|❌|✅|
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
-## Install
+Install
+-----
 
     pip install curl_cffi --upgrade
 
-This should work on Linux, macOS and Windows out of the box.
-If it does not work on you platform, you may need to compile and install `curl-impersonate`
-first and set some environment variables like `LD_LIBRARY_PATH`.
+For more details, see :doc:`install`.
 
-To install beta releases:
+Usage
+------
 
-    pip install curl_cffi --upgrade --pre
-
-To install unstable version from GitHub:
-
-    git clone https://github.com/yifeikong/curl_cffi/
-    cd curl_cffi
-    make preprocess
-    pip install .
-
-## Usage
-
-Use the latest impersonate versions, do NOT copy `chrome110` here without changing.
-
-### requests-like
+requests-like
+~~~~~~
 
 ```python
 from curl_cffi import requests
 
 # Notice the impersonate parameter
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110")
+r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -71,7 +79,8 @@ proxies = {"https": "socks://localhost:3128"}
 r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
 ```
 
-### Sessions
+Sessions
+~~~~~~
 
 ```python
 # sessions are supported
@@ -84,31 +93,6 @@ r = s.get("https://httpbin.org/cookies")
 print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
-
-Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
-
-However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
-
-- chrome99
-- chrome100
-- chrome101
-- chrome104
-- chrome107
-- chrome110
-- chrome116 <sup>[1]</sup>
-- chrome119 <sup>[1]</sup>
-- chrome120 <sup>[1]</sup>
-- chrome99_android
-- edge99
-- edge101
-- safari15_3 <sup>[2]</sup>
-- safari15_5 <sup>[2]</sup>
-- safari17_0 <sup>[1]</sup>
-- safari17_2_ios <sup>[1]</sup>
-
-Notes:
-1. Added in version `0.6.0`.
-2. fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 
 ### asyncio
 
@@ -201,3 +185,10 @@ Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interfac
 ## Sponsor
 
 <a href="https://buymeacoffee.com/yifei" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
