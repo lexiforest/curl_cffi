@@ -194,3 +194,9 @@ class Response:
     async def aclose(self):
         if self.stream_task:
             await self.stream_task  # type: ignore
+
+            
+    # It prints the status code of the response instead of
+    # the object's memory location.
+    def __repr__(self)->str:
+        return f"<Response [{self.status_code}]>"
