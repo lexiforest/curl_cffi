@@ -198,6 +198,17 @@ If you are using scrapy, check out these middlewares:
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO) to register: https://yescaptcha.com/i/stfnIO
 
+## [Sponsor] ScrapeNinja
+
+<a href="https://scrapeninja.net/" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
+
+[ScrapeNinja](https://scrapeninja.net/) is a web scraping API with two engines: fast, with high performance and TLS
+fingerprint; and slower with a real browser under the hood. 
+
+ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
+extraction, so you can just get the data in JSON. Rotating proxies are available out of
+the box on all subscription plans.
+
 ## Sponsor
 
 <a href="https://buymeacoffee.com/yifei" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>

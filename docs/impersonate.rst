@@ -1,7 +1,10 @@
 Impersonate guide
 ======
 
-Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+Supported browser versions
+--------------------------
+
+Supported impersonate versions, as supported by our [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
 However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
 
@@ -24,5 +27,30 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 
 Notes:
 1. Added in version `0.6.0`.
-2. fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
+2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
+
+Which version to use?
+---------------------
+
+Generally speaking, you should use the latest Chrome or Safari versions. As of 0.6, they're
+``chrome120``, ``safari17_0`` and ``safari17_2_ios``. To always impersonate the latest avaiable
+browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
+
+    from curl_cffi import requests
+
+    requests.get(url, impersonate="chrome")
+
+Should I randomize browser fingerprints, or even change them for each request?
+------
+
+The answer is: Yes, and No.
+
+Browser fingerprint does not change for each request. You should not change that, too.
+Let's say if you are a website owner, would be block all the Chrome 120 users, that's
+almost 10% of all your users.
+
+How to impersonate a custom fingerprint?
+------
+
+
 

@@ -719,7 +719,7 @@ class Session(BaseSession):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
     ) -> Response:
-        """Send the request, see [curl_cffi.requests.request](/api/curl_cffi.requests/#curl_cffi.requests.request) for details on parameters."""
+        """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
 
