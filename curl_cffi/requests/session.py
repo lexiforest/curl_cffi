@@ -43,7 +43,7 @@ from .impersonate import (
     toggle_extension,
 )
 from .models import Request, Response
-from .websockets import WebSocket
+from .websockets import ON_CLOSE_T, ON_ERROR_T, ON_MESSAGE_T, ON_OPEN_T, WebSocket
 
 with suppress(ImportError):
     import gevent
@@ -855,10 +855,10 @@ class Session(BaseSession):
         self,
         url,
         *args,
-        on_message: Optional[Callable[[WebSocket, bytes], None]] = None,
-        on_error: Optional[Callable[[WebSocket, CurlError], None]] = None,
-        on_open: Optional[Callable] = None,
-        on_close: Optional[Callable] = None,
+        on_message: Optional[ON_MESSAGE_T] = None,
+        on_error: Optional[ON_ERROR_T] = None,
+        on_open: Optional[ON_OPEN_T] = None,
+        on_close: Optional[ON_CLOSE_T] = None,
         **kwargs,
     ) -> WebSocket:
         """Connects to a websocket url.
