@@ -201,9 +201,9 @@ Yescaptcha 是一个可以识别 Cloudflare 盾的接口，直接返回识别完
 
 ## [赞助商] ScrapeNinja
 
-<a href="https://scrapeninja.net/" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
+<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
 
-[ScrapeNinja](https://scrapeninja.net/) 是一个网络采集 API，它有两个引擎：极速版，性能
+[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) 是一个网络采集 API，它有两个引擎：极速版，性能
 较好，可以模拟 TLS 指纹；和通用版，使用浏览器。
 
 ScrapeNinja 帮你解决无头浏览器，代理，超时，重试，并且负责数据抽取，这样你可以直接拿到

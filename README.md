@@ -200,9 +200,9 @@ Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interfac
 
 ## [Sponsor] ScrapeNinja
 
-<a href="https://scrapeninja.net/" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
+<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
 
-[ScrapeNinja](https://scrapeninja.net/) is a web scraping API with two engines: fast, with high performance and TLS
+[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
 fingerprint; and slower with a real browser under the hood. 
 
 ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
