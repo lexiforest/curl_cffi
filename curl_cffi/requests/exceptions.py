@@ -1,35 +1,41 @@
 # Apache 2.0 License
 # Vendored from https://github.com/psf/requests/blob/main/src/requests/exceptions.py
 
+import json
+
 from .. import CurlError
-from json import JSONDecodeError as _JSONDecodeError
 
 
-class RequestsError(CurlError):
-    """Base exception for curl_cffi.requests package"""
+class RequestsError(CurlError, IOError):
+    """Base exception for curl_cffi.requests package, alias of RequestException"""
 
     def __init__(self, msg, code=0, response=None, *args, **kwargs):
         super().__init__(msg, code, *args, **kwargs)
         self.response = response
 
 
-class RequestException(RequestsError, IOError):
+class RequestException(RequestsError):
+    """Base exception for curl_cffi.requests package."""
     pass
 
 
 class CookieConflict(RequestException):
+    """Same cookie exists for different domains."""
     pass
 
 
 class SessionClosed(RequestException):
+    """The session has already been closed."""
     pass
 
 
 class InvalidJSONError(RequestException):
+    """A JSON error occurred."""
     pass
 
 
-class JSONDecodeError(InvalidJSONError, _JSONDecodeError):
+class JSONDecodeError(InvalidJSONError, json.JSONDecodeError):
+    """Couldn't decode the text into json"""
     pass
 
 
@@ -38,6 +44,7 @@ class HTTPError(RequestException):
 
 
 class ConnectionError(RequestException):
+    """A Connection error occurred."""
     pass
 
 
