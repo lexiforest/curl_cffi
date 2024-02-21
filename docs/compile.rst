@@ -4,6 +4,8 @@ How to compile
 This page documents how to compile curl-impersonate and curl-cffi from source. If binary
 package is not available on your platform, you may refer to this page for some inspirations.
 
+First, you need to check if there are libcurl-impersonate binaries for you platform.
+
 !!! note
 
     This build process is very hacky now, but it works for most common systems.
