@@ -8,7 +8,7 @@ from urllib.request import urlretrieve
 
 from cffi import FFI
 
-__version__ = "0.6.0b9"
+__version__ = "0.6.0"
 
 
 def detect_arch():

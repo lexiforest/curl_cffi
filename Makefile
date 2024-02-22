@@ -1,6 +1,6 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.6.0b9
+VERSION := 0.6.0
 CURL_VERSION := curl-8.1.1
 
 $(CURL_VERSION):
