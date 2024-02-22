@@ -1,10 +1,11 @@
 API References
 ======
 
-curl
+curl low levl APIs
 ------------------
 
-
+Curl
+~~~~~~
 
 .. autoclass:: curl_cffi.Curl
 
@@ -25,6 +26,8 @@ curl
    .. automethod:: ws_send
    .. automethod:: ws_close
 
+AsyncCurl
+~~~~~~
 
 .. autoclass:: curl_cffi.AsyncCurl
 
@@ -38,6 +41,8 @@ curl
    .. automethod:: process_data
    .. automethod:: close
 
+CurlMime
+~~~~~~
 
 .. autoclass:: curl_cffi.CurlMime
 
@@ -66,7 +71,7 @@ requests API
 request method
 ~~~~~~~~~~~~~~
 
-``.get``, ``.post``, etc are just alias of ``.request(METHOD, ...)``
+``requests.get``, ``requests.post``, etc are just aliases of ``.request(METHOD, ...)``
 
 .. autofunction:: curl_cffi.requests.request
 
@@ -90,6 +95,8 @@ Sessions
    .. automethod:: close
    .. automethod:: ws_connect
 
+Headers
+~~~~~~~
 
 .. autoclass:: curl_cffi.requests.Headers
 
@@ -103,6 +110,9 @@ Sessions
    .. automethod:: __setitem__
    .. automethod:: __delitem__
 
+Cookies
+~~~~~~~
+
 .. autoclass:: curl_cffi.requests.Cookies
 
    .. automethod:: set
@@ -114,15 +124,8 @@ Sessions
    .. automethod:: __setitem__
    .. automethod:: __delitem__
 
-.. autoclass:: curl_cffi.requests.WebSocket
-
-   .. automethod:: __init__
-   .. automethod:: recv
-   .. automethod:: send
-   .. automethod:: run_forever
-   .. automethod:: close
-   .. automethod:: arecv
-   .. automethod:: asend
+Request, Response and WebSocket
+~~~~~~
 
 .. autoclass:: curl_cffi.requests.Request
 
@@ -138,4 +141,14 @@ Sessions
    .. automethod:: atext
    .. automethod:: acontent
    .. automethod:: aclose
+
+.. autoclass:: curl_cffi.requests.WebSocket
+
+   .. automethod:: __init__
+   .. automethod:: recv
+   .. automethod:: send
+   .. automethod:: run_forever
+   .. automethod:: close
+   .. automethod:: arecv
+   .. automethod:: asend
 

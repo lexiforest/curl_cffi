@@ -17,6 +17,7 @@ def clear_queue(q: queue.Queue):
 
 
 class Request:
+    """Representing a sent request."""
     def __init__(self, url: str, headers: Headers, method: str):
         self.url = url
         self.headers = headers
@@ -29,6 +30,7 @@ class Response:
     Attributes:
         url: url used in the request.
         content: response body in bytes.
+        text: response body in str.
         status_code: http status code.
         reason: http response reason, such as OK, Not Found.
         ok: is status_code in [200, 400)?
@@ -76,11 +78,14 @@ class Response:
         return self._decode(self.content)
 
     def raise_for_status(self):
+        """Raise an error if status code is not in [200, 400)"""
         if not self.ok:
             raise RequestsError(f"HTTP Error {self.status_code}: {self.reason}")
 
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
+        iterate streaming content line by line, separated by ``\\n``.
+
         Copied from: https://requests.readthedocs.io/en/latest/_modules/requests/models/
         which is under the License: Apache 2.0
         """
@@ -106,6 +111,9 @@ class Response:
             yield pending
 
     def iter_content(self, chunk_size=None, decode_unicode=False):
+        """
+        iterate streaming content chunk by chunk in bytes.
+        """
         if chunk_size:
             warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
         if decode_unicode:
@@ -126,9 +134,11 @@ class Response:
             yield chunk
 
     def json(self, **kw):
+        """return a prased json object of the content."""
         return loads(self.content, **kw)
 
     def close(self):
+        """Close the streaming connection, only valid in stream mode."""
         if self.quit_now:
             self.quit_now.set()
         if self.stream_task:
@@ -136,6 +146,8 @@ class Response:
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
+        iterate streaming content line by line, separated by ``\\n``.
+
         Copied from: https://requests.readthedocs.io/en/latest/_modules/requests/models/
         which is under the License: Apache 2.0
         """
@@ -162,6 +174,9 @@ class Response:
             yield pending
 
     async def aiter_content(self, chunk_size=None, decode_unicode=False):
+        """
+        iterate streaming content chunk by chunk in bytes.
+        """
         if chunk_size:
             warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
         if decode_unicode:
@@ -183,14 +198,19 @@ class Response:
             yield chunk
 
     async def atext(self) -> str:
+        """
+        Return a decoded string.
+        """
         return self._decode(await self.acontent())
 
     async def acontent(self) -> bytes:
+        """wait and read the streaming content in one bytes object."""
         chunks = []
         async for chunk in self.aiter_content():
             chunks.append(chunk)
         return b"".join(chunks)
 
     async def aclose(self):
+        """Close the streaming connection, only valid in stream mode."""
         if self.stream_task:
             await self.stream_task  # type: ignore

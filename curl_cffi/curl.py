@@ -148,11 +148,11 @@ class Curl:
         """Wrapper for ``curl_easy_setopt``.
 
         Parameters:
-            option: option to set, use the constants from CurlOpt enum
+            option: option to set, using constants from CurlOpt enum
             value: value to set, strings will be handled automatically
 
         Returns:
-            error_code: 0 if no error, see ``CurlECode``
+            0 if no error, see ``CurlECode``.
         """
         input_option = {
             # this should be int in curl, but cffi requires pointer for void*
@@ -224,10 +224,10 @@ class Curl:
         """Wrapper for ``curl_easy_getinfo``. Gets information in response after curl perform.
 
         Parameters:
-            option: option to get info of, use the constants from ``CurlInfo`` enum
+            option: option to get info of, using constants from ``CurlInfo`` enum
 
         Returns:
-            info: value retrived from last perform.
+            value retrieved from last perform.
         """
         ret_option = {
             0x100000: "char**",
@@ -338,13 +338,17 @@ class Curl:
 
     @staticmethod
     def get_reason_phrase(status_line: bytes) -> bytes:
-        """Extract reason phrase, like `OK`, `Not Found` from response status line."""
+        """Extract reason phrase, like ``OK``, ``Not Found`` from response status line."""
         m = re.match(rb"HTTP/\d\.\d [0-9]{3} (.*)", status_line)
         return m.group(1) if m else b""
 
     @staticmethod
     def parse_status_line(status_line: bytes) -> Tuple[CurlHttpVersion, int, bytes]:
-        """Extract reason phrase, like `OK`, `Not Found` from response status line."""
+        """Parse status line.
+
+        Returns:
+            http_version, status_code, and reason phrase
+        """
         m = re.match(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)", status_line)
         if not m:
             return CurlHttpVersion.V1_0, 0, b""
@@ -369,7 +373,18 @@ class Curl:
         ffi.release(self._error_buffer)
         self._resolve = ffi.NULL
 
-    def ws_recv(self, n: int = 1024):
+    def ws_recv(self, n: int = 1024) -> Tuple[bytes, Any]:
+        """Receive a frame from a websocket connection.
+
+        Args:
+            n: maximum data to receive.
+
+        Returns:
+            a tuple of frame content and curl frame meta struct.
+
+        Raises:
+            CurlError: if failed.
+        """
         buffer = ffi.new("char[]", n)
         n_recv = ffi.new("int *")
         p_frame = ffi.new("struct curl_ws_frame **")
@@ -383,6 +398,18 @@ class Curl:
         return ffi.buffer(buffer)[: n_recv[0]], frame
 
     def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
+        """Send data to a websocket connection.
+
+        Args:
+            payload: content to send.
+            flags: websocket flag to set for the frame, default: binary.
+
+        Returns:
+            0 if no error.
+
+        Raises:
+            CurlError: if failed.
+        """
         n_sent = ffi.new("int *")
         buffer = ffi.from_buffer(payload)
         ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
@@ -390,11 +417,18 @@ class Curl:
         return n_sent[0]
 
     def ws_close(self):
+        """Send the close frame."""
         self.ws_send(b"", CurlWsFlag.CLOSE)
 
 
 class CurlMime:
+    """Wrapper for the ``curl_mime_`` API."""
+
     def __init__(self, curl: Optional[Curl] = None):
+        """
+        Args:
+            curl: Curl instance to use.
+        """
         self._curl = curl if curl else Curl()
         self._form = lib.curl_mime_init(self._curl._curl)
 
@@ -407,6 +441,17 @@ class CurlMime:
         local_path: Optional[Union[str, bytes, Path]] = None,
         data: Optional[bytes] = None,
     ):
+        """Add a mime part for a mutlipart html form.
+
+        Note: You can only use either local_path or data, not both.
+
+        Args:
+            name: name of the field.
+            content_type: content_type for the field. for example: ``image/png``.
+            filename: filename for the server.
+            local_path: file to upload on local disk.
+            data: file content to upload.
+        """
         part = lib.curl_mime_addpart(self._form)
 
         ret = lib.curl_mime_name(part, name.encode())
@@ -445,16 +490,20 @@ class CurlMime:
 
     @classmethod
     def from_list(cls, files: List[dict]):
+        """Create a multipart instance from a list of dict, for keys, see ``addpart``"""
         form = cls()
         for file in files:
             form.addpart(**file)
         return form
 
     def attach(self, curl: Optional[Curl] = None):
+        """Attach the mime instance to a curl instance."""
         c = curl if curl else self._curl
         c.setopt(CurlOpt.MIMEPOST, self._form)
 
     def close(self):
+        """Close the mime instance and underlying files. This method must be called after
+        ``perform`` or ``request``."""
         lib.curl_mime_free(self._form)
         self._form = ffi.NULL
 
