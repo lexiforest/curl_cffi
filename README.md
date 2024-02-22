@@ -12,7 +12,7 @@ website for no obvious reason, you can give this package a try.
 ## Features
 
 - Supports JA3/TLS and http2 fingerprints impersonation.
-- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/master/benchmark).
+- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/main/benchmark).
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
@@ -32,7 +32,7 @@ website for no obvious reason, you can give this package a try.
 
     pip install curl_cffi --upgrade
 
-This should work on Linux(x86_64/aarch64), macOS(Intel/Apple Silicon) and Windows(amd64).
+This should work on Linux, macOS and Windows out of the box.
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
 
@@ -197,6 +197,17 @@ If you are using scrapy, check out these middlewares:
 <a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO) to register: https://yescaptcha.com/i/stfnIO
+
+## [Sponsor] ScrapeNinja
+
+<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
+
+[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
+fingerprint; and slower with a real browser under the hood. 
+
+ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
+extraction, so you can just get the data in JSON. Rotating proxies are available out of
+the box on all subscription plans.
 
 ## Sponsor
 

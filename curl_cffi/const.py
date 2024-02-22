@@ -4,6 +4,9 @@ from enum import IntEnum
 
 
 class CurlOpt(IntEnum):
+    """``CULROPT_`` constancs extracted from libcurl,
+    see: https://curl.se/libcurl/c/curl_easy_setopt.html"""
+
     WRITEDATA = 10000 + 1
     URL = 10000 + 2
     PORT = 0 + 3
@@ -328,6 +331,9 @@ class CurlOpt(IntEnum):
 
 
 class CurlInfo(IntEnum):
+    """``CURLINFO_`` constancs extracted from libcurl,
+    see: https://curl.se/libcurl/c/curl_easy_getinfo.html"""
+
     TEXT = 0
     EFFECTIVE_URL = 0x100000 + 1
     RESPONSE_CODE = 0x200000 + 2
@@ -396,6 +402,9 @@ class CurlInfo(IntEnum):
 
 
 class CurlMOpt(IntEnum):
+    """``CURLMOPT_`` constancs extracted from libcurl,
+    see: https://curl.se/libcurl/c/curl_multi_setopt.html"""
+
     SOCKETFUNCTION = 20000 + 1
     SOCKETDATA = 10000 + 2
     PIPELINING = 0 + 3
@@ -415,6 +424,9 @@ class CurlMOpt(IntEnum):
 
 
 class CurlECode(IntEnum):
+    """``CURLECODE_`` constancs extracted from libcurl,
+    see: https://curl.se/libcurl/c/libcurl-errors.html"""
+
     OK = 0
     UNSUPPORTED_PROTOCOL = 1
     FAILED_INIT = 2
@@ -519,6 +531,8 @@ class CurlECode(IntEnum):
 
 
 class CurlHttpVersion(IntEnum):
+    """``CURL_HTTP_VERSION`` constants extracted from libcurl, see comments for details"""
+
     NONE = 0
     V1_0 = 1  # please use HTTP 1.0 in the request */
     V1_1 = 2  # please use HTTP 1.1 in the request */
@@ -529,6 +543,8 @@ class CurlHttpVersion(IntEnum):
 
 
 class CurlWsFlag(IntEnum):
+    """``CURL_WS_FLAG`` constancs extracted from libcurl, see comments for details"""
+
     TEXT       = (1<<0)
     BINARY     = (1<<1)
     CONT       = (1<<2)

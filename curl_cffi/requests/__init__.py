@@ -23,7 +23,7 @@ __all__ = [
 
 from functools import partial
 from io import BytesIO
-from typing import Callable, Dict, Optional, Tuple, Union, Literal
+from typing import Callable, Dict, Optional, Tuple, Union
 
 
 from ..curl import CurlMime
@@ -72,22 +72,22 @@ def request(
         method: http method for the request: GET/POST/PUT/DELETE etc.
         url: url for the requests.
         params: query string for the requests.
-        data: form values or binary data to use in body, `Content-Type: application/x-www-form-urlencoded` will be added if a dict is given.
+        data: form values or binary data to use in body, ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict is given.
         json: json values to use in body, `Content-Type: application/json` will be added automatically.
         headers: headers to send.
         cookies: cookies to use.
-        files: not implemented yet.
+        files: not supported, use ``multipart`` instead.
         auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
         timeout: how many seconds to wait before giving up.
         allow_redirects: whether to allow redirection.
         max_redirects: max redirect counts, default unlimited(-1).
-        proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
-        proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
+        proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
+        proxy: proxy to use, format: "http://user@pass:proxy_url". Cannot be used with the above parameter.
         proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
         verify: whether to verify https certs.
         referer: shortcut for setting referer header.
         accept_encoding: shortcut for setting accept-encoding header.
-        content_callback: a callback function to receive response body. `def callback(chunk: bytes):`
+        content_callback: a callback function to receive response body. ``def callback(chunk: bytes) -> None:``
         impersonate: which browser version to impersonate.
         thread: work with other thread implementations. choices: eventlet, gevent.
         default_headers: whether to set default browser headers.
@@ -95,9 +95,10 @@ def request(
         http_version: limiting http version, http2 will be tries by default.
         debug: print extra curl debug info.
         interface: which interface use in request to server.
+        multipart: upload files using the multipart format, see.
 
     Returns:
-        A [Response](/api/curl_cffi.requests#curl_cffi.requests.Response) object.
+        A ``Response`` object.
     """
     with Session(thread=thread, curl_options=curl_options, debug=debug) as s:
         return s.request(

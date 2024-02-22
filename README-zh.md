@@ -199,6 +199,16 @@ print(body.decode())
 
 Yescaptcha 是一个可以识别 Cloudflare 盾的接口，直接返回识别完成的 Cookies （`cf_clearance` 等） [点此](https://yescaptcha.com/i/stfnIO)注册：https://yescaptcha.com/i/stfnIO
 
+## [赞助商] ScrapeNinja
+
+<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
+
+[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) 是一个网络采集 API，它有两个引擎：极速版，性能
+较好，可以模拟 TLS 指纹；和通用版，使用浏览器。
+
+ScrapeNinja 帮你解决无头浏览器，代理，超时，重试，并且负责数据抽取，这样你可以直接拿到
+JSON 数据。在所有的订阅方案中，切换代理都是直接可用的。
+
 ## 赞助
 
 <img src="assets/alipay.jpg" style="width: 512px;" />

@@ -122,9 +122,14 @@ class AsyncCurl:
     """Wrapper around curl_multi handle to provide asyncio support. It uses the libcurl
     socket_action APIs."""
 
-    def __init__(self, cacert: str = DEFAULT_CACERT, loop=None):
+    def __init__(self, cacert: str = "", loop=None):
+        """
+        Parameters:
+            cacert: CA cert path to use, by default, curl_cffi uses certs from ``certifi``.
+            loop: EventLoop to use.
+        """
         self._curlm = lib.curl_multi_init()
-        self._cacert = cacert
+        self._cacert = cacert or DEFAULT_CACERT
         self._curl2future = {}  # curl to future map
         self._curl2curl = {}  # c curl to Curl
         self._sockfds = set()  # sockfds
