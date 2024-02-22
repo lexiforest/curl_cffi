@@ -12,8 +12,6 @@ Welcome to curl_cffi's documentation!
 
    install
    impersonate
-   compile
-   cookies
    advanced
    vs-requests
    faq
