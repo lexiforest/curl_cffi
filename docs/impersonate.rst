@@ -43,6 +43,10 @@ browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
 
     requests.get(url, impersonate="chrome")
 
+iOS has restrictions on WebView and TLS libs, so safari_x_ios should work for most apps.
+If you encountered an android app with custom fingerprints, you can try the ``safari ios``
+fingerprints given that this app should have an iOS version.
+
 How to customize my fingerprints? e.g. okhttp
 ------
 
