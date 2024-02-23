@@ -6,6 +6,10 @@ v0.6
 
 The minimum Python version is now 3.8.
 
+- v0.6.1
+    - ``AsyncSession.close`` is now a coroutine.
+    - This is a bugfix release.
+
 - v0.6.0
     - Added more recent impersonate versions, up to Chrome 120 and Safari 17.0
     - Upgraded libcurl to 8.1.1

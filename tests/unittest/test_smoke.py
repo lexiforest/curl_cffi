@@ -18,3 +18,10 @@ def test_with_impersonate():
     for url in URLS:
         r = requests.get(url, impersonate=requests.BrowserType.chrome)
         assert r.status_code == 200
+
+
+async def test_async():
+    async with requests.AsyncSession() as s:
+        for url in URLS:
+            r = await s.get(url)
+            assert r.status_code == 200

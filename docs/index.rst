@@ -211,9 +211,11 @@ ScrapeNinja
 
 .. image:: https://scrapeninja.net/img/logo_with_text_new5.svg
    :width: 149
-   :alt: YesCaptcha
+   :alt: ScrapeNinja
+   :target: https://scrapeninja.net/?utm_source=github&utm_medium=banner&utm_campaign=cffi
 
-ScrapeNinja is a web scraping API with two engines: fast, with high performance and TLS
+`ScrapeNinja <https://scrapeninja.net/?utm_source=github&utm_medium=banner&utm_campaign=cffi>_
+is a web scraping API with two engines: fast, with high performance and TLS
 fingerprint; and slower with a real browser under the hood. 
 
 ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data

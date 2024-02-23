@@ -937,12 +937,12 @@ class AsyncSession(BaseSession):
         return self
 
     async def __aexit__(self, *args):
-        self.close()
+        await self.close()
         return None
 
-    def close(self):
+    async def close(self):
         """Close the session."""
-        self.acurl.close()
+        await self.acurl.close()
         self._closed = True
         while True:
             try:

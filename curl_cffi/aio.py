@@ -147,25 +147,29 @@ class AsyncCurl:
         self.setopt(CurlMOpt.SOCKETDATA, self._self_handle)
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
 
-    def close(self):
+    async def close(self):
         """Close and cleanup running timers, readers, writers and handles."""
-        # Close force timeout checker
+
+        # Close and wait for the force timeout checker to complete
         self._checker.cancel()
-        # Wait for the force timeout checker to finish
         with suppress(asyncio.CancelledError):
-            self.loop.run_until_complete(self._checker)
+            await self._checker
+
         # Close all pending futures
         for curl, future in self._curl2future.items():
             lib.curl_multi_remove_handle(self._curlm, curl._curl)
             if not future.done() and not future.cancelled():
                 future.set_result(None)
+
         # Cleanup curl_multi handle
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
+
         # Remove add readers and writers
         for sockfd in self._sockfds:
             self.loop.remove_reader(sockfd)
             self.loop.remove_writer(sockfd)
+
         # Cancel all time functions
         for timer in self._timers:
             timer.cancel()
