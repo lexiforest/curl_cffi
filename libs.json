@@ -60,7 +60,7 @@
         "libdir": "~/.local/lib",
         "sysname": "linux-gnu",
         "so_name": "libcurl-impersonate-chrome.so",
-        "so_arch": "armv6l"
+        "so_arch": "arm"
     },
     {
         "system": "Linux",
@@ -69,6 +69,6 @@
         "libdir": "~/.local/lib",
         "sysname": "linux-gnu",
         "so_name": "libcurl-impersonate-chrome.so",
-        "so_arch": "armv7l"
+        "so_arch": "arm"
     }
 ]

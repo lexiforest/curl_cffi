@@ -1,6 +1,8 @@
 .ONESHELL:
 SHELL := bash
-VERSION := 0.6.1
+
+# this is the upstream libcurl-impersonate version
+VERSION := 0.6.0
 CURL_VERSION := curl-8.1.1
 
 $(CURL_VERSION):
