@@ -58,7 +58,7 @@
         "machine": "armv6l",
         "pointer_size": 32,
         "libdir": "~/.local/lib",
-        "sysname": "linux-gnu",
+        "sysname": "linux-gnueabihf",
         "so_name": "libcurl-impersonate-chrome.so",
         "so_arch": "arm"
     },
@@ -67,7 +67,7 @@
         "machine": "armv7l",
         "pointer_size": 32,
         "libdir": "~/.local/lib",
-        "sysname": "linux-gnu",
+        "sysname": "linux-gnueabihf",
         "so_name": "libcurl-impersonate-chrome.so",
         "so_arch": "arm"
     }
