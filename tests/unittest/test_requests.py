@@ -170,6 +170,11 @@ def test_timeout(server):
         requests.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
 
 
+def test_session_timeout(server):
+    with pytest.raises(requests.RequestsError):
+        requests.Session(timeout=0.1).get(str(server.url.copy_with(path="/slow_response")))
+
+
 def test_post_timeout(server):
     with pytest.raises(requests.RequestsError):
         requests.post(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
