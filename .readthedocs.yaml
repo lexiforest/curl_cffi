@@ -8,6 +8,7 @@ build:
     python: "3.11"
   jobs:
     pre_install:
+      - apt-get install -y build-essential libtool
       - make preprocess && pip install .
 
 # Optionally declare the Python requirements required to build your docs
