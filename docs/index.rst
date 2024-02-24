@@ -201,8 +201,9 @@ Bypass Cloudflare with API
 .. image:: https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/yescaptcha.png
    :width: 149
    :alt: YesCaptcha
+   :target: https://yescaptcha.com/i/stfnIO
 
-Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
+`Yescaptcha <https://yescaptcha.com/i/stfnIO>`_ is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. ``cf_clearance``). Click `here <https://yescaptcha.com/i/stfnIO>`_
 to register.
 
@@ -212,6 +213,7 @@ ScrapeNinja
 .. image:: https://scrapeninja.net/img/logo_with_text_new5.svg
    :width: 149
    :alt: ScrapeNinja
+   :target: https://scrapeninja.net/?utm_source=github&utm_medium=banner&utm_campaign=cffi
 
 `ScrapeNinja <https://scrapeninja.net/?utm_source=github&utm_medium=banner&utm_campaign=cffi>`_
 is a web scraping API with two engines: fast, with high performance and TLS

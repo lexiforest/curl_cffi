@@ -32,3 +32,15 @@ If you are using scrapy, check out these middlewares:
 - [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
 - [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
 
+
+Using with eventlet/gevent
+------
+
+Just set ``thread`` to eventlet or gevent.
+
+.. code-block:: python
+
+   from curl_cffi import requests
+
+   s = requests.Session(thread="eventlet")
+   s.get(url)
