@@ -6,9 +6,11 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
+  apt_packages:
+    - build-essential
+    - libtool
   jobs:
     pre_install:
-      - apt-get install -y build-essential libtool
       - make preprocess && pip install .
 
 # Optionally declare the Python requirements required to build your docs
