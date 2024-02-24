@@ -11,7 +11,8 @@ build:
     - libtool
   jobs:
     pre_install:
-      - make preprocess && pip install .
+      - make preprocess
+      - python -m pip install -e .
 
 # Optionally declare the Python requirements required to build your docs
 python:
