@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 else:
     ProxySpec = Dict[str, str]
 
+CHARSET_RE = re.compile(r"charset=([\w-]+)")
 ThreadType = Literal["eventlet", "gevent"]
 
 class BrowserType(str, Enum):
@@ -546,8 +547,8 @@ class BaseSession:
         # print("Cookies after extraction", self.cookies)
 
         content_type = rsp.headers.get("Content-Type", default="")
-        m = re.search(r"charset=([\w-]+)", content_type)
-        charset = m.group(1) if m else "utf-8"
+        charset_match = CHARSET_RE.search(content_type)
+        charset = charset_match.group(1) if charset_match else "utf-8"
 
         rsp.charset = charset
         rsp.encoding = charset  # TODO use chardet

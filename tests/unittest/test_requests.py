@@ -114,6 +114,11 @@ def test_headers(server):
     assert headers["Foo"][0] == "bar"
 
 
+def test_charset_parse(server):
+    r = requests.get( str(server.url.copy_with(path="/gbk")))
+    assert r.charset == "gbk"
+
+
 def test_content_type_header_with_json(server):
     # FIXME: this actually does not work, because the test server uvicorn will merge
     # Content-Type headers, so it always works even if there is duplicate headers.
