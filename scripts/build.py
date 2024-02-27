@@ -30,7 +30,7 @@ def detect_arch():
 
 arch = detect_arch()
 
-def download_so():
+def download_libcurl():
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
         print(".so files alreay downloaded.")
         return
@@ -51,12 +51,15 @@ def download_so():
 
     if arch["system"] == "Windows":
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
+        return f"{arch['libdir']}/libcurl.dll"
+    else:
+        return f"{arch['libdir']}/libcurl-impersonate-chrome.a"
 
 
 ffibuilder = FFI()
 system = platform.system()
 root_dir = Path(__file__).parent.parent
-download_so()
+archive_path = download_libcurl()
 
 
 ffibuilder.set_source(
@@ -65,7 +68,8 @@ ffibuilder.set_source(
         #include "shim.h"
     """,
     # FIXME from `curl-impersonate`
-    libraries=["libcurl-impersonate-chrome.a"] if system != "Windows" else ["libcurl"],
+    libraries=[] if system != "Windows" else ["libcurl"],
+    extra_objects=[archive_path] if system != "Windows" else [],
     library_dirs=[arch["libdir"]],
     source_extension=".c",
     include_dirs=[
