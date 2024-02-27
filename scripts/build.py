@@ -31,9 +31,11 @@ def detect_arch():
 arch = detect_arch()
 
 def download_libcurl():
+    libpath = f"{arch['libdir']}/libcurl-impersonate-chrome.a" if arch["system"] != "Windows" else "curl_cffi/libcurl.dll"
+
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
-        print(".so files alreay downloaded.")
-        return
+        print(".so files already downloaded.")
+        return libpath
 
     file = "libcurl-impersonate.tar.gz"
     url = (
@@ -51,9 +53,8 @@ def download_libcurl():
 
     if arch["system"] == "Windows":
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
-        return f"{arch['libdir']}/libcurl.dll"
-    else:
-        return f"{arch['libdir']}/libcurl-impersonate-chrome.a"
+
+    return libpath
 
 
 ffibuilder = FFI()
