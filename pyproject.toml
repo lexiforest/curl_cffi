@@ -102,7 +102,7 @@ test-skip = "pp*"
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64"]
-environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
+environment = { LD_LIBRARY_PATH="$PWD/curl_cffi" }
 environment-pass = ["LD_LIBRARY_PATH"]
 
 
