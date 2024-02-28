@@ -5,4 +5,4 @@ include include/curl/*
 include scripts/build.py
 include Makefile
 include libs.json
-include curl_cffi/*.so
+include curl_cffi/libcurl-impersonate-chrome.so.4
