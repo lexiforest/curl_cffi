@@ -99,11 +99,11 @@ test-extras = ["test"]
 test-skip = "pp*"
 
 
-# configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
+# configure cibuildwheel to build native archs ('auto'), and some emulated ones
 archs = ["auto", "aarch64"]
-environment = { LD_LIBRARY_PATH="$PWD/curl_cffi" }
-environment-pass = ["LD_LIBRARY_PATH"]
+# no need to repair if the .so file is already included
+repair-wheel-command = ""
 
 
 [tool.cibuildwheel.macos]
