@@ -6,8 +6,22 @@ via [cffi](https://cffi.readthedocs.io/en/latest/).
 [Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/main/README-zh.md) | [Discuss on Telegram](https://t.me/+lL9n33eZp480MGM1)
 
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
-impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
-website for no obvious reason, you can give this package a try.
+impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
+website for no obvious reason, you can give `curl_cffi` a try.
+
+<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
+
+[Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi)
+is an enterprise-grade solution providing Web Scraping API that aims to simplify the
+scraping process by managing everything: real browser rendering, rotating proxies, and
+fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the
+observability by providing an analytical dashboard and measuring the success rate/block
+rate in detail.
+
+Scrapfly is a good solution if you are looking for a cloud-managed solution for `curl_cffi`.
+If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also maintain
+[this tool](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi) to convert curl
+command into python curl_cffi code!
 
 ## Features
 
@@ -19,7 +33,7 @@ website for no obvious reason, you can give this package a try.
 - Supports http 2.0, which requests does not.
 - Supports websocket.
 
-|library|requests|aiohttp|httpx|pycurl|curl_cffi|
+||requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
 |http2|❌|❌|✅|✅|✅|
 |sync|✅|❌|✅|✅|✅|
@@ -57,18 +71,23 @@ Use the latest impersonate versions, do NOT copy `chrome110` here without changi
 from curl_cffi import requests
 
 # Notice the impersonate parameter
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110")
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
 # the js3n fingerprint should be the same as target browser
 
+# To keep using the latest browser version as `curl_cffi` updates,
+# simply set impersonate="chrome" without specifying a version.
+# Other similar values are: "safari" and "safari_ios"
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 ```
 
 ### Sessions
@@ -108,7 +127,7 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 
 Notes:
 1. Added in version `0.6.0`.
-2. fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
+2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 
 ### asyncio
 
@@ -165,7 +184,7 @@ from io import BytesIO
 
 buffer = BytesIO()
 c = Curl()
-c.setopt(CurlOpt.URL, b'https://tls.browserleaks.com/json')
+c.setopt(CurlOpt.URL, b"https://tools.scrapfly.io/api/fp/ja3")
 c.setopt(CurlOpt.WRITEDATA, buffer)
 
 c.impersonate("chrome110")

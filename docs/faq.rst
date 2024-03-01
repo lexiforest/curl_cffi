@@ -158,5 +158,3 @@ your own headers.
 
    requests.get(url, impersonate="chrome", default_headers=False, headers=...)
 
-
-
