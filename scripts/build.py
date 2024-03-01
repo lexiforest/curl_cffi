@@ -31,11 +31,8 @@ def detect_arch():
 arch = detect_arch()
 
 def download_libcurl():
-    libpath = f"{arch['libdir']}/libcurl-impersonate-chrome.a" if arch["system"] != "Windows" else "curl_cffi/libcurl.dll"
-
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
         print(".so files already downloaded.")
-        return libpath
 
     file = "libcurl-impersonate.tar.gz"
     url = (
@@ -54,13 +51,31 @@ def download_libcurl():
     if arch["system"] == "Windows":
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
 
-    return libpath
+def get_curl_archives():
+    if arch["system"] != "Windows":
+        return [
+            f"{arch['libdir']}/libcurl-impersonate-chrome.a",
+            f"{arch['libdir']}/libssl.a",
+            f"{arch['libdir']}/libcrypto.a",
+            f"{arch['libdir']}/libz.a",
+            f"{arch['libdir']}/libnghttp2.a",
+        ]
+    else:
+        return []
+
+def get_curl_libraries():
+    if arch["system"] == "Windows":
+        return ["libcurl"]
+    elif arch["system"] == "Darwin":
+        return ["curl-impersonate-chrome"]
+    else:
+        return []
 
 
 ffibuilder = FFI()
 system = platform.system()
 root_dir = Path(__file__).parent.parent
-archive_path = download_libcurl()
+download_libcurl()
 
 
 ffibuilder.set_source(
@@ -69,8 +84,8 @@ ffibuilder.set_source(
         #include "shim.h"
     """,
     # FIXME from `curl-impersonate`
-    libraries=["curl-impersonate-chrome"] if system == "Darwin" else ["libcurl"] if system == "Windows" else [],
-    extra_objects=[archive_path] if system == "Linux" else [],
+    libraries=get_curl_libraries(),
+    extra_objects=get_curl_archives(),
     library_dirs=[arch["libdir"]],
     source_extension=".c",
     include_dirs=[
