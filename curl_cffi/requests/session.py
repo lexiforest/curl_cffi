@@ -73,6 +73,17 @@ class BrowserType(str, Enum):
     def has(cls, item):
         return item in cls.__members__
 
+    @classmethod
+    def normalize(cls, item):
+        if item == "chrome":
+            return cls.chrome
+        elif item == "safari":
+            return cls.safari
+        elif item == "safari_ios":
+            return cls.safari_ios
+        else:
+            return item
+
 
 class BrowserSpec:
     """A more structured way of selecting browsers"""
@@ -455,9 +466,10 @@ class BaseSession:
             self.default_headers if default_headers is None else default_headers
         )
         if impersonate:
-            if not BrowserType.has(impersonate):
-                raise RequestsError(f"impersonate {impersonate} is not supported")
-            c.impersonate(impersonate, default_headers=default_headers)
+            impersonate = BrowserType.normalize(impersonate)
+            ret = c.impersonate(impersonate, default_headers=default_headers)
+            if ret != 0:
+                raise RequestsError(f"Impersonating {impersonate} is not supported")
 
         # http_version, after impersonate, which will change this to http2
         http_version = http_version or self.http_version
