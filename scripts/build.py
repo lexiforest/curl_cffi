@@ -9,7 +9,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 
 def detect_arch():
@@ -83,6 +83,7 @@ ffibuilder.set_source(
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
     ),
+    extra_link_args=["-Wl,-rpath=$ORIGIN"] if system == "Linux" else [],
 )
 
 with open(root_dir / "ffi/cdef.c") as f:

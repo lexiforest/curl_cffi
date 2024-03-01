@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.6.1"
+version = "0.6.2"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support"
 license = { file = "LICENSE" }
@@ -99,11 +99,9 @@ test-extras = ["test"]
 test-skip = "pp*"
 
 
-# configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
+# configure cibuildwheel to build native archs ('auto'), and some emulated ones
 archs = ["auto", "aarch64"]
-environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
-environment-pass = ["LD_LIBRARY_PATH"]
 
 
 [tool.cibuildwheel.macos]

@@ -138,8 +138,7 @@ class Curl:
             errmsg = ffi.string(self._error_buffer).decode()
             action = " ".join([str(a) for a in args])
             return CurlError(
-                f"Failed to {action}, ErrCode: {errcode}, Reason: '{errmsg}'. "
-                "This may be a libcurl error, "
+                f"Failed to {action}, curl: ({errcode}) {errmsg}. "
                 "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
                 code=errcode,
             )
