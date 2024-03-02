@@ -33,6 +33,7 @@ arch = detect_arch()
 def download_libcurl():
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
         print(".so files already downloaded.")
+        return
 
     file = "libcurl-impersonate.tar.gz"
     url = (
