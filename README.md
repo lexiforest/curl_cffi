@@ -1,9 +1,13 @@
 # curl_cffi
 
-Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
-via [cffi](https://cffi.readthedocs.io/en/latest/).
+[![Downloads](https://static.pepy.tech/badge/curl_cffi/week)](https://pepy.tech/project/curl_cffi)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
+[![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
 
 [Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/main/README-zh.md) | [Discuss on Telegram](https://t.me/+lL9n33eZp480MGM1)
+
+Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
+via [cffi](https://cffi.readthedocs.io/en/latest/).
 
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
