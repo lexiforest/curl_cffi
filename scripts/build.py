@@ -55,7 +55,6 @@ def download_libcurl():
 def get_curl_archives():
     if arch["system"] == "Linux":
         return [
-            f"{arch['libdir']}/libcurl-impersonate-chrome.a",
             f"{arch['libdir']}/libssl.a",
             f"{arch['libdir']}/libcrypto.a",
             f"{arch['libdir']}/libz.a",
@@ -63,6 +62,7 @@ def get_curl_archives():
             f"{arch['libdir']}/libbrotlicommon-static.a",
             f"{arch['libdir']}/libbrotlidec-static.a",
             f"{arch['libdir']}/libbrotlienc-static.a",
+            f"{arch['libdir']}/libcurl-impersonate-chrome.a",
         ]
     else:
         return []
