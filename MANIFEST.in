@@ -5,4 +5,3 @@ include include/curl/*
 include scripts/build.py
 include Makefile
 include libs.json
-include curl_cffi/*.so
