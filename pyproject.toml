@@ -100,8 +100,14 @@ test-skip = "pp*"
 
 
 [tool.cibuildwheel.linux]
+# install zip for usage below
+before-all = "yum install -y zip && make preprocess"
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 archs = ["auto", "aarch64"]
+environment = { LD_LIBRARY_PATH="$PWD/curl_cffi" }
+environment-pass = ["LD_LIBRARY_PATH"]
+# remove the extra libcurl-impersonate.so copied into the wheel
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} && zip -d /tmp/cibuildwheel/repaired_wheel/*.whl curl_cffi/libcurl-impersonate-chrome.so"
 
 
 [tool.cibuildwheel.macos]
