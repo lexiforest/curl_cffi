@@ -174,35 +174,8 @@ with Session() as s:
     ws.run_forever()
 ```
 
-### curl-like
-
-Alternatively, you can use the low-level curl-like API:
-
-```python
-from curl_cffi import Curl, CurlOpt
-from io import BytesIO
-
-buffer = BytesIO()
-c = Curl()
-c.setopt(CurlOpt.URL, b"https://tools.scrapfly.io/api/fp/ja3")
-c.setopt(CurlOpt.WRITEDATA, buffer)
-
-c.impersonate("chrome110")
-
-c.perform()
-c.close()
-body = buffer.getvalue()
-print(body.decode())
-```
-
-See the [docs](https://curl-cffi.readthedocs.io) for more details.
-
-### scrapy
-
-If you are using scrapy, check out these middlewares:
-
-- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
-- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
+For low-level APIs, Scrapy integration and other advanced topics, see the
+[docs](https://curl-cffi.readthedocs.io) for more details.
 
 ## Acknowledgement
 
@@ -222,7 +195,7 @@ Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interfac
 <a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
 
 [ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
-fingerprint; and slower with a real browser under the hood. 
+fingerprint; and slower with a real browser under the hood.
 
 ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
 extraction, so you can just get the data in JSON. Rotating proxies are available out of

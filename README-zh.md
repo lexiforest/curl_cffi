@@ -168,35 +168,7 @@ with Session() as s:
     ws.run_forever()
 ```
 
-### 类 curl
-
-另外，你还可以使用类似 curl 的底层 API：
-
-```python
-from curl_cffi import Curl, CurlOpt
-from io import BytesIO
-
-buffer = BytesIO()
-c = Curl()
-c.setopt(CurlOpt.URL, b'https://tls.browserleaks.com/json')
-c.setopt(CurlOpt.WRITEDATA, buffer)
-
-c.impersonate("chrome110")
-
-c.perform()
-c.close()
-body = buffer.getvalue()
-print(body.decode())
-```
-
-更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
-
-### scrapy
-
-如果你用 scrapy 的话，可以参考这些中间件：
-
-- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
-- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
+对于底层 API, Scrapy 集成等进阶话题, 请查阅 [文档](https://curl-cffi.readthedocs.io)
 
 有问题和建议请优先提 issue，中英文均可，也可以加 [TG 群](https://t.me/+lL9n33eZp480MGM1) 或微信群讨论：
 

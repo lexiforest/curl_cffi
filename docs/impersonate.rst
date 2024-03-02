@@ -104,7 +104,7 @@ is that, for a given browser version, the fingerprints are fixed. If you create 
 random fingerprints, the server is easy to know that you are not using a typical browser.
 
 If you were thinking about ``ja3``, and not ``ja3n``, then the fingerprints is already
-randomnized, due to the ``extension permutation`` feature introduced in Chrome 110.
+randomized, due to the ``extension permutation`` feature introduced in Chrome 110.
 
 AFAIK, most websites use an allowlist, not a blocklist to filter out bot traffic. So I
 don’t think random ja3 fingerprints would work in the wild.
