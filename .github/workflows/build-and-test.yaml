@@ -25,7 +25,7 @@ jobs:
           pipx run build --sdist
           gunzip ./dist/*.tar.gz
           tar -vf ./dist/*.tar --delete --wildcards '*/curl_cffi/libcurl-impersonate-*'
-          gzip ./dist/*.tar
+          gzip ./dist/*.tar.gz
 
       - uses: actions/upload-artifact@v3
         with:
