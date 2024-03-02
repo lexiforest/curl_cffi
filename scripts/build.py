@@ -53,7 +53,7 @@ def download_libcurl():
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
 
 def get_curl_archives():
-    if arch["system"] != "Windows":
+    if arch["system"] == "Linux":
         return [
             f"{arch['libdir']}/libcurl-impersonate-chrome.a",
             f"{arch['libdir']}/libssl.a",
