@@ -54,6 +54,8 @@ def download_libcurl():
 
 def get_curl_archives():
     if arch["system"] == "Linux":
+        # note that the order of libraries matters
+        # https://stackoverflow.com/a/36581865
         return [
             f"{arch['libdir']}/libcurl-impersonate-chrome.a",
             f"{arch['libdir']}/libssl.a",
