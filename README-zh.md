@@ -1,10 +1,16 @@
 # curl_cffi
 
+[![Downloads](https://static.pepy.tech/badge/curl_cffi/week)](https://pepy.tech/project/curl_cffi)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
+[![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
+
 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 的 Python 绑定，基于
 [cffi](https://cffi.readthedocs.io/en/latest/).
 
-不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi `可以模拟浏览器的
-TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试这个库。
+不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi ` 可以模拟浏览器的
+TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试 `curl_cffi`。
+
+------
 
 <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
 
@@ -16,6 +22,8 @@ TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，�
 如果你在寻找云端托管 `curl_cffi` 服务的话，Scrapfly 是一个不错的选择。如果你希望自己管理
 脚本，他们还提供了一个[工具](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi)，
 可以把 curl 命令直接转换成 `curl_cffi` 的 Python 代码。
+
+------
 
 ## 功能
 

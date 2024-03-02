@@ -13,6 +13,8 @@ Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` ca
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
+------
+
 <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
 
 [Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi)
@@ -26,6 +28,8 @@ Scrapfly is a good solution if you are looking for a cloud-managed solution for 
 If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also maintain
 [this tool](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi) to convert curl
 command into python curl_cffi code!
+
+------
 
 ## Features
 
@@ -67,6 +71,8 @@ To install unstable version from GitHub:
 
 ## Usage
 
+`curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
+
 Use the latest impersonate versions, do NOT copy `chrome110` here without changing.
 
 ### requests-like
@@ -97,12 +103,14 @@ r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110"
 ### Sessions
 
 ```python
-# sessions are supported
 s = requests.Session()
-# httpbin is a http test website
+
+# httpbin is a http test website, this endpoint makes the server set cookies
 s.get("https://httpbin.org/cookies/set/foo/bar")
 print(s.cookies)
 # <Cookies[<Cookie foo=bar for httpbin.org />]>
+
+# retrieve cookies again to verify
 r = s.get("https://httpbin.org/cookies")
 print(r.json())
 # {'cookies': {'foo': 'bar'}}
