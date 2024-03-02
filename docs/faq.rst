@@ -91,7 +91,7 @@ To force curl to use http 1.1 only.
 
     from curl_cffi import requests, CurlHttpVersion
 
-    r = requests.get("https://postman-echo.com", http_version=CurlHttpVersion.v1_1)
+    r = requests.get("https://postman-echo.com", http_version=CurlHttpVersion.V1_1)
 
 Related issues:
 
