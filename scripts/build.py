@@ -9,7 +9,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "0.6.1"
+__version__ = "0.6.2b1"
 
 
 def detect_arch():
@@ -30,9 +30,9 @@ def detect_arch():
 
 arch = detect_arch()
 
-def download_so():
+def download_libcurl():
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
-        print(".so files alreay downloaded.")
+        print(".so files already downloaded.")
         return
 
     file = "libcurl-impersonate.tar.gz"
@@ -52,11 +52,36 @@ def download_so():
     if arch["system"] == "Windows":
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
 
+def get_curl_archives():
+    if arch["system"] == "Linux":
+        # note that the order of libraries matters
+        # https://stackoverflow.com/a/36581865
+        return [
+            f"{arch['libdir']}/libcurl-impersonate-chrome.a",
+            f"{arch['libdir']}/libssl.a",
+            f"{arch['libdir']}/libcrypto.a",
+            f"{arch['libdir']}/libz.a",
+            f"{arch['libdir']}/libnghttp2.a",
+            f"{arch['libdir']}/libbrotlidec-static.a",
+            f"{arch['libdir']}/libbrotlienc-static.a",
+            f"{arch['libdir']}/libbrotlicommon-static.a",
+        ]
+    else:
+        return []
+
+def get_curl_libraries():
+    if arch["system"] == "Windows":
+        return ["libcurl"]
+    elif arch["system"] == "Darwin":
+        return ["curl-impersonate-chrome"]
+    else:
+        return []
+
 
 ffibuilder = FFI()
 system = platform.system()
 root_dir = Path(__file__).parent.parent
-download_so()
+download_libcurl()
 
 
 ffibuilder.set_source(
@@ -65,7 +90,8 @@ ffibuilder.set_source(
         #include "shim.h"
     """,
     # FIXME from `curl-impersonate`
-    libraries=["curl-impersonate-chrome"] if system != "Windows" else ["libcurl"],
+    libraries=get_curl_libraries(),
+    extra_objects=get_curl_archives(),
     library_dirs=[arch["libdir"]],
     source_extension=".c",
     include_dirs=[
@@ -78,7 +104,6 @@ ffibuilder.set_source(
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
     ),
-    extra_link_args=["-Wl,-rpath=$ORIGIN"] if system == "Linux" else [],
 )
 
 with open(root_dir / "ffi/cdef.c") as f:

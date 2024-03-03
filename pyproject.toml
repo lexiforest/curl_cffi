@@ -97,11 +97,14 @@ test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
 test-skip = "pp*"
+build-verbosity = 1
 
 
-[tool.cibuildwheel.linux]
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
+[tool.cibuildwheel.linux]
 archs = ["auto", "aarch64"]
+environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
+environment-pass = ["LD_LIBRARY_PATH"]
 
 
 [tool.cibuildwheel.macos]
