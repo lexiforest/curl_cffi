@@ -101,6 +101,7 @@ class Curl:
         """
         self._curl = lib.curl_easy_init() if not handle else handle
         self._headers = ffi.NULL
+        self._proxy_headers = ffi.NULL
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
@@ -204,6 +205,10 @@ class Curl:
             for header in value:
                 self._headers = lib.curl_slist_append(self._headers, header)
             ret = lib._curl_easy_setopt(self._curl, option, self._headers)
+        elif option == CurlOpt.PROXYHEADER:
+            for proxy_header in value:
+                self._proxy_headers = lib.curl_slist_append(self._proxy_headers, proxy_header)
+            ret = lib._curl_easy_setopt(self._curl, option, self._proxy_headers)
         elif option == CurlOpt.RESOLVE:
             for resolve in value:
                 if isinstance(resolve, str):
@@ -302,6 +307,10 @@ class Curl:
             if self._headers != ffi.NULL:
                 lib.curl_slist_free_all(self._headers)
             self._headers = ffi.NULL
+
+            if self._proxy_headers != ffi.NULL:
+                lib.curl_slist_free_all(self._proxy_headers)
+            self._proxy_headers = ffi.NULL
 
     def duphandle(self):
         """Wrapper for ``curl_easy_duphandle``.
