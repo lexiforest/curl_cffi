@@ -5,13 +5,14 @@ import shutil
 import struct
 from pathlib import Path
 from urllib.request import urlretrieve
+import tempfile
 
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
 __version__ = "0.6.2b1"
 
-
+tmpdir = None
 def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
         archs = json.loads(f.read())
@@ -23,12 +24,18 @@ def detect_arch():
             and arch["machine"] == uname.machine
             and arch["pointer_size"] == pointer_size
         ):
-            arch["libdir"] = os.path.expanduser(arch["libdir"])
+            if arch["libdir"]:
+                arch["libdir"] = os.path.expanduser(arch["libdir"])
+            else:
+                global tmpdir
+                tmpdir = tempfile.TemporaryDirectory()
+                arch["libdir"] = tmpdir.name
             return arch
     raise Exception(f"Unsupported arch: {uname}")
 
 
 arch = detect_arch()
+print(f"Using {arch['libdir']} to store libcurl-impersonate")
 
 def download_libcurl():
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
