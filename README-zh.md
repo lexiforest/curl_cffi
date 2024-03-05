@@ -1,18 +1,37 @@
 # curl_cffi
 
+[![Downloads](https://static.pepy.tech/badge/curl_cffi/week)](https://pepy.tech/project/curl_cffi)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
+[![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
+
 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 的 Python 绑定，基于
 [cffi](https://cffi.readthedocs.io/en/latest/).
 
-不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi `可以模拟浏览器的
-TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试这个库。
+不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi ` 可以模拟浏览器的
+TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试 `curl_cffi`。
+
+------
+
+<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
+
+[Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi)
+是一个企业级的网页抓取 API，通过全流程托管来帮助你简化抓取流程。功能包括：真实浏览器
+渲染，代理自动切换，和 TLS、HTTP、浏览器指纹模拟，可以突破所有主要的反爬手段。Scrapfly
+还提供了一个监控面板，让你能够随时观察抓取成功率。
+
+如果你在寻找云端托管 `curl_cffi` 服务的话，Scrapfly 是一个不错的选择。如果你希望自己管理
+脚本，他们还提供了一个[工具](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi)，
+可以把 curl 命令直接转换成 `curl_cffi` 的 Python 代码。
+
+------
 
 ## 功能
 
 - 支持 JA3/TLS 和 http2 指纹模拟。
-- 比 requests/tls_client 快得多，和 aiohttp/pycurl 的速度比肩，详情查看 [benchmarks](https://github.com/yifeikong/curl_cffi/tree/master/benchmark)。
+- 比 requests/httpx 快得多，和 aiohttp/pycurl 的速度比肩，详见 [benchmarks](https://github.com/yifeikong/curl_cffi/tree/master/benchmark)。
 - 模仿 requests 的 API，不用再学一个新的。
-- 预编译，不需要再自己机器上再弄一遍。
-- 支持 `asyncio`，并且每个请求都可以换代理。
+- 预编译，不需要在自己机器上从头开始。
+- 支持 `asyncio`，并且支持每个请求切换代理。
 - 支持 http 2.0，requests 不支持。
 - 支持 websocket。
 
@@ -54,18 +73,23 @@ TLS 或者 JA3 指纹。如果你莫名其妙地被某个网站封锁了，可�
 from curl_cffi import requests
 
 # 注意 impersonate 这个参数
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110")
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
 # ja3n 指纹和目标浏览器一致
 
+# To keep using the latest browser version as `curl_cffi` updates,
+# simply set impersonate="chrome" without specifying a version.
+# Other similar values are: "safari" and "safari_ios"
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+
 # 支持使用代理
 proxies = {"https": "http://localhost:3128"}
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 ```
 
 ### Sessions
@@ -152,35 +176,7 @@ with Session() as s:
     ws.run_forever()
 ```
 
-### 类 curl
-
-另外，你还可以使用类似 curl 的底层 API：
-
-```python
-from curl_cffi import Curl, CurlOpt
-from io import BytesIO
-
-buffer = BytesIO()
-c = Curl()
-c.setopt(CurlOpt.URL, b'https://tls.browserleaks.com/json')
-c.setopt(CurlOpt.WRITEDATA, buffer)
-
-c.impersonate("chrome110")
-
-c.perform()
-c.close()
-body = buffer.getvalue()
-print(body.decode())
-```
-
-更多细节请查看 [英文文档](https://curl-cffi.readthedocs.io)。
-
-### scrapy
-
-如果你用 scrapy 的话，可以参考这些中间件：
-
-- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
-- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
+对于底层 API, Scrapy 集成等进阶话题, 请查阅 [文档](https://curl-cffi.readthedocs.io)
 
 有问题和建议请优先提 issue，中英文均可，也可以加 [TG 群](https://t.me/+lL9n33eZp480MGM1) 或微信群讨论：
 

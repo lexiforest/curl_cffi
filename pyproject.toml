@@ -2,7 +2,7 @@
 name = "curl_cffi"
 version = "0.6.2"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
-description = "libcurl ffi bindings for Python, with impersonation support"
+description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
 dependencies = [
     "cffi>=1.12.0",
@@ -44,7 +44,6 @@ dev = [
     "uvicorn==0.18.3",
     "websockets==11.0.3",
     "ruff==0.1.14",
-    "nest_asyncio==1.6.0",
 ]
 build = [
     "cibuildwheel",
@@ -65,7 +64,6 @@ test = [
     "websockets==11.0.3",
     "python-multipart==0.0.6",
     "fastapi==0.100.0",
-    "nest_asyncio==1.6.0",
 ]
 
 
