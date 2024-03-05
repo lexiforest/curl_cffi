@@ -9,19 +9,25 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "0.6.2b1"
+__version__ = "0.6.2b2"
 
 
 def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
         archs = json.loads(f.read())
+
+    libc, _ = platform.libc_ver()
+    # https://github.com/python/cpython/issues/87414
+    libc = "gnu" if libc == "glibc" else "musl"
     uname = platform.uname()
     pointer_size = struct.calcsize("P") * 8
+
     for arch in archs:
         if (
             arch["system"] == uname.system
             and arch["machine"] == uname.machine
             and arch["pointer_size"] == pointer_size
+            and ("libc" not in arch or arch.get("libc") == libc)
         ):
             arch["libdir"] = os.path.expanduser(arch["libdir"])
             return arch
@@ -36,10 +42,14 @@ def download_libcurl():
         return
 
     file = "libcurl-impersonate.tar.gz"
+    if arch["system"] == "Linux":
+        sysname = "linux-" + arch["libc"]
+    else:
+        sysname = arch["sysname"]
     url = (
         f"https://github.com/yifeikong/curl-impersonate/releases/download/"
         f"v{__version__}/libcurl-impersonate-v{__version__}"
-        f".{arch['so_arch']}-{arch['sysname']}.tar.gz"
+        f".{arch['so_arch']}-{sysname}.tar.gz"
     )
 
     print(f"Downloading libcurl-impersonate-chrome from {url}...")
