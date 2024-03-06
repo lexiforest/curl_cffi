@@ -40,7 +40,20 @@
         "machine": "x86_64",
         "pointer_size": 64,
         "libdir": "~/.local/lib",
-        "sysname": "linux-gnu",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "x86_64"
+    },
+    {
+        "system": "Linux",
+        "machine": "x86_64",
+        "pointer_size": 64,
+        "libdir": "~/.local/lib",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
         "so_name": "libcurl-impersonate-chrome.so",
         "so_arch": "x86_64"
     },
@@ -49,7 +62,20 @@
         "machine": "aarch64",
         "pointer_size": 64,
         "libdir": "~/.local/lib",
-        "sysname": "linux-gnu",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "aarch64"
+    },
+    {
+        "system": "Linux",
+        "machine": "aarch64",
+        "pointer_size": 64,
+        "libdir": "~/.local/lib",
+        "sysname": "linux",
+        "link_type": "dynamic",
+        "libc": "musl",
         "so_name": "libcurl-impersonate-chrome.so",
         "so_arch": "aarch64"
     },
@@ -58,7 +84,9 @@
         "machine": "armv6l",
         "pointer_size": 32,
         "libdir": "~/.local/lib",
-        "sysname": "linux-gnueabihf",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnueabihf",
         "so_name": "libcurl-impersonate-chrome.so",
         "so_arch": "arm"
     },
@@ -67,7 +95,9 @@
         "machine": "armv7l",
         "pointer_size": 32,
         "libdir": "~/.local/lib",
-        "sysname": "linux-gnueabihf",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnueabihf",
         "so_name": "libcurl-impersonate-chrome.so",
         "so_arch": "arm"
     }

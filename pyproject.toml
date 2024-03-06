@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.6.2"
+version = "0.6.3b1"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
@@ -89,6 +89,8 @@ build = [
     "cp38-win32",
     "cp38-manylinux_x86_64",
     "cp38-manylinux_aarch64",
+    "cp38-musllinux_x86_64",
+    "cp38-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
