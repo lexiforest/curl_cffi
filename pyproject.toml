@@ -1,8 +1,8 @@
 [project]
 name = "curl_cffi"
-version = "0.6.2"
+version = "0.6.3b1"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
-description = "libcurl ffi bindings for Python, with impersonation support"
+description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
 dependencies = [
     "cffi>=1.12.0",
@@ -44,7 +44,6 @@ dev = [
     "uvicorn==0.18.3",
     "websockets==11.0.3",
     "ruff==0.1.14",
-    "nest_asyncio==1.6.0",
 ]
 build = [
     "cibuildwheel",
@@ -65,7 +64,6 @@ test = [
     "websockets==11.0.3",
     "python-multipart==0.0.6",
     "fastapi==0.100.0",
-    "nest_asyncio==1.6.0",
 ]
 
 
@@ -91,12 +89,15 @@ build = [
     "cp38-win32",
     "cp38-manylinux_x86_64",
     "cp38-manylinux_aarch64",
+    "cp38-manylinux_i686",
+    "cp38-musllinux_x86_64",
+    "cp38-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
-test-skip = "pp*"
+test-skip = "cp38-manylinux_i686"  # trustme not available
 build-verbosity = 1
 
 
