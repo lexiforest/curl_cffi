@@ -83,7 +83,7 @@
         "system": "Linux",
         "machine": "aarch64",
         "pointer_size": 64,
-        "libdir": "",
+        "libdir": "~/.local/lib",
         "sysname": "linux",
         "link_type": "dynamic",
         "libc": "musl",
