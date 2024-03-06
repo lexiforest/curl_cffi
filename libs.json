@@ -59,6 +59,17 @@
     },
     {
         "system": "Linux",
+        "machine": "i686",
+        "pointer_size": 32,
+        "libdir": "~/.local/lib",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnu",
+        "so_name": "libcurl-impersonate-chrome.so",
+        "so_arch": "i386"
+    },
+    {
+        "system": "Linux",
         "machine": "aarch64",
         "pointer_size": 64,
         "libdir": "~/.local/lib",

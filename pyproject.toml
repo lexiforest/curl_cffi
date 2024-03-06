@@ -89,6 +89,7 @@ build = [
     "cp38-win32",
     "cp38-manylinux_x86_64",
     "cp38-manylinux_aarch64",
+    "cp38-manylinux_i686",
     "cp38-musllinux_x86_64",
     "cp38-musllinux_aarch64",
 ]
@@ -96,7 +97,7 @@ before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
-test-skip = "pp*"
+test-skip = "cp38-manylinux_i686"  # trustme not available
 build-verbosity = 1
 
 
