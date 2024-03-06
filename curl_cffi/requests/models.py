@@ -118,6 +118,7 @@ class Response:
             warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
         if decode_unicode:
             raise NotImplementedError()
+        buff = b''
         while True:
             chunk = self.queue.get()  # type: ignore
 
@@ -129,9 +130,17 @@ class Response:
             # end of stream.
             if chunk is None:
                 self.curl.reset()  # type: ignore
+                while len(buff):
+                    yield buff[:chunk_size]
+                    buff = buff[chunk_size:]
                 return
-
-            yield chunk
+            if chunk_size is None:
+                yield chunk
+            else:
+                buff += chunk
+                while len(buff) > chunk_size:
+                    yield buff[:chunk_size]
+                    buff = buff[chunk_size:]
 
     def json(self, **kw):
         """return a prased json object of the content."""
