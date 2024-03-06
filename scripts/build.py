@@ -63,7 +63,7 @@ def download_libcurl():
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
 
 def get_curl_archives():
-    if arch["system"] == "Linux":
+    if arch["system"] == "Linux" and arch.get("link_type") == "static":
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
         return [
@@ -83,6 +83,8 @@ def get_curl_libraries():
     if arch["system"] == "Windows":
         return ["libcurl"]
     elif arch["system"] == "Darwin":
+        return ["curl-impersonate-chrome"]
+    elif arch["system"] == "Linux" and arch.get("link_type") == "dynamic":
         return ["curl-impersonate-chrome"]
     else:
         return []
