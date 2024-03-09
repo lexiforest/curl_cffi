@@ -40,12 +40,13 @@ build: .preprocessed
 	python -m build --wheel
 
 lint:
-	ruff check .
-	ruff format . --check --target-version py38
+	ruff check
+	ruff format --diff
 	mypy .
 
 format:
-	ruff format . --target-version py38
+	ruff check --fix
+	ruff format
 
 test:
 	python -bb -m pytest tests/unittest
