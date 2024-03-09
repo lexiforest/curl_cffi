@@ -1,12 +1,12 @@
 import re
 import warnings
 from http.cookies import SimpleCookie
-from typing import Any, List, Tuple, Union, Optional
 from pathlib import Path
+from typing import Any, List, Optional, Tuple, Union
 
 import certifi
 
-from ._wrapper import ffi, lib  # type: ignore
+from ._wrapper import ffi, lib
 from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 
 DEFAULT_CACERT = certifi.where()
@@ -171,15 +171,11 @@ class Curl:
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback)
         elif option == CurlOpt.HEADERDATA:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback)
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -268,9 +264,7 @@ class Curl:
         Returns:
             0 if no error.
         """
-        return lib.curl_easy_impersonate(
-            self._curl, target.encode(), int(default_headers)
-        )
+        return lib.curl_easy_impersonate(self._curl, target.encode(), int(default_headers))
 
     def _ensure_cacert(self):
         if not self._is_cert_set:
@@ -338,7 +332,7 @@ class Curl:
         Returns:
             A parsed cookies.SimpleCookie instance.
         """
-        cookie = SimpleCookie()
+        cookie: SimpleCookie = SimpleCookie()
         for header in headers:
             if header.lower().startswith(b"set-cookie: "):
                 cookie.load(header[12:].decode())  # len("set-cookie: ") == 12
@@ -483,11 +477,16 @@ class CurlMime:
 
         # this is a filename
         if local_path is not None:
-            if not isinstance(local_path, bytes):
-                local_path = str(local_path).encode()
-            if not Path(local_path.decode()).exists():
-                raise FileNotFoundError(f"File not found at {local_path}")
-            ret = lib.curl_mime_filedata(part, local_path)
+            if isinstance(local_path, Path):
+                local_path_str = str(local_path)
+            elif isinstance(local_path, bytes):
+                local_path_str = local_path.decode()
+            else:
+                local_path_str = local_path
+
+            if not Path(local_path_str).exists():
+                raise FileNotFoundError(f"File not found at {local_path_str}")
+            ret = lib.curl_mime_filedata(part, local_path_str.encode())
             if ret != 0:
                 raise CurlError("Add field failed.")
 

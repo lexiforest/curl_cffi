@@ -1,6 +1,6 @@
 import pytest
-from curl_cffi import requests, CurlHttpVersion, CurlOpt
 
+from curl_cffi import CurlHttpVersion, CurlOpt, requests
 
 #######################################################################################
 # testing httpbin

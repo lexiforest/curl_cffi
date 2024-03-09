@@ -7,11 +7,11 @@ __all__ = ["Cookies"]
 import re
 import time
 import typing
+import warnings
+from dataclasses import dataclass
 from http.cookiejar import Cookie, CookieJar
 from http.cookies import _unquote
 from urllib.parse import urlparse
-from dataclasses import dataclass
-import warnings
 
 from .errors import CookieConflict, RequestsError
 
@@ -70,9 +70,7 @@ class CurlMorsel:
 
     def to_curl_format(self):
         if not self.hostname:
-            raise RequestsError(
-                "Domain not found for cookie {}={}".format(self.name, self.value)
-            )
+            raise RequestsError("Domain not found for cookie {}={}".format(self.name, self.value))
         return "\t".join(
             [
                 self.hostname,
@@ -119,7 +117,7 @@ class CurlMorsel:
             discard=True if self.expires == 0 else False,
             comment=None,
             comment_url=None,
-            rest=dict(http_only=self.http_only),  # type: ignore
+            rest=dict(http_only=f"{self.http_only}"),
             rfc2109=False,
         )
 
@@ -189,9 +187,7 @@ class Cookies(typing.MutableMapping[str, str]):
             self.jar.set_cookie(cookie)
         self.jar.clear_expired_cookies()
 
-    def set(
-        self, name: str, value: str, domain: str = "", path: str = "/", secure=False
-    ) -> None:
+    def set(self, name: str, value: str, domain: str = "", path: str = "/", secure=False) -> None:
         """
         Set a cookie value by name. May optionally include domain and path.
         """
@@ -226,7 +222,7 @@ class Cookies(typing.MutableMapping[str, str]):
             "rest": {"HttpOnly": None},
             "rfc2109": False,
         }
-        cookie = Cookie(**kwargs)  # type: ignore
+        cookie = Cookie(**kwargs)
         self.jar.set_cookie(cookie)
 
     def get(  # type: ignore
@@ -290,9 +286,7 @@ class Cookies(typing.MutableMapping[str, str]):
         for cookie in remove:
             self.jar.clear(cookie.domain, cookie.path, cookie.name)
 
-    def clear(
-        self, domain: typing.Optional[str] = None, path: typing.Optional[str] = None
-    ) -> None:
+    def clear(self, domain: typing.Optional[str] = None, path: typing.Optional[str] = None) -> None:
         """
         Delete all cookies. Optionally include a domain and path in
         order to only delete a subset of all the cookies.
@@ -335,10 +329,7 @@ class Cookies(typing.MutableMapping[str, str]):
 
     def __repr__(self) -> str:
         cookies_repr = ", ".join(
-            [
-                f"<Cookie {cookie.name}={cookie.value} for {cookie.domain} />"
-                for cookie in self.jar
-            ]
+            [f"<Cookie {cookie.name}={cookie.value} for {cookie.domain} />" for cookie in self.jar]
         )
 
         return f"<Cookies[{cookies_repr}]>"

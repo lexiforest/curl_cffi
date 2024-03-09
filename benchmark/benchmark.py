@@ -1,21 +1,24 @@
 import asyncio
-import time
-import pandas as pd
-import requests
-import aiohttp
-import pycurl
-import tls_client
-import httpx
-import curl_cffi
-import curl_cffi.requests
 import queue
 import threading
+import time
 from io import BytesIO
+
+import aiohttp
+import httpx
+import pandas as pd
+import pycurl
+import requests
+import tls_client
+
+import curl_cffi
+import curl_cffi.requests
 
 # import uvloop
 # uvloop.install()
 
 results = []
+
 
 class FakePycurlSession:
     def __init__(self):
@@ -68,16 +71,17 @@ for size in ["1k", "20k", "200k"]:
     print("One worker, {}: ".format(size), stats)
 
 df = pd.DataFrame(results)
-df.to_csv("single_worker.csv", index=False, float_format='%.4f')
+df.to_csv("single_worker.csv", index=False, float_format="%.4f")
 
 results = []
+
 
 def worker(q, done, SessionClass):
     s = SessionClass()
     while not done.is_set():
         try:
             url = q.get_nowait()
-        except:
+        except Exception:
             continue
         s.get(url)
         q.task_done()
@@ -156,4 +160,4 @@ for size in ["1k", "20k", "200k"]:
     print("10 Workers, {}: ".format(size), stats)
 
 df = pd.DataFrame(results)
-df.to_csv("multiple_workers.csv", index=False, float_format='%.4f')
+df.to_csv("multiple_workers.csv", index=False, float_format="%.4f")

@@ -1,6 +1,6 @@
-import sys
 import platform
 import subprocess
+import sys
 
 CONST_FILE = "curl_cffi/const.py"
 CURL_VERSION = sys.argv[1]
@@ -50,7 +50,6 @@ with open(CONST_FILE, "w") as f:
     f.write(output.decode())
     f.write("\n\n")
 
-
     f.write("class CurlECode(IntEnum):\n")
     cmd = rf"""
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i CURLE_ | sed "s/[, ][=0]*//g" | sed "s/CURLE_/    /g" | awk '{{print $0 " = " NR-1}}'
@@ -58,7 +57,6 @@ with open(CONST_FILE, "w") as f:
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
     f.write("\n\n")
-
 
     f.write("class CurlHttpVersion(IntEnum):\n")
     f.write("    NONE = 0\n")
@@ -69,7 +67,6 @@ with open(CONST_FILE, "w") as f:
     f.write("    V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */\n")
     f.write("    V3 = 30  # Makes use of explicit HTTP/3 without fallback.\n")
     f.write("\n\n")
-
 
     f.write("class CurlWsFlag(IntEnum):\n")
     f.write("    TEXT       = (1<<0)\n")

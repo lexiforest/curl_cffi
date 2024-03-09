@@ -20,9 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: Lint
+        run: |
+          pip install mypy ruff
+          make lint
+
       - run: |
           make preprocess
           pipx run build --sdist
+
       - uses: actions/upload-artifact@v3
         with:
           path: ./dist/*.tar.gz
@@ -56,6 +63,11 @@ jobs:
         run: |
           brew install make automake libtool
           which pipx || brew install pipx && pipx ensurepath
+
+      - name: Lint
+        run: |
+          pip install mypy ruff
+          make lint
 
       - name: Build and test wheels
         uses: pypa/cibuildwheel@v2.16.5

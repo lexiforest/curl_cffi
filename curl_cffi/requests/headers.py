@@ -11,8 +11,6 @@ HeaderTypes = typing.Union[
     typing.Mapping[bytes, bytes],
     typing.Sequence[typing.Tuple[str, str]],
     typing.Sequence[typing.Tuple[bytes, bytes]],
-    typing.Sequence[str],
-    typing.Sequence[bytes],
 ]
 
 
@@ -21,14 +19,14 @@ def to_str(value: typing.Union[str, bytes], encoding: str = "utf-8") -> str:
 
 
 def to_bytes_or_str(value: str, match_type_of: typing.AnyStr) -> typing.AnyStr:
-    return value if isinstance(match_type_of, str) else value.encode()  # type: ignore
+    return value if isinstance(match_type_of, str) else value.encode()
 
 
 SENSITIVE_HEADERS = {"authorization", "proxy-authorization"}
 
 
 def obfuscate_sensitive_headers(
-    items: typing.Iterable[typing.Tuple[typing.AnyStr, typing.AnyStr]]
+    items: typing.Iterable[typing.Tuple[typing.AnyStr, typing.AnyStr]],
 ) -> typing.Iterator[typing.Tuple[typing.AnyStr, typing.AnyStr]]:
     for k, v in items:
         if to_str(k.lower()) in SENSITIVE_HEADERS:
@@ -73,7 +71,7 @@ class Headers(typing.MutableMapping[str, str]):
         headers: typing.Optional[HeaderTypes] = None,
         encoding: typing.Optional[str] = None,
     ) -> None:
-        if headers is None or len(headers) == 0:
+        if not headers:
             self._list = []  # type: typing.List[typing.Tuple[bytes, bytes, bytes]]
         elif isinstance(headers, Headers):
             self._list = list(headers._list)
@@ -90,19 +88,14 @@ class Headers(typing.MutableMapping[str, str]):
         else:
             if isinstance(headers[0], (str, bytes)):
                 sep = ":" if isinstance(headers[0], str) else b":"
-                h = []
-                for line in headers:
-                    k, v = line.split(sep, maxsplit=1)  # type: ignore
-                    v = v.lstrip()
-                    h.append((k, v))
+                h = [(k, v.lstrip()) for line in headers for k, v in [line.split(sep, maxsplit=1)]]
             else:
                 h = headers
-
             self._list = [
                 (
-                    normalize_header_key(k, lower=False, encoding=encoding),  # type: ignore
-                    normalize_header_key(k, lower=True, encoding=encoding),  # type: ignore
-                    normalize_header_value(v, encoding),  # type: ignore
+                    normalize_header_key(k, lower=False, encoding=encoding),
+                    normalize_header_key(k, lower=True, encoding=encoding),
+                    normalize_header_value(v, encoding),
                 )
                 for k, v in h
             ]
@@ -181,8 +174,7 @@ class Headers(typing.MutableMapping[str, str]):
         comma separated value.
         """
         return [
-            (key.decode(self.encoding), value.decode(self.encoding))
-            for key, _, value in self._list
+            (key.decode(self.encoding), value.decode(self.encoding)) for key, _, value in self._list
         ]
 
     def get(self, key: str, default: typing.Any = None) -> typing.Any:
@@ -256,9 +248,7 @@ class Headers(typing.MutableMapping[str, str]):
         lookup_key = set_key.lower()
 
         found_indexes = [
-            idx
-            for idx, (_, item_key, _) in enumerate(self._list)
-            if item_key == lookup_key
+            idx for idx, (_, item_key, _) in enumerate(self._list) if item_key == lookup_key
         ]
 
         for idx in reversed(found_indexes[1:]):
@@ -277,9 +267,7 @@ class Headers(typing.MutableMapping[str, str]):
         del_key = key.lower().encode(self.encoding)
 
         pop_indexes = [
-            idx
-            for idx, (_, item_key, _) in enumerate(self._list)
-            if item_key.lower() == del_key
+            idx for idx, (_, item_key, _) in enumerate(self._list) if item_key.lower() == del_key
         ]
 
         if not pop_indexes:

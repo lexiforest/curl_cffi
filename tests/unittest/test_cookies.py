@@ -1,7 +1,6 @@
 import pytest
-from curl_cffi.requests.models import Request
+
 from curl_cffi.requests.cookies import Cookies, CurlMorsel
-from curl_cffi.requests.headers import Headers
 from curl_cffi.requests.errors import CookieConflict, RequestsError
 
 

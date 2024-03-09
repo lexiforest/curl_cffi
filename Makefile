@@ -39,6 +39,14 @@ build: .preprocessed
 	pip install build
 	python -m build --wheel
 
+lint:
+	ruff check .
+	ruff format . --check --target-version py38
+	mypy .
+
+format:
+	ruff format . --target-version py38
+
 test:
 	python -bb -m pytest tests/unittest
 

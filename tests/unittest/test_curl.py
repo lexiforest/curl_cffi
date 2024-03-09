@@ -151,9 +151,7 @@ def test_auth(server):
     c.setopt(CurlOpt.WRITEDATA, buffer)
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
-    assert (
-        headers["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
-    )
+    assert headers["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
 
 
 def test_timeout(server):

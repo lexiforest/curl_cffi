@@ -1,6 +1,6 @@
 from importlib import metadata
-from .curl import Curl
 
+from .curl import Curl
 
 __title__ = "curl_cffi"
 __description__ = metadata.metadata("curl_cffi")["Summary"]

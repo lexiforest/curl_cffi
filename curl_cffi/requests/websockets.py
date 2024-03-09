@@ -6,7 +6,6 @@ from typing import Callable, Optional, Tuple
 from curl_cffi.const import CurlECode, CurlWsFlag
 from curl_cffi.curl import CurlError
 
-
 ON_MESSAGE_T = Callable[["WebSocket", bytes], None]
 ON_ERROR_T = Callable[["WebSocket", CurlError], None]
 ON_OPEN_T = Callable[["WebSocket"], None]
@@ -116,7 +115,9 @@ class WebSocket:
                             raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR)
                         else:
                             if code < 3000 and (code not in WsCloseCode or code == 1005):
-                                raise WebSocketError("Invalid close code", WsCloseCode.PROTOCOL_ERROR)
+                                raise WebSocketError(
+                                    "Invalid close code", WsCloseCode.PROTOCOL_ERROR
+                                )
                     if self.on_close:
                         self.on_close(self, code, reason)
             except WebSocketError as e:

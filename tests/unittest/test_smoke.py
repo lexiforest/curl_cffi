@@ -1,7 +1,6 @@
 # Simple smoke test to real world websites
 from curl_cffi import requests
 
-
 URLS = [
     "https://www.baidu.com",
     "https://www.qq.com",

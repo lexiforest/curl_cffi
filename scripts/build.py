@@ -3,9 +3,9 @@ import os
 import platform
 import shutil
 import struct
+import tempfile
 from pathlib import Path
 from urllib.request import urlretrieve
-import tempfile
 
 from cffi import FFI
 
@@ -13,6 +13,8 @@ from cffi import FFI
 __version__ = "0.6.2b2"
 
 tmpdir = None
+
+
 def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
         archs = json.loads(f.read())
@@ -43,6 +45,7 @@ def detect_arch():
 arch = detect_arch()
 print(f"Using {arch['libdir']} to store libcurl-impersonate")
 
+
 def download_libcurl():
     if (Path(arch["libdir"]) / arch["so_name"]).exists():
         print(".so files already downloaded.")
@@ -69,6 +72,7 @@ def download_libcurl():
     if arch["system"] == "Windows":
         shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
 
+
 def get_curl_archives():
     if arch["system"] == "Linux" and arch.get("link_type") == "static":
         # note that the order of libraries matters
@@ -85,6 +89,7 @@ def get_curl_archives():
         ]
     else:
         return []
+
 
 def get_curl_libraries():
     if arch["system"] == "Windows":
@@ -120,9 +125,7 @@ ffibuilder.set_source(
     sources=[
         str(root_dir / "ffi/shim.c"),
     ],
-    extra_compile_args=(
-        ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
-    ),
+    extra_compile_args=(["-Wno-implicit-function-declaration"] if system == "Darwin" else []),
 )
 
 with open(root_dir / "ffi/cdef.c") as f:

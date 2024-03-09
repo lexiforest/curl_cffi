@@ -545,9 +545,9 @@ class CurlHttpVersion(IntEnum):
 class CurlWsFlag(IntEnum):
     """``CURL_WS_FLAG`` constancs extracted from libcurl, see comments for details"""
 
-    TEXT       = (1<<0)
-    BINARY     = (1<<1)
-    CONT       = (1<<2)
-    CLOSE      = (1<<3)
-    PING       = (1<<4)
-    OFFSET     = (1<<5)
+    TEXT = 1 << 0
+    BINARY = 1 << 1
+    CONT = 1 << 2
+    CLOSE = 1 << 3
+    PING = 1 << 4
+    OFFSET = 1 << 5
