@@ -119,7 +119,6 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
 
 [tool.ruff.lint]
 # Enable the isort rules.
