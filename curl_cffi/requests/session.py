@@ -381,7 +381,7 @@ class BaseSession:
                 c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
                 c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(all_timeout))
 
-        elif isinstance(timeout, float):
+        elif isinstance(timeout, (int, float)):
             if not stream:
                 c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))
             else:
