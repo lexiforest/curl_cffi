@@ -2,6 +2,10 @@
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
+# typing.Mapping is deprecated in favor of abc.Mapping
+# see: https://docs.python.org/3/library/typing.html#typing.Mapping
+from collections.abc import Mapping
+
 from typing import (
     Any,
     AnyStr,
@@ -11,7 +15,6 @@ from typing import (
     Iterator,
     KeysView,
     List,
-    Mapping,
     MutableMapping,
     Optional,
     Sequence,
