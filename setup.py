@@ -17,6 +17,6 @@ setup(
     # this option is only valid in setup.py
     cffi_modules=["scripts/build.py:ffibuilder"],
     cmdclass={
-        "bdist_wheel": bdist_wheel_abi3,  # type: ignore
+        "bdist_wheel": bdist_wheel_abi3,
     },
 )

@@ -2,34 +2,70 @@
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
-import typing
-from collections.abc import Mapping
+import sys
 
-HeaderTypes = typing.Union[
+# typing.Mapping is deprecated in favor of abc.Mapping
+# see: https://docs.python.org/3/library/typing.html#typing.Mapping
+if sys.version_info < (3, 9, 0):
+    from typing import (
+        ItemsView,
+        Iterable,
+        Iterator,
+        KeysView,
+        Mapping,
+        MutableMapping,
+        Sequence,
+        ValuesView,
+    )
+    from collections.abc import Mapping as AbcMapping
+else:
+    from collections.abc import (
+        ItemsView,
+        Iterable,
+        Iterator,
+        KeysView,
+        Mapping,
+        MutableMapping,
+        Sequence,
+        ValuesView,
+    )
+
+    AbcMapping = Mapping  # type: ignore[misc]
+
+from typing import (
+    Any,
+    AnyStr,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
+
+HeaderTypes = Union[
     "Headers",
-    typing.Mapping[str, str],
-    typing.Mapping[bytes, bytes],
-    typing.Sequence[typing.Tuple[str, str]],
-    typing.Sequence[typing.Tuple[bytes, bytes]],
-    typing.Sequence[str],
-    typing.Sequence[bytes],
+    Mapping[str, Optional[str]],
+    Mapping[bytes, Optional[bytes]],
+    Sequence[Tuple[str, str]],
+    Sequence[Tuple[bytes, bytes]],
+    Sequence[Union[str, bytes]],
 ]
 
 
-def to_str(value: typing.Union[str, bytes], encoding: str = "utf-8") -> str:
+def to_str(value: Union[str, bytes], encoding: str = "utf-8") -> str:
     return value if isinstance(value, str) else value.decode(encoding)
 
 
-def to_bytes_or_str(value: str, match_type_of: typing.AnyStr) -> typing.AnyStr:
-    return value if isinstance(match_type_of, str) else value.encode()  # type: ignore
+def to_bytes_or_str(value: str, match_type_of: AnyStr) -> AnyStr:
+    return value if isinstance(match_type_of, str) else value.encode()  # pyright: ignore [reportGeneralTypeIssues]
 
 
 SENSITIVE_HEADERS = {"authorization", "proxy-authorization"}
 
 
 def obfuscate_sensitive_headers(
-    items: typing.Iterable[typing.Tuple[typing.AnyStr, typing.AnyStr]]
-) -> typing.Iterator[typing.Tuple[typing.AnyStr, typing.AnyStr]]:
+    items: Iterable[Tuple[AnyStr, AnyStr]],
+) -> Iterator[Tuple[AnyStr, AnyStr]]:
     for k, v in items:
         if to_str(k.lower()) in SENSITIVE_HEADERS:
             v = to_bytes_or_str("[secure]", match_type_of=v)
@@ -37,9 +73,9 @@ def obfuscate_sensitive_headers(
 
 
 def normalize_header_key(
-    value: typing.Union[str, bytes],
+    value: Union[str, bytes],
     lower: bool,
-    encoding: typing.Optional[str] = None,
+    encoding: Optional[str] = None,
 ) -> bytes:
     """
     Coerce str/bytes into a strictly byte-wise HTTP header key.
@@ -52,9 +88,7 @@ def normalize_header_key(
     return bytes_value.lower() if lower else bytes_value
 
 
-def normalize_header_value(
-    value: typing.Union[str, bytes], encoding: typing.Optional[str] = None
-) -> bytes:
+def normalize_header_value(value: Union[str, bytes], encoding: Optional[str] = None) -> bytes:
     """
     Coerce str/bytes into a strictly byte-wise HTTP header value.
     """
@@ -63,21 +97,21 @@ def normalize_header_value(
     return value.encode(encoding or "ascii")
 
 
-class Headers(typing.MutableMapping[str, str]):
+class Headers(MutableMapping[str, str]):
     """
     HTTP headers, as a case-insensitive multi-dict.
     """
 
     def __init__(
         self,
-        headers: typing.Optional[HeaderTypes] = None,
-        encoding: typing.Optional[str] = None,
+        headers: Optional[HeaderTypes] = None,
+        encoding: Optional[str] = None,
     ) -> None:
-        if headers is None or len(headers) == 0:
-            self._list = []  # type: typing.List[typing.Tuple[bytes, bytes, bytes]]
+        if not headers:
+            self._list = []  # type: List[Tuple[bytes, bytes, bytes]]
         elif isinstance(headers, Headers):
             self._list = list(headers._list)
-        elif isinstance(headers, Mapping):
+        elif isinstance(headers, AbcMapping):
             self._list = [
                 (
                     normalize_header_key(k, lower=False, encoding=encoding),
@@ -87,24 +121,22 @@ class Headers(typing.MutableMapping[str, str]):
                 for k, v in headers.items()
                 if v is not None
             ]
-        else:
+        elif isinstance(headers, list):
             if isinstance(headers[0], (str, bytes)):
                 sep = ":" if isinstance(headers[0], str) else b":"
                 h = []
                 for line in headers:
-                    k, v = line.split(sep, maxsplit=1)  # type: ignore
-                    v = v.lstrip()
-                    h.append((k, v))
-            else:
+                    k, v = line.split(sep, maxsplit=1)  # pyright: ignore
+                    h.append((k, v.strip()))
+            elif isinstance(headers[0], tuple):
                 h = headers
-
             self._list = [
                 (
-                    normalize_header_key(k, lower=False, encoding=encoding),  # type: ignore
-                    normalize_header_key(k, lower=True, encoding=encoding),  # type: ignore
-                    normalize_header_value(v, encoding),  # type: ignore
+                    normalize_header_key(k, lower=False, encoding=encoding),
+                    normalize_header_key(k, lower=True, encoding=encoding),
+                    normalize_header_value(v, encoding),
                 )
-                for k, v in h
+                for k, v in h  # pyright: ignore
             ]
 
         self._encoding = encoding
@@ -139,17 +171,17 @@ class Headers(typing.MutableMapping[str, str]):
         self._encoding = value
 
     @property
-    def raw(self) -> typing.List[typing.Tuple[bytes, bytes]]:
+    def raw(self) -> List[Tuple[bytes, bytes]]:
         """
         Returns a list of the raw header items, as byte pairs.
         """
         return [(raw_key, value) for raw_key, _, value in self._list]
 
-    def keys(self) -> typing.KeysView[str]:
+    def keys(self) -> KeysView[str]:
         return {key.decode(self.encoding): None for _, key, _ in self._list}.keys()
 
-    def values(self) -> typing.ValuesView[str]:
-        values_dict: typing.Dict[str, str] = {}
+    def values(self) -> ValuesView[str]:
+        values_dict: Dict[str, str] = {}
         for _, key, value in self._list:
             str_key = key.decode(self.encoding)
             str_value = value.decode(self.encoding)
@@ -159,12 +191,12 @@ class Headers(typing.MutableMapping[str, str]):
                 values_dict[str_key] = str_value
         return values_dict.values()
 
-    def items(self) -> typing.ItemsView[str, str]:
+    def items(self) -> ItemsView[str, str]:
         """
         Return `(key, value)` items of headers. Concatenate headers
         into a single comma separated value when a key occurs multiple times.
         """
-        values_dict: typing.Dict[str, str] = {}
+        values_dict: Dict[str, str] = {}
         for _, key, value in self._list:
             str_key = key.decode(self.encoding)
             str_value = value.decode(self.encoding)
@@ -174,18 +206,17 @@ class Headers(typing.MutableMapping[str, str]):
                 values_dict[str_key] = str_value
         return values_dict.items()
 
-    def multi_items(self) -> typing.List[typing.Tuple[str, str]]:
+    def multi_items(self) -> List[Tuple[str, str]]:
         """
         Return a list of `(key, value)` pairs of headers. Allow multiple
         occurrences of the same key without concatenating into a single
         comma separated value.
         """
         return [
-            (key.decode(self.encoding), value.decode(self.encoding))
-            for key, _, value in self._list
+            (key.decode(self.encoding), value.decode(self.encoding)) for key, _, value in self._list
         ]
 
-    def get(self, key: str, default: typing.Any = None) -> typing.Any:
+    def get(self, key: str, default: Any = None) -> Any:
         """
         Return a header value. If multiple occurrences of the header occur
         then concatenate them together with commas.
@@ -195,7 +226,7 @@ class Headers(typing.MutableMapping[str, str]):
         except KeyError:
             return default
 
-    def get_list(self, key: str, split_commas: bool = False) -> typing.List[str]:
+    def get_list(self, key: str, split_commas: bool = False) -> List[str]:
         """
         Return a list of all header values for a given key.
         If `split_commas=True` is passed, then any comma separated header
@@ -217,7 +248,7 @@ class Headers(typing.MutableMapping[str, str]):
             split_values.extend([item.strip() for item in value.split(",")])
         return split_values
 
-    def update(self, headers: typing.Optional[HeaderTypes] = None) -> None:  # type: ignore
+    def update(self, headers: Optional[HeaderTypes] = None) -> None:  # type: ignore
         headers = Headers(headers)
         for key in headers.keys():
             if key in self:
@@ -256,9 +287,7 @@ class Headers(typing.MutableMapping[str, str]):
         lookup_key = set_key.lower()
 
         found_indexes = [
-            idx
-            for idx, (_, item_key, _) in enumerate(self._list)
-            if item_key == lookup_key
+            idx for idx, (_, item_key, _) in enumerate(self._list) if item_key == lookup_key
         ]
 
         for idx in reversed(found_indexes[1:]):
@@ -277,9 +306,7 @@ class Headers(typing.MutableMapping[str, str]):
         del_key = key.lower().encode(self.encoding)
 
         pop_indexes = [
-            idx
-            for idx, (_, item_key, _) in enumerate(self._list)
-            if item_key.lower() == del_key
+            idx for idx, (_, item_key, _) in enumerate(self._list) if item_key.lower() == del_key
         ]
 
         if not pop_indexes:
@@ -288,17 +315,17 @@ class Headers(typing.MutableMapping[str, str]):
         for idx in reversed(pop_indexes):
             del self._list[idx]
 
-    def __contains__(self, key: typing.Any) -> bool:
+    def __contains__(self, key: Any) -> bool:
         header_key = key.lower().encode(self.encoding)
         return header_key in [key for _, key, _ in self._list]
 
-    def __iter__(self) -> typing.Iterator[typing.Any]:
+    def __iter__(self) -> Iterator[Any]:
         return iter(self.keys())
 
     def __len__(self) -> int:
         return len(self._list)
 
-    def __eq__(self, other: typing.Any) -> bool:
+    def __eq__(self, other: Any) -> bool:
         try:
             other_headers = Headers(other)
         except ValueError:

@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     load_pem_private_key,
 )
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, Form, UploadFile
 from httpx import URL
 from uvicorn.config import Config
 from uvicorn.main import Server
@@ -417,9 +417,7 @@ async def set_special_cookies(scope, receive, send):
 
 
 async def redirect_301(scope, receive, send):
-    await send(
-        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/"]]}
-    )
+    await send({"type": "http.response.start", "status": 301, "headers": [[b"location", b"/"]]})
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 
 
@@ -429,7 +427,7 @@ async def redirect_to(scope, receive, send):
         {
             "type": "http.response.start",
             "status": 301,
-            "headers": [[b"location", params["to"][0].encode()]],  # type: ignore
+            "headers": [[b"location", params["to"][0].encode()]],
         }
     )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
@@ -593,7 +591,7 @@ class TestWebsocketServer:
     def run(self):
         async def serve(port):
             # GitHub actions only likes 127, not localhost, wtf...
-            async with websockets.serve(echo, "127.0.0.1", port):
+            async with websockets.serve(echo, "127.0.0.1", port):  # pyright: ignore
                 await asyncio.Future()  # run forever
 
         asyncio.run(serve(self.port))
@@ -692,14 +690,16 @@ def upload_multi_files(images: typing.List[UploadFile]):
     files = []
     for image in images:
         content = image.file.read()
-        files.append({
-            "filename": image.filename,
-            "content_type": image.content_type,
-            "size": len(content),
-
-        })
+        files.append(
+            {
+                "filename": image.filename,
+                "content_type": image.content_type,
+                "size": len(content),
+            }
+        )
 
     return {"files": files}
+
 
 @file_app.post("/two-files")
 def upload_two_files(image1: UploadFile, image2: UploadFile):

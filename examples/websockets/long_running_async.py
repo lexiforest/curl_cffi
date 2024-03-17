@@ -1,7 +1,9 @@
 """
 WIP: this has not been implemented yet.
 """
+
 import asyncio
+
 from curl_cffi import requests
 
 
@@ -14,8 +16,10 @@ async def on_error(ws, error):
 
 
 async def on_open(ws):
-    print("For websockets, you need to set $wss_proxy environment variable!\n"
-          "$https_proxy will not work!")
+    print(
+        "For websockets, you need to set $wss_proxy environment variable!\n"
+        "$https_proxy will not work!"
+    )
     print(">>> Websocket open!")
 
 

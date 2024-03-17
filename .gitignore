@@ -20,3 +20,6 @@ curl-*/
 .preprocessed
 include/
 .DS_Store
+
+.mypy_cache/
+.ruff_cache/

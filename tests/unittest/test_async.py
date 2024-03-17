@@ -2,7 +2,7 @@ from curl_cffi import AsyncCurl, Curl, CurlOpt
 
 
 async def test_init(server):
-    ac = AsyncCurl()
+    ac = AsyncCurl()  # noqa F841
 
 
 async def test_add_handle(server):
@@ -23,9 +23,8 @@ async def test_socket_action(server):
     c.setopt(CurlOpt.WRITEFUNCTION, lambda x: len(x))
     fut = ac.add_handle(c)
     await fut
-    running = ac.socket_action(-1, 0)
+    running = ac.socket_action(-1, 0)  # noqa F841
     # assert running == 1
 
 
-async def test_process_data(server):
-    ...
+async def test_process_data(server): ...

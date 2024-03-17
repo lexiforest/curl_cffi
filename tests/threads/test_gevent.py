@@ -2,10 +2,10 @@ from gevent import monkey
 
 monkey.patch_all()
 
-import threading
-import time
+import threading  #  noqa: E402
+import time  #  noqa: E402
 
-from curl_cffi import requests
+from curl_cffi import requests  #  noqa: E402
 
 
 def delay():

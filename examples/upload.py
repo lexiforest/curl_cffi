@@ -6,8 +6,8 @@ We do not support requests.post(url, files=...), for 2 reasons.
 
 You use the multipart instead, it's very simple and straightforward.
 """
-from curl_cffi import requests, CurlMime
 
+from curl_cffi import CurlMime, requests
 
 mp = CurlMime()
 mp.addpart(
@@ -38,8 +38,8 @@ mp = CurlMime.from_list(
             "name": "foo",
             "content_type": "text/plain",
             "filename": "another.txt",
-            "data": "bar"
-        }
+            "data": "bar",
+        },
     ]
 )
 

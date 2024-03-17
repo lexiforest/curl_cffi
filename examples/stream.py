@@ -1,10 +1,11 @@
 import asyncio
-from curl_cffi import requests
 from contextlib import closing
+
+from curl_cffi import requests
 
 try:
     # Python 3.10+
-    from contextlib import aclosing
+    from contextlib import aclosing  # pyright: ignore
 except ImportError:
     from contextlib import asynccontextmanager
 

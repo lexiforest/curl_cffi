@@ -25,14 +25,13 @@ from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, Optional, Tuple, Union
 
-
-from ..curl import CurlMime
 from ..const import CurlHttpVersion, CurlWsFlag
+from ..curl import CurlMime
 from .cookies import Cookies, CookieTypes
-from .models import Request, Response
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .session import AsyncSession, BrowserType, Session, ProxySpec, ThreadType
+from .models import Request, Response
+from .session import AsyncSession, BrowserType, ProxySpec, Session, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
 
 

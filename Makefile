@@ -39,6 +39,15 @@ build: .preprocessed
 	pip install build
 	python -m build --wheel
 
+lint:
+	ruff check
+	ruff format --diff
+	mypy .
+
+format:
+	ruff check --fix
+	ruff format
+
 test:
 	python -bb -m pytest tests/unittest
 

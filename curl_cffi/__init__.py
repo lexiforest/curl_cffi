@@ -14,11 +14,11 @@ __all__ = [
 ]
 
 import _cffi_backend  # noqa: F401  # required by _wrapper
+
+from .__version__ import __curl_version__, __description__, __title__, __version__  # noqa: F401
+
 # This line includes _wrapper.so into the wheel
-from ._wrapper import ffi, lib  # type: ignore
-
-from .const import CurlInfo, CurlMOpt, CurlOpt, CurlECode, CurlHttpVersion, CurlWsFlag
-from .curl import Curl, CurlError, CurlMime
+from ._wrapper import ffi, lib
 from .aio import AsyncCurl
-
-from .__version__ import __title__, __version__, __description__, __curl_version__
+from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlMOpt, CurlOpt, CurlWsFlag
+from .curl import Curl, CurlError, CurlMime

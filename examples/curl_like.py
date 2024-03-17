@@ -2,7 +2,6 @@ from io import BytesIO
 
 from curl_cffi import Curl, CurlOpt
 
-
 buffer = BytesIO()
 c = Curl()
 c.setopt(CurlOpt.CUSTOMREQUEST, b"GET")

@@ -1,6 +1,5 @@
 from curl_cffi.requests import Session, WebSocket
 
-
 msg_count = 0
 
 
@@ -21,8 +20,10 @@ def on_error(ws: WebSocket, error):
 
 
 def on_open(ws: WebSocket):
-    print("For websockets, you need to set $wss_proxy environment variable!\n"
-          "$https_proxy will not work!")
+    print(
+        "For websockets, you need to set $wss_proxy environment variable!\n"
+        "$https_proxy will not work!"
+    )
     print(">>> Websocket open!")
 
 

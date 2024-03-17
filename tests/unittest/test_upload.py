@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-import pytest
-
 from curl_cffi import CurlMime, requests
 
 ASSET_FOLDER = Path(__file__).parent.parent.parent / "assets"
@@ -41,9 +39,7 @@ def test_upload_with_text_fields(file_server):
         ]
     )
 
-    r = requests.post(
-        file_server.url + "/file", data={"foo": "bar"}, multipart=multipart
-    )
+    r = requests.post(file_server.url + "/file", data={"foo": "bar"}, multipart=multipart)
     data = r.json()
     assert data["filename"] == "alipay.jpg"
     assert data["content_type"] == "image/jpg"
@@ -70,7 +66,7 @@ def test_upload_multiple_files(file_server):
         ]
     )
 
-    r = requests.post( file_server.url + "/files", multipart=multipart)
+    r = requests.post(file_server.url + "/files", multipart=multipart)
     data = r.json()
     assert len(data["files"]) == 2
     assert data["files"][0]["filename"] == "alipay.jpg"
@@ -97,7 +93,7 @@ def test_upload_multiple_files_different_name(file_server):
         ]
     )
 
-    r = requests.post(file_server.url + "/two-files" , multipart=multipart)
+    r = requests.post(file_server.url + "/two-files", multipart=multipart)
     data = r.json()
     assert data["size1"] == os.path.getsize(ASSET_FOLDER / "alipay.jpg")
     assert data["size2"] == os.path.getsize(ASSET_FOLDER / "wechat.jpg")
