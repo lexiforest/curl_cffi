@@ -2,10 +2,19 @@
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
+import sys
+
 # typing.Mapping is deprecated in favor of abc.Mapping
 # see: https://docs.python.org/3/library/typing.html#typing.Mapping
-from collections.abc import Mapping
+if sys.version_info < (3, 9, 0):
+    from collections.abc import Mapping as AbcMapping
+    from typing import Mapping, MutableMapping
+else:
+    from collections.abc import Mapping, MutableMapping
 
+    AbcMapping = Mapping
+
+from collections.abc import Mapping
 from typing import (
     Any,
     AnyStr,
@@ -15,7 +24,6 @@ from typing import (
     Iterator,
     KeysView,
     List,
-    MutableMapping,
     Optional,
     Sequence,
     Tuple,
@@ -92,7 +100,7 @@ class Headers(MutableMapping[str, str]):
             self._list = []  # type: List[Tuple[bytes, bytes, bytes]]
         elif isinstance(headers, Headers):
             self._list = list(headers._list)
-        elif isinstance(headers, Mapping):
+        elif isinstance(headers, AbcMapping):
             self._list = [
                 (
                     normalize_header_key(k, lower=False, encoding=encoding),
