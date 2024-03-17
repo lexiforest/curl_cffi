@@ -32,7 +32,6 @@ else:
 
     AbcMapping = Mapping  # type: ignore[misc]
 
-from collections.abc import Mapping
 from typing import (
     Any,
     AnyStr,
