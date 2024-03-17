@@ -32,6 +32,27 @@ Unlike other pure Python http clients like ``httpx`` or ``requests``, ``curl_cff
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
 website for no obvious reason, you can give this package a try.
 
+------
+
+.. image:: https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/scrapfly.png
+   :width: 300
+   :alt: Scrapfly
+   :target: https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi
+
+`Scrapfly <https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi>`_
+is an enterprise-grade solution providing Web Scraping API that aims to simplify the
+scraping process by managing everything: real browser rendering, rotating proxies, and
+fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the
+observability by providing an analytical dashboard and measuring the success rate/block
+rate in detail.
+
+Scrapfly is a good solution if you are looking for a cloud-managed solution for ``curl_cffi``.
+If you are managing TLS/HTTP fingerprint by yourself with ``curl_cffi``, they also maintain
+`this tool <https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi>`_ to convert curl
+command into python curl_cffi code!
+
+------
+
 Features
 ------
 
