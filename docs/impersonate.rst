@@ -108,3 +108,13 @@ randomized, due to the ``extension permutation`` feature introduced in Chrome 11
 
 AFAIK, most websites use an allowlist, not a blocklist to filter out bot traffic. So I
 don’t think random ja3 fingerprints would work in the wild.
+
+Can I change JS fingerprints with this library?
+------
+
+No, you can not. As the name suggests, JavaScript fingerprints are generated using Javascript
+APIs provided by real browsers. ``curl_cffi`` is a python binding to a C library, with no
+browser or JavaScript runtime under the hood.
+
+If you need to impersonate browsers on the JavaScript perspective, you can search for "Anti-detect
+Browser", "Playwright stealth" and similar keywords. Or simply use a commercial plan from our sponsors.

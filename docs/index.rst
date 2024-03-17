@@ -44,7 +44,7 @@ is an enterprise-grade solution providing Web Scraping API that aims to simplify
 scraping process by managing everything: real browser rendering, rotating proxies, and
 fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the
 observability by providing an analytical dashboard and measuring the success rate/block
-rate in detail.
+rate in details.
 
 Scrapfly is a good solution if you are looking for a cloud-managed solution for ``curl_cffi``.
 If you are managing TLS/HTTP fingerprint by yourself with ``curl_cffi``, they also maintain

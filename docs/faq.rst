@@ -37,6 +37,7 @@ a better proxy IP provider and use browser automation tools like playwright.
 If you are in a hurry or just want the professionals to take care of the hard parts,
 you can consider the commercial solutions from our sponsors:
 
+- `Scraply <https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi>`_, Cloud-based scraping platform.
 - `Yescaptcha <https://yescaptcha.com/i/stfnIO>`_, captcha resolver and proxy service for bypassing Cloudflare.
 - `ScrapeNinja <https://scrapeninja.net/?utm_source=github&utm_medium=banner&utm_campaign=cffi>`_, Managed web scraping API.
 
