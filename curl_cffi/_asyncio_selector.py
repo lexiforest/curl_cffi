@@ -33,7 +33,7 @@ _T = TypeVar("_T")
 
 class _HasFileno(Protocol):
     def fileno(self) -> int:
-        pass
+        return 0
 
 
 _FileDescriptorLike = Union[int, _HasFileno]

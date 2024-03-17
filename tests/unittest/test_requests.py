@@ -8,6 +8,7 @@ import pytest
 from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
+from curl_cffi.requests.models import Response
 
 
 def test_head(server):
@@ -190,6 +191,7 @@ def test_too_many_redirects(server):
     with pytest.raises(requests.RequestsError) as e:
         requests.get(str(server.url.copy_with(path="/redirect_loop")), max_redirects=2)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+    assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
 
 
@@ -548,6 +550,7 @@ def test_stream_redirect_loop(server):
             with s.stream("GET", url, max_redirects=2):
                 pass
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+        assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
 
 
@@ -559,6 +562,7 @@ def test_stream_redirect_loop_without_close(server):
             s.get(url, max_redirects=2, stream=True)
 
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+        assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
 
 
@@ -588,6 +592,7 @@ def test_stream_auto_close_with_header_errors(server):
     with pytest.raises(requests.RequestsError) as e:
         s.get(url, max_redirects=2, stream=True)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+    assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
 
     url = str(server.url.copy_with(path="/"))
@@ -646,4 +651,4 @@ def test_curl_infos(server):
 
     r = s.get(str(server.url))
 
-    assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"
+    assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"  # pyright: ignore

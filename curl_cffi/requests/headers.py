@@ -22,8 +22,8 @@ from typing import (
 
 HeaderTypes = Union[
     "Headers",
-    Mapping[str, str],
-    Mapping[bytes, bytes],
+    Mapping[str, Optional[str]],
+    Mapping[bytes, Optional[bytes]],
     Sequence[Tuple[str, str]],
     Sequence[Tuple[bytes, bytes]],
     Sequence[Union[str, bytes]],
@@ -35,7 +35,7 @@ def to_str(value: Union[str, bytes], encoding: str = "utf-8") -> str:
 
 
 def to_bytes_or_str(value: str, match_type_of: AnyStr) -> AnyStr:
-    return value if isinstance(match_type_of, str) else value.encode()
+    return value if isinstance(match_type_of, str) else value.encode()  # pyright: ignore [reportGeneralTypeIssues]
 
 
 SENSITIVE_HEADERS = {"authorization", "proxy-authorization"}
@@ -102,7 +102,10 @@ class Headers(MutableMapping[str, str]):
         elif isinstance(headers, list):
             if isinstance(headers[0], (str, bytes)):
                 sep = ":" if isinstance(headers[0], str) else b":"
-                h = [(k, v.lstrip()) for line in headers for k, v in [line.split(sep, maxsplit=1)]]
+                h = []
+                for line in headers:
+                    k, v = line.split(sep, maxsplit=1)  # pyright: ignore
+                    h.append((k, v.strip()))
             elif isinstance(headers[0], tuple):
                 h = headers
             self._list = [
@@ -111,7 +114,7 @@ class Headers(MutableMapping[str, str]):
                     normalize_header_key(k, lower=True, encoding=encoding),
                     normalize_header_value(v, encoding),
                 )
-                for k, v in h
+                for k, v in h  # pyright: ignore
             ]
 
         self._encoding = encoding

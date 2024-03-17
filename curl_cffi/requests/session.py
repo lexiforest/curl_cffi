@@ -361,8 +361,8 @@ class BaseSession:
                 username, password = self.auth
             if auth:
                 username, password = auth
-            c.setopt(CurlOpt.USERNAME, username.encode())
-            c.setopt(CurlOpt.PASSWORD, password.encode())
+            c.setopt(CurlOpt.USERNAME, username.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
+            c.setopt(CurlOpt.PASSWORD, password.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
 
         # timeout
         if timeout is not_set:
@@ -813,12 +813,12 @@ class Session(BaseSession):
                 except CurlError as e:
                     rsp = self._parse_response(c, buffer, header_buffer)
                     rsp.request = req
-                    q.put_nowait(RequestsError(str(e), e.code, rsp))
+                    cast(queue.Queue, q).put_nowait(RequestsError(str(e), e.code, rsp))
                 finally:
-                    if not header_recved.is_set():
-                        header_recved.set()
+                    if not cast(threading.Event, header_recved).is_set():
+                        cast(threading.Event, header_recved).set()
                     # None acts as a sentinel
-                    q.put(None)
+                    cast(queue.Queue, q).put(None)
 
             def cleanup(fut):
                 header_parsed.wait()
@@ -828,12 +828,12 @@ class Session(BaseSession):
             stream_task.add_done_callback(cleanup)
 
             # Wait for the first chunk
-            header_recved.wait()
+            cast(threading.Event, header_recved).wait()
             rsp = self._parse_response(c, buffer, header_buffer)
             header_parsed.set()
 
             # Raise the exception if something wrong happens when receiving the header.
-            first_element = _peek_queue(q)
+            first_element = _peek_queue(cast(queue.Queue, q))
             if isinstance(first_element, RequestsError):
                 c.reset()
                 raise first_element
@@ -1080,12 +1080,12 @@ class AsyncSession(BaseSession):
                 except CurlError as e:
                     rsp = self._parse_response(curl, buffer, header_buffer)
                     rsp.request = req
-                    q.put_nowait(RequestsError(str(e), e.code, rsp))
+                    cast(asyncio.Queue, q).put_nowait(RequestsError(str(e), e.code, rsp))
                 finally:
-                    if not header_recved.is_set():
-                        header_recved.set()
+                    if not cast(asyncio.Event, header_recved).is_set():
+                        cast(asyncio.Event, header_recved).set()
                     # None acts as a sentinel
-                    await q.put(None)
+                    await cast(asyncio.Queue, q).put(None)
 
             def cleanup(fut):
                 self.release_curl(curl)
@@ -1093,20 +1093,20 @@ class AsyncSession(BaseSession):
             stream_task = asyncio.create_task(perform())
             stream_task.add_done_callback(cleanup)
 
-            await header_recved.wait()
+            await cast(asyncio.Event, header_recved).wait()
 
             # Unlike threads, coroutines does not use preemptive scheduling.
             # For asyncio, there is no need for a header_parsed event, the
             # _parse_response will execute in the foreground, no background tasks running.
             rsp = self._parse_response(curl, buffer, header_buffer)
 
-            first_element = _peek_aio_queue(q)
+            first_element = _peek_aio_queue(cast(asyncio.Queue, q))
             if isinstance(first_element, RequestsError):
                 self.release_curl(curl)
                 raise first_element
 
             rsp.request = req
-            rsp.stream_task = stream_task
+            rsp.astream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
             return rsp

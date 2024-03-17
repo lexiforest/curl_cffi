@@ -591,7 +591,7 @@ class TestWebsocketServer:
     def run(self):
         async def serve(port):
             # GitHub actions only likes 127, not localhost, wtf...
-            async with websockets.serve(echo, "127.0.0.1", port):
+            async with websockets.serve(echo, "127.0.0.1", port):  # pyright: ignore
                 await asyncio.Future()  # run forever
 
         asyncio.run(serve(self.port))

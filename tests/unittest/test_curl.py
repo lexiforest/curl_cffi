@@ -1,6 +1,7 @@
 import base64
 import json
 from io import BytesIO
+from typing import cast
 
 import pytest
 
@@ -309,7 +310,7 @@ def test_elapsed(server):
     url = str(server.url)
     c.setopt(CurlOpt.URL, url.encode())
     c.perform()
-    assert c.getinfo(CurlInfo.TOTAL_TIME) > 0
+    assert cast(int, c.getinfo(CurlInfo.TOTAL_TIME)) > 0
 
 
 def test_reason(server):

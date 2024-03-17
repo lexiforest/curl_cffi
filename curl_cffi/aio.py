@@ -5,8 +5,6 @@ from contextlib import suppress
 from typing import Any, Dict, Set
 from weakref import WeakKeyDictionary, WeakSet
 
-import cffi
-
 from ._wrapper import ffi, lib
 from .const import CurlMOpt
 from .curl import DEFAULT_CACERT, Curl
@@ -134,7 +132,7 @@ class AsyncCurl:
         self._curlm = lib.curl_multi_init()
         self._cacert = cacert or DEFAULT_CACERT
         self._curl2future: Dict[Curl, asyncio.Future] = {}  # curl to future map
-        self._curl2curl: Dict[cffi.CData, Curl] = {}  # c curl to Curl
+        self._curl2curl: Dict[ffi.CData, Curl] = {}  # c curl to Curl
         self._sockfds: Set[int] = set()  # sockfds
         self.loop = _get_selector(loop if loop is not None else asyncio.get_running_loop())
         self._checker = self.loop.create_task(self._force_timeout())

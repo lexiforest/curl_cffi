@@ -1,7 +1,8 @@
 import queue
 import warnings
+from concurrent.futures import Future
 from json import loads
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Dict, List, Optional
 
 from .. import Curl
 from .cookies import Cookies
@@ -65,7 +66,8 @@ class Response:
         self.history: List[Dict[str, Any]] = []
         self.infos: Dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
-        self.stream_task = None
+        self.stream_task: Optional[Future] = None
+        self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
 
     def _decode(self, content: bytes) -> str:
@@ -117,6 +119,9 @@ class Response:
             warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
         if decode_unicode:
             raise NotImplementedError()
+
+        assert self.queue and self.curl, "stream mode is not enabled."
+
         while True:
             chunk = self.queue.get()
 
@@ -133,11 +138,12 @@ class Response:
             yield chunk
 
     def json(self, **kw):
-        """return a prased json object of the content."""
+        """return a parsed json object of the content."""
         return loads(self.content, **kw)
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
+
         if self.quit_now:
             self.quit_now.set()
         if self.stream_task:
@@ -179,6 +185,8 @@ class Response:
         if decode_unicode:
             raise NotImplementedError()
 
+        assert self.queue and self.curl, "stream mode is not enabled."
+
         while True:
             chunk = await self.queue.get()
 
@@ -209,8 +217,9 @@ class Response:
 
     async def aclose(self):
         """Close the streaming connection, only valid in stream mode."""
-        if self.stream_task:
-            await self.stream_task
+
+        if self.astream_task:
+            await self.astream_task
 
     # It prints the status code of the response instead of
     # the object's memory location.
