@@ -7,28 +7,40 @@ import sys
 # typing.Mapping is deprecated in favor of abc.Mapping
 # see: https://docs.python.org/3/library/typing.html#typing.Mapping
 if sys.version_info < (3, 9, 0):
+    from typing import (
+        ItemsView,
+        Iterable,
+        Iterator,
+        KeysView,
+        Mapping,
+        MutableMapping,
+        Sequence,
+        ValuesView,
+    )
     from collections.abc import Mapping as AbcMapping
-    from typing import Mapping, MutableMapping
 else:
-    from collections.abc import Mapping, MutableMapping
+    from collections.abc import (
+        ItemsView,
+        Iterable,
+        Iterator,
+        KeysView,
+        Mapping,
+        MutableMapping,
+        Sequence,
+        ValuesView,
+    )
 
-    AbcMapping = Mapping
+    AbcMapping = Mapping  # type: ignore[misc]
 
 from collections.abc import Mapping
 from typing import (
     Any,
     AnyStr,
     Dict,
-    ItemsView,
-    Iterable,
-    Iterator,
-    KeysView,
     List,
     Optional,
-    Sequence,
     Tuple,
     Union,
-    ValuesView,
 )
 
 HeaderTypes = Union[
