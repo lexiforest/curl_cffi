@@ -10,6 +10,8 @@ from ._wrapper import ffi, lib
 from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 
 DEFAULT_CACERT = certifi.where()
+REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
+STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
 
 
 class CurlError(Exception):
@@ -341,7 +343,7 @@ class Curl:
     @staticmethod
     def get_reason_phrase(status_line: bytes) -> bytes:
         """Extract reason phrase, like ``OK``, ``Not Found`` from response status line."""
-        m = re.match(rb"HTTP/\d\.\d [0-9]{3} (.*)", status_line)
+        m = REASON_PHRASE_RE.match(status_line)
         return m.group(1) if m else b""
 
     @staticmethod
@@ -351,7 +353,7 @@ class Curl:
         Returns:
             http_version, status_code, and reason phrase
         """
-        m = re.match(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)", status_line)
+        m = STATUS_LINE_RE.match(status_line)
         if not m:
             return CurlHttpVersion.V1_0, 0, b""
         if m.group(1) == "2.0":
