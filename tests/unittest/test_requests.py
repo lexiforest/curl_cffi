@@ -262,6 +262,12 @@ def test_session_options(server):
     assert r.status_code == 200
 
 
+def test_session_base_url(server):
+    s = requests.Session(base_url=str(server.url))
+    r = s.get("/echo_params", params={"foo": "bar"})
+    assert r.content == b'{"params": {"foo": ["bar"]}}'
+
+
 def test_session_update_parms(server):
     s = requests.Session(params={"old": "day"})
     r = s.get(str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"})
