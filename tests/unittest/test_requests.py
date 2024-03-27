@@ -263,9 +263,31 @@ def test_session_options(server):
 
 
 def test_session_base_url(server):
-    s = requests.Session(base_url=str(server.url))
-    r = s.get("/echo_params", params={"foo": "bar"})
-    assert r.content == b'{"params": {"foo": ["bar"]}}'
+    s = requests.Session(base_url=str(server.url.copy_with(path="/a/b", params={"foo": "bar"})))
+
+    # target path is empty
+    r = s.get("")
+    assert r.url == s.base_url
+
+    # target path only has params
+    r = s.get("", params={"hello": "world"})
+    assert r.url == str(server.url.copy_with(path="/a/b", params={"hello": "world"}))
+
+    # target path is a relative path without starting /
+    r = s.get("x")
+    assert r.url == str(server.url.copy_with(path="/a/x"))
+    r = s.get("x", params={"hello": "world"})
+    assert r.url == str(server.url.copy_with(path="/a/x", params={"hello": "world"}))
+
+    # target path is a relative path with starting /
+    r = s.get("/x")
+    assert r.url == str(server.url.copy_with(path="/x"))
+    r = s.get("/x", params={"hello": "world"})
+    assert r.url == str(server.url.copy_with(path="/x", params={"hello": "world"}))
+
+    # target path is an absolute url
+    r = s.get(str(server.url.copy_with(path="/x/y")))
+    assert r.url == str(server.url.copy_with(path="/x/y"))
 
 
 def test_session_update_parms(server):

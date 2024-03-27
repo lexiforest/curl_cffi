@@ -65,10 +65,32 @@ async def test_options(server):
 
 
 async def test_base_url(server):
-    async with AsyncSession(base_url=str(server.url)) as s:
-        r = await s.get("/echo_params", params={"foo": "bar"})
-        assert r.status_code == 200
-        assert r.content == b'{"params": {"foo": ["bar"]}}'
+    async with AsyncSession(
+        base_url=str(server.url.copy_with(path="/a/b", params={"foo": "bar"}))
+    ) as s:
+        # target path is empty
+        r = await s.get("")
+        assert r.url == s.base_url
+
+        # target path only has params
+        r = await s.get("", params={"hello": "world"})
+        assert r.url == str(server.url.copy_with(path="/a/b", params={"hello": "world"}))
+
+        # target path is a relative path without starting /
+        r = await s.get("x")
+        assert r.url == str(server.url.copy_with(path="/a/x"))
+        r = await s.get("x", params={"hello": "world"})
+        assert r.url == str(server.url.copy_with(path="/a/x", params={"hello": "world"}))
+
+        # target path is a relative path with starting /
+        r = await s.get("/x")
+        assert r.url == str(server.url.copy_with(path="/x"))
+        r = await s.get("/x", params={"hello": "world"})
+        assert r.url == str(server.url.copy_with(path="/x", params={"hello": "world"}))
+
+        # target path is an absolute url
+        r = await s.get(str(server.url.copy_with(path="/x/y")))
+        assert r.url == str(server.url.copy_with(path="/x/y"))
 
 
 async def test_params(server):
