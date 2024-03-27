@@ -23,7 +23,7 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse
+from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
 
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -101,6 +101,12 @@ class BrowserSpec:
     """A more structured way of selecting browsers"""
 
     # TODO
+
+
+def _is_absolute_url(url: str) -> bool:
+    """Check if the provided url is an absolute url"""
+    parsed_url = urlparse(url)
+    return bool(parsed_url.scheme and parsed_url.hostname)
 
 
 def _update_url_params(url: str, params: Dict) -> str:
@@ -190,6 +196,7 @@ class BaseSession:
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
         proxy_auth: Optional[Tuple[str, str]] = None,
+        base_url: Optional[str] = None,
         params: Optional[dict] = None,
         verify: bool = True,
         timeout: Union[float, Tuple[float, float]] = 30,
@@ -208,6 +215,7 @@ class BaseSession:
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
         self.auth = auth
+        self.base_url = base_url
         self.params = params
         self.verify = verify
         self.timeout = timeout
@@ -229,6 +237,9 @@ class BaseSession:
             proxies = {"all": proxy}
         self.proxies: ProxySpec = proxies or {}
         self.proxy_auth = proxy_auth
+
+        if self.base_url and not _is_absolute_url(self.base_url):
+            raise ValueError("You need to provide an absolute url for 'base_url'")
 
         self._closed = False
 
@@ -278,6 +289,8 @@ class BaseSession:
             url = _update_url_params(url, self.params)
         if params:
             url = _update_url_params(url, params)
+        if self.base_url:
+            url = urljoin(self.base_url, url)
         c.setopt(CurlOpt.URL, url.encode())
 
         # data/body/json
@@ -617,6 +630,7 @@ class Session(BaseSession):
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
             proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
+            base_url: absolute url to use for relative urls.
             params: query string for the session.
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
@@ -897,6 +911,7 @@ class AsyncSession(BaseSession):
             proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
             proxy: proxy to use, format: "http://proxy_url". Cannot be used with the above parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
+            base_url: absolute url to use for relative urls.
             params: query string for the session.
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
