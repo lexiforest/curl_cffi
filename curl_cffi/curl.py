@@ -272,6 +272,8 @@ class Curl:
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
             self._check_error(ret, "set cacert")
+            ret = self.setopt(CurlOpt.PROXY_CAINFO, self._cacert)
+            self._check_error(ret, "set proxy cacert")
 
     def perform(self, clear_headers: bool = True) -> None:
         """Wrapper for ``curl_easy_perform``, performs a curl request.
