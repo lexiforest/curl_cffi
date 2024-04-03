@@ -2,9 +2,12 @@ __all__ = [
     "Curl",
     "AsyncCurl",
     "CurlMime",
+    "CurlShare",
     "CurlError",
     "CurlInfo",
     "CurlOpt",
+    "CURLSHoption",
+    "CurlLockData",
     "CurlMOpt",
     "CurlECode",
     "CurlHttpVersion",
@@ -20,5 +23,5 @@ from .__version__ import __curl_version__, __description__, __title__, __version
 # This line includes _wrapper.so into the wheel
 from ._wrapper import ffi, lib
 from .aio import AsyncCurl
-from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlMOpt, CurlOpt, CurlWsFlag
-from .curl import Curl, CurlError, CurlMime
+from .const import CurlECode, CurlHttpVersion, CurlInfo, CURLSHoption, CurlLockData, CurlMOpt, CurlOpt, CurlWsFlag
+from .curl import Curl, CurlError, CurlMime, CurlShare

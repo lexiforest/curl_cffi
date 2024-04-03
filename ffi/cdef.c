@@ -68,3 +68,9 @@ int curl_mime_type(void *field, char *type);
 int curl_mime_filename(void *field, char *filename);
 int curl_mime_filedata(void *field, char *filename);
 void curl_mime_free(void *form);
+
+// share
+void *curl_share_init();
+int curl_share_setopt(void *curlsh, int option, int param);
+int curl_share_cleanup(void *curlsh);
+const char *curl_share_strerror(int errornum);

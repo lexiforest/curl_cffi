@@ -551,3 +551,24 @@ class CurlWsFlag(IntEnum):
     CLOSE = 1 << 3
     PING = 1 << 4
     OFFSET = 1 << 5
+
+
+class CurlLockData(IntEnum):
+    NONE = 0
+    SHARE = 1
+    COOKIE = 2
+    DNS = 3
+    SSL_SESSION = 4
+    CONNECT = 5
+    PSL = 6
+    LAST = 7
+
+
+class CURLSHoption(IntEnum):
+    NONE = 0
+    SHARE = 1
+    UNSHARE = 2
+    LOCKFUNC = 3
+    UNLOCKFUNC = 4
+    USERDATA = 5
+    LAST = 6
