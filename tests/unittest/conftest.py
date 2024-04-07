@@ -124,6 +124,8 @@ async def app(scope, receive, send):
         await incomplete_read(scope, receive, send)
     elif scope["path"].startswith("/gbk"):
         await hello_world_gbk(scope, receive, send)
+    elif scope["path"].startswith("/windows1251"):
+        await hello_world_windows1251(scope, receive, send)
     elif scope["path"].startswith("http://"):
         await http_proxy(scope, receive, send)
     elif scope["method"] == "CONNECT":
@@ -163,6 +165,22 @@ async def hello_world_gbk(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": b"Hello, world!"})
+
+
+async def hello_world_windows1251(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [[b"content-type", b"text/plain"]],
+        }
+    )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": "Bсеки човек има право на образование.".encode("cp1251"),
+        }
+    )
 
 
 async def http_proxy(scope, receive, send):

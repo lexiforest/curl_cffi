@@ -58,6 +58,7 @@ def request(
     impersonate: Optional[Union[str, BrowserType]] = None,
     thread: Optional[ThreadType] = None,
     default_headers: Optional[bool] = None,
+    default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
     curl_options: Optional[dict] = None,
     http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
@@ -90,6 +91,8 @@ def request(
         impersonate: which browser version to impersonate.
         thread: work with other thread implementations. choices: eventlet, gevent.
         default_headers: whether to set default browser headers.
+        default_encoding: encoding for decoding response content if charset is not found in headers. 
+                Defaults to "utf-8". Can be set to a callable for automatic detection.
         curl_options: extra curl options to use.
         http_version: limiting http version, http2 will be tries by default.
         debug: print extra curl debug info.
@@ -122,6 +125,7 @@ def request(
             content_callback=content_callback,
             impersonate=impersonate,
             default_headers=default_headers,
+            default_encoding=default_encoding,
             http_version=http_version,
             interface=interface,
             multipart=multipart,

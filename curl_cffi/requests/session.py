@@ -1,7 +1,6 @@
 import asyncio
 import math
 import queue
-import re
 import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -55,7 +54,6 @@ if TYPE_CHECKING:
 else:
     ProxySpec = Dict[str, str]
 
-CHARSET_RE = re.compile(r"charset=([\w-]+)")
 ThreadType = Literal["eventlet", "gevent"]
 
 
@@ -205,6 +203,7 @@ class BaseSession:
         max_redirects: int = -1,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
+        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         curl_options: Optional[dict] = None,
         curl_infos: Optional[list] = None,
         http_version: Optional[CurlHttpVersion] = None,
@@ -224,6 +223,7 @@ class BaseSession:
         self.max_redirects = max_redirects
         self.impersonate = impersonate
         self.default_headers = default_headers
+        self.default_encoding = default_encoding
         self.curl_options = curl_options or {}
         self.curl_infos = curl_infos or []
         self.http_version = http_version
@@ -547,7 +547,7 @@ class BaseSession:
 
         return req, buffer, header_buffer, q, header_recved, quit_now
 
-    def _parse_response(self, curl, buffer, header_buffer):
+    def _parse_response(self, curl, buffer, header_buffer, default_encoding):
         c = curl
         rsp = Response(c)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
@@ -583,13 +583,7 @@ class BaseSession:
         rsp.cookies = self.cookies
         # print("Cookies after extraction", self.cookies)
 
-        content_type = rsp.headers.get("Content-Type", default="")
-        charset_match = CHARSET_RE.search(content_type)
-        charset = charset_match.group(1) if charset_match else "utf-8"
-
-        rsp.charset = charset
-        rsp.encoding = charset  # TODO use chardet
-
+        rsp.default_encoding = default_encoding
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
         rsp.redirect_url = cast(bytes, c.getinfo(CurlInfo.REDIRECT_URL)).decode()
@@ -639,6 +633,8 @@ class Session(BaseSession):
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
             interface: which interface use in request to server.
+            default_encoding: encoding for decoding response content if charset is not found in headers. 
+                Defaults to "utf-8". Can be set to a callable for automatic detection.
 
         Notes:
             This class can be used as a context manager.
@@ -767,6 +763,7 @@ class Session(BaseSession):
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
@@ -825,7 +822,7 @@ class Session(BaseSession):
                 try:
                     c.perform()
                 except CurlError as e:
-                    rsp = self._parse_response(c, buffer, header_buffer)
+                    rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                     rsp.request = req
                     cast(queue.Queue, q).put_nowait(RequestsError(str(e), e.code, rsp))
                 finally:
@@ -843,7 +840,7 @@ class Session(BaseSession):
 
             # Wait for the first chunk
             cast(threading.Event, header_recved).wait()
-            rsp = self._parse_response(c, buffer, header_buffer)
+            rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
             header_parsed.set()
 
             # Raise the exception if something wrong happens when receiving the header.
@@ -868,11 +865,11 @@ class Session(BaseSession):
                 else:
                     c.perform()
             except CurlError as e:
-                rsp = self._parse_response(c, buffer, header_buffer)
+                rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                 rsp.request = req
                 raise RequestsError(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(c, buffer, header_buffer)
+                rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                 rsp.request = req
                 return rsp
             finally:
@@ -919,6 +916,8 @@ class AsyncSession(BaseSession):
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
+            default_encoding: encoding for decoding response content if charset is not found in headers. 
+                Defaults to "utf-8". Can be set to a callable for automatic detection.
 
         Notes:
             This class can be used as a context manager, and it's recommended to use via
@@ -1043,6 +1042,7 @@ class AsyncSession(BaseSession):
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: Optional[bool] = None,
+        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
@@ -1093,7 +1093,7 @@ class AsyncSession(BaseSession):
                 try:
                     await task
                 except CurlError as e:
-                    rsp = self._parse_response(curl, buffer, header_buffer)
+                    rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                     rsp.request = req
                     cast(asyncio.Queue, q).put_nowait(RequestsError(str(e), e.code, rsp))
                 finally:
@@ -1113,7 +1113,7 @@ class AsyncSession(BaseSession):
             # Unlike threads, coroutines does not use preemptive scheduling.
             # For asyncio, there is no need for a header_parsed event, the
             # _parse_response will execute in the foreground, no background tasks running.
-            rsp = self._parse_response(curl, buffer, header_buffer)
+            rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
 
             first_element = _peek_aio_queue(cast(asyncio.Queue, q))
             if isinstance(first_element, RequestsError):
@@ -1132,11 +1132,11 @@ class AsyncSession(BaseSession):
                 await task
                 # print(curl.getinfo(CurlInfo.CAINFO))
             except CurlError as e:
-                rsp = self._parse_response(curl, buffer, header_buffer)
+                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req
                 raise RequestsError(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(curl, buffer, header_buffer)
+                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req
                 return rsp
             finally:

@@ -4,6 +4,7 @@ import time
 from io import BytesIO
 
 import pytest
+from charset_normalizer import detect
 
 from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
@@ -109,7 +110,22 @@ def test_headers(server):
 
 def test_charset_parse(server):
     r = requests.get(str(server.url.copy_with(path="/gbk")))
-    assert r.charset == "gbk"
+    assert r.encoding == "gbk"
+
+
+def test_charset_default_encoding(server):
+    r = requests.get(
+        str(server.url.copy_with(path="/windows1251")), default_encoding="windows-1251"
+    )
+    assert r.encoding == "windows-1251"
+
+
+def test_charset_default_encoding_autodetect(server):
+    def autodetect(content):
+        return detect(content).get("encoding")
+
+    r = requests.get(str(server.url.copy_with(path="/windows1251")), default_encoding=autodetect)
+    assert r.encoding == "windows-1251"
 
 
 def test_content_type_header_with_json(server):
