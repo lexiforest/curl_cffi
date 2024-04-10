@@ -5,7 +5,7 @@ authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
 dependencies = [
-    "cffi>=1.12.0",
+    "cffi>=1.16.0",
     "certifi>=2024.2.2",
 ]
 readme = "README.md"
@@ -26,51 +26,43 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = [
-    "autoflake==1.4",
-    "charset_normalizer>=3.3.2,<4",
-    "coverage==6.4.1",
-    "cryptography==38.0.3",
-    "flake8==6.0.0",
-    "flake8-bugbear==22.7.1",
-    "flake8-pie==0.15.0",
-    "httpx==0.23.1",
-    "mypy==1.9.0",
-    "types-certifi==2021.10.8.2",
-    "pytest==7.1.2",
-    "pytest-asyncio==0.19.0",
-    "pytest-trio==0.7.0",
-    "trio==0.21.0",
-    "trio-typing==0.7.0",
-    "trustme==0.9.0",
-    "uvicorn==0.18.3",
-    "websockets==11.0.3",
-    "ruff==0.3.3",
+    "charset_normalizer>=3.3.2,<4.0",
+    "coverage>=6.4.1,<7.0",
+    "cryptography>=42.0.5,<43.0",
+    "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
+    "mypy>=1.9.0,<2.0",
+    "pytest>=8.1.1,<9.0",
+    "pytest-asyncio>=0.23.6,<1.0",
+    "pytest-trio>=0.8.0,<1.0",
+    "ruff>=0.3.5,<1.0",
+    "trio>=0.25.0,<1.0",
+    "trustme>=1.1.0,<2.0",
+    "uvicorn>=0.29.0,<1.0",
+    "websockets>=12.0,<13.0",
 ]
 build = [
     "cibuildwheel",
     "wheel",
 ]
 test = [
-    "charset_normalizer>=3.3.2,<4",
-    "cryptography==38.0.3",
-    "httpx==0.23.1",
-    "types-certifi==2021.10.8.2",
-    "pytest==7.1.2",
-    "pytest-asyncio==0.19.0",
-    "pytest-trio==0.7.0",
-    "trio==0.21.0",
-    "trio-typing==0.7.0",
-    "trustme==0.9.0",
-    "uvicorn==0.18.3",
-    "proxy.py==2.4.3",
-    "websockets==11.0.3",
-    "python-multipart==0.0.6",
-    "fastapi==0.100.0",
+    "charset_normalizer>=3.3.2,<4.0",
+    "cryptography>=42.0.5,<43.0",
+    "fastapi==0.110.0,<1.0",
+    "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
+    "proxy.py>=2.4.3,<3.0",
+    "pytest>=8.1.1,<9.0",
+    "pytest-asyncio>=0.23.6,<1.0",
+    "pytest-trio>=0.8.0,<1.0",
+    "python-multipart>=0.0.9,<1.0",
+    "trio>=0.25.0,<1.0",
+    "trustme>=1.1.0,<2.0",
+    "uvicorn>=0.29.0,<1.0",
+    "websockets>=12.0,<13.0",
 ]
 
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi>=1.12.0"]
+requires = ["wheel", "setuptools", "cffi>=1.16.0"]
 build-backend = "setuptools.build_meta"
 
 
@@ -123,8 +115,14 @@ asyncio_mode = "auto"
 line-length = 100
 
 [tool.ruff.lint]
-# Enable the isort rules.
-extend-select = ["I"]
+select = [
+    "E",  # pycodestyle
+    "F",  # Pyflakes
+    "UP",  # pyupgrade
+    "B",  # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",  # isort
+]
 
 [tool.mypy]
 python_version = "3.8"
