@@ -70,7 +70,7 @@ class CurlMorsel:
 
     def to_curl_format(self):
         if not self.hostname:
-            raise RequestsError("Domain not found for cookie {}={}".format(self.name, self.value))
+            raise RequestsError(f"Domain not found for cookie {self.name}={self.value}")
         return "\t".join(
             [
                 self.hostname,
@@ -114,7 +114,7 @@ class CurlMorsel:
             secure=self.secure,
             # using if explicitly to make it clear.
             expires=None if self.expires == 0 else self.expires,
-            discard=True if self.expires == 0 else False,
+            discard=self.expires == 0,
             comment=None,
             comment_url=None,
             rest=dict(http_only=f"{self.http_only}"),
@@ -193,12 +193,13 @@ class Cookies(typing.MutableMapping[str, str]):
         """
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
         if name.startswith("__Secure-") and secure is False:
-            warnings.warn("`secure` changed to True for `__Secure-` prefixed cookies")
+            warnings.warn("`secure` changed to True for `__Secure-` prefixed cookies", stacklevel=2)
             secure = True
         elif name.startswith("__Host-") and (secure is False or domain or path != "/"):
             warnings.warn(
                 "`host` changed to True, `domain` removed, `path` changed to `/` "
-                "for `__Host-` prefixed cookies"
+                "for `__Host-` prefixed cookies",
+                stacklevel=2,
             )
             secure = True
             domain = ""
@@ -239,24 +240,26 @@ class Cookies(typing.MutableMapping[str, str]):
         value = None
         matched_domain = ""
         for cookie in self.jar:
-            if cookie.name == name:
-                if domain is None or cookie.domain == domain:
-                    if path is None or cookie.path == path:
-                        # if cookies on two different domains do not share a same value
-                        if (
-                            value is not None
-                            and not matched_domain.endswith(cookie.domain)
-                            and not str(cookie.domain).endswith(matched_domain)
-                            and value != cookie.value
-                        ):
-                            message = (
-                                f"Multiple cookies exist with name={name} on "
-                                f"{matched_domain} and {cookie.domain}, add domain "
-                                "parameter to suppress this error."
-                            )
-                            raise CookieConflict(message)
-                        value = cookie.value
-                        matched_domain = cookie.domain or ""
+            if (
+                cookie.name == name
+                and (domain is None or cookie.domain == domain)
+                and (path is None or cookie.path == path)
+            ):
+                # if cookies on two different domains do not share a same value
+                if (
+                    value is not None
+                    and not matched_domain.endswith(cookie.domain)
+                    and not str(cookie.domain).endswith(matched_domain)
+                    and value != cookie.value
+                ):
+                    message = (
+                        f"Multiple cookies exist with name={name} on "
+                        f"{matched_domain} and {cookie.domain}, add domain "
+                        "parameter to suppress this error."
+                    )
+                    raise CookieConflict(message)
+                value = cookie.value
+                matched_domain = cookie.domain or ""
 
         if value is None:
             return default

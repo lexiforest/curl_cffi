@@ -17,12 +17,15 @@ mp.addpart(
     local_path="./image.png",  # local file to upload
 )
 
+with open("./image.jpg", "rb") as file:
+    data = file.read()
+
 # you can add multiple files under the same field name
 mp.addpart(
     name="image",
     content_type="image/jpg",
     filename="image.jpg",
-    data=open("./image.jpg", "rb").read(),  # note the difference vs above
+    data=data,  # note the difference vs above
 )
 
 # from a list

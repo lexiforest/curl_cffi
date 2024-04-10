@@ -72,8 +72,10 @@ def request(
         method: http method for the request: GET/POST/PUT/DELETE etc.
         url: url for the requests.
         params: query string for the requests.
-        data: form values or binary data to use in body, ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict is given.
-        json: json values to use in body, `Content-Type: application/json` will be added automatically.
+        data: form values or binary data to use in body,
+            ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict is given.
+        json: json values to use in body, `Content-Type: application/json` will be added
+            automatically.
         headers: headers to send.
         cookies: cookies to use.
         files: not supported, use ``multipart`` instead.
@@ -82,12 +84,14 @@ def request(
         allow_redirects: whether to allow redirection.
         max_redirects: max redirect counts, default unlimited(-1).
         proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
-        proxy: proxy to use, format: "http://user@pass:proxy_url". Cannot be used with the above parameter.
+        proxy: proxy to use, format: "http://user@pass:proxy_url".
+            Can't be used with proxy parameter.
         proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
         verify: whether to verify https certs.
         referer: shortcut for setting referer header.
         accept_encoding: shortcut for setting accept-encoding header.
-        content_callback: a callback function to receive response body. ``def callback(chunk: bytes) -> None:``
+        content_callback: a callback function to receive response body.
+            ``def callback(chunk: bytes) -> None:``
         impersonate: which browser version to impersonate.
         thread: work with other thread implementations. choices: eventlet, gevent.
         default_headers: whether to set default browser headers.

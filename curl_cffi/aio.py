@@ -36,7 +36,7 @@ if sys.platform == "win32":
         if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
             return asyncio_loop
 
-        warnings.warn(PROACTOR_WARNING, RuntimeWarning)
+        warnings.warn(PROACTOR_WARNING, RuntimeWarning, stacklevel=2)
 
         from ._asyncio_selector import AddThreadSelectorEventLoop
 
@@ -201,7 +201,7 @@ class AsyncCurl:
     def process_data(self, sockfd: int, ev_bitmask: int):
         """Call curl_multi_info_read to read data for given socket."""
         if not self._curlm:
-            warnings.warn("Curlm alread closed! quitting from process_data")
+            warnings.warn("Curlm alread closed! quitting from process_data", stacklevel=2)
             return
 
         self.socket_action(sockfd, ev_bitmask)
