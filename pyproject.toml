@@ -6,7 +6,7 @@ description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
 dependencies = [
     "cffi>=1.12.0",
-    "certifi",
+    "certifi>=2024.2.2",
 ]
 readme = "README.md"
 requires-python = ">=3.8"
@@ -27,6 +27,7 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "autoflake==1.4",
+    "charset_normalizer>=3.3.2,<4",
     "coverage==6.4.1",
     "cryptography==38.0.3",
     "flake8==6.0.0",
@@ -50,6 +51,7 @@ build = [
     "wheel",
 ]
 test = [
+    "charset_normalizer>=3.3.2,<4",
     "cryptography==38.0.3",
     "httpx==0.23.1",
     "types-certifi==2021.10.8.2",
