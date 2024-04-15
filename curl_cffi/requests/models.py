@@ -2,7 +2,6 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from functools import cached_property
 from json import loads
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 

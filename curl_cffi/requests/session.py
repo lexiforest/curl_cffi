@@ -3,6 +3,7 @@ import math
 import queue
 import threading
 import warnings
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from enum import Enum
@@ -107,7 +108,7 @@ def _is_absolute_url(url: str) -> bool:
     return bool(parsed_url.scheme and parsed_url.hostname)
 
 
-def _update_url_params(url: str, params: Dict) -> str:
+def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     """Add GET params to provided URL being aware of existing.
 
     Parameters:
@@ -124,23 +125,37 @@ def _update_url_params(url: str, params: Dict) -> str:
     """
     # Unquoting URL first so we don't loose existing args
     url = unquote(url)
+
     # Extracting url info
     parsed_url = urlparse(url)
+
     # Extracting URL arguments from parsed URL
     get_args = parsed_url.query
-    # Converting URL arguments to dict
-    parsed_get_args = dict(parse_qsl(get_args))
-    # Merging URL arguments dict with new params
-    parsed_get_args.update(params)
 
-    # Bool and Dict values should be converted to json-friendly values
-    # you may throw this part away if you don't like it :)
-    parsed_get_args.update(
-        {k: dumps(v) for k, v in parsed_get_args.items() if isinstance(v, (bool, dict))}
-    )
+    # Do NOT converting URL arguments to dict
+    parsed_get_args = parse_qsl(get_args)
+
+    # Merging URL arguments dict with new params
+    old_args_counter = Counter((x[0] for x in parsed_get_args))
+    if isinstance(params, dict):
+        params = list(params.items())
+    new_args_counter = Counter((x[0] for x in params))
+
+    for key, value in params:
+        # Bool and Dict values should be converted to json-friendly values
+        # you may throw this part away if you don't like it :)
+        if isinstance(value, (bool, dict)):
+            value = dumps(value)
+
+        # 1 to 1 mapping, we have to search and update it.
+        if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
+            parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
+        else:
+            parsed_get_args.append((key, value))
 
     # Converting URL argument to proper query string
     encoded_get_args = urlencode(parsed_get_args, doseq=True)
+
     # Creating new parsed result object based on provided with new
     # URL arguments. Same thing happens inside of urlparse.
     new_url = ParseResult(
@@ -248,8 +263,8 @@ class BaseSession:
         curl,
         method: str,
         url: str,
-        params: Optional[dict] = None,
-        data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
+        params: Optional[Union[Dict, List, Tuple]] = None,
+        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
         json: Optional[dict] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -294,7 +309,7 @@ class BaseSession:
         c.setopt(CurlOpt.URL, url.encode())
 
         # data/body/json
-        if isinstance(data, dict):
+        if isinstance(data, (dict, list, tuple)):
             body = urlencode(data).encode()
         elif isinstance(data, str):
             body = data.encode()
@@ -633,7 +648,7 @@ class Session(BaseSession):
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
             interface: which interface use in request to server.
-            default_encoding: encoding for decoding response content if charset is not found in headers. 
+            default_encoding: encoding for decoding response content if charset is not found in headers.
                 Defaults to "utf-8". Can be set to a callable for automatic detection.
 
         Notes:
@@ -744,8 +759,8 @@ class Session(BaseSession):
         self,
         method: str,
         url: str,
-        params: Optional[dict] = None,
-        data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
+        params: Optional[Union[Dict, List, Tuple]] = None,
+        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
         json: Optional[dict] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -916,7 +931,7 @@ class AsyncSession(BaseSession):
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default unlimited(-1).
             impersonate: which browser version to impersonate in the session.
-            default_encoding: encoding for decoding response content if charset is not found in headers. 
+            default_encoding: encoding for decoding response content if charset is not found in headers.
                 Defaults to "utf-8". Can be set to a callable for automatic detection.
 
         Notes:
@@ -1023,8 +1038,8 @@ class AsyncSession(BaseSession):
         self,
         method: str,
         url: str,
-        params: Optional[dict] = None,
-        data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
+        params: Optional[Union[Dict, List, Tuple]] = None,
+        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
         json: Optional[dict] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,

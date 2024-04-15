@@ -7,6 +7,7 @@ import sys
 # typing.Mapping is deprecated in favor of abc.Mapping
 # see: https://docs.python.org/3/library/typing.html#typing.Mapping
 if sys.version_info < (3, 9, 0):
+    from collections.abc import Mapping as AbcMapping
     from typing import (
         ItemsView,
         Iterable,
@@ -17,7 +18,6 @@ if sys.version_info < (3, 9, 0):
         Sequence,
         ValuesView,
     )
-    from collections.abc import Mapping as AbcMapping
 else:
     from collections.abc import (
         ItemsView,
