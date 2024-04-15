@@ -23,7 +23,7 @@ __all__ = [
 
 from functools import partial
 from io import BytesIO
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ..const import CurlHttpVersion, CurlWsFlag
 from ..curl import CurlMime
@@ -38,8 +38,8 @@ from .websockets import WebSocket, WebSocketError, WsCloseCode
 def request(
     method: str,
     url: str,
-    params: Optional[dict] = None,
-    data: Optional[Union[Dict[str, str], str, BytesIO, bytes]] = None,
+    params: Optional[Union[Dict, List, Tuple]] = None,
+    data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
     json: Optional[dict] = None,
     headers: Optional[HeaderTypes] = None,
     cookies: Optional[CookieTypes] = None,
@@ -91,7 +91,7 @@ def request(
         impersonate: which browser version to impersonate.
         thread: work with other thread implementations. choices: eventlet, gevent.
         default_headers: whether to set default browser headers.
-        default_encoding: encoding for decoding response content if charset is not found in headers. 
+        default_encoding: encoding for decoding response content if charset is not found in headers.
                 Defaults to "utf-8". Can be set to a callable for automatic detection.
         curl_options: extra curl options to use.
         http_version: limiting http version, http2 will be tries by default.

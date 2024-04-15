@@ -68,6 +68,22 @@ def test_post_json(server):
     assert r.content == b"{}"
 
 
+def test_post_form(server):
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
+    assert r.status_code == 200
+    assert r.content == b"foo=bar"
+
+    data = [("foo", 7), ("foo", 8), ("bar", 9)]
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data=data)
+    assert r.status_code == 200
+    assert r.content == b"foo=7&foo=8&bar=9"
+
+    data = [("foo[]", 7), ("foo[]", 8), ("bar", 9)]
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data=data)
+    assert r.status_code == 200
+    assert r.content == b"foo%5B%5D=7&foo%5B%5D=8&bar=9"
+
+
 def test_post_redirect_to_get(server):
     url = str(server.url.copy_with(path="/redirect_then_echo_headers"))
     r = requests.post(url, data={"foo": "bar"}, allow_redirects=True, debug=True)
@@ -98,8 +114,30 @@ def test_params(server):
 
 
 def test_update_params(server):
+    # The param is new, just append it
+    r = requests.get(str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"})
+    assert r.content == b'{"params": {"foo": ["bar"]}}'
+
+    # The old param is already multiple, append it, too
+    r = requests.get(str(server.url.copy_with(path="/echo_params?foo=1&foo=2")), params={"foo": 3})
+    assert r.content == b'{"params": {"foo": ["1", "2", "3"]}}'
+
+    # 1 to 1 mapping, we have to update it.
     r = requests.get(str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"})
     assert r.content == b'{"params": {"foo": ["bar"]}}'
+
+    # does not break old ones
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        params={"foo": "bar"},
+    )
+    assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["bar"]}}'
+
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        params=[("foo", "1"), ("foo", "2")],
+    )
+    assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["z", "1", "2"]}}'
 
 
 def test_headers(server):
