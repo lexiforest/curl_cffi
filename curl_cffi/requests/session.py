@@ -82,8 +82,14 @@ class BrowserType(str, Enum):
 
     @classmethod
     def normalize(cls, item):
-        item_map = {"chrome": cls.chrome, "safari": cls.safari, "safari_ios": cls.safari_ios}
-        return item_map.get(item, item)
+        if item == "chrome":  # noqa: SIM116
+            return cls.chrome
+        elif item == "safari":
+            return cls.safari
+        elif item == "safari_ios":
+            return cls.safari_ios
+        else:
+            return item
 
 
 class BrowserSpec:
@@ -284,12 +290,12 @@ class BaseSession:
         c = curl
 
         # method
-        if method != "GET":
+        if method == "POST":
+            c.setopt(CurlOpt.POST, 1)
+        elif method != "GET":
             c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
-            if method == "POST":
-                c.setopt(CurlOpt.POST, 1)
-            elif method == "HEAD":
-                c.setopt(CurlOpt.NOBODY, 1)
+        if method == "HEAD":
+            c.setopt(CurlOpt.NOBODY, 1)
 
         # url
         if self.params:

@@ -69,7 +69,7 @@ def write_callback(ptr, size, nmemb, userdata):
     callback = ffi.from_handle(userdata)
     wrote = callback(ffi.buffer(ptr, nmemb)[:])
     wrote = ensure_int(wrote)
-    if wrote in (CURL_WRITEFUNC_PAUSE, CURL_WRITEFUNC_ERROR):
+    if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:  # noqa: SIM109
         return wrote
     # should make this an exception in future versions
     if wrote != nmemb * size:
