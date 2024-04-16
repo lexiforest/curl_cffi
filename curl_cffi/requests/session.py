@@ -132,10 +132,10 @@ def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     parsed_get_args = parse_qsl(get_args)
 
     # Merging URL arguments dict with new params
-    old_args_counter = Counter((x[0] for x in parsed_get_args))
+    old_args_counter = Counter(x[0] for x in parsed_get_args)
     if isinstance(params, dict):
         params = list(params.items())
-    new_args_counter = Counter((x[0] for x in params))
+    new_args_counter = Counter(x[0] for x in params)
 
     for key, value in params:
         # Bool and Dict values should be converted to json-friendly values
@@ -307,7 +307,7 @@ class BaseSession:
         c.setopt(CurlOpt.URL, url.encode())
 
         # data/body/json
-        if isinstance(data, dict):
+        if isinstance(data, (dict, list, tuple)):
             body = urlencode(data).encode()
         elif isinstance(data, str):
             body = data.encode()
