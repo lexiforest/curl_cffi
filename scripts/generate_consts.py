@@ -15,7 +15,7 @@ with open(CONST_FILE, "w") as f:
     f.write("class CurlOpt(IntEnum):\n")
     cmd = rf"""
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLOPT_.\+ =" | sed "s/  CURLOPT_/    /g" | sed "s/,//g"
-    """
+    """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
     f.write(
@@ -32,7 +32,7 @@ with open(CONST_FILE, "w") as f:
     f.write("class CurlInfo(IntEnum):\n")
     cmd = rf"""
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLINFO_.\+ =" | sed "s/  CURLINFO_/    /g" | sed "s/,//g"
-    """
+    """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
     f.write(
@@ -45,7 +45,7 @@ with open(CONST_FILE, "w") as f:
     f.write("class CurlMOpt(IntEnum):\n")
     cmd = rf"""
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLMOPT_.\+ =" | sed "s/  CURLMOPT_/    /g" | sed "s/,//g"
-    """
+    """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
     f.write("\n\n")
@@ -53,7 +53,7 @@ with open(CONST_FILE, "w") as f:
     f.write("class CurlECode(IntEnum):\n")
     cmd = rf"""
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i CURLE_ | sed "s/[, ][=0]*//g" | sed "s/CURLE_/    /g" | awk '{{print $0 " = " NR-1}}'
-    """
+    """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
     f.write("\n\n")

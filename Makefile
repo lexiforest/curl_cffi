@@ -42,7 +42,7 @@ build: .preprocessed
 lint:
 	ruff check
 	ruff format --diff
-	mypy .
+	mypy --install-types --non-interactive .
 
 format:
 	ruff check --fix

@@ -605,7 +605,7 @@ def test_stream_empty_body(server):
 def test_stream_incomplete_read(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/incomplete_read"))
-        with pytest.raises(requests.RequestsError) as e:
+        with pytest.raises(requests.RequestsError) as e:  # noqa: SIM117
             with s.stream("GET", url) as r:
                 for _ in r.iter_content():
                     continue
@@ -628,7 +628,7 @@ def test_stream_incomplete_read_without_close(server):
 def test_stream_redirect_loop(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/redirect_loop"))
-        with pytest.raises(requests.RequestsError) as e:
+        with pytest.raises(requests.RequestsError) as e:  # noqa: SIM117
             with s.stream("GET", url, max_redirects=2):
                 pass
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
@@ -703,11 +703,9 @@ def test_stream_close_early(server):
     # from http://xcal1.vodafone.co.uk/
     url = "http://212.183.159.230/200MB.zip"
     r = s.get(url, max_recv_speed=1024 * 1024, stream=True)
-    counter = 0
     start = time.time()
-    for _ in r.iter_content():
-        counter += 1
-        if counter > 10:
+    for i, _ in enumerate(r.iter_content()):
+        if i > 10:
             break
     r.close()
     end = time.time()

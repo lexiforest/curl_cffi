@@ -68,7 +68,7 @@ for size in ["1k", "20k", "200k"]:
         stats[name] = dur
         results.append({"name": name, "size": size, "duration": dur})
 
-    print("One worker, {}: ".format(size), stats)
+    print(f"One worker, {size}: {stats}")
 
 df = pd.DataFrame(results)
 df.to_csv("single_worker.csv", index=False, float_format="%.4f")
@@ -132,7 +132,7 @@ for size in ["1k", "20k", "200k"]:
             t.join()
     # print(stats)
 
-    async def test_asyncs_workers():
+    async def test_asyncs_workers(url, size, stats):
         for name, worker, SessionClass in [
             ("aiohttp", aiohttp_worker, aiohttp.ClientSession),
             ("httpx_async", httpx_worker, httpx.AsyncClient),
@@ -156,8 +156,8 @@ for size in ["1k", "20k", "200k"]:
             for w in workers:
                 w.cancel()
 
-    asyncio.run(test_asyncs_workers())
-    print("10 Workers, {}: ".format(size), stats)
+    asyncio.run(test_asyncs_workers(url, size, stats))
+    print(f"10 Workers, {size}: {stats}")
 
 df = pd.DataFrame(results)
 df.to_csv("multiple_workers.csv", index=False, float_format="%.4f")

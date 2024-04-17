@@ -45,7 +45,8 @@ class Response:
         encoding: http body encoding.
         charset: alias for encoding.
         charset_encoding: encoding specified by the Content-Type header.
-        default_encoding: user-defined encoding used for decoding content if charset is not found in headers.
+        default_encoding: encoding for decoding response content if charset is not found in
+                headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
@@ -147,10 +148,7 @@ class Response:
         for chunk in self.iter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
             if pending is not None:
                 chunk = pending + chunk
-            if delimiter:
-                lines = chunk.split(delimiter)
-            else:
-                lines = chunk.splitlines()
+            lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
             if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
                 pending = lines.pop()
             else:
@@ -166,7 +164,7 @@ class Response:
         iterate streaming content chunk by chunk in bytes.
         """
         if chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
+            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
         if decode_unicode:
             raise NotImplementedError()
 
@@ -211,10 +209,7 @@ class Response:
         async for chunk in self.aiter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
             if pending is not None:
                 chunk = pending + chunk
-            if delimiter:
-                lines = chunk.split(delimiter)
-            else:
-                lines = chunk.splitlines()
+            lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
             if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
                 pending = lines.pop()
             else:
@@ -231,7 +226,7 @@ class Response:
         iterate streaming content chunk by chunk in bytes.
         """
         if chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.")
+            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
         if decode_unicode:
             raise NotImplementedError()
 

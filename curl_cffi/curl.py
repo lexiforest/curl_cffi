@@ -69,11 +69,11 @@ def write_callback(ptr, size, nmemb, userdata):
     callback = ffi.from_handle(userdata)
     wrote = callback(ffi.buffer(ptr, nmemb)[:])
     wrote = ensure_int(wrote)
-    if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:
+    if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:  # noqa: SIM109
         return wrote
     # should make this an exception in future versions
     if wrote != nmemb * size:
-        warnings.warn("Wrote bytes != received bytes.", RuntimeWarning)
+        warnings.warn("Wrote bytes != received bytes.", RuntimeWarning, stacklevel=2)
     return nmemb * size
 
 
@@ -101,7 +101,7 @@ class Curl:
             debug: whether to show curl debug messages.
             handle: a curl handle instance from ``curl_easy_init``.
         """
-        self._curl = lib.curl_easy_init() if not handle else handle
+        self._curl = handle if handle else lib.curl_easy_init()
         self._headers = ffi.NULL
         self._proxy_headers = ffi.NULL
         self._resolve = ffi.NULL
@@ -118,7 +118,7 @@ class Curl:
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
-            warnings.warn("Failed to set error buffer")
+            warnings.warn("Failed to set error buffer", stacklevel=2)
         if self._debug:
             self.setopt(CurlOpt.VERBOSE, 1)
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
@@ -189,10 +189,7 @@ class Curl:
             lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
             option = CurlOpt.HEADERDATA
         elif value_type == "char*":
-            if isinstance(value, str):
-                c_value = value.encode()
-            else:
-                c_value = value
+            c_value = value.encode() if isinstance(value, str) else value
             # Must keep a reference, otherwise may be GCed.
             if option == CurlOpt.POSTFIELDS:
                 self._body_handle = c_value

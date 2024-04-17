@@ -15,6 +15,7 @@ import select
 import socket
 import threading
 import typing
+from contextlib import suppress
 from typing import (
     Any,
     Callable,
@@ -48,10 +49,8 @@ def _atexit_callback() -> None:
         with loop._select_cond:
             loop._closing_selector = True
             loop._select_cond.notify()
-        try:
+        with suppress(BlockingIOError):
             loop._waker_w.send(b"a")
-        except BlockingIOError:
-            pass
         if loop._thread is not None:
             # If we don't join our (daemon) thread here, we may get a deadlock
             # during interpreter shutdown. I don't really understand why. This
@@ -152,16 +151,12 @@ class SelectorThread:
     def _wake_selector(self) -> None:
         if self._closed:
             return
-        try:
+        with suppress(BlockingIOError):
             self._waker_w.send(b"a")
-        except BlockingIOError:
-            pass
 
     def _consume_waker(self) -> None:
-        try:
+        with suppress(BlockingIOError):
             self._waker_r.recv(1024)
-        except BlockingIOError:
-            pass
 
     def _start_select(self) -> None:
         # Capture reader and writer sets here in the event loop
