@@ -80,6 +80,7 @@ def get_curl_archives():
             f"{arch['libdir']}/libssl.a",
             f"{arch['libdir']}/libcrypto.a",
             f"{arch['libdir']}/libz.a",
+            f"{arch['libdir']}/libzstd.a",
             f"{arch['libdir']}/libnghttp2.a",
             f"{arch['libdir']}/libbrotlidec-static.a",
             f"{arch['libdir']}/libbrotlienc-static.a",
