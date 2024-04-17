@@ -66,13 +66,15 @@ class BrowserType(str, Enum):
     chrome116 = "chrome116"
     chrome119 = "chrome119"
     chrome120 = "chrome120"
+    chrome123 = "chrome123"
+    chrome124 = "chrome124"
     chrome99_android = "chrome99_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
     safari17_0 = "safari17_0"
     safari17_2_ios = "safari17_2_ios"
 
-    chrome = "chrome120"
+    chrome = "chrome123"
     safari = "safari17_0"
     safari_ios = "safari17_2_ios"
 
