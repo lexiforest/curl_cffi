@@ -3,7 +3,7 @@ SHELL := bash
 
 # this is the upstream libcurl-impersonate version
 VERSION := 0.7.0b2
-CURL_VERSION := curl-8.1.1
+CURL_VERSION := curl-8.5.0
 
 $(CURL_VERSION):
 	curl -L "https://curl.se/download/$(CURL_VERSION).tar.xz" \

@@ -1,6 +1,13 @@
 Change Log
 ==========
 
+v0.7
+----
+
+- v0.7.0
+    - Added more recent impersonate versions, up to Chrome 124
+    - Upgraded libcurl to 8.5.0
+
 v0.6
 ----
 
