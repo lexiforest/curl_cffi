@@ -122,6 +122,9 @@ Supported impersonate versions, as supported by my [fork](https://github.com/yif
 
 However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
 
+Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
+chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
+
 - chrome99
 - chrome100
 - chrome101
@@ -131,6 +134,8 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 - chrome116 <sup>[1]</sup>
 - chrome119 <sup>[1]</sup>
 - chrome120 <sup>[1]</sup>
+- chrome123 <sup>[3]</sup>
+- chrome124 <sup>[3]</sup>
 - chrome99_android
 - edge99
 - edge101
@@ -142,6 +147,7 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 Notes:
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
+3. Added in version `0.7.0`.
 
 ### asyncio
 
