@@ -63,8 +63,10 @@ def request(
     http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
     interface: Optional[str] = None,
-    multipart: Optional[CurlMime] = None,
     cert: Optional[Union[str, Tuple[str, str]]] = None,
+    stream: bool = False,
+    max_recv_speed: int = 0,    
+    multipart: Optional[CurlMime] = None,
 ) -> Response:
     """Send an http request.
 
@@ -132,8 +134,10 @@ def request(
             default_encoding=default_encoding,
             http_version=http_version,
             interface=interface,
-            multipart=multipart,
             cert=cert,
+            stream=stream,
+            max_recv_speed=max_recv_speed,
+            multipart=multipart,
         )
 
 
