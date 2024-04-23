@@ -691,7 +691,7 @@ class Session(BaseSession):
     def __exit__(self, *args):
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Close the session."""
         self._closed = True
         self.curl.close()
@@ -985,7 +985,7 @@ class AsyncSession(BaseSession):
         await self.close()
         return None
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the session."""
         await self.acurl.close()
         self._closed = True
