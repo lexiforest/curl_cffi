@@ -97,8 +97,8 @@ class BrowserSpec:
     def __init__(
         self,
         browser_type: BrowserType,
-        version: str | None = None,
-        platform: str | None = None
+        version: Optional[str] = None,
+        platform: Optional[str] = None
     ):
         self.browser_type = browser_type
         self.version = version
