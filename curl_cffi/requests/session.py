@@ -121,12 +121,6 @@ class BrowserSpec:
 
         return result
 
-    def __eq__(self, other: 'BrowserSpec') -> bool:
-        return (
-            self.browser_type == other.browser_type
-            and self.version == other.version
-            and self.platform == other.platform
-        )
 
 def _is_absolute_url(url: str) -> bool:
     """Check if the provided url is an absolute url"""
