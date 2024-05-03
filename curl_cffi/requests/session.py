@@ -83,22 +83,50 @@ class BrowserType(str, Enum):
         return item in cls.__members__
 
     @classmethod
-    def normalize(cls, item):
-        if item == "chrome":  # noqa: SIM116
-            return cls.chrome
-        elif item == "safari":
-            return cls.safari
-        elif item == "safari_ios":
-            return cls.safari_ios
-        else:
-            return item
-
+    def normalize(cls, item: str) -> 'BrowserType':
+        browser_map = {
+            "chrome": cls.chrome123,
+            "safari": cls.safari17_0,
+            "safari_ios": cls.safari17_2_ios,
+        }
+        return browser_map.get(item, item)
 
 class BrowserSpec:
     """A more structured way of selecting browsers"""
 
-    # TODO
+    def __init__(
+        self,
+        browser_type: BrowserType,
+        version: str | None = None,
+        platform: str | None = None
+    ):
+        self.browser_type = browser_type
+        self.version = version
+        self.platform = platform
 
+    @classmethod
+    def from_string(cls, spec_string: str) -> 'BrowserSpec':
+        parts = spec_string.split("_")
+        browser_type = BrowserType.normalize(parts[0])
+        version, platform = (parts[1], parts[2]) if len(parts) > 2 else (parts[1] if len(parts) > 1 else None, None)
+        return cls(browser_type, version, platform)
+
+    def __str__(self) -> str:
+        result = self.browser_type
+        if self.version:
+            result += "_" + self.version
+
+        if self.platform:
+            result += "_" + self.platform
+
+        return result
+
+    def __eq__(self, other: 'BrowserSpec') -> bool:
+        return (
+            self.browser_type == other.browser_type
+            and self.version == other.version
+            and self.platform == other.platform
+        )
 
 def _is_absolute_url(url: str) -> bool:
     """Check if the provided url is an absolute url"""
