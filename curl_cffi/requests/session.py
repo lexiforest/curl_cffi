@@ -93,11 +93,35 @@ class BrowserType(str, Enum):
         else:
             return item
 
-
 class BrowserSpec:
     """A more structured way of selecting browsers"""
 
-    # TODO
+    def __init__(
+        self,
+        browser_type: BrowserType,
+        version: Optional[str] = None,
+        platform: Optional[str] = None
+    ):
+        self.browser_type = browser_type
+        self.version = version
+        self.platform = platform
+
+    @classmethod
+    def from_string(cls, spec_string: str) -> 'BrowserSpec':
+        parts = spec_string.split("_")
+        browser_type = BrowserType.normalize(parts[0])
+        version, platform = (parts[1], parts[2]) if len(parts) > 2 else (parts[1] if len(parts) > 1 else None, None)
+        return cls(browser_type, version, platform)
+
+    def __str__(self) -> str:
+        result = self.browser_type
+        if self.version:
+            result += "_" + self.version
+
+        if self.platform:
+            result += "_" + self.platform
+
+        return result
 
 
 def _is_absolute_url(url: str) -> bool:
