@@ -83,13 +83,15 @@ class BrowserType(str, Enum):
         return item in cls.__members__
 
     @classmethod
-    def normalize(cls, item) -> 'BrowserType':
-        browser_map = {
-            "chrome": cls.chrome,
-            "safari": cls.safari,
-            "safari_ios": cls.safari_ios,
-        }
-        return browser_map.get(item, item)
+    def normalize(cls, item):
+        if item == "chrome":  # noqa: SIM116
+            return cls.chrome
+        elif item == "safari":
+            return cls.safari
+        elif item == "safari_ios":
+            return cls.safari_ios
+        else:
+            return item
 
 class BrowserSpec:
     """A more structured way of selecting browsers"""
