@@ -85,9 +85,9 @@ class BrowserType(str, Enum):
     @classmethod
     def normalize(cls, item: str) -> 'BrowserType':
         browser_map = {
-            "chrome": cls.chrome123,
-            "safari": cls.safari17_0,
-            "safari_ios": cls.safari17_2_ios,
+            "chrome": cls.chrome,
+            "safari": cls.safari,
+            "safari_ios": cls.safari_ios,
         }
         return browser_map.get(item, item)
 
