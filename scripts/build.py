@@ -19,10 +19,12 @@ def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
         archs = json.loads(f.read())
 
+    uname = platform.uname()
+    glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
+
     libc, _ = platform.libc_ver()
     # https://github.com/python/cpython/issues/87414
-    libc = "gnu" if libc == "glibc" else "musl"
-    uname = platform.uname()
+    libc = glibc_flavor if libc == "glibc" else "musl"
     pointer_size = struct.calcsize("P") * 8
 
     for arch in archs:
