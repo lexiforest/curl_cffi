@@ -48,8 +48,7 @@ rate in details.
 
 Scrapfly is a good solution if you are looking for a cloud-managed solution for ``curl_cffi``.
 If you are managing TLS/HTTP fingerprint by yourself with ``curl_cffi``, they also maintain
-`this tool <https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi>`_ to convert curl
-command into python curl_cffi code!
+a `curl to python converter <https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi>`_ .
 
 ------
 
