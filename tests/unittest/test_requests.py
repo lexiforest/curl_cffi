@@ -146,6 +146,19 @@ def test_headers(server):
     assert headers["Foo"][0] == "bar"
 
 
+def test_empty_header_included(server):
+    r = requests.get(str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar", "xxx": ""})
+    headers = r.json()
+    assert headers["Foo"][0] == "bar"
+    assert headers["Xxx"][0] == ""
+
+
+def test_expect_header_omitted(server):
+    r = requests.get(str(server.url.copy_with(path="/echo_headers")), headers={"expect": "100"})
+    headers = r.json()
+    assert "Expect" not in headers
+
+
 def test_charset_parse(server):
     r = requests.get(str(server.url.copy_with(path="/gbk")))
     assert r.encoding == "gbk"

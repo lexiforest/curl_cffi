@@ -336,7 +336,8 @@ class BaseSession:
         # headers
         h = Headers(self.headers)
         h.update(headers)
-        # remove Host header if it's unnecessary, otherwise curl maybe confused.
+
+        # remove Host header if it's unnecessary, otherwise curl may get confused.
         # Host header will be automatically added by curl if it's not present.
         # https://github.com/yifeikong/curl_cffi/issues/119
         host_header = h.get("Host")
@@ -344,11 +345,22 @@ class BaseSession:
             u = urlparse(url)
             if host_header == u.netloc or host_header == u.hostname:
                 h.pop("Host", None)
-        header_lines = [f"{k}: {v}" for k, v in h.multi_items()]
+
+        # Make curl always include empty headers.
+        # See: https://stackoverflow.com/a/32911474/1061155
+        header_lines = []
+        for k, v in h.multi_items():
+            header_lines.append(f"{k}: {v}" if v else f"{k};")
+
+        # Add content-type if missing
         if json is not None:
             _update_header_line(header_lines, "Content-Type", "application/json")
         if isinstance(data, dict) and method != "POST":
             _update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
+
+        # Never send `Expect` header.
+        _update_header_line(header_lines, "Expect", "")
+
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
         req = Request(url, h, method)
