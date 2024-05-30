@@ -213,7 +213,7 @@ class BaseSession:
         timeout: Union[float, Tuple[float, float]] = 30,
         trust_env: bool = True,
         allow_redirects: bool = True,
-        max_redirects: int = -1,
+        max_redirects: int = 30,
         impersonate: Optional[Union[str, BrowserType]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -648,7 +648,7 @@ class Session(BaseSession):
             timeout: how many seconds to wait before giving up.
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
-            max_redirects: max redirect counts, default unlimited(-1).
+            max_redirects: max redirect counts, default 30, use -1 for unlimited.
             impersonate: which browser version to impersonate in the session.
             interface: which interface use in request to server.
             default_encoding: encoding for decoding response content if charset is not found in
@@ -934,7 +934,7 @@ class AsyncSession(BaseSession):
             timeout: how many seconds to wait before giving up.
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
-            max_redirects: max redirect counts, default unlimited(-1).
+            max_redirects: max redirect counts, default 30, use -1 for unlimited.
             impersonate: which browser version to impersonate in the session.
             default_encoding: encoding for decoding response content if charset is not found
                 in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.

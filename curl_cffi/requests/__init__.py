@@ -47,7 +47,7 @@ def request(
     auth: Optional[Tuple[str, str]] = None,
     timeout: Union[float, Tuple[float, float]] = 30,
     allow_redirects: bool = True,
-    max_redirects: int = -1,
+    max_redirects: int = 30,
     proxies: Optional[ProxySpec] = None,
     proxy: Optional[str] = None,
     proxy_auth: Optional[Tuple[str, str]] = None,
@@ -84,7 +84,7 @@ def request(
         auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
         timeout: how many seconds to wait before giving up.
         allow_redirects: whether to allow redirection.
-        max_redirects: max redirect counts, default unlimited(-1).
+        max_redirects: max redirect counts, default 30, use -1 for unlimited.
         proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
         proxy: proxy to use, format: "http://user@pass:proxy_url".
             Can't be used with proxy parameter.
