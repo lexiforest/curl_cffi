@@ -599,7 +599,10 @@ class BaseSession:
         self.cookies.update_cookies_from_curl(morsels)
         rsp.cookies = self.cookies
         # print("Cookies after extraction", self.cookies)
-
+        rsp.ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
+        rsp.certs = []
+        for i in range(c.getinfo(CurlInfo.NUM_CERTS)):
+            rsp.certs.append(c.getinfo(CurlInfo.CERTINFO, i))
         rsp.default_encoding = default_encoding
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
