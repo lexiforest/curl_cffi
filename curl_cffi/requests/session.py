@@ -595,7 +595,6 @@ class BaseSession:
         morsels = [CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)]
         # for l in c.getinfo(CurlInfo.COOKIELIST):
         #     print("Curl Cookies", l.decode())
-
         self.cookies.update_cookies_from_curl(morsels)
         rsp.cookies = self.cookies
         # print("Cookies after extraction", self.cookies)
