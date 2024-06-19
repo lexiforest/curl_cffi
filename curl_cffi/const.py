@@ -278,7 +278,7 @@ class CurlOpt(IntEnum):
     ALTSVC = 10000 + 287
     MAXAGE_CONN = 0 + 288
     SASL_AUTHZID = 10000 + 289
-    MAIL_RCPT_ALLLOWFAILS = 0 + 290
+    MAIL_RCPT_ALLOWFAILS = 0 + 290
     SSLCERT_BLOB = 40000 + 291
     SSLKEY_BLOB = 40000 + 292
     PROXY_SSLCERT_BLOB = 40000 + 293
@@ -311,16 +311,23 @@ class CurlOpt(IntEnum):
     WS_OPTIONS = 0 + 320
     CA_CACHE_TIMEOUT = 0 + 321
     QUICK_EXIT = 0 + 322
-    HTTPBASEHEADER = 10000 + 323
-    SSL_SIG_HASH_ALGS = 10000 + 324
-    SSL_ENABLE_ALPS = 0 + 325
-    SSL_CERT_COMPRESSION = 10000 + 326
-    SSL_ENABLE_TICKET = 0 + 327
-    HTTP2_PSEUDO_HEADERS_ORDER = 10000 + 328
-    HTTP2_SETTINGS = 10000 + 329
-    SSL_PERMUTE_EXTENSIONS = 0 + 330
-    HTTP2_WINDOW_UPDATE = 0 + 331
-    ECH = 10000 + 332
+    HAPROXY_CLIENT_IP = 10000 + 323
+    SERVER_RESPONSE_TIMEOUT_MS = 0 + 324
+    HTTPBASEHEADER = 10000 + 1000
+    SSL_SIG_HASH_ALGS = 10000 + 1001
+    SSL_ENABLE_ALPS = 0 + 1002
+    SSL_CERT_COMPRESSION = 10000 + 1003
+    SSL_ENABLE_TICKET = 0 + 1004
+    HTTP2_PSEUDO_HEADERS_ORDER = 10000 + 1005
+    HTTP2_SETTINGS = 10000 + 1006
+    SSL_PERMUTE_EXTENSIONS = 0 + 1007
+    HTTP2_WINDOW_UPDATE = 0 + 1008
+    ECH = 10000 + 1009
+    HTTP2_STREAMS = 10000 + 1010
+    TLS_GREASE = 0 + 1011
+    TLS_EXTENSION_ORDER = 10000 + 1012
+    STREAM_EXCLUSIVE = 0 + 1013
+    TLS_KEY_USAGE_NO_CHECK = 0 + 1014
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -395,7 +402,11 @@ class CurlInfo(IntEnum):
     REFERER = 0x100000 + 60
     CAINFO = 0x100000 + 61
     CAPATH = 0x100000 + 62
-    LASTONE = 62
+    XFER_ID = 0x600000 + 63
+    CONN_ID = 0x600000 + 64
+    QUEUE_TIME_T = 0x600000 + 65
+    USED_PROXY = 0x200000 + 66
+    LASTONE = 66
 
     if locals().get("RESPONSE_CODE"):
         HTTP_CODE = locals().get("RESPONSE_CODE")
@@ -527,11 +538,12 @@ class CurlECode(IntEnum):
     PROXY = 97
     SSL_CLIENTCERT = 98
     UNRECOVERABLE_POLL = 99
-    ECH_REQUIRED = 100
+    TOO_LARGE = 100
+    ECH_REQUIRED = 101
 
 
 class CurlHttpVersion(IntEnum):
-    """``CURL_HTTP_VERSION`` constants extracted from libcurl, see comments for details"""
+    """``CURL_HTTP_VERSION`` constants extracted from libcurl, see comments for details."""
 
     NONE = 0
     V1_0 = 1  # please use HTTP 1.0 in the request */
@@ -543,7 +555,7 @@ class CurlHttpVersion(IntEnum):
 
 
 class CurlWsFlag(IntEnum):
-    """``CURL_WS_FLAG`` constancs extracted from libcurl, see comments for details"""
+    """``CURL_WS_FLAG`` constants extracted from libcurl, see comments for details."""
 
     TEXT = 1 << 0
     BINARY = 1 << 1

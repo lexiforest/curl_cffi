@@ -984,6 +984,8 @@ class AsyncSession(BaseSession):
         curl = await self.pool.get()
         if curl is None:
             curl = Curl(debug=self.debug)
+        # curl.setopt(CurlOpt.FRESH_CONNECT, 1)
+        # curl.setopt(CurlOpt.FORBID_REUSE, 1)
         return curl
 
     def push_curl(self, curl):
@@ -1014,6 +1016,7 @@ class AsyncSession(BaseSession):
         if not self._closed:
             self.acurl.remove_handle(curl)
             curl.reset()
+            # curl.setopt(CurlOpt.PIPEWAIT, 1)
             self.push_curl(curl)
         else:
             curl.close()
@@ -1146,9 +1149,9 @@ class AsyncSession(BaseSession):
         else:
             try:
                 # curl.debug()
+                # print("using curl instance: ", curl)
                 task = self.acurl.add_handle(curl)
                 await task
-                # print(curl.getinfo(CurlInfo.CAINFO))
             except CurlError as e:
                 rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req

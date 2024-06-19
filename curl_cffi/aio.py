@@ -145,6 +145,7 @@ class AsyncCurl:
         self._self_handle = ffi.new_handle(self)
         self.setopt(CurlMOpt.SOCKETDATA, self._self_handle)
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
+        # self.setopt(CurlMOpt.PIPELINING, 0)
 
     async def close(self):
         """Close and cleanup running timers, readers, writers and handles."""
@@ -184,6 +185,7 @@ class AsyncCurl:
     def add_handle(self, curl: Curl):
         """Add a curl handle to be managed by curl_multi. This is the equivalent of
         `perform` in the async world."""
+
         # import pdb; pdb.set_trace()
         curl._ensure_cacert()
         lib.curl_multi_add_handle(self._curlm, curl._curl)

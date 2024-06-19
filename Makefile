@@ -2,13 +2,13 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 0.7.0b4
-CURL_VERSION := curl-8.5.0
+VERSION := 0.7.0b5
+CURL_VERSION := curl-8_7_1
 
 $(CURL_VERSION):
-	curl -L "https://curl.se/download/$(CURL_VERSION).tar.xz" \
-		-o "$(CURL_VERSION).tar.xz"
-	tar -xf $(CURL_VERSION).tar.xz
+	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
+	unzip -q -o curl.zip
+	mv curl-$(CURL_VERSION) $(CURL_VERSION)
 
 curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
 	curl -L "https://github.com/yifeikong/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
@@ -18,6 +18,17 @@ curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
 .preprocessed: curl-impersonate-$(VERSION)/chrome/patches
 	cd $(CURL_VERSION)
 	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
+	# Re-generate the configure script
+	autoreconf -fi
+	mkdir -p ../include/curl
+	cp -R include/curl/* ../include/curl/
+	# Sentinel files: https://tech.davis-hansson.com/p/make/
+	touch .preprocessed
+
+local-curl: $(CURL_VERSION)
+	cp /usr/local/lib/libcurl-impersonate-chrome* /Users/runner/work/_temp/install/lib/
+	cd $(CURL_VERSION)
+	for p in ../curl-impersonate/chrome/patches/curl-*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
 	autoreconf -fi
 	mkdir -p ../include/curl
