@@ -458,18 +458,21 @@ class BaseSession:
                 )
 
             if proxy is not None:
-                if parts.scheme == "https" and proxy.startswith("https://"):
-                    warnings.warn(
-                        "You may be using http proxy WRONG, the prefix should be 'http://' not 'https://',"
-                        "see: https://github.com/yifeikong/curl_cffi/issues/6",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
 
                 c.setopt(CurlOpt.PROXY, proxy)
-                # for http proxy, need to tell curl to enable tunneling
-                if not proxy.startswith("socks"):
-                    c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
+
+                if parts.scheme == "https":
+                    if proxy.startswith("https://"):
+                        warnings.warn(
+                            "Make sure you are using https over https proxy, otherwise, "
+                            "the proxy prefix should be 'http://' not 'https://', "
+                            "see: https://github.com/yifeikong/curl_cffi/issues/6",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                    # For https site with http tunnel proxy, tell curl to enable tunneling
+                    if not proxy.startswith("socks"):
+                        c.setopt(CurlOpt.HTTPPROXYTUNNEL, 1)
 
                 # proxy_auth
                 proxy_auth = proxy_auth or self.proxy_auth
