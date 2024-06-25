@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.7.0b5"
+version = "0.7.0b6"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
@@ -104,6 +104,10 @@ environment-pass = ["LD_LIBRARY_PATH"]
 
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
+
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32 -w {dest_dir} {wheel}"
 
 
 [tool.pytest.ini_options]

@@ -10,7 +10,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "0.7.0b5"
+__version__ = "0.7.0b6"
 
 tmpdir = None
 
@@ -68,9 +68,6 @@ def download_libcurl():
     print("Unpacking downloaded files...")
     os.makedirs(arch["libdir"], exist_ok=True)
     shutil.unpack_archive(file, arch["libdir"])
-
-    if arch["system"] == "Windows":
-        shutil.copy2(f"{arch['libdir']}/libcurl.dll", "curl_cffi")
 
 
 def get_curl_archives():
