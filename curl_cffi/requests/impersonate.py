@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+from typing import List, Literal, Optional
 import warnings
 from enum import Enum
 
@@ -44,10 +46,15 @@ class BrowserType(str, Enum):
             return item
 
 
-class BrowserSpec:
-    """A more structured way of selecting browsers"""
-
-    # TODO
+@dataclass
+class ExtraFingerprints:
+    tls_min_version: int = CurlSslVersion.TLSv1_2
+    tls_grease: bool = False
+    tls_permute_extensions: bool = False
+    tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
+    tls_signature_algorithms: Optional[List[str]] = None
+    http2_stream_weight: int = 256
+    http2_stream_exclusive: int = 1
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor

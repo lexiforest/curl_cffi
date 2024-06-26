@@ -30,7 +30,7 @@ from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
-from .impersonate import toggle_extension, BrowserType, TLS_VERSION_MAP, TLS_CIPHER_NAME_MAP, TLS_EC_CURVES_MAP
+from .impersonate import ExtraFingerprints, toggle_extension, BrowserType, TLS_VERSION_MAP, TLS_CIPHER_NAME_MAP, TLS_EC_CURVES_MAP
 from .models import Request, Response
 from .websockets import WebSocket
 
@@ -172,6 +172,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
+        extra_fp: Optional[ExtraFingerprints] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         curl_options: Optional[dict] = None,
@@ -194,6 +195,7 @@ class BaseSession:
         self.impersonate = impersonate
         self.ja3 = ja3
         self.akamai = akamai
+        self.extra_fp = extra_fp
         self.default_headers = default_headers
         self.default_encoding = default_encoding
         self.curl_options = curl_options or {}
@@ -230,14 +232,14 @@ class BaseSession:
 
         # print("to_disable: ", to_disable_ids)
 
-    def _set_ja3_options(self, curl, ja3: str):
+    def _set_ja3_options(self, curl, ja3: str, permute: bool = False):
         """
         Detailed explanation: https://engineering.salesforce.com/tls-fingerprinting-with-ja3-and-ja3s-247362855967/
         """
         tls_version, ciphers, extensions, curves, curve_formats = ja3.split(",")
 
         curl_tls_version = TLS_VERSION_MAP[int(tls_version)]
-        # curl.setopt(CurlOpt.SSLVERSION, curl_tls_version)
+        curl.setopt(CurlOpt.SSLVERSION, curl_tls_version | CurlSslVersion.MAX_DEFAULT)
         assert curl_tls_version == CurlSslVersion.TLSv1_2, "Only TLS v1.2 works for now."
 
         cipher_names = []
@@ -252,13 +254,14 @@ class BaseSession:
             extensions = extensions[:-3]
             warnings.warn(
                 "Padding(21) extension found in ja3 string, whether to add it should "
-                "be decided by the SSL engine. The TLS hello packet may contain "
+                "be managed by the SSL engine. The TLS client hello packet may contain "
                 "or not contain this extension, any of which should be correct."
             )
         extension_ids = set(int(e) for e in extensions.split("-"))
         self._toggle_extensions_by_ids(curl, extension_ids)
 
-        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, extensions)
+        if not permute:
+            curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, extensions)
 
         curve_names = []
         for curve in curves.split("-"):
@@ -288,6 +291,18 @@ class BaseSession:
         # curl-impersonate only accepts masp format, without commas.
         curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
 
+    def _set_extra_fp(self, curl, fp: ExtraFingerprints):
+
+        if fp.tls_signature_algorithms:
+            curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
+
+        curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
+        curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
+        curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
+        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
+
     def _set_curl_options(
         self,
         curl,
@@ -313,6 +328,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
+        extra_fp: Optional[ExtraFingerprints] = None,
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
@@ -559,15 +575,23 @@ class BaseSession:
         ja3 = ja3 or self.ja3
         if ja3:
             if impersonate:
+                warnings.warn("JA3 was altered after browser version was set.")
                 raise RequestsError("Cannot use both impersonate and ja3 string")
-            self._set_ja3_options(c, ja3)
+            self._set_ja3_options(c, ja3, permute=bool(extra_fp and extra_fp.tls_permute_extensions))
 
         # akamai string
         akamai = akamai or self.akamai
         if akamai:
             if impersonate:
-                raise RequestsError("Cannot use both impersonate and akamai string")
+                warnings.warn("Akamai was altered after browser version was set.")
             self._set_akamai_options(c, akamai)
+
+        # extra_fp options
+        extra_fp = extra_fp or self.extra_fp
+        if extra_fp:
+            if impersonate:
+                warnings.warn("Extra fingerprints was altered after browser version was set.")
+            self._set_extra_fp(c, extra_fp)
 
         # http_version, after impersonate, which will change this to http2
         http_version = http_version or self.http_version
@@ -703,6 +727,7 @@ class Session(BaseSession):
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
             interface: which interface use in request to server.
             default_encoding: encoding for decoding response content if charset is not found in
                 headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
@@ -835,6 +860,7 @@ class Session(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
+        extra_fp: Optional[ExtraFingerprints] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
@@ -879,6 +905,7 @@ class Session(BaseSession):
             impersonate=impersonate,
             ja3=ja3,
             akamai=akamai,
+            extra_fp=extra_fp,
             default_headers=default_headers,
             http_version=http_version,
             interface=interface,
@@ -995,6 +1022,7 @@ class AsyncSession(BaseSession):
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
             default_encoding: encoding for decoding response content if charset is not found
                 in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
 
@@ -1123,6 +1151,7 @@ class AsyncSession(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
+        extra_fp: Optional[ExtraFingerprints] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
@@ -1160,6 +1189,7 @@ class AsyncSession(BaseSession):
             impersonate=impersonate,
             ja3=ja3,
             akamai=akamai,
+            extra_fp=extra_fp,
             default_headers=default_headers,
             http_version=http_version,
             interface=interface,

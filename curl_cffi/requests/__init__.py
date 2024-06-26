@@ -19,17 +19,20 @@ __all__ = [
     "WebSocket",
     "WebSocketError",
     "WsCloseCode",
+    "ExtraFingerprints",
 ]
 
 from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
+
 from ..const import CurlHttpVersion, CurlWsFlag
 from ..curl import CurlMime
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
+from .impersonate import ExtraFingerprints
 from .models import Request, Response
 from .session import AsyncSession, BrowserType, ProxySpec, Session, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
@@ -58,6 +61,7 @@ def request(
     impersonate: Optional[Union[str, BrowserType]] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
+    extra_fp: Optional[ExtraFingerprints] = None,
     thread: Optional[ThreadType] = None,
     default_headers: Optional[bool] = None,
     default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -99,6 +103,7 @@ def request(
         impersonate: which browser version to impersonate.
         ja3: ja3 string to impersonate.
         akamai: akamai string to impersonate.
+        extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
         thread: work with other thread implementations. choices: eventlet, gevent.
         default_headers: whether to set default browser headers.
         default_encoding: encoding for decoding response content if charset is not found in headers.
@@ -136,6 +141,7 @@ def request(
             impersonate=impersonate,
             ja3=ja3,
             akamai=akamai,
+            extra_fp=extra_fp,
             default_headers=default_headers,
             default_encoding=default_encoding,
             http_version=http_version,
