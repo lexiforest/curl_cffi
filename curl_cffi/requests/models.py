@@ -44,6 +44,8 @@ class Response:
         elapsed: how many seconds the request cost.
         encoding: http body encoding.
         charset: alias for encoding.
+        primary_ip: primary ip of the server.
+        local_ip: local ip used in this connection.
         charset_encoding: encoding specified by the Content-Type header.
         default_encoding: encoding for decoding response content if charset is not found in
                 headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
@@ -68,6 +70,8 @@ class Response:
         self.redirect_count = 0
         self.redirect_url = ""
         self.http_version = 0
+        self.primary_ip: str = ""
+        self.local_ip: str = ""
         self.history: List[Dict[str, Any]] = []
         self.infos: Dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None

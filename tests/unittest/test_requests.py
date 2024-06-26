@@ -745,3 +745,12 @@ def test_curl_infos(server):
     r = s.get(str(server.url))
 
     assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"  # pyright: ignore
+
+
+def test_response_ip(server):
+    s = requests.Session()
+    r = s.get(str(server.url))
+
+    assert r.primary_ip == "127.0.0.1"
+    assert r.local_ip == "127.0.0.1"
+
