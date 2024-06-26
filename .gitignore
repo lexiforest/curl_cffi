@@ -7,6 +7,12 @@ Release
 *.o
 **/__pycache__
 .venv
+*.dll
+*.lib
+*.a
+*.exe
+*.in
+*.rc
 
 build/
 dist/

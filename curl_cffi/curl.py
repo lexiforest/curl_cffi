@@ -7,7 +7,7 @@ from typing import Any, List, Optional, Tuple, Union
 import certifi
 
 from ._wrapper import ffi, lib
-from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
+from .const import CurlHttpVersion, CurlInfo, CurlLockData, CurlOpt, CURLSHoption, CurlWsFlag
 
 DEFAULT_CACERT = certifi.where()
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
@@ -516,4 +516,26 @@ class CurlMime:
         self._form = ffi.NULL
 
     def __del__(self) -> None:
+        self.close()
+
+class CurlShare:
+    def __init__(self) -> None:
+        self._share = lib.curl_share_init()
+
+    def close(self):
+        if self._share:
+            lib.curl_share_cleanup(self._share)
+            self._share = ffi.NULL
+
+    def setopt(self, option: CURLSHoption, value: CurlLockData):
+        ret = lib.curl_share_setopt(self._share, option, value)
+        if ret:
+            self._check_error(ret)
+        return ret
+
+    def _check_error(self, errornum):
+        errormsg = ffi.string(lib.curl_share_strerror(errornum)).decode('utf-8')
+        return ValueError(errormsg)
+
+    def __del__(self):
         self.close()
