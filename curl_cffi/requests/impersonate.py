@@ -258,7 +258,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
         raise NotImplementedError("It's unlikely that the server_name(0) extension being changed.")
     # ALPN
     elif extension_id == 16:
-        raise NotImplementedError("It's unlikely that the ALPN(0) extension being changed.")
+        raise NotImplementedError("It's unlikely that the ALPN(16) extension being changed.")
     # status_request
     elif extension_id == 5:
         if enable:
