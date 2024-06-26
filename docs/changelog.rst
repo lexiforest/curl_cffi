@@ -5,13 +5,19 @@ v0.7
 ----
 
 - v0.7.0
-    - Added more recent impersonate versions, up to Chrome 124
-    - Upgraded libcurl to 8.5.0
+    - Added more recent impersonate versions, up to Chrome 124.
+    - Upgraded libcurl to 8.7.1.
+    - Added support for list of tuple in post fields.
+    - Updated header strategy: always exclude empty headers, never send Expect header.
+    - Changed default redirect limit to 30.
+    - Prefer not sending CONNECT for plain http proxy.
+    - Fix Windows build.
+    - Fix Safari Stream priority.
 
 v0.6
 ----
 
-The minimum Python version is now 3.8.
+The minimum Python version is now 3.8. Windows fingerprints are wrong in 0.6.x.
 
 - v0.6.1
     - ``AsyncSession.close`` is now a coroutine.

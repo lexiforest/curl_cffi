@@ -109,6 +109,9 @@ print(r.json())
 
 不过只支持类似 Chrome 的浏览器。Firefox 的支持进展可以查看 [#59](https://github.com/yifeikong/curl_cffi/issues/59)。
 
+只有当浏览器指纹发生改编的时候，才会添加新版本。如果你看到某个版本被跳过去了，那是因为
+他们的指纹没有发生改变，直接用之前的版本加上新的 header 即可。
+
 - chrome99
 - chrome100
 - chrome101
@@ -118,6 +121,8 @@ print(r.json())
 - chrome116 <sup>[1]</sup>
 - chrome119 <sup>[1]</sup>
 - chrome120 <sup>[1]</sup>
+- chrome123 <sup>[3]</sup>
+- chrome124 <sup>[3]</sup>
 - chrome99_android
 - edge99
 - edge101
@@ -129,6 +134,7 @@ print(r.json())
 注意:
 1. 自 `0.6.0` 起添加。
 2. 在 `0.6.0` 中修复, 之前的 http2 指纹是[错误的](https://github.com/lwthiker/curl-impersonate/issues/215)。
+3. 自 `0.7.0` 起添加。
 
 ### asyncio
 
@@ -207,3 +213,18 @@ JSON 数据。在所有的订阅方案中，切换代理都是直接可用的。
 ## 赞助
 
 <img src="assets/alipay.jpg" style="width: 512px;" />
+
+## 引用
+
+If you find this project useful, please cite it as below:
+
+```
+@software{Kong2023,
+  author = {Yifei Kong},
+  title = {curl_cffi - A Python HTTP client for impersonating browser TLS and HTTP/2 fingerprints},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  url = {https://github.com/yifeikong/curl_cffi},
+}
+```

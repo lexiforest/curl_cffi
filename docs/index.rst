@@ -129,21 +129,26 @@ requests-like
 
     from curl_cffi import requests
 
-    url = "https://tls.browserleaks.com/json"
+    url = "https://tools.scrapfly.io/api/fp/ja3"
 
     # Notice the impersonate parameter
-    r = requests.get(url, impersonate="chrome")
+    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
 
     print(r.json())
     # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
     # the js3n fingerprint should be the same as target browser
 
+    # To keep using the latest browser version as `curl_cffi` updates,
+    # simply set impersonate="chrome" without specifying a version.
+    # Other similar values are: "safari" and "safari_ios"
+    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+
     # http/socks proxies are supported
     proxies = {"https": "http://localhost:3128"}
-    r = requests.get(url, impersonate="chrome", proxies=proxies)
+    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 
     proxies = {"https": "socks://localhost:3128"}
-    r = requests.get(url, impersonate="chrome", proxies=proxies)
+    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 
 Sessions
 ~~~~~~

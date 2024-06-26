@@ -17,6 +17,8 @@ However, only Chrome-like browsers are supported. Firefox support is tracked in 
 - chrome116 :sup:`1`
 - chrome119 :sup:`1`
 - chrome120 :sup:`1`
+- chrome123 :sup:`3`
+- chrome124 :sup:`3`
 - chrome99_android
 - edge99
 - edge101
@@ -29,12 +31,13 @@ Notes:
 
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were `not correct <https://github.com/lwthiker/curl-impersonate/issues/215>`_.
+3. Added in version `0.7.0`.
 
 Which version to use?
 ---------------------
 
-Generally speaking, you should use the latest Chrome or Safari versions. As of 0.6, they're
-``chrome120``, ``safari17_0`` and ``safari17_2_ios``. To always impersonate the latest avaiable
+Generally speaking, you should use the latest Chrome or Safari versions. As of 0.7, they're
+``chrome124``, ``safari17_0`` and ``safari17_2_ios``. To always impersonate the latest avaiable
 browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
 
 .. code-block:: python
@@ -87,11 +90,15 @@ For Akamai http2 fingerprints, you can fully customize the 3 parts:
 * ``CURLOPT_HTTP2_SETTINGS`` sets the settings frame values, for example `1:65536;3:1000;4:6291456;6:262144` (non-standard HTTP/2 options created for this project).
 * ``CURLOPT_HTTP2_WINDOW_UPDATE`` sets intial window update value for http2, for example `15663105` (non-standard HTTP/2 options created for this project).
 
+For a complete list of options and explanation, see the `curl-impersoante README`_.
+
+.. _curl-impersonate README: https://github.com/yifeikong/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
+
 
 Should I randomize my fingerprints for each request?
 ------
 
-You can use a random from the list above, like:
+You can choose a random version from the list above, like:
 
 .. code-block:: python
 
@@ -106,15 +113,16 @@ random fingerprints, the server is easy to know that you are not using a typical
 If you were thinking about ``ja3``, and not ``ja3n``, then the fingerprints is already
 randomized, due to the ``extension permutation`` feature introduced in Chrome 110.
 
-AFAIK, most websites use an allowlist, not a blocklist to filter out bot traffic. So I
-don’t think random ja3 fingerprints would work in the wild.
+As far as we know, most websites use an allowlist, not a blocklist to filter out bot
+traffic. So do not expect random ja3 fingerprints would work in the wild.
 
-Can I change JS fingerprints with this library?
+Can I change JavaScript fingerprints with this library?
 ------
 
-No, you can not. As the name suggests, JavaScript fingerprints are generated using Javascript
+No, you can not. As the name suggests, JavaScript fingerprints are generated using JavaScript
 APIs provided by real browsers. ``curl_cffi`` is a python binding to a C library, with no
 browser or JavaScript runtime under the hood.
 
-If you need to impersonate browsers on the JavaScript perspective, you can search for "Anti-detect
-Browser", "Playwright stealth" and similar keywords. Or simply use a commercial plan from our sponsors.
+If you need to impersonate browsers on the JavaScript perspective, you can search for
+"Anti-detect Browser", "Playwright stealth" and similar keywords. Or simply use a
+commercial plan from our sponsors.
