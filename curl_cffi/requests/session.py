@@ -218,13 +218,17 @@ class BaseSession:
     def _toggle_extensions_by_ids(self, curl, extension_ids):
         default_enabled = {0, 51, 13, 43, 5, 18, 65281, 23, 10, 45, 35, 11, 16}
 
-        to_enable_ids = set(extension_ids) - default_enabled
+        to_enable_ids = extension_ids - default_enabled
         for ext_id in to_enable_ids:
             toggle_extension(curl, ext_id, enable=True)
 
-        to_disable_ids = default_enabled - set(extension_ids)
+        # print("to_enable: ", to_enable_ids)
+
+        to_disable_ids = default_enabled - extension_ids
         for ext_id in to_disable_ids:
             toggle_extension(curl, ext_id, enable=False)
+
+        # print("to_disable: ", to_disable_ids)
 
     def _set_ja3_options(self, curl, ja3: str):
         """
@@ -244,7 +248,14 @@ class BaseSession:
 
         curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
 
-        extension_ids = [int(e) for e in extensions.split("-")]
+        if extensions.endswith("-21"):
+            extensions = extensions[:-3]
+            warnings.warn(
+                "Padding(21) extension found in ja3 string, whether to add it should "
+                "be decided by the SSL engine. The TLS hello packet may contain "
+                "or not contain this extension, any of which should be correct."
+            )
+        extension_ids = set(int(e) for e in extensions.split("-"))
         self._toggle_extensions_by_ids(curl, extension_ids)
 
         curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, extensions)

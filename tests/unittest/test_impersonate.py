@@ -60,12 +60,24 @@ def test_customized_ja3_ciphers():
     assert ciphers == "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171"
 
 
+# TODO change to parameterized test
 def test_customized_ja3_extensions():
     url = "https://tls.browserleaks.com/json"
     ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
     r = requests.get(url, ja3=ja3).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
+
+    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    r = requests.get(url, ja3=ja3).json()
+    _, _, extensions, _, _ = r["ja3_text"].split(",")
+    assert extensions == "65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
+
+    # removed enable session_ticket()
+    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65281-0-11-23-5-18-27-16-17513-10-43-45-13-51,25497-29-23-24,0"
+    r = requests.get(url, ja3=ja3).json()
+    _, _, extensions, _, _ = r["ja3_text"].split(",")
+    assert extensions == "65281-0-11-23-5-18-27-16-17513-10-43-45-13-51"
 
 
 def test_customized_ja3_curves():

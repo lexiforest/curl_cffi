@@ -1,7 +1,7 @@
 import warnings
 from enum import Enum
+
 from ..const import CurlSslVersion, CurlOpt
-from ..curl import ffi, lib
 
 
 class BrowserType(str, Enum):
@@ -216,7 +216,7 @@ TLS_EC_CURVES_MAP = {
 }
 
 
-def toggle_extension(curl, extension_id, enable: bool):
+def toggle_extension(curl, extension_id: int, enable: bool):
     # ECH
     if extension_id == 65037:
         if enable:
@@ -236,3 +236,32 @@ def toggle_extension(curl, extension_id, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
         else:
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+    # server_name
+    elif extension_id == 0:
+        raise NotImplementedError("It's unlikely that the server_name(0) extension being changed.")
+    # ALPN
+    elif extension_id == 16:
+        raise NotImplementedError("It's unlikely that the ALPN(0) extension being changed.")
+    # status_request
+    elif extension_id == 5:
+        if enable:
+            pass # It's now always enabled
+        else:
+            raise NotImplementedError("This extension(5) is always on for now, it will be updated later.")
+    # signed_certificate_timestamp
+    elif extension_id == 18:
+        if enable:
+            pass # It's now always enabled
+        else:
+            raise NotImplementedError("This extension(18) is always on for now, it will be updated later.")
+    # session_ticket
+    elif extension_id == 35:
+        if enable:
+            curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 1)
+        else:
+            curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 0)
+    # padding
+    elif extension_id == 21:
+        pass
+    else:
+        raise NotImplementedError(f"This extension({extension_id}) can not be toggled for now, it may be updated later.")
