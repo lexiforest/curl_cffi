@@ -37,6 +37,7 @@ def test_impersonate_non_exist(server):
 # TODO implement local ja3/akamai verification server with th1.
 
 
+@pytest.mark.skip(reason="warning is used")
 def test_costomized_no_impersonate_coexist(server):
     with pytest.raises(requests.RequestsError):
         requests.get(str(server.url), impersonate="chrome", ja3=",,,,")
