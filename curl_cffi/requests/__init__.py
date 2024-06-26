@@ -32,7 +32,7 @@ from ..curl import CurlMime
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .impersonate import ExtraFingerprints
+from .impersonate import ExtraFingerprints, ExtraFpDict
 from .models import Request, Response
 from .session import AsyncSession, BrowserType, ProxySpec, Session, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
@@ -61,7 +61,7 @@ def request(
     impersonate: Optional[Union[str, BrowserType]] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
-    extra_fp: Optional[ExtraFingerprints] = None,
+    extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
     thread: Optional[ThreadType] = None,
     default_headers: Optional[bool] = None,
     default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",

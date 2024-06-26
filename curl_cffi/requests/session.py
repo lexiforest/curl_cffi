@@ -30,7 +30,15 @@ from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
-from .impersonate import ExtraFingerprints, toggle_extension, BrowserType, TLS_VERSION_MAP, TLS_CIPHER_NAME_MAP, TLS_EC_CURVES_MAP
+from .impersonate import (
+    ExtraFingerprints,
+    ExtraFpDict,
+    toggle_extension,
+    BrowserType,
+    TLS_VERSION_MAP,
+    TLS_CIPHER_NAME_MAP,
+    TLS_EC_CURVES_MAP
+)
 from .models import Request, Response
 from .websockets import WebSocket
 
@@ -172,7 +180,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
-        extra_fp: Optional[ExtraFingerprints] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         curl_options: Optional[dict] = None,
@@ -328,7 +336,7 @@ class BaseSession:
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
-        extra_fp: Optional[ExtraFingerprints] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
@@ -576,8 +584,12 @@ class BaseSession:
         if ja3:
             if impersonate:
                 warnings.warn("JA3 was altered after browser version was set.")
-                raise RequestsError("Cannot use both impersonate and ja3 string")
-            self._set_ja3_options(c, ja3, permute=bool(extra_fp and extra_fp.tls_permute_extensions))
+            permute = False
+            if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
+                permute = True
+            if isinstance(extra_fp, dict) and extra_fp.get("tls_permute_extensions"):
+                permute = True
+            self._set_ja3_options(c, ja3, permute=permute)
 
         # akamai string
         akamai = akamai or self.akamai
@@ -589,6 +601,8 @@ class BaseSession:
         # extra_fp options
         extra_fp = extra_fp or self.extra_fp
         if extra_fp:
+            if isinstance(extra_fp, dict):
+                extra_fp = ExtraFingerprints(**extra_fp)
             if impersonate:
                 warnings.warn("Extra fingerprints was altered after browser version was set.")
             self._set_extra_fp(c, extra_fp)
@@ -860,7 +874,7 @@ class Session(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
-        extra_fp: Optional[ExtraFingerprints] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
@@ -1151,7 +1165,7 @@ class AsyncSession(BaseSession):
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
-        extra_fp: Optional[ExtraFingerprints] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,

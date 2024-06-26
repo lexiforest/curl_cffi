@@ -1,5 +1,4 @@
 from curl_cffi import requests
-from curl_cffi.requests.impersonate import ExtraFingerprints
 
 # OKHTTP impersonatation examples
 # credits: https://github.com/bogdanfinn/tls-client/blob/master/profiles/contributed_custom_profiles.go
@@ -18,8 +17,8 @@ okhttp4_android10_ja3 = ",".join(
 
 okhttp4_android10_akamai = "4:16777216|16711681|0|m,p,a,s"
 
-extra_fp = ExtraFingerprints(
-    tls_signature_algorithms=[
+extra_fp = {
+    "tls_signature_algorithms": [
         "ecdsa_secp256r1_sha256",
         "rsa_pss_rsae_sha256",
         "rsa_pkcs1_sha256",
@@ -30,7 +29,7 @@ extra_fp = ExtraFingerprints(
         "rsa_pkcs1_sha512",
         "rsa_pkcs1_sha1",
     ]
-)
+}
 
 
 r = requests.get(

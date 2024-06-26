@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, TypedDict
 import warnings
 from enum import Enum
 
@@ -55,6 +55,16 @@ class ExtraFingerprints:
     tls_signature_algorithms: Optional[List[str]] = None
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
+
+
+class ExtraFpDict(TypedDict, total=False):
+    tls_min_version: int
+    tls_grease: bool
+    tls_permute_extensions: bool
+    tls_cert_compression: Literal["zlib", "brotli"]
+    tls_signature_algorithms: Optional[List[str]]
+    http2_stream_weight: int
+    http2_stream_exclusive: int
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
