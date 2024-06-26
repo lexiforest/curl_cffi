@@ -563,3 +563,17 @@ class CurlWsFlag(IntEnum):
     CLOSE = 1 << 3
     PING = 1 << 4
     OFFSET = 1 << 5
+
+
+class CurlSslVersion(IntEnum):
+    """``CURL_SSLVERSION`` constants extracted from libcurl, see comments for details."""
+
+    DEFAULT = 0
+    TLSv1 = 1
+    SSLv2 = 2
+    SSLv3 = 3
+    TLSv1_0 = 4
+    TLSv1_1 = 5
+    TLSv1_2 = 6
+    TLSv1_3 = 7
+    MAX_DEFAULT = 1 << 16
