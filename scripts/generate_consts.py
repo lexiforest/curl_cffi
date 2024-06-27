@@ -64,24 +64,45 @@ with open(CONST_FILE, "w") as f:
     """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
     f.write(output.decode())
-    f.write("\n\n")
+    f.write("\n")
 
-    f.write("class CurlHttpVersion(IntEnum):\n")
-    f.write('    """``CURL_HTTP_VERSION`` constants extracted from libcurl, see comments for details."""\n\n')
-    f.write("    NONE = 0\n")
-    f.write("    V1_0 = 1  # please use HTTP 1.0 in the request */\n")
-    f.write("    V1_1 = 2  # please use HTTP 1.1 in the request */\n")
-    f.write("    V2_0 = 3  # please use HTTP 2 in the request */\n")
-    f.write("    V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */\n")
-    f.write("    V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */\n")
-    f.write("    V3 = 30  # Makes use of explicit HTTP/3 without fallback.\n")
-    f.write("\n\n")
+    # These lines are not easy to be extracted automatically
+    f.write(
+        '''
+class CurlHttpVersion(IntEnum):
+    """``CURL_HTTP_VERSION`` constants extracted from libcurl, see comments for details."""
 
-    f.write("class CurlWsFlag(IntEnum):\n")
-    f.write('    """``CURL_WS_FLAG`` constants extracted from libcurl, see comments for details."""\n\n')
-    f.write("    TEXT = 1 << 0\n")
-    f.write("    BINARY = 1 << 1\n")
-    f.write("    CONT = 1 << 2\n")
-    f.write("    CLOSE = 1 << 3\n")
-    f.write("    PING = 1 << 4\n")
-    f.write("    OFFSET = 1 << 5\n")
+    NONE = 0
+    V1_0 = 1  # please use HTTP 1.0 in the request */
+    V1_1 = 2  # please use HTTP 1.1 in the request */
+    V2_0 = 3  # please use HTTP 2 in the request */
+    V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */
+    V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */
+    V3 = 30  # Makes use of explicit HTTP/3 without fallback.
+
+
+class CurlWsFlag(IntEnum):
+    """``CURL_WS_FLAG`` constants extracted from libcurl, see comments for details."""
+
+    TEXT = 1 << 0
+    BINARY = 1 << 1
+    CONT = 1 << 2
+    CLOSE = 1 << 3
+    PING = 1 << 4
+    OFFSET = 1 << 5
+
+
+class CurlSslVersion(IntEnum):
+    """``CURL_SSLVERSION`` constants extracted from libcurl, see comments for details."""
+
+    DEFAULT = 0
+    TLSv1 = 1
+    SSLv2 = 2
+    SSLv3 = 3
+    TLSv1_0 = 4
+    TLSv1_1 = 5
+    TLSv1_2 = 6
+    TLSv1_3 = 7
+    MAX_DEFAULT = 1 << 16
+'''
+    )

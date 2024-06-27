@@ -6,7 +6,6 @@ import warnings
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from enum import Enum
 from functools import partialmethod
 from io import BytesIO
 from json import dumps
@@ -25,11 +24,21 @@ from typing import (
 )
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
 
-from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt
+
+from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
+from .impersonate import (
+    ExtraFingerprints,
+    ExtraFpDict,
+    toggle_extension,
+    BrowserType,
+    TLS_VERSION_MAP,
+    TLS_CIPHER_NAME_MAP,
+    TLS_EC_CURVES_MAP
+)
 from .models import Request, Response
 from .websockets import WebSocket
 
@@ -52,52 +61,6 @@ else:
     ProxySpec = Dict[str, str]
 
 ThreadType = Literal["eventlet", "gevent"]
-
-
-class BrowserType(str, Enum):
-    edge99 = "edge99"
-    edge101 = "edge101"
-    chrome99 = "chrome99"
-    chrome100 = "chrome100"
-    chrome101 = "chrome101"
-    chrome104 = "chrome104"
-    chrome107 = "chrome107"
-    chrome110 = "chrome110"
-    chrome116 = "chrome116"
-    chrome119 = "chrome119"
-    chrome120 = "chrome120"
-    chrome123 = "chrome123"
-    chrome124 = "chrome124"
-    chrome99_android = "chrome99_android"
-    safari15_3 = "safari15_3"
-    safari15_5 = "safari15_5"
-    safari17_0 = "safari17_0"
-    safari17_2_ios = "safari17_2_ios"
-
-    chrome = "chrome123"
-    safari = "safari17_0"
-    safari_ios = "safari17_2_ios"
-
-    @classmethod
-    def has(cls, item):
-        return item in cls.__members__
-
-    @classmethod
-    def normalize(cls, item):
-        if item == "chrome":  # noqa: SIM116
-            return cls.chrome
-        elif item == "safari":
-            return cls.safari
-        elif item == "safari_ios":
-            return cls.safari_ios
-        else:
-            return item
-
-
-class BrowserSpec:
-    """A more structured way of selecting browsers"""
-
-    # TODO
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -215,6 +178,9 @@ class BaseSession:
         allow_redirects: bool = True,
         max_redirects: int = 30,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        ja3: Optional[str] = None,
+        akamai: Optional[str] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         curl_options: Optional[dict] = None,
@@ -235,6 +201,9 @@ class BaseSession:
         self.allow_redirects = allow_redirects
         self.max_redirects = max_redirects
         self.impersonate = impersonate
+        self.ja3 = ja3
+        self.akamai = akamai
+        self.extra_fp = extra_fp
         self.default_headers = default_headers
         self.default_encoding = default_encoding
         self.curl_options = curl_options or {}
@@ -255,6 +224,92 @@ class BaseSession:
             raise ValueError("You need to provide an absolute url for 'base_url'")
 
         self._closed = False
+
+    def _toggle_extensions_by_ids(self, curl, extension_ids):
+        default_enabled = {0, 51, 13, 43, 65281, 23, 10, 45, 35, 11, 16}
+
+        to_enable_ids = extension_ids - default_enabled
+        for ext_id in to_enable_ids:
+            toggle_extension(curl, ext_id, enable=True)
+
+        # print("to_enable: ", to_enable_ids)
+
+        to_disable_ids = default_enabled - extension_ids
+        for ext_id in to_disable_ids:
+            toggle_extension(curl, ext_id, enable=False)
+
+        # print("to_disable: ", to_disable_ids)
+
+    def _set_ja3_options(self, curl, ja3: str, permute: bool = False):
+        """
+        Detailed explanation: https://engineering.salesforce.com/tls-fingerprinting-with-ja3-and-ja3s-247362855967/
+        """
+        tls_version, ciphers, extensions, curves, curve_formats = ja3.split(",")
+
+        curl_tls_version = TLS_VERSION_MAP[int(tls_version)]
+        curl.setopt(CurlOpt.SSLVERSION, curl_tls_version | CurlSslVersion.MAX_DEFAULT)
+        assert curl_tls_version == CurlSslVersion.TLSv1_2, "Only TLS v1.2 works for now."
+
+        cipher_names = []
+        for cipher in ciphers.split("-"):
+            cipher_id = int(cipher)
+            cipher_name = TLS_CIPHER_NAME_MAP[cipher_id]
+            cipher_names.append(cipher_name)
+
+        curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
+
+        if extensions.endswith("-21"):
+            extensions = extensions[:-3]
+            warnings.warn(
+                "Padding(21) extension found in ja3 string, whether to add it should "
+                "be managed by the SSL engine. The TLS client hello packet may contain "
+                "or not contain this extension, any of which should be correct."
+            )
+        extension_ids = set(int(e) for e in extensions.split("-"))
+        self._toggle_extensions_by_ids(curl, extension_ids)
+
+        if not permute:
+            curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, extensions)
+
+        curve_names = []
+        for curve in curves.split("-"):
+            curve_id = int(curve)
+            curve_name = TLS_EC_CURVES_MAP[curve_id]
+            curve_names.append(curve_name)
+
+        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(curve_names))
+
+        assert int(curve_formats) == 0, "Only curve_formats == 0 is supported."
+
+    def _set_akamai_options(self, curl, akamai: str):
+        """
+        Detailed explanation: https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf
+        """
+        settings, window_update, streams, header_order = akamai.split("|")
+
+        curl.setopt(CurlOpt.HTTP_VERSION, CurlHttpVersion.V2_0)
+
+        curl.setopt(CurlOpt.HTTP2_SETTINGS, settings)
+        curl.setopt(CurlOpt.HTTP2_WINDOW_UPDATE, int(window_update))
+
+        if streams != "0":
+            curl.setopt(CurlOpt.HTTP2_STREAMS, streams)
+
+        # m,a,s,p -> masp
+        # curl-impersonate only accepts masp format, without commas.
+        curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
+
+    def _set_extra_fp(self, curl, fp: ExtraFingerprints):
+
+        if fp.tls_signature_algorithms:
+            curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
+
+        curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
+        curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
+        curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
+        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
 
     def _set_curl_options(
         self,
@@ -279,6 +334,9 @@ class BaseSession:
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        ja3: Optional[str] = None,
+        akamai: Optional[str] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
@@ -521,6 +579,34 @@ class BaseSession:
             if ret != 0:
                 raise RequestsError(f"Impersonating {impersonate} is not supported")
 
+        # ja3 string
+        ja3 = ja3 or self.ja3
+        if ja3:
+            if impersonate:
+                warnings.warn("JA3 was altered after browser version was set.")
+            permute = False
+            if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
+                permute = True
+            if isinstance(extra_fp, dict) and extra_fp.get("tls_permute_extensions"):
+                permute = True
+            self._set_ja3_options(c, ja3, permute=permute)
+
+        # akamai string
+        akamai = akamai or self.akamai
+        if akamai:
+            if impersonate:
+                warnings.warn("Akamai was altered after browser version was set.")
+            self._set_akamai_options(c, akamai)
+
+        # extra_fp options
+        extra_fp = extra_fp or self.extra_fp
+        if extra_fp:
+            if isinstance(extra_fp, dict):
+                extra_fp = ExtraFingerprints(**extra_fp)
+            if impersonate:
+                warnings.warn("Extra fingerprints was altered after browser version was set.")
+            self._set_extra_fp(c, extra_fp)
+
         # http_version, after impersonate, which will change this to http2
         http_version = http_version or self.http_version
         if http_version:
@@ -653,6 +739,9 @@ class Session(BaseSession):
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             impersonate: which browser version to impersonate in the session.
+            ja3: ja3 string to impersonate in the session.
+            akamai: akamai string to impersonate in the session.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
             interface: which interface use in request to server.
             default_encoding: encoding for decoding response content if charset is not found in
                 headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
@@ -783,6 +872,9 @@ class Session(BaseSession):
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        ja3: Optional[str] = None,
+        akamai: Optional[str] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
@@ -825,6 +917,9 @@ class Session(BaseSession):
             accept_encoding=accept_encoding,
             content_callback=content_callback,
             impersonate=impersonate,
+            ja3=ja3,
+            akamai=akamai,
+            extra_fp=extra_fp,
             default_headers=default_headers,
             http_version=http_version,
             interface=interface,
@@ -939,6 +1034,9 @@ class AsyncSession(BaseSession):
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             impersonate: which browser version to impersonate in the session.
+            ja3: ja3 string to impersonate in the session.
+            akamai: akamai string to impersonate in the session.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
             default_encoding: encoding for decoding response content if charset is not found
                 in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
 
@@ -1065,6 +1163,9 @@ class AsyncSession(BaseSession):
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
+        ja3: Optional[str] = None,
+        akamai: Optional[str] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         http_version: Optional[CurlHttpVersion] = None,
@@ -1100,6 +1201,9 @@ class AsyncSession(BaseSession):
             accept_encoding=accept_encoding,
             content_callback=content_callback,
             impersonate=impersonate,
+            ja3=ja3,
+            akamai=akamai,
+            extra_fp=extra_fp,
             default_headers=default_headers,
             http_version=http_version,
             interface=interface,

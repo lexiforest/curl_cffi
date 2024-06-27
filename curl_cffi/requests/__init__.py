@@ -19,17 +19,20 @@ __all__ = [
     "WebSocket",
     "WebSocketError",
     "WsCloseCode",
+    "ExtraFingerprints",
 ]
 
 from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
+
 from ..const import CurlHttpVersion, CurlWsFlag
 from ..curl import CurlMime
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
+from .impersonate import ExtraFingerprints, ExtraFpDict
 from .models import Request, Response
 from .session import AsyncSession, BrowserType, ProxySpec, Session, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
@@ -56,6 +59,9 @@ def request(
     accept_encoding: Optional[str] = "gzip, deflate, br",
     content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
+    ja3: Optional[str] = None,
+    akamai: Optional[str] = None,
+    extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
     thread: Optional[ThreadType] = None,
     default_headers: Optional[bool] = None,
     default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -65,7 +71,7 @@ def request(
     interface: Optional[str] = None,
     cert: Optional[Union[str, Tuple[str, str]]] = None,
     stream: bool = False,
-    max_recv_speed: int = 0,    
+    max_recv_speed: int = 0,
     multipart: Optional[CurlMime] = None,
 ) -> Response:
     """Send an http request.
@@ -95,6 +101,9 @@ def request(
         content_callback: a callback function to receive response body.
             ``def callback(chunk: bytes) -> None:``
         impersonate: which browser version to impersonate.
+        ja3: ja3 string to impersonate.
+        akamai: akamai string to impersonate.
+        extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
         thread: work with other thread implementations. choices: eventlet, gevent.
         default_headers: whether to set default browser headers.
         default_encoding: encoding for decoding response content if charset is not found in headers.
@@ -130,6 +139,9 @@ def request(
             accept_encoding=accept_encoding,
             content_callback=content_callback,
             impersonate=impersonate,
+            ja3=ja3,
+            akamai=akamai,
+            extra_fp=extra_fp,
             default_headers=default_headers,
             default_encoding=default_encoding,
             http_version=http_version,
