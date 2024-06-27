@@ -328,6 +328,8 @@ class CurlOpt(IntEnum):
     TLS_EXTENSION_ORDER = 10000 + 1012
     STREAM_EXCLUSIVE = 0 + 1013
     TLS_KEY_USAGE_NO_CHECK = 0 + 1014
+    TLS_SIGNED_CERT_TIMESTAMPS = 0 + 1015
+    TLS_STATUS_REQUEST = 0 + 1016
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")

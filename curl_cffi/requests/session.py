@@ -226,7 +226,7 @@ class BaseSession:
         self._closed = False
 
     def _toggle_extensions_by_ids(self, curl, extension_ids):
-        default_enabled = {0, 51, 13, 43, 5, 18, 65281, 23, 10, 45, 35, 11, 16}
+        default_enabled = {0, 51, 13, 43, 65281, 23, 10, 45, 35, 11, 16}
 
         to_enable_ids = extension_ids - default_enabled
         for ext_id in to_enable_ids:

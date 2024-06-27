@@ -262,15 +262,11 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     # status_request
     elif extension_id == 5:
         if enable:
-            pass # It's now always enabled
-        else:
-            raise NotImplementedError("This extension(5) is always on for now, it will be updated later.")
-    # signed_certificate_timestamp
+            curl.setopt(CurlOpt.TLS_STATUS_REQUEST, 1)
+    # signed_certificate_timestamps
     elif extension_id == 18:
         if enable:
-            pass # It's now always enabled
-        else:
-            raise NotImplementedError("This extension(18) is always on for now, it will be updated later.")
+            curl.setopt(CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, 1)
     # session_ticket
     elif extension_id == 35:
         if enable:

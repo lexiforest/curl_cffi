@@ -9,7 +9,7 @@ okhttp4_android10_ja3 = ",".join(
     [
         "771",
         "4865-4866-4867-49195-49196-52393-49199-49200-52392-49171-49172-156-157-47-53",
-        "0-23-65281-10-11-35-16-5-13-51-45-43-18-21",  # FIXME: 18 should not be here.
+        "0-23-65281-10-11-35-16-5-13-51-45-43-21",
         "29-23-24",
         "0",
     ]
@@ -29,6 +29,16 @@ extra_fp = {
         "rsa_pkcs1_sha512",
         "rsa_pkcs1_sha1",
     ]
+    # other options:
+    # tls_min_version: int = CurlSslVersion.TLSv1_2
+    # tls_grease: bool = False
+    # tls_permute_extensions: bool = False
+    # tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
+    # tls_signature_algorithms: Optional[List[str]] = None
+    # http2_stream_weight: int = 256
+    # http2_stream_exclusive: int = 1
+
+    # See requests/impersonate.py and tests/unittest/test_impersonate.py for more examples
 }
 
 
