@@ -74,15 +74,13 @@ To install unstable version from GitHub:
 
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
 
-Use the latest impersonate versions, do NOT copy `chrome110` here without changing.
-
 ### requests-like
 
 ```python
 from curl_cffi import requests
 
 # Notice the impersonate parameter
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -93,12 +91,19 @@ print(r.json())
 # Other similar values are: "safari" and "safari_ios"
 r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
+# To pin a specific version, use version numbers together.
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
+
+# To impersonate other than browsers, bring your own ja3/akamai strings
+# See examples directory for details.
+r = requests.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
+
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
 ```
 
 ### Sessions
@@ -117,12 +122,15 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-Supported impersonate versions, as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+`curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
 However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
 
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
+
+If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
+to specify your own customized fingerprints.
 
 - chrome99
 - chrome100
