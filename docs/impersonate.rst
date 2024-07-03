@@ -4,9 +4,15 @@ Impersonate guide
 Supported browser versions
 --------------------------
 
-Supported impersonate versions, as supported by our `fork <https://github.com/yifeikong/curl-impersonate>`_ of `curl-impersonate <https://github.com/lwthiker/curl-impersonate>`_:
+``curl_cffi`` supports the same browser versions as supported by our `fork <https://github.com/yifeikong/curl-impersonate>`_ of `curl-impersonate <https://github.com/lwthiker/curl-impersonate>`_:
 
 However, only Chrome-like browsers are supported. Firefox support is tracked in `#59 <https://github.com/yifeikong/curl_cffi/issues/59>`_.
+
+Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
+chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
+
+If you are trying to impersonate a target other than a browser, use ``ja3=...`` and ``akamai=...``
+to specify your own customized fingerprints. See below for details.
 
 - chrome99
 - chrome100
@@ -46,17 +52,67 @@ browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
 
     requests.get(url, impersonate="chrome")
 
-iOS has restrictions on WebView and TLS libs, so safari_x_ios should work for most apps.
-If you encountered an android app with custom fingerprints, you can try the ``safari ios``
+iOS has restrictions on WebView and TLS libs, so ``safari_x_ios`` should work for most apps.
+If you encountered an android app with custom fingerprints, you can try the ``safari_ios``
 fingerprints given that this app should have an iOS version.
 
-How to customize my fingerprints? e.g. okhttp
+How to use my own fingerprints other than the builtin ones? e.g. okhttp
 ------
 
-It's not fully implemented, yet.
+Use ``ja3=...``, ``akamai=...`` and ``extra_fp=...``.
 
-There are many parts in the JA3 and Akamai http2 fingerprints. Some of them can be changed,
-while some can not be changed at the moment. The progress is tracked in https://github.com/yifeikong/curl_cffi/issues/194.
+You can retrieve the JA3 and Akamai strings using tools like WireShark or from TLS fingerprinting sites.
+
+.. code-block:: python
+
+   # OKHTTP impersonatation examples
+   # credits: https://github.com/bogdanfinn/tls-client/blob/master/profiles/contributed_custom_profiles.go
+
+   url = "https://tls.browserleaks.com/json"
+
+   okhttp4_android10_ja3 = ",".join(
+       [
+           "771",
+           "4865-4866-4867-49195-49196-52393-49199-49200-52392-49171-49172-156-157-47-53",
+           "0-23-65281-10-11-35-16-5-13-51-45-43-21",
+           "29-23-24",
+           "0",
+       ]
+   )
+
+   okhttp4_android10_akamai = "4:16777216|16711681|0|m,p,a,s"
+
+   extra_fp = {
+       "tls_signature_algorithms": [
+           "ecdsa_secp256r1_sha256",
+           "rsa_pss_rsae_sha256",
+           "rsa_pkcs1_sha256",
+           "ecdsa_secp384r1_sha384",
+           "rsa_pss_rsae_sha384",
+           "rsa_pkcs1_sha384",
+           "rsa_pss_rsae_sha512",
+           "rsa_pkcs1_sha512",
+           "rsa_pkcs1_sha1",
+       ]
+       # other options:
+       # tls_min_version: int = CurlSslVersion.TLSv1_2
+       # tls_grease: bool = False
+       # tls_permute_extensions: bool = False
+       # tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
+       # tls_signature_algorithms: Optional[List[str]] = None
+       # http2_stream_weight: int = 256
+       # http2_stream_exclusive: int = 1
+
+       # See requests/impersonate.py and tests/unittest/test_impersonate.py for more examples
+   }
+
+
+   r = requests.get(
+       url, ja3=okhttp4_android10_ja3, akamai=okhttp4_android10_akamai, extra_fp=extra_fp
+   )
+   print(r.json())
+
+The other way is to use the ``curlopt`` s to specify exactly which options you want to change.
 
 To modify them, use ``curl.setopt(CurlOpt, value)``, for example:
 
@@ -115,6 +171,16 @@ randomized, due to the ``extension permutation`` feature introduced in Chrome 11
 
 As far as we know, most websites use an allowlist, not a blocklist to filter out bot
 traffic. So do not expect random ja3 fingerprints would work in the wild.
+
+Moreover, do not generate random ja3 strings. There are certain limits for a valid ja3 string.
+For example:
+
+* TLS 1.3 ciphers must be at the front.
+* GREASE extension must be the first.
+* etc.
+
+You should copy ja3 strings from sniffing tools, not generate them, unless you can make
+sure all the requirements are met.
 
 Can I change JavaScript fingerprints with this library?
 ------

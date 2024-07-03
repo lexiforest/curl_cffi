@@ -15,6 +15,11 @@ Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` ca
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
+The fingerprints in 0.6 on Windows are all wrong, you should update to 0.7 if you are on
+Windows. Sorry for the inconvenience.
+
+Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
+
 ------
 
 <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
@@ -34,7 +39,7 @@ If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also
 
 ## Features
 
-- Supports JA3/TLS and http2 fingerprints impersonation.
+- Supports JA3/TLS and http2 fingerprints impersonation, inlucding recent browsers and custome fingerprints.
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/main/benchmark).
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
@@ -130,7 +135,7 @@ Browser versions will be added **only** when their fingerprints change. If you s
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
 
 If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
-to specify your own customized fingerprints.
+to specify your own customized fingerprints. See the [docs on impersonatation](https://curl-cffi.readthedocs.io/en/latest/impersonate.html) for details.
 
 - chrome99
 - chrome100

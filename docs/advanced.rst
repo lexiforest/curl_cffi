@@ -16,7 +16,7 @@ Alternatively, you can use the low-level curl-like API:
     c.setopt(CurlOpt.URL, b'https://tls.browserleaks.com/json')
     c.setopt(CurlOpt.WRITEDATA, buffer)
 
-    c.impersonate("chrome120")
+    c.impersonate("chrome124")
 
     c.perform()
     c.close()

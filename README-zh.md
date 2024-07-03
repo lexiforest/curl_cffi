@@ -10,6 +10,10 @@
 不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi ` 可以模拟浏览器的
 TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试 `curl_cffi`。
 
+0.6 版本在 Windows 上的指纹全错了，如果你用的是 Windows 的话，请尽快升级。造成不便，多有抱歉。
+
+只支持 Python 3.8 和以上版本，Python 3.7 已经官宣退役了。
+
 ------
 
 <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
@@ -26,7 +30,7 @@ TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，�
 
 ## 功能
 
-- 支持 JA3/TLS 和 http2 指纹模拟。
+- 支持 JA3/TLS 和 http2 指纹模拟，包含最新的浏览器和自定义指纹。
 - 比 requests/httpx 快得多，和 aiohttp/pycurl 的速度比肩，详见 [benchmarks](https://github.com/yifeikong/curl_cffi/tree/master/benchmark)。
 - 模仿 requests 的 API，不用再学一个新的。
 - 预编译，不需要在自己机器上从头开始。
@@ -83,6 +87,12 @@ print(r.json())
 # Other similar values are: "safari" and "safari_ios"
 r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
+# To pin a specific version, use version numbers together.
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
+
+# 自定义指纹, examples 中有具体例子。
+r = requests.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
+
 # 支持使用代理
 proxies = {"https": "http://localhost:3128"}
 r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
@@ -111,6 +121,8 @@ print(r.json())
 
 只有当浏览器指纹发生改编的时候，才会添加新版本。如果你看到某个版本被跳过去了，那是因为
 他们的指纹没有发生改变，直接用之前的版本加上新的 header 即可。
+
+如果你要模仿的不是浏览器, 使用 `ja3=...` and `akamai=...` 来指定你的自定义指纹. 参见[文档](https://curl-cffi.readthedocs.io/en/latest/impersonate.html).
 
 - chrome99
 - chrome100

@@ -6,7 +6,8 @@ v0.7
 
 - v0.7.0
     - Added more recent impersonate versions, up to Chrome 124.
-    - Upgraded libcurl to 8.7.1.
+    - Upgraded ``libcurl`` to 8.7.1.
+    - Supported custom impersonation.
     - Added support for list of tuple in post fields.
     - Updated header strategy: always exclude empty headers, never send Expect header.
     - Changed default redirect limit to 30.

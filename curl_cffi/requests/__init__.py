@@ -56,7 +56,7 @@ def request(
     proxy_auth: Optional[Tuple[str, str]] = None,
     verify: Optional[bool] = None,
     referer: Optional[str] = None,
-    accept_encoding: Optional[str] = "gzip, deflate, br",
+    accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
     impersonate: Optional[Union[str, BrowserType]] = None,
     ja3: Optional[str] = None,
@@ -80,7 +80,7 @@ def request(
         method: http method for the request: GET/POST/PUT/DELETE etc.
         url: url for the requests.
         params: query string for the requests.
-        data: form values or binary data to use in body,
+        data: form values(dict/list/tuple) or binary data to use in body,
             ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict is given.
         json: json values to use in body, `Content-Type: application/json` will be added
             automatically.
@@ -93,7 +93,7 @@ def request(
         max_redirects: max redirect counts, default 30, use -1 for unlimited.
         proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
         proxy: proxy to use, format: "http://user@pass:proxy_url".
-            Can't be used with proxy parameter.
+            Can't be used with `proxies` parameter.
         proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
         verify: whether to verify https certs.
         referer: shortcut for setting referer header.
@@ -104,15 +104,19 @@ def request(
         ja3: ja3 string to impersonate.
         akamai: akamai string to impersonate.
         extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
-        thread: work with other thread implementations. choices: eventlet, gevent.
-        default_headers: whether to set default browser headers.
+        thread: thread engine to use for working with other thread implementations.
+            choices: eventlet, gevent.
+        default_headers: whether to set default browser headers when impersonating.
         default_encoding: encoding for decoding response content if charset is not found in headers.
                 Defaults to "utf-8". Can be set to a callable for automatic detection.
         curl_options: extra curl options to use.
-        http_version: limiting http version, http2 will be tries by default.
+        http_version: limiting http version, defaults to http2.
         debug: print extra curl debug info.
-        interface: which interface use in request to server.
-        multipart: upload files using the multipart format, see.
+        interface: which interface to use.
+        cert: a tuple of (cert, key) filenames for client cert.
+        stream: streaming the response, default False.
+        max_recv_speed: maximum receive speed, bytes per second.
+        multipart: upload files using the multipart format, see examples for details.
 
     Returns:
         A ``Response`` object.

@@ -331,7 +331,7 @@ class BaseSession:
         proxy_auth: Optional[Tuple[str, str]] = None,
         verify: Optional[Union[bool, str]] = None,
         referer: Optional[str] = None,
-        accept_encoding: Optional[str] = "gzip, deflate, br",
+        accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[Union[str, BrowserType]] = None,
         ja3: Optional[str] = None,
@@ -378,7 +378,7 @@ class BaseSession:
         elif data is None:
             body = b""
         else:
-            raise TypeError("data must be dict, str, BytesIO or bytes")
+            raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
         if json is not None:
             body = dumps(json, separators=(",", ":")).encode()
 
@@ -723,7 +723,7 @@ class Session(BaseSession):
                 created. Also, a fresh curl object will always be created when accessed
                 from another thread.
             thread: thread engine to use for working with other thread implementations.
-                choices: eventlet, gevent., possible values: eventlet, gevent.
+                choices: eventlet, gevent.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
@@ -731,7 +731,7 @@ class Session(BaseSession):
             proxy: proxy to use, format: "http://proxy_url".
                 Cannot be used with the above parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
-            base_url: absolute url to use for relative urls.
+            base_url: absolute url to use as base for relative urls.
             params: query string for the session.
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
@@ -742,9 +742,10 @@ class Session(BaseSession):
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
-            interface: which interface use in request to server.
+            interface: which interface use.
             default_encoding: encoding for decoding response content if charset is not found in
                 headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+            cert: a tuple of (cert, key) filenames for client cert.
 
         Notes:
             This class can be used as a context manager.
@@ -826,7 +827,7 @@ class Session(BaseSession):
             on_message: message callback, ``def on_message(ws, str)``
             on_error: error callback, ``def on_error(ws, error)``
             on_open: open callback, ``def on_open(ws)``
-            on_cloes: close callback, ``def on_close(ws)``
+            on_close: close callback, ``def on_close(ws)``
 
         Other parameters are the same as ``.request``
 
@@ -1039,6 +1040,7 @@ class AsyncSession(BaseSession):
             extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
             default_encoding: encoding for decoding response content if charset is not found
                 in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+            cert: a tuple of (cert, key) filenames for client cert.
 
         Notes:
             This class can be used as a context manager, and it's recommended to use via

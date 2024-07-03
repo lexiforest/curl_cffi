@@ -1,6 +1,11 @@
 Install
 =======
 
+The fingerprints in 0.6 on Windows are all wrong, you should update to 0.7 if you are on
+Windows.
+
+Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
+
 Via pip
 ------
 
