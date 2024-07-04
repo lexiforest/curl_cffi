@@ -159,3 +159,21 @@ your own headers.
 
    requests.get(url, impersonate="chrome", default_headers=False, headers=...)
 
+
+How to deal with encoding/decoding errors?
+
+Use ``chardet`` or ``cchardet``
+
+.. code-block::
+
+    >>> from curl_cffi import requests
+    >>> r = requests.get("https://example.com/messy_codec.html")
+    >>> import chardet
+    >>> chardet.detect(r.content)
+    {'encoding': 'GB2312', 'confidence': 0.99, 'language': 'Chinese'}
+
+Or use regex or lxml to parse the meta header:
+
+.. code-block::
+
+    <meta http-equiv="Content-Type" content="text/html; charset=gbk" />

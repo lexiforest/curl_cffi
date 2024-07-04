@@ -4,6 +4,9 @@ Cookies
 How to save and load cookies
 ------
 
+Do not use ``get_dict`` to dump and load cookies. Cookies are more than just plain
+key-value pairs.
+
 .. code-block:: python
 
     import pickle

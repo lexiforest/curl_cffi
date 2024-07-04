@@ -40,3 +40,16 @@ def test_curl_format_without_hostname():
     m = CurlMorsel(name="foo", value="bar")
     with pytest.raises(RequestsError):
         m.to_curl_format()
+
+
+def test_get_dict():
+    c = Cookies({"foo": "bar"})
+    d = c.get_dict()
+    assert d == {"foo": "bar"}
+
+    c = Cookies({"foo": "bar", "hello": "world", "a": "b"})
+    d = c.get_dict()
+    assert len(d) == 3
+    assert d["foo"] == "bar"
+    assert d["hello"] == "world"
+    assert d["a"] == "b"
