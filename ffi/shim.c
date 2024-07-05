@@ -1,6 +1,7 @@
 #include "shim.h"
 
 #define INTEGER_OPTION_MAX 10000
+#define POINTER_OPTION_MAX 30000
 
 int _curl_easy_setopt(void* curl, int option, void* parameter) {
     // printf("****** hijack test begins: \n");
@@ -11,6 +12,9 @@ int _curl_easy_setopt(void* curl, int option, void* parameter) {
     // for integer options, we need to convert param from pointers to integers
     if (option < INTEGER_OPTION_MAX) {
         return (int)curl_easy_setopt(curl, (CURLoption)option, *(int*)parameter);
+    }
+    if (option >= POINTER_OPTION_MAX) {
+        return (int)curl_easy_setopt(curl, (CURLoption)option, *(curl_off_t*)parameter);
     }
     return (int)curl_easy_setopt(curl, (CURLoption)option, parameter);
 }
