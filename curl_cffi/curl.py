@@ -162,16 +162,14 @@ class Curl:
             0: "int*",
             10000: "char*",
             20000: "void*",
-            30000: "off_t",  # offset type
+            30000: "int64_t*",  # offset type
         }
         # print("option", option, "value", value)
 
         # Convert value
         value_type = input_option.get(int(option / 10000) * 10000)
-        if value_type == "int*":
-            c_value = ffi.new("int*", value)
-        elif value_type == "off_t":
-            c_value = ffi.cast("void*", value)
+        if value_type == "int*" or value_type == "int64_t*":
+            c_value = ffi.new(value_type, value)
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
