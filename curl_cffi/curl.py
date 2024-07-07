@@ -159,17 +159,18 @@ class Curl:
         input_option = {
             # this should be int in curl, but cffi requires pointer for void*
             # it will be convert back in the glue c code.
-            0: "int*",
+            0: "long*",
             10000: "char*",
             20000: "void*",
-            30000: "int*",  # offset type
+            30000: "int64_t*",  # offset type
+            40000: "void*",     # blob type
         }
         # print("option", option, "value", value)
 
         # Convert value
-        value_type = input_option.get(int(option / 10000) * 10000)
-        if value_type == "int*":
-            c_value = ffi.new("int*", value)
+        value_type = input_option.get((option // 10000) * 10000)
+        if value_type == "long*" or value_type == "int64_t*":
+            c_value = ffi.new(value_type, value)
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
