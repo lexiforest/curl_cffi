@@ -4,6 +4,11 @@ Change Log
 v0.7
 ----
 
+- v0.7.1
+    - Added `Cookies.get_dict()`, for compatibility with `requests`.
+    - Fixed type conversion in C shim, by @qishipai.
+    - Fixed cookie `subdomains` attribute.
+
 - v0.7.0
     - Added more recent impersonate versions, up to Chrome 124.
     - Upgraded ``libcurl`` to 8.7.1.
