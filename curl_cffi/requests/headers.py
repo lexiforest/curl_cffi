@@ -85,13 +85,18 @@ def normalize_header_key(
     return bytes_value.lower() if lower else bytes_value
 
 
-def normalize_header_value(value: Union[str, bytes], encoding: Optional[str] = None) -> bytes:
+def normalize_header_value(value: Union[str, bytes, int], encoding: Optional[str] = None) -> bytes:
     """
     Coerce str/bytes into a strictly byte-wise HTTP header value.
     """
     if isinstance(value, bytes):
         return value
-    return value.encode(encoding or "ascii")
+    # The default encoding for header value should be latin-1
+    # See: RFC and https://github.com/python/cpython/blob/bc264eac3ad14dab748e33b3d714c2674872791f/Lib/http/client.py#L1309
+    if isinstance(value, int):
+        return str(value).encode()
+    else:
+        return value.encode(encoding or "latin-1")
 
 
 class Headers(MutableMapping[str, str]):
