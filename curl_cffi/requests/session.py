@@ -22,7 +22,7 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
+from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
 from typing_extensions import Unpack
 
@@ -101,12 +101,12 @@ def _is_absolute_url(url: str) -> bool:
     return bool(parsed_url.scheme and parsed_url.hostname)
 
 
-def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
-    """Add GET params to provided URL being aware of existing.
+def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple]) -> str:
+    """Add URL query params to provided URL being aware of existing.
 
     Parameters:
         url: string of target URL
-        params: dict containing requested params to be added
+        params: list of dict or list containing requested params to be added
 
     Returns:
         string with updated URL
@@ -116,35 +116,36 @@ def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     >> _update_url_params(url, new_params)
     'http://stackoverflow.com/test?data=some&data=values&answers=false'
     """
-    # Unquoting URL first so we don't loose existing args
+    # Unquoting and parse
     url = unquote(url)
-
-    # Extracting url info
     parsed_url = urlparse(url)
 
-    # Extracting URL arguments from parsed URL
-    get_args = parsed_url.query
-
-    # Do NOT converting URL arguments to dict
-    parsed_get_args = parse_qsl(get_args)
+    # Extracting URL arguments from parsed URL, NOTE the result is a list, not dict
+    parsed_get_args = parse_qsl(parsed_url.query)
 
     # Merging URL arguments dict with new params
-    old_args_counter = Counter(x[0] for x in parsed_get_args)
-    if isinstance(params, dict):
-        params = list(params.items())
-    new_args_counter = Counter(x[0] for x in params)
+    for params in params_list:
 
-    for key, value in params:
-        # Bool and Dict values should be converted to json-friendly values
-        # you may throw this part away if you don't like it :)
-        if isinstance(value, (bool, dict)):
-            value = dumps(value)
+        if not params:
+            continue
 
-        # 1 to 1 mapping, we have to search and update it.
-        if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
-            parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
-        else:
-            parsed_get_args.append((key, value))
+        # Check the args appearance count of keys
+        old_args_counter = Counter(x[0] for x in parsed_get_args)
+        if isinstance(params, dict):
+            params = list(params.items())
+        new_args_counter = Counter(x[0] for x in params)
+
+        for key, value in params:
+            # Bool and dict values should be converted to json-friendly values
+            if isinstance(value, (bool, dict)):
+                value = dumps(value)
+
+            # k:v is 1-to-1 mapping, we have to search and update it, e.g. k=v
+            if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
+                parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
+            # k:v is 1-to-list mapping, simply append them, e.g. k=v1&k=v2
+            else:
+                parsed_get_args.append((key, value))
 
     # Converting URL argument to proper query string
     encoded_get_args = urlencode(parsed_get_args, doseq=True)
@@ -154,7 +155,7 @@ def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     new_url = ParseResult(
         parsed_url.scheme,
         parsed_url.netloc,
-        parsed_url.path,
+        quote(parsed_url.path),
         parsed_url.params,
         encoded_get_args,
         parsed_url.fragment,
@@ -392,11 +393,8 @@ class BaseSession:
         if method == "HEAD":
             c.setopt(CurlOpt.NOBODY, 1)
 
-        # url
-        if self.params:
-            url = _update_url_params(url, self.params)
-        if params:
-            url = _update_url_params(url, params)
+        # url, always unquote and re-quote
+        url = _update_url_params(url, self.params, params)
         if self.base_url:
             url = urljoin(self.base_url, url)
         c.setopt(CurlOpt.URL, url.encode())
@@ -474,7 +472,10 @@ class BaseSession:
 
         # files
         if files:
-            raise NotImplementedError("files is not supported, use `multipart`.")
+            raise NotImplementedError(
+                "files is not supported, use `multipart`. See examples here: "
+                "https://github.com/yifeikong/curl_cffi/blob/main/examples/upload.py"
+            )
 
         # multipart
         if multipart:

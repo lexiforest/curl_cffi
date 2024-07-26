@@ -7,7 +7,7 @@
 [curl-impersonate](https://github.com/lwthiker/curl-impersonate) 的 Python 绑定，基于
 [cffi](https://cffi.readthedocs.io/en/latest/).
 
-不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi ` 可以模拟浏览器的
+不同于其他的纯 Python http 客户端，比如 `httpx` 和 `requests`，`curl_cffi` 可以模拟浏览器的
 TLS/JA3 和 HTTP/2 指纹。如果你莫名其妙地被某个网站封锁了，可以来试试 `curl_cffi`。
 
 0.6 版本在 Windows 上的指纹全错了，如果你用的是 Windows 的话，请尽快升级。造成不便，多有抱歉。
