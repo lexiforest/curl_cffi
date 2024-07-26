@@ -103,6 +103,15 @@ def test_delete(server):
     assert r.status_code == 200
 
 
+def test_non_post_with_bodies(server):
+    r = requests.get(str(server.url.copy_with(path="/echo_path")), data="foo")
+    assert r.json()["method"] == "GET"
+    r = requests.put(str(server.url.copy_with(path="/echo_path")), data="foo")
+    assert r.json()["method"] == "PUT"
+    r = requests.delete(str(server.url.copy_with(path="/echo_path")), data="foo")
+    assert r.json()["method"] == "DELETE"
+
+
 def test_options(server):
     r = requests.options(str(server.url.copy_with(path="/echo_body")))
     assert r.status_code == 200

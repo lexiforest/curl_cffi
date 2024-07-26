@@ -391,6 +391,8 @@ class BaseSession:
             c.setopt(CurlOpt.POSTFIELDS, body)
             # necessary if body contains '\0'
             c.setopt(CurlOpt.POSTFIELDSIZE, len(body))
+            if method == "GET":
+                c.setopt(CurlOpt.CUSTOMREQUEST, method)
 
         # headers
         h = Headers(self.headers)

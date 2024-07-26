@@ -250,7 +250,7 @@ async def echo_body(scope, receive, send):
 
 
 async def echo_path(scope, receive, send):
-    body = {"path": scope["path"]}
+    body = {"path": scope["path"], "method": scope["method"]}
     await send(
         {
             "type": "http.response.start",
