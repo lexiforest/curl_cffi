@@ -24,6 +24,8 @@ from typing import (
 )
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
 
+from typing_extensions import Unpack
+
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
@@ -33,7 +35,6 @@ from .impersonate import (
     TLS_CIPHER_NAME_MAP,
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
-    BaseSessionParams,
     BrowserType,
     ExtraFingerprints,
     ExtraFpDict,
@@ -50,7 +51,6 @@ with suppress(ImportError):
     import eventlet.tpool
 
 if TYPE_CHECKING:
-    from typing_extensions import Unpack
 
     class ProxySpec(TypedDict, total=False):
         all: str
@@ -59,8 +59,36 @@ if TYPE_CHECKING:
         ws: str
         wss: str
 
+    class BaseSessionParams(TypedDict, total=False):
+        headers: Optional[HeaderTypes]
+        cookies: Optional[CookieTypes]
+        auth: Optional[Tuple[str, str]]
+        proxies: Optional[ProxySpec]
+        proxy: Optional[str]
+        proxy_auth: Optional[Tuple[str, str]]
+        base_url: Optional[str]
+        params: Optional[dict]
+        verify: bool
+        timeout: Union[float, Tuple[float, float]]
+        trust_env: bool
+        allow_redirects: bool
+        max_redirects: int
+        impersonate: Optional[BrowserType]
+        ja3: Optional[str]
+        akamai: Optional[str]
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
+        default_headers: bool
+        default_encoding: Union[str, Callable[[bytes], str]]
+        curl_options: Optional[dict]
+        curl_infos: Optional[list]
+        http_version: Optional[CurlHttpVersion]
+        debug: bool
+        interface: Optional[str]
+        cert: Optional[Union[str, Tuple[str, str]]]
+
 else:
     ProxySpec = Dict[str, str]
+    BaseSessionParams = TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
 

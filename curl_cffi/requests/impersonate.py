@@ -1,9 +1,8 @@
 import warnings
 from dataclasses import dataclass
-from typing import Callable, List, Literal, Optional, Tuple, TypedDict, Union
+from typing import List, Literal, Optional, TypedDict
 
-from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
-from ..requests import CookieTypes, HeaderTypes, ProxySpec
+from ..const import CurlOpt, CurlSslVersion
 
 BrowserType = Literal[
     # Edge
@@ -76,34 +75,6 @@ class ExtraFpDict(TypedDict, total=False):
     tls_signature_algorithms: Optional[List[str]]
     http2_stream_weight: int
     http2_stream_exclusive: int
-
-
-class BaseSessionParams(TypedDict, total=False):
-    headers: Optional[HeaderTypes]
-    cookies: Optional[CookieTypes]
-    auth: Optional[Tuple[str, str]]
-    proxies: Optional[ProxySpec]
-    proxy: Optional[str]
-    proxy_auth: Optional[Tuple[str, str]]
-    base_url: Optional[str]
-    params: Optional[dict]
-    verify: bool
-    timeout: Union[float, Tuple[float, float]]
-    trust_env: bool
-    allow_redirects: bool
-    max_redirects: int
-    impersonate: Optional[BrowserType]
-    ja3: Optional[str]
-    akamai: Optional[str]
-    extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
-    default_headers: bool
-    default_encoding: Union[str, Callable[[bytes], str]]
-    curl_options: Optional[dict]
-    curl_infos: Optional[list]
-    http_version: Optional[CurlHttpVersion]
-    debug: bool
-    interface: Optional[str]
-    cert: Optional[Union[str, Tuple[str, str]]]
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
