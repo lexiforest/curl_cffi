@@ -58,7 +58,7 @@ def request(
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
-    impersonate: Optional[Union[str, BrowserType]] = None,
+    impersonate: Optional[BrowserType] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
     extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,

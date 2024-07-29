@@ -1,49 +1,61 @@
 from dataclasses import dataclass
-from typing import List, Literal, Optional, TypedDict
+from typing import List, Literal, Optional, TypedDict, TypeAlias, Tuple, Union, Callable
 import warnings
-from enum import Enum
 
-from ..const import CurlSslVersion, CurlOpt
+from curl_cffi.requests import HeaderTypes, CookieTypes, ProxySpec
+
+from curl_cffi.const import CurlSslVersion, CurlOpt, CurlHttpVersion
+
+BrowserType: TypeAlias = Literal[
+    # Edge
+    "edge99",
+    "edge101",
+    # Chrome
+    "chrome99",
+    "chrome100",
+    "chrome101",
+    "chrome104",
+    "chrome107",
+    "chrome110",
+    "chrome116",
+    "chrome119",
+    "chrome120",
+    "chrome123",
+    "chrome124",
+    "chrome99_android",
+    # Safari
+    "safari15_3",
+    "safari15_5",
+    "safari17_0",
+    "safari17_2_ios",
+    # alias
+    "chrome",
+    "edge",
+    "safari",
+    "safari_ios",
+    "chrome_android",
+]
+
+DefaultChrome = "chrome124"
+DefaultEdge = "edge101"
+DefaultSafari = "safari17_0"
+DefaultSafariPhone = "safari17_2_ios"
+DefaultChromePhone = "chrome99_android"
 
 
-class BrowserType(str, Enum):
-    edge99 = "edge99"
-    edge101 = "edge101"
-    chrome99 = "chrome99"
-    chrome100 = "chrome100"
-    chrome101 = "chrome101"
-    chrome104 = "chrome104"
-    chrome107 = "chrome107"
-    chrome110 = "chrome110"
-    chrome116 = "chrome116"
-    chrome119 = "chrome119"
-    chrome120 = "chrome120"
-    chrome123 = "chrome123"
-    chrome124 = "chrome124"
-    chrome99_android = "chrome99_android"
-    safari15_3 = "safari15_3"
-    safari15_5 = "safari15_5"
-    safari17_0 = "safari17_0"
-    safari17_2_ios = "safari17_2_ios"
-
-    chrome = "chrome124"
-    safari = "safari17_0"
-    safari_ios = "safari17_2_ios"
-
-    @classmethod
-    def has(cls, item):
-        return item in cls.__members__
-
-    @classmethod
-    def normalize(cls, item):
-        if item == "chrome":  # noqa: SIM116
-            return cls.chrome
-        elif item == "safari":
-            return cls.safari
-        elif item == "safari_ios":
-            return cls.safari_ios
-        else:
-            return item
+def normalize_browser_type(item):
+    if item == "chrome":  # noqa: SIM116
+        return DefaultChrome
+    elif item == "edge":
+        return DefaultEdge
+    elif item == "safari":
+        return DefaultSafari
+    elif item == "safari_ios":
+        return DefaultSafariPhone
+    elif item == "chrome_android":
+        return DefaultChromePhone
+    else:
+        return item
 
 
 @dataclass
@@ -66,6 +78,33 @@ class ExtraFpDict(TypedDict, total=False):
     http2_stream_weight: int
     http2_stream_exclusive: int
 
+
+class BaseSessionParams(TypedDict, total=False):
+    headers: Optional[HeaderTypes]
+    cookies: Optional[CookieTypes]
+    auth: Optional[Tuple[str, str]]
+    proxies: Optional[ProxySpec]
+    proxy: Optional[str]
+    proxy_auth: Optional[Tuple[str, str]]
+    base_url: Optional[str]
+    params: Optional[dict]
+    verify: bool
+    timeout: Union[float, Tuple[float, float]]
+    trust_env: bool
+    allow_redirects: bool
+    max_redirects: int
+    impersonate: Optional[BrowserType]
+    ja3: Optional[str]
+    akamai: Optional[str]
+    extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
+    default_headers: bool
+    default_encoding: Union[str, Callable[[bytes], str]]
+    curl_options: Optional[dict]
+    curl_infos: Optional[list]
+    http_version: Optional[CurlHttpVersion]
+    debug: bool
+    interface: Optional[str]
+    cert: Optional[Union[str, Tuple[str, str]]]
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
 # version. As of today, the major version is always 03.

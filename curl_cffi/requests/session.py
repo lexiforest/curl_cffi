@@ -20,7 +20,7 @@ from typing import (
     Tuple,
     TypedDict,
     Union,
-    cast,
+    cast, Unpack,
 )
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
 
@@ -37,7 +37,7 @@ from .impersonate import (
     BrowserType,
     TLS_VERSION_MAP,
     TLS_CIPHER_NAME_MAP,
-    TLS_EC_CURVES_MAP
+    TLS_EC_CURVES_MAP, normalize_browser_type, BaseSessionParams
 )
 from .models import Request, Response
 from .websockets import WebSocket
@@ -177,7 +177,7 @@ class BaseSession:
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserType] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -334,7 +334,7 @@ class BaseSession:
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserType] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -577,7 +577,7 @@ class BaseSession:
         impersonate = impersonate or self.impersonate
         default_headers = self.default_headers if default_headers is None else default_headers
         if impersonate:
-            impersonate = BrowserType.normalize(impersonate)
+            impersonate = normalize_browser_type(impersonate)
             ret = c.impersonate(impersonate, default_headers=default_headers)
             if ret != 0:
                 raise RequestsError(f"Impersonating {impersonate} is not supported")
@@ -716,7 +716,7 @@ class Session(BaseSession):
         curl: Optional[Curl] = None,
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
-        **kwargs,
+        **kwargs: Unpack[BaseSessionParams],
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -875,7 +875,7 @@ class Session(BaseSession):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserType] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -1013,7 +1013,7 @@ class AsyncSession(BaseSession):
         loop=None,
         async_curl: Optional[AsyncCurl] = None,
         max_clients: int = 10,
-        **kwargs,
+        **kwargs: Unpack[BaseSessionParams],
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -1167,7 +1167,7 @@ class AsyncSession(BaseSession):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserType] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,

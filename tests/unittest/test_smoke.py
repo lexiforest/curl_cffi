@@ -15,7 +15,7 @@ def test_without_impersonate():
 
 def test_with_impersonate():
     for url in URLS:
-        r = requests.get(url, impersonate=requests.BrowserType.chrome)
+        r = requests.get(url, impersonate="chrome")
         assert r.status_code == 200
 
 
