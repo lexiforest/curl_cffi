@@ -20,6 +20,9 @@ __all__ = [
     "WebSocketError",
     "WsCloseCode",
     "ExtraFingerprints",
+    "CookieTypes",
+    "HeaderTypes",
+    "ProxySpec",
 ]
 
 from functools import partial
