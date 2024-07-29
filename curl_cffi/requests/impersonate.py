@@ -2,8 +2,8 @@ import warnings
 from dataclasses import dataclass
 from typing import Callable, List, Literal, Optional, Tuple, TypedDict, Union
 
-from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
-from curl_cffi.requests import CookieTypes, HeaderTypes, ProxySpec
+from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from ..requests import CookieTypes, HeaderTypes, ProxySpec
 
 BrowserType = Literal[
     # Edge
