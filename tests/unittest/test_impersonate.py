@@ -21,7 +21,7 @@ def test_impersonate_without_version(server):
 
 def test_impersonate_non_exist(server):
     with pytest.raises(requests.RequestsError, match="Impersonating"):
-        requests.get(str(server.url), impersonate="edge")
+        requests.get(str(server.url), impersonate="edge2131")
     with pytest.raises(requests.RequestsError, match="Impersonating"):
         requests.get(str(server.url), impersonate="chrome2952")
 
