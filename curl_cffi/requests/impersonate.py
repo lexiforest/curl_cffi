@@ -1,10 +1,11 @@
 import warnings
 from dataclasses import dataclass
+from enum import Enum
 from typing import List, Literal, Optional, TypedDict
 
 from ..const import CurlOpt, CurlSslVersion
 
-BrowserType = Literal[
+BrowserTypeLiteral = Literal[
     # Edge
     "edge99",
     "edge101",
@@ -54,6 +55,27 @@ def normalize_browser_type(item):
         return DefaultChromePhone
     else:
         return item
+
+
+class BrowserType(str, Enum):  # todo: remove in version 1.x
+    edge99 = "edge99"
+    edge101 = "edge101"
+    chrome99 = "chrome99"
+    chrome100 = "chrome100"
+    chrome101 = "chrome101"
+    chrome104 = "chrome104"
+    chrome107 = "chrome107"
+    chrome110 = "chrome110"
+    chrome116 = "chrome116"
+    chrome119 = "chrome119"
+    chrome120 = "chrome120"
+    chrome123 = "chrome123"
+    chrome124 = "chrome124"
+    chrome99_android = "chrome99_android"
+    safari15_3 = "safari15_3"
+    safari15_5 = "safari15_5"
+    safari17_0 = "safari17_0"
+    safari17_2_ios = "safari17_2_ios"
 
 
 @dataclass

@@ -35,7 +35,7 @@ from .impersonate import (
     TLS_CIPHER_NAME_MAP,
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
-    BrowserType,
+    BrowserTypeLiteral,
     ExtraFingerprints,
     ExtraFpDict,
     normalize_browser_type,
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
         trust_env: bool
         allow_redirects: bool
         max_redirects: int
-        impersonate: Optional[BrowserType]
+        impersonate: Optional[BrowserTypeLiteral]
         ja3: Optional[str]
         akamai: Optional[str]
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
@@ -207,7 +207,7 @@ class BaseSession:
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
-        impersonate: Optional[BrowserType] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -364,7 +364,7 @@ class BaseSession:
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[BrowserType] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -906,7 +906,7 @@ class Session(BaseSession):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[BrowserType] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -1198,7 +1198,7 @@ class AsyncSession(BaseSession):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[BrowserType] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
