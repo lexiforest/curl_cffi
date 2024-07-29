@@ -185,9 +185,7 @@ class Cookies(MutableMapping[str, str]):
             self.jar.set_cookie(cookie)
         self.jar.clear_expired_cookies()
 
-    def set(
-        self, name: str, value: str, domain: str = "", path: str = "/", secure=False
-    ) -> None:
+    def set(self, name: str, value: str, domain: str = "", path: str = "/", secure=False) -> None:
         """
         Set a cookie value by name. May optionally include domain and path.
         """
@@ -268,18 +266,14 @@ class Cookies(MutableMapping[str, str]):
             return default
         return value
 
-    def get_dict(
-        self, domain: Optional[str] = None, path: Optional[str] = None
-    ) -> dict:
+    def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict:
         """
         Cookies with the same name on different domains may overwrite each other,
         do NOT use this function as a method of serialization.
         """
         ret = {}
         for cookie in self.jar:
-            if (domain is None or cookie.name == domain) and (
-                path is None or cookie.path == path
-            ):
+            if (domain is None or cookie.name == domain) and (path is None or cookie.path == path):
                 ret[cookie.name] = cookie.value
         return ret
 
@@ -350,10 +344,7 @@ class Cookies(MutableMapping[str, str]):
 
     def __repr__(self) -> str:
         cookies_repr = ", ".join(
-            [
-                f"<Cookie {cookie.name}={cookie.value} for {cookie.domain} />"
-                for cookie in self.jar
-            ]
+            [f"<Cookie {cookie.name}={cookie.value} for {cookie.domain} />" for cookie in self.jar]
         )
 
         return f"<Cookies[{cookies_repr}]>"

@@ -26,7 +26,6 @@ from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-
 from ..const import CurlHttpVersion, CurlWsFlag
 from ..curl import CurlMime
 from .cookies import Cookies, CookieTypes

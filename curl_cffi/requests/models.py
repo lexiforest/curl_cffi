@@ -153,10 +153,11 @@ class Response:
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
-            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
-                pending = lines.pop()
-            else:
-                pending = None
+            pending = (
+                lines.pop()
+                if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]
+                else None
+            )
 
             yield from lines
 
@@ -214,10 +215,11 @@ class Response:
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
-            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
-                pending = lines.pop()
-            else:
-                pending = None
+            pending = (
+                lines.pop()
+                if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]
+                else None
+            )
 
             for line in lines:
                 yield line

@@ -20,10 +20,9 @@ from typing import (
     Tuple,
     TypedDict,
     Union,
-    cast, Unpack,
+    cast,
 )
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
-
 
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -31,13 +30,15 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
 from .impersonate import (
+    TLS_CIPHER_NAME_MAP,
+    TLS_EC_CURVES_MAP,
+    TLS_VERSION_MAP,
+    BaseSessionParams,
+    BrowserType,
     ExtraFingerprints,
     ExtraFpDict,
+    normalize_browser_type,
     toggle_extension,
-    BrowserType,
-    TLS_VERSION_MAP,
-    TLS_CIPHER_NAME_MAP,
-    TLS_EC_CURVES_MAP, normalize_browser_type, BaseSessionParams
 )
 from .models import Request, Response
 from .websockets import WebSocket
@@ -49,6 +50,7 @@ with suppress(ImportError):
     import eventlet.tpool
 
 if TYPE_CHECKING:
+    from typing_extensions import Unpack
 
     class ProxySpec(TypedDict, total=False):
         all: str
@@ -264,7 +266,8 @@ class BaseSession:
             warnings.warn(
                 "Padding(21) extension found in ja3 string, whether to add it should "
                 "be managed by the SSL engine. The TLS client hello packet may contain "
-                "or not contain this extension, any of which should be correct."
+                "or not contain this extension, any of which should be correct.",
+                stacklevel=1,
             )
         extension_ids = set(int(e) for e in extensions.split("-"))
         self._toggle_extensions_by_ids(curl, extension_ids)
@@ -301,7 +304,6 @@ class BaseSession:
         curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
 
     def _set_extra_fp(self, curl, fp: ExtraFingerprints):
-
         if fp.tls_signature_algorithms:
             curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
 
@@ -519,7 +521,6 @@ class BaseSession:
                 )
 
             if proxy is not None:
-
                 c.setopt(CurlOpt.PROXY, proxy)
 
                 if parts.scheme == "https":
@@ -586,7 +587,7 @@ class BaseSession:
         ja3 = ja3 or self.ja3
         if ja3:
             if impersonate:
-                warnings.warn("JA3 was altered after browser version was set.")
+                warnings.warn("JA3 was altered after browser version was set.", stacklevel=1)
             permute = False
             if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
                 permute = True
@@ -598,7 +599,7 @@ class BaseSession:
         akamai = akamai or self.akamai
         if akamai:
             if impersonate:
-                warnings.warn("Akamai was altered after browser version was set.")
+                warnings.warn("Akamai was altered after browser version was set.", stacklevel=1)
             self._set_akamai_options(c, akamai)
 
         # extra_fp options
@@ -607,7 +608,9 @@ class BaseSession:
             if isinstance(extra_fp, dict):
                 extra_fp = ExtraFingerprints(**extra_fp)
             if impersonate:
-                warnings.warn("Extra fingerprints was altered after browser version was set.")
+                warnings.warn(
+                    "Extra fingerprints was altered after browser version was set.", stacklevel=1
+                )
             self._set_extra_fp(c, extra_fp)
 
         # http_version, after impersonate, which will change this to http2

@@ -6,24 +6,16 @@ from curl_cffi.const import CurlHttpVersion, CurlSslVersion
 
 def test_impersonate_with_version(server):
     # the test server does not understand http/2
-    r = requests.get(
-        str(server.url), impersonate="chrome120", http_version=CurlHttpVersion.V1_1
-    )
+    r = requests.get(str(server.url), impersonate="chrome120", http_version=CurlHttpVersion.V1_1)
     assert r.status_code == 200
-    r = requests.get(
-        str(server.url), impersonate="safari17_0", http_version=CurlHttpVersion.V1_1
-    )
+    r = requests.get(str(server.url), impersonate="safari17_0", http_version=CurlHttpVersion.V1_1)
     assert r.status_code == 200
 
 
 def test_impersonate_without_version(server):
-    r = requests.get(
-        str(server.url), impersonate="chrome", http_version=CurlHttpVersion.V1_1
-    )
+    r = requests.get(str(server.url), impersonate="chrome", http_version=CurlHttpVersion.V1_1)
     assert r.status_code == 200
-    r = requests.get(
-        str(server.url), impersonate="safari_ios", http_version=CurlHttpVersion.V1_1
-    )
+    r = requests.get(str(server.url), impersonate="safari_ios", http_version=CurlHttpVersion.V1_1)
     assert r.status_code == 200
 
 
@@ -47,7 +39,10 @@ def test_costomized_no_impersonate_coexist(server):
 
 def test_customized_ja3_chrome126():
     url = "https://tls.browserleaks.com/json"
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     assert r["ja3_text"] == ja3
 
@@ -55,7 +50,10 @@ def test_customized_ja3_chrome126():
 @pytest.mark.skip(reason="not working")
 def test_customized_ja3_tls_version():
     url = "https://tls.browserleaks.com/json"
-    ja3 = "770,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
+    ja3 = (
+        "770,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     tls_version, _, _, _, _ = r["ja3_text"].split(",")
     assert tls_version == "770"
@@ -63,7 +61,10 @@ def test_customized_ja3_tls_version():
 
 def test_customized_ja3_ciphers():
     url = "https://tls.browserleaks.com/json"
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171,0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171,"
+        "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     _, ciphers, _, _, _ = r["ja3_text"].split(",")
     assert ciphers == "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171"
@@ -72,23 +73,35 @@ def test_customized_ja3_ciphers():
 # TODO change to parameterized test
 def test_customized_ja3_extensions():
     url = "https://tls.browserleaks.com/json"
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
 
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
 
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65281-0-11-23-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "65281-0-11-23-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65281-0-11-23-27-16-17513-10-35-43-45-13-51"
 
     # removed enable session_ticket()
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65281-0-11-23-5-18-27-16-17513-10-43-45-13-51,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "65281-0-11-23-5-18-27-16-17513-10-43-45-13-51,25497-29-23-24,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65281-0-11-23-5-18-27-16-17513-10-43-45-13-51"
@@ -96,7 +109,10 @@ def test_customized_ja3_extensions():
 
 def test_customized_ja3_curves():
     url = "https://tls.browserleaks.com/json"
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-24-23-29,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-24-23-29,0"
+    )
     r = requests.get(url, ja3=ja3).json()
     _, _, _, curves, _ = r["ja3_text"].split(",")
     assert curves == "25497-24-23-29"
@@ -160,13 +176,18 @@ def test_customized_extra_fp_grease():
 
 def test_customized_extra_fp_permute():
     url = "https://tls.browserleaks.com/json"
-    ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
+    )
 
     r = requests.get(url, ja3=ja3).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
 
-    r = requests.get(url, ja3=ja3, extra_fp=requests.ExtraFingerprints(tls_permute_extensions=True)).json()
+    r = requests.get(
+        url, ja3=ja3, extra_fp=requests.ExtraFingerprints(tls_permute_extensions=True)
+    ).json()
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions != "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
 

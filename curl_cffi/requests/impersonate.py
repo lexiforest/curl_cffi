@@ -1,12 +1,11 @@
-from dataclasses import dataclass
-from typing import List, Literal, Optional, TypedDict, TypeAlias, Tuple, Union, Callable
 import warnings
+from dataclasses import dataclass
+from typing import Callable, List, Literal, Optional, Tuple, TypedDict, Union
 
-from curl_cffi.requests import HeaderTypes, CookieTypes, ProxySpec
+from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from curl_cffi.requests import CookieTypes, HeaderTypes, ProxySpec
 
-from curl_cffi.const import CurlSslVersion, CurlOpt, CurlHttpVersion
-
-BrowserType: TypeAlias = Literal[
+BrowserType = Literal[
     # Edge
     "edge99",
     "edge101",
@@ -105,6 +104,7 @@ class BaseSessionParams(TypedDict, total=False):
     debug: bool
     interface: Optional[str]
     cert: Optional[Union[str, Tuple[str, str]]]
+
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
 # version. As of today, the major version is always 03.
@@ -253,10 +253,10 @@ TLS_EXTENSION_NAME_MAP = {
     # 64251-64767:"Unassigned
     64768: "ech_outer_extensions",
     # 64769-65036:"Unassigned
-    65037:"encrypted_client_hello",
+    65037: "encrypted_client_hello",
     # 65038-65279:"Unassigned
     # 65280:"Reserved for Private Use
-    65281:"renegotiation_info",
+    65281: "renegotiation_info",
     # 65282-65535:"Reserved for Private Use
 }
 
@@ -282,7 +282,11 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     # compress certificate
     elif extension_id == 27:
         if enable:
-            warnings.warn("Cert compression setting to brotli, you had better specify which to use: zlib/brotli")
+            warnings.warn(
+                "Cert compression setting to brotli, "
+                "you had better specify which to use: zlib/brotli",
+                stacklevel=1,
+            )
             curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "brotli")
         else:
             curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
@@ -316,4 +320,6 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     elif extension_id == 21:
         pass
     else:
-        raise NotImplementedError(f"This extension({extension_id}) can not be toggled for now, it may be updated later.")
+        raise NotImplementedError(
+            f"This extension({extension_id}) can not be toggled for now, it may be updated later."
+        )
