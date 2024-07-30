@@ -22,7 +22,7 @@ def test_impersonate():
 
 
 def test_impersonate_edge():
-    r = requests.get(JA3_URL, impersonate=requests.BrowserType.edge101)
+    r = requests.get(JA3_URL, impersonate="edge101")
     assert r.json()["ja3_hash"] == EDGE_JA3_HASH
 
 

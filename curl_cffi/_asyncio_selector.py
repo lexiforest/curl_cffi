@@ -321,15 +321,15 @@ class AddThreadSelectorEventLoop(asyncio.AbstractEventLoop):
         self._selector.close()
         self._real_loop.close()
 
-    def add_reader(
+    def add_reader(  # type: ignore
         self,
         fd: "_FileDescriptorLike",
         callback: Callable[..., None],
-        *args: Any,  # type: ignore
+        *args: Any,
     ) -> None:
         return self._selector.add_reader(fd, callback, *args)
 
-    def add_writer(
+    def add_writer(  # type: ignore
         self,
         fd: "_FileDescriptorLike",
         callback: Callable[..., None],

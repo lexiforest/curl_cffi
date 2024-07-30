@@ -156,7 +156,9 @@ def test_headers(server):
 
 
 def test_empty_header_included(server):
-    r = requests.get(str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar", "xxx": ""})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar", "xxx": ""}
+    )
     headers = r.json()
     assert headers["Foo"][0] == "bar"
     assert headers["Xxx"][0] == ""
@@ -762,4 +764,3 @@ def test_response_ip(server):
 
     assert r.primary_ip == "127.0.0.1"
     assert r.local_ip == "127.0.0.1"
-

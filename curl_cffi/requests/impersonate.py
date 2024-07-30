@@ -1,12 +1,63 @@
-from dataclasses import dataclass
-from typing import List, Literal, Optional, TypedDict
 import warnings
+from dataclasses import dataclass
 from enum import Enum
+from typing import List, Literal, Optional, TypedDict
 
-from ..const import CurlSslVersion, CurlOpt
+from ..const import CurlOpt, CurlSslVersion
+
+BrowserTypeLiteral = Literal[
+    # Edge
+    "edge99",
+    "edge101",
+    # Chrome
+    "chrome99",
+    "chrome100",
+    "chrome101",
+    "chrome104",
+    "chrome107",
+    "chrome110",
+    "chrome116",
+    "chrome119",
+    "chrome120",
+    "chrome123",
+    "chrome124",
+    "chrome99_android",
+    # Safari
+    "safari15_3",
+    "safari15_5",
+    "safari17_0",
+    "safari17_2_ios",
+    # alias
+    "chrome",
+    "edge",
+    "safari",
+    "safari_ios",
+    "chrome_android",
+]
+
+DEFAULT_CHROME = "chrome124"
+DEFAULT_EDGE = "edge101"
+DEFAULT_SAFARI = "safari17_0"
+DEFAULT_SAFARI_IOS = "safari17_2_ios"
+DEFAULT_CHROME_ANDROID = "chrome99_android"
 
 
-class BrowserType(str, Enum):
+def normalize_browser_type(item):
+    if item == "chrome":  # noqa: SIM116
+        return DEFAULT_CHROME
+    elif item == "edge":
+        return DEFAULT_EDGE
+    elif item == "safari":
+        return DEFAULT_SAFARI
+    elif item == "safari_ios":
+        return DEFAULT_SAFARI_IOS
+    elif item == "chrome_android":
+        return DEFAULT_CHROME_ANDROID
+    else:
+        return item
+
+
+class BrowserType(str, Enum):  # todo: remove in version 1.x
     edge99 = "edge99"
     edge101 = "edge101"
     chrome99 = "chrome99"
@@ -25,25 +76,6 @@ class BrowserType(str, Enum):
     safari15_5 = "safari15_5"
     safari17_0 = "safari17_0"
     safari17_2_ios = "safari17_2_ios"
-
-    chrome = "chrome124"
-    safari = "safari17_0"
-    safari_ios = "safari17_2_ios"
-
-    @classmethod
-    def has(cls, item):
-        return item in cls.__members__
-
-    @classmethod
-    def normalize(cls, item):
-        if item == "chrome":  # noqa: SIM116
-            return cls.chrome
-        elif item == "safari":
-            return cls.safari
-        elif item == "safari_ios":
-            return cls.safari_ios
-        else:
-            return item
 
 
 @dataclass
@@ -214,10 +246,10 @@ TLS_EXTENSION_NAME_MAP = {
     # 64251-64767:"Unassigned
     64768: "ech_outer_extensions",
     # 64769-65036:"Unassigned
-    65037:"encrypted_client_hello",
+    65037: "encrypted_client_hello",
     # 65038-65279:"Unassigned
     # 65280:"Reserved for Private Use
-    65281:"renegotiation_info",
+    65281: "renegotiation_info",
     # 65282-65535:"Reserved for Private Use
 }
 
@@ -243,7 +275,11 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     # compress certificate
     elif extension_id == 27:
         if enable:
-            warnings.warn("Cert compression setting to brotli, you had better specify which to use: zlib/brotli")
+            warnings.warn(
+                "Cert compression setting to brotli, "
+                "you had better specify which to use: zlib/brotli",
+                stacklevel=1,
+            )
             curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "brotli")
         else:
             curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
@@ -277,4 +313,6 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     elif extension_id == 21:
         pass
     else:
-        raise NotImplementedError(f"This extension({extension_id}) can not be toggled for now, it may be updated later.")
+        raise NotImplementedError(
+            f"This extension({extension_id}) can not be toggled for now, it may be updated later."
+        )

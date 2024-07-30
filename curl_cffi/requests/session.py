@@ -24,6 +24,7 @@ from typing import (
 )
 from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urljoin, urlparse
 
+from typing_extensions import Unpack
 
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -31,13 +32,15 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .errors import RequestsError, SessionClosed
 from .headers import Headers, HeaderTypes
 from .impersonate import (
+    TLS_CIPHER_NAME_MAP,
+    TLS_EC_CURVES_MAP,
+    TLS_VERSION_MAP,
+    BrowserType,  # noqa: F401
+    BrowserTypeLiteral,
     ExtraFingerprints,
     ExtraFpDict,
+    normalize_browser_type,
     toggle_extension,
-    BrowserType,
-    TLS_VERSION_MAP,
-    TLS_CIPHER_NAME_MAP,
-    TLS_EC_CURVES_MAP
 )
 from .models import Request, Response
 from .websockets import WebSocket
@@ -57,8 +60,36 @@ if TYPE_CHECKING:
         ws: str
         wss: str
 
+    class BaseSessionParams(TypedDict, total=False):
+        headers: Optional[HeaderTypes]
+        cookies: Optional[CookieTypes]
+        auth: Optional[Tuple[str, str]]
+        proxies: Optional[ProxySpec]
+        proxy: Optional[str]
+        proxy_auth: Optional[Tuple[str, str]]
+        base_url: Optional[str]
+        params: Optional[dict]
+        verify: bool
+        timeout: Union[float, Tuple[float, float]]
+        trust_env: bool
+        allow_redirects: bool
+        max_redirects: int
+        impersonate: Optional[BrowserTypeLiteral]
+        ja3: Optional[str]
+        akamai: Optional[str]
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
+        default_headers: bool
+        default_encoding: Union[str, Callable[[bytes], str]]
+        curl_options: Optional[dict]
+        curl_infos: Optional[list]
+        http_version: Optional[CurlHttpVersion]
+        debug: bool
+        interface: Optional[str]
+        cert: Optional[Union[str, Tuple[str, str]]]
+
 else:
     ProxySpec = Dict[str, str]
+    BaseSessionParams = TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
 
@@ -177,7 +208,7 @@ class BaseSession:
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -264,7 +295,8 @@ class BaseSession:
             warnings.warn(
                 "Padding(21) extension found in ja3 string, whether to add it should "
                 "be managed by the SSL engine. The TLS client hello packet may contain "
-                "or not contain this extension, any of which should be correct."
+                "or not contain this extension, any of which should be correct.",
+                stacklevel=1,
             )
         extension_ids = set(int(e) for e in extensions.split("-"))
         self._toggle_extensions_by_ids(curl, extension_ids)
@@ -301,7 +333,6 @@ class BaseSession:
         curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
 
     def _set_extra_fp(self, curl, fp: ExtraFingerprints):
-
         if fp.tls_signature_algorithms:
             curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
 
@@ -334,7 +365,7 @@ class BaseSession:
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -519,7 +550,6 @@ class BaseSession:
                 )
 
             if proxy is not None:
-
                 c.setopt(CurlOpt.PROXY, proxy)
 
                 if parts.scheme == "https":
@@ -577,7 +607,7 @@ class BaseSession:
         impersonate = impersonate or self.impersonate
         default_headers = self.default_headers if default_headers is None else default_headers
         if impersonate:
-            impersonate = BrowserType.normalize(impersonate)
+            impersonate = normalize_browser_type(impersonate)
             ret = c.impersonate(impersonate, default_headers=default_headers)
             if ret != 0:
                 raise RequestsError(f"Impersonating {impersonate} is not supported")
@@ -586,7 +616,7 @@ class BaseSession:
         ja3 = ja3 or self.ja3
         if ja3:
             if impersonate:
-                warnings.warn("JA3 was altered after browser version was set.")
+                warnings.warn("JA3 was altered after browser version was set.", stacklevel=1)
             permute = False
             if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
                 permute = True
@@ -598,7 +628,7 @@ class BaseSession:
         akamai = akamai or self.akamai
         if akamai:
             if impersonate:
-                warnings.warn("Akamai was altered after browser version was set.")
+                warnings.warn("Akamai was altered after browser version was set.", stacklevel=1)
             self._set_akamai_options(c, akamai)
 
         # extra_fp options
@@ -607,7 +637,9 @@ class BaseSession:
             if isinstance(extra_fp, dict):
                 extra_fp = ExtraFingerprints(**extra_fp)
             if impersonate:
-                warnings.warn("Extra fingerprints was altered after browser version was set.")
+                warnings.warn(
+                    "Extra fingerprints was altered after browser version was set.", stacklevel=1
+                )
             self._set_extra_fp(c, extra_fp)
 
         # http_version, after impersonate, which will change this to http2
@@ -716,7 +748,7 @@ class Session(BaseSession):
         curl: Optional[Curl] = None,
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
-        **kwargs,
+        **kwargs: Unpack[BaseSessionParams],
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -875,7 +907,7 @@ class Session(BaseSession):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -1013,7 +1045,7 @@ class AsyncSession(BaseSession):
         loop=None,
         async_curl: Optional[AsyncCurl] = None,
         max_clients: int = 10,
-        **kwargs,
+        **kwargs: Unpack[BaseSessionParams],
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -1167,7 +1199,7 @@ class AsyncSession(BaseSession):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[Union[str, BrowserType]] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,

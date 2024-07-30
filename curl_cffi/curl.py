@@ -163,7 +163,7 @@ class Curl:
             10000: "char*",
             20000: "void*",
             30000: "int64_t*",  # offset type
-            40000: "void*",     # blob type
+            40000: "void*",  # blob type
         }
         # print("option", option, "value", value)
 
@@ -195,7 +195,7 @@ class Curl:
             if option == CurlOpt.POSTFIELDS:
                 self._body_handle = c_value
         else:
-            raise NotImplementedError("Option unsupported: %s" % option)
+            raise NotImplementedError(f"Option unsupported: {option}")
 
         if option == CurlOpt.HTTPHEADER:
             for header in value:

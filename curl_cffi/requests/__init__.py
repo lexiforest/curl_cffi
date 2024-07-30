@@ -2,6 +2,7 @@ __all__ = [
     "Session",
     "AsyncSession",
     "BrowserType",
+    "BrowserTypeLiteral",
     "CurlWsFlag",
     "request",
     "head",
@@ -20,21 +21,23 @@ __all__ = [
     "WebSocketError",
     "WsCloseCode",
     "ExtraFingerprints",
+    "CookieTypes",
+    "HeaderTypes",
+    "ProxySpec",
 ]
 
 from functools import partial
 from io import BytesIO
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-
 from ..const import CurlHttpVersion, CurlWsFlag
 from ..curl import CurlMime
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .impersonate import ExtraFingerprints, ExtraFpDict
+from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Request, Response
-from .session import AsyncSession, BrowserType, ProxySpec, Session, ThreadType
+from .session import AsyncSession, ProxySpec, Session, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
 
 
@@ -58,7 +61,7 @@ def request(
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
-    impersonate: Optional[Union[str, BrowserType]] = None,
+    impersonate: Optional[BrowserTypeLiteral] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
     extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
