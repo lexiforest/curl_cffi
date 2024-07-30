@@ -35,6 +35,7 @@ from .impersonate import (
     TLS_CIPHER_NAME_MAP,
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
+    BrowserType,  # noqa: F401
     BrowserTypeLiteral,
     ExtraFingerprints,
     ExtraFpDict,

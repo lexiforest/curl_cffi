@@ -35,24 +35,24 @@ BrowserTypeLiteral = Literal[
     "chrome_android",
 ]
 
-DefaultChrome = "chrome124"
-DefaultEdge = "edge101"
-DefaultSafari = "safari17_0"
-DefaultSafariPhone = "safari17_2_ios"
-DefaultChromePhone = "chrome99_android"
+DEFAULT_CHROME = "chrome124"
+DEFAULT_EDGE = "edge101"
+DEFAULT_SAFARI = "safari17_0"
+DEFAULT_SAFARI_IOS = "safari17_2_ios"
+DEFAULT_CHROME_ANDROID = "chrome99_android"
 
 
 def normalize_browser_type(item):
     if item == "chrome":  # noqa: SIM116
-        return DefaultChrome
+        return DEFAULT_CHROME
     elif item == "edge":
-        return DefaultEdge
+        return DEFAULT_EDGE
     elif item == "safari":
-        return DefaultSafari
+        return DEFAULT_SAFARI
     elif item == "safari_ios":
-        return DefaultSafariPhone
+        return DEFAULT_SAFARI_IOS
     elif item == "chrome_android":
-        return DefaultChromePhone
+        return DEFAULT_CHROME_ANDROID
     else:
         return item
 
