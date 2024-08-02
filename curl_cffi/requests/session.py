@@ -92,7 +92,7 @@ else:
     BaseSessionParams = TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE"]
+HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH"]
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -381,6 +381,8 @@ class BaseSession:
         event_class: Any = None,
     ):
         c = curl
+
+        method = method.upper()  # type: ignore
 
         # method
         if method == "POST":
