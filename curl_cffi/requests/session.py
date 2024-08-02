@@ -92,6 +92,7 @@ else:
     BaseSessionParams = TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
+HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE"]
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -346,7 +347,7 @@ class BaseSession:
     def _set_curl_options(
         self,
         curl,
-        method: str,
+        method: HttpMethod,
         url: str,
         params: Optional[Union[Dict, List, Tuple]] = None,
         data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
@@ -888,7 +889,7 @@ class Session(BaseSession):
 
     def request(
         self,
-        method: str,
+        method: HttpMethod,
         url: str,
         params: Optional[Union[Dict, List, Tuple]] = None,
         data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
@@ -1180,7 +1181,7 @@ class AsyncSession(BaseSession):
 
     async def request(
         self,
-        method: str,
+        method: HttpMethod,
         url: str,
         params: Optional[Union[Dict, List, Tuple]] = None,
         data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,

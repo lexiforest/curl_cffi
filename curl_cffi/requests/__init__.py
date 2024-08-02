@@ -37,12 +37,12 @@ from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Request, Response
-from .session import AsyncSession, ProxySpec, Session, ThreadType
+from .session import AsyncSession, HttpMethod, ProxySpec, Session, ThreadType
 from .websockets import WebSocket, WebSocketError, WsCloseCode
 
 
 def request(
-    method: str,
+    method: HttpMethod,
     url: str,
     params: Optional[Union[Dict, List, Tuple]] = None,
     data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
