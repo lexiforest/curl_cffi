@@ -143,7 +143,7 @@ class Curl:
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
                 "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
-                code=cast(CurlECod, errcode),
+                code=cast(CurlECode, errcode),
             )
 
     def setopt(self, option: CurlOpt, value: Any) -> int:
