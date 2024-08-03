@@ -29,7 +29,7 @@ from typing_extensions import Unpack
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
-from .exceptions import ImpersonateError, RequestException, SessionClosed
+from .exceptions import ImpersonateError, RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType  # noqa: F401
 from .impersonate import (
@@ -1026,7 +1026,8 @@ class Session(BaseSession):
             except CurlError as e:
                 rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                 rsp.request = req
-                raise RequestException(str(e), e.code, rsp) from e
+                error = code2error(e.code, str(e))
+                raise error(str(e), e.code, rsp) from e
             else:
                 rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                 rsp.request = req
@@ -1306,7 +1307,8 @@ class AsyncSession(BaseSession):
             except CurlError as e:
                 rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req
-                raise RequestException(str(e), e.code, rsp) from e
+                error = code2error(e.code, str(e))
+                raise error(str(e), e.code, rsp) from e
             else:
                 rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req
