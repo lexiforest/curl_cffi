@@ -101,7 +101,7 @@ def _is_absolute_url(url: str) -> bool:
     return bool(parsed_url.scheme and parsed_url.hostname)
 
 
-def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple]) -> str:
+def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -> str:
     """Add URL query params to provided URL being aware of existing.
 
     Parameters:
@@ -125,7 +125,6 @@ def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple]) -> str:
 
     # Merging URL arguments dict with new params
     for params in params_list:
-
         if not params:
             continue
 
@@ -321,6 +320,9 @@ class BaseSession:
         Detailed explanation: https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf
         """
         settings, window_update, streams, header_order = akamai.split("|")
+
+        # For compatiblity with tls.peet.ws
+        settings = settings.replace(",", ";")
 
         curl.setopt(CurlOpt.HTTP_VERSION, CurlHttpVersion.V2_0)
 

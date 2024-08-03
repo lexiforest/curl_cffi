@@ -131,6 +131,10 @@ def test_customized_akamai_safari():
     r = requests.get(url, akamai=akamai).json()
     assert r["akamai_text"] == akamai
 
+    # test_tls_peet_ws_settings
+    r = requests.get(url, akamai=akamai.replace(";", ",")).json()
+    assert r["akamai_text"] == akamai
+
 
 def test_customized_extra_fp_sig_hash_algs():
     url = "https://tls.peet.ws/api/all"
