@@ -2,7 +2,7 @@ import re
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import Any, List, Literal, Optional, Tuple, Union
+from typing import Any, List, Literal, Optional, Tuple, Union, cast
 
 import certifi
 
@@ -143,7 +143,7 @@ class Curl:
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
                 "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
-                code=errcode,
+                code=cast(CurlECod, errcode),
             )
 
     def setopt(self, option: CurlOpt, value: Any) -> int:

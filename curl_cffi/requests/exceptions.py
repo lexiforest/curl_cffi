@@ -44,6 +44,10 @@ class HTTPError(RequestException):
     """An HTTP error occurred."""
 
 
+class IncompleteRead(HTTPError):
+    """Incomplete read of content"""
+
+
 class ConnectionError(RequestException):
     """A Connection error occurred."""
 
@@ -201,6 +205,7 @@ CODE2ERROR = {
     CurlECode.PROXY: ProxyError,
     CurlECode.SSL_CLIENTCERT: SSLError,
     CurlECode.ECH_REQUIRED: SSLError,
+    CurlECode.PARTIAL_FILE: IncompleteRead,
 }
 
 
