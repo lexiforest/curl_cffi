@@ -6,37 +6,33 @@ import json
 from .. import CurlError
 
 
-class RequestsError(CurlError, IOError):
-    """Base exception for curl_cffi.requests package, alias of RequestException"""
+# Note IOError is an alias of OSError in Python 3.x
+class RequestException(CurlError, OSError):
+    """Base exception for curl_cffi.requests package"""
 
     def __init__(self, msg, code=0, response=None, *args, **kwargs):
         super().__init__(msg, code, *args, **kwargs)
         self.response = response
 
 
-class RequestException(RequestsError):
-    """Base exception for curl_cffi.requests package."""
-    pass
-
-
 class CookieConflict(RequestException):
     """Same cookie exists for different domains."""
-    pass
 
 
 class SessionClosed(RequestException):
     """The session has already been closed."""
-    pass
+
+
+class ImpersonateError(RequestException):
+    """The impersonate config was wrong or impersonate failed."""
 
 
 class InvalidJSONError(RequestException):
     """A JSON error occurred."""
-    pass
 
 
 class JSONDecodeError(InvalidJSONError, json.JSONDecodeError):
     """Couldn't decode the text into json"""
-    pass
 
 
 class HTTPError(RequestException):
@@ -45,7 +41,6 @@ class HTTPError(RequestException):
 
 class ConnectionError(RequestException):
     """A Connection error occurred."""
-    pass
 
 
 class ProxyError(RequestException):

@@ -125,8 +125,11 @@ select = [
     "UP",  # pyupgrade
     "B",  # flake8-bugbear
     "SIM",  # flake8-simplify
-    "I",  # isort
 ]
+
+[tool.isort]
+profile = "black"
+line_length = 100
 
 [tool.mypy]
 python_version = "3.8"
