@@ -174,7 +174,7 @@ CODE2ERROR = {
     CurlECode.WRITE_ERROR: RequestException,
     CurlECode.READ_ERROR: RequestException,
     CurlECode.OUT_OF_MEMORY: RequestException,
-    CurlECode.OPERATION_TIMEDOUT: TimeoutError,
+    CurlECode.OPERATION_TIMEDOUT: Timeout,
     CurlECode.SSL_CONNECT_ERROR: SSLError,
     CurlECode.INTERFACE_FAILED: InterfaceError,
     CurlECode.TOO_MANY_REDIRECTS: TooManyRedirects,
