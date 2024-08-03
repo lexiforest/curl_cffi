@@ -10,6 +10,7 @@ from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.models import Response
+from curl_cffi.requests.session import _update_url_params
 
 
 def test_head(server):
@@ -115,6 +116,36 @@ def test_non_post_with_bodies(server):
 def test_options(server):
     r = requests.options(str(server.url.copy_with(path="/echo_body")))
     assert r.status_code == 200
+
+
+def test_update_url_params():
+    # should be quoted
+    url = "https://example.com/post.json?limit=1&tags=id:<1000&page=0"
+    quoted = "https://example.com/post.json?limit=1&tags=id%3A%3C1000&page=0"
+    assert _update_url_params(url) == quoted
+
+    # should not change
+    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
+    assert _update_url_params(url) == url
+
+    # update url params
+    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
+    params = {"tags": "bar"}
+    updated_url = "https://example.com/post.json?limit=1&tags=bar&page=0"
+    assert _update_url_params(url, params) == updated_url
+
+    # append url params
+    url = "https://example.com/post.json?limit=1&tags=foo&tags=a"
+    params = {"tags": "bar"}
+    updated_url = "https://example.com/post.json?limit=1&tags=foo&tags=a&tags=bar"
+    assert _update_url_params(url, params) == updated_url
+
+    # update url params in a row
+    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
+    session_params = {"tags": "a"}
+    request_params = {"tags": "bar"}
+    updated_url = "https://example.com/post.json?limit=1&tags=bar&page=0"
+    assert _update_url_params(url, session_params, request_params) == updated_url
 
 
 def test_params(server):
