@@ -1,17 +1,7 @@
+# for compatibility with 0.5.x
+
+__all__ = ["CurlError", "RequestsError", "CookieConflict", "SessionClosed"]
+
 from .. import CurlError
-
-
-class RequestsError(CurlError):
-    """Base exception for curl_cffi.requests package"""
-
-    def __init__(self, msg, code=0, response=None, *args, **kwargs):
-        super().__init__(msg, code, *args, **kwargs)
-        self.response = response
-
-
-class CookieConflict(RequestsError):
-    pass
-
-
-class SessionClosed(RequestsError):
-    pass
+from .exceptions import CookieConflict, SessionClosed
+from .exceptions import RequestException as RequestsError

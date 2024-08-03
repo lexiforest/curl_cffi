@@ -29,13 +29,13 @@ from typing_extensions import Unpack
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
-from .errors import RequestsError, SessionClosed
+from .exceptions import ImpersonateError, RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
+from .impersonate import BrowserType  # noqa: F401
 from .impersonate import (
     TLS_CIPHER_NAME_MAP,
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
-    BrowserType,  # noqa: F401
     BrowserTypeLiteral,
     ExtraFingerprints,
     ExtraFpDict,
@@ -43,7 +43,7 @@ from .impersonate import (
     toggle_extension,
 )
 from .models import Request, Response
-from .websockets import WebSocket
+from .websockets import ON_CLOSE_T, ON_ERROR_T, ON_MESSAGE_T, ON_OPEN_T, WebSocket
 
 with suppress(ImportError):
     import gevent
@@ -616,7 +616,7 @@ class BaseSession:
             impersonate = normalize_browser_type(impersonate)
             ret = c.impersonate(impersonate, default_headers=default_headers)
             if ret != 0:
-                raise RequestsError(f"Impersonating {impersonate} is not supported")
+                raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
         # ja3 string
         ja3 = ja3 or self.ja3
@@ -644,7 +644,8 @@ class BaseSession:
                 extra_fp = ExtraFingerprints(**extra_fp)
             if impersonate:
                 warnings.warn(
-                    "Extra fingerprints was altered after browser version was set.", stacklevel=1
+                    "Extra fingerprints was altered after browser version was set.",
+                    stacklevel=1,
                 )
             self._set_extra_fp(c, extra_fp)
 
@@ -855,10 +856,10 @@ class Session(BaseSession):
         self,
         url,
         *args,
-        on_message: Optional[Callable[[WebSocket, bytes], None]] = None,
-        on_error: Optional[Callable[[WebSocket, CurlError], None]] = None,
-        on_open: Optional[Callable] = None,
-        on_close: Optional[Callable] = None,
+        on_message: Optional[ON_MESSAGE_T] = None,
+        on_error: Optional[ON_ERROR_T] = None,
+        on_open: Optional[ON_OPEN_T] = None,
+        on_close: Optional[ON_CLOSE_T] = None,
         **kwargs,
     ) -> WebSocket:
         """Connects to a websocket url.
@@ -982,7 +983,7 @@ class Session(BaseSession):
                 except CurlError as e:
                     rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                     rsp.request = req
-                    cast(queue.Queue, q).put_nowait(RequestsError(str(e), e.code, rsp))
+                    cast(queue.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
@@ -1003,7 +1004,7 @@ class Session(BaseSession):
 
             # Raise the exception if something wrong happens when receiving the header.
             first_element = _peek_queue(cast(queue.Queue, q))
-            if isinstance(first_element, RequestsError):
+            if isinstance(first_element, RequestException):
                 c.reset()
                 raise first_element
 
@@ -1025,7 +1026,8 @@ class Session(BaseSession):
             except CurlError as e:
                 rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                 rsp.request = req
-                raise RequestsError(str(e), e.code, rsp) from e
+                error = code2error(e.code, str(e))
+                raise error(str(e), e.code, rsp) from e
             else:
                 rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
                 rsp.request = req
@@ -1266,7 +1268,7 @@ class AsyncSession(BaseSession):
                 except CurlError as e:
                     rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                     rsp.request = req
-                    cast(asyncio.Queue, q).put_nowait(RequestsError(str(e), e.code, rsp))
+                    cast(asyncio.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
@@ -1287,7 +1289,7 @@ class AsyncSession(BaseSession):
             rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
 
             first_element = _peek_aio_queue(cast(asyncio.Queue, q))
-            if isinstance(first_element, RequestsError):
+            if isinstance(first_element, RequestException):
                 self.release_curl(curl)
                 raise first_element
 
@@ -1305,7 +1307,8 @@ class AsyncSession(BaseSession):
             except CurlError as e:
                 rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req
-                raise RequestsError(str(e), e.code, rsp) from e
+                error = code2error(e.code, str(e))
+                raise error(str(e), e.code, rsp) from e
             else:
                 rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
                 rsp.request = req

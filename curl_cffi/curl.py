@@ -2,12 +2,12 @@ import re
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Literal, Optional, Tuple, Union, cast
 
 import certifi
 
 from ._wrapper import ffi, lib
-from .const import CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
+from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 
 DEFAULT_CACERT = certifi.where()
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
@@ -17,9 +17,9 @@ STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
 class CurlError(Exception):
     """Base exception for curl_cffi package"""
 
-    def __init__(self, msg, code: int = 0, *args, **kwargs):
+    def __init__(self, msg, code: Union[CurlECode, Literal[0]] = 0, *args, **kwargs):
         super().__init__(msg, *args, **kwargs)
-        self.code = code
+        self.code: Union[CurlECode, Literal[0]] = code
 
 
 CURLINFO_TEXT = 0
@@ -143,7 +143,7 @@ class Curl:
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
                 "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
-                code=errcode,
+                code=cast(CurlECode, errcode),
             )
 
     def setopt(self, option: CurlOpt, value: Any) -> int:

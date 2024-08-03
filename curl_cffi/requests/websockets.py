@@ -3,8 +3,8 @@ import struct
 from enum import IntEnum
 from typing import Callable, Optional, Tuple
 
-from curl_cffi.const import CurlECode, CurlWsFlag
-from curl_cffi.curl import CurlError
+from ..const import CurlECode, CurlWsFlag
+from ..curl import CurlError
 
 ON_MESSAGE_T = Callable[["WebSocket", bytes], None]
 ON_ERROR_T = Callable[["WebSocket", CurlError], None]
