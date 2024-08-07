@@ -28,6 +28,7 @@ from typing_extensions import Unpack
 
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
+from .cache import CacheStrategy
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import ImpersonateError, RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
@@ -221,6 +222,7 @@ class BaseSession:
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cache: Optional[CacheStrategy] = None,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -244,6 +246,7 @@ class BaseSession:
         self.debug = debug
         self.interface = interface
         self.cert = cert
+        self.cache = cache
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
