@@ -2,13 +2,18 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from json import loads
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 from .. import Curl
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
+
+# Use orjson if present
+try:
+    from orjson import loads
+except ImportError:
+    from json import loads
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
 
