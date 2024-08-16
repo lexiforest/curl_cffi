@@ -19,9 +19,8 @@ Welcome to curl_cffi's documentation!
    api
    changelog
 
-`中文 README`_ | `Discuss on Telegram`_
+`Discuss on Telegram`_
 
-.. _中文 README: https://github.com/yifeikong/curl_cffi/blob/main/README-zh.md
 .. _Discuss on Telegram: https://t.me/+lL9n33eZp480MGM1
 
 curl_cffi is a Python binding for `curl-impersonate`_ via `cffi`_.

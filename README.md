@@ -4,9 +4,8 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
 [![Generic badge](https://img.shields.io/badge/Telegram%20Group-join-blue?logo=telegram)](https://t.me/+lL9n33eZp480MGM1)
-[![Generic badge](https://img.shields.io/badge/微信交流群-加入-brightgreen?logo=wechat)](./assets/wechat.jpg)
 
-[Documentation](https://curl-cffi.readthedocs.io) | [中文 README](https://github.com/yifeikong/curl_cffi/blob/main/README-zh.md) 
+[Documentation](https://curl-cffi.readthedocs.io)
 
 Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
 via [cffi](https://cffi.readthedocs.io/en/latest/).
@@ -236,18 +235,3 @@ the box on all subscription plans.
 ## Sponsor
 
 <a href="https://buymeacoffee.com/yifei" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
-
-## Citation
-
-If you find this project useful, please cite it as below:
-
-```
-@software{Kong2023,
-  author = {Yifei Kong},
-  title = {curl_cffi - A Python HTTP client for impersonating browser TLS and HTTP/2 fingerprints},
-  year = {2023},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  url = {https://github.com/yifeikong/curl_cffi},
-}
-```

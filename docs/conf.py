@@ -11,8 +11,8 @@ import sys
 sys.path.insert(0, os.path.abspath("../"))
 
 project = "curl_cffi"
-copyright = "2024, Yifei Kong"
-author = "Yifei Kong"
+copyright = "2024, perker"
+author = "perker"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
