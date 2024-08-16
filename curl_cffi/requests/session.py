@@ -24,7 +24,11 @@ from typing import (
 )
 from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
-from typing_extensions import Unpack
+# Unpack introduced in 3.11
+try:
+    from typing import Unpack
+except ImportError:
+    from typing_extensions import Unpack
 
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
