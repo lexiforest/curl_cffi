@@ -477,7 +477,7 @@ def test_cookies_with_special_chars(server):
     assert r.json()["foo"] == "bar space"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/119
+# https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_mislead_by_host(server):
     s = requests.Session(debug=True)
     s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
@@ -489,7 +489,7 @@ def test_cookies_mislead_by_host(server):
     assert r.json()["foo"] == "bar"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/119
+# https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_redirect_to_another_domain(server):
     s = requests.Session()
     s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8000:127.0.0.1"])
@@ -502,7 +502,7 @@ def test_cookies_redirect_to_another_domain(server):
     assert cookies["foo"] == "google.com"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/119
+# https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_wo_hostname_redirect_to_another_domain(server):
     s = requests.Session(debug=True)
     s.curl.setopt(
@@ -525,7 +525,7 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
     assert cookies["hello"] == "world"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/39
+# https://github.com/lexiforest/curl_cffi/issues/39
 def test_post_body_cleaned(server):
     s = requests.Session()
     # POST with body
@@ -537,7 +537,7 @@ def test_post_body_cleaned(server):
     assert r.content == b""
 
 
-# https://github.com/yifeikong/curl_cffi/issues/16
+# https://github.com/lexiforest/curl_cffi/issues/16
 def test_session_with_headers(server):
     s = requests.Session()
     r = s.get(str(server.url), headers={"Foo": "bar"})
@@ -545,7 +545,7 @@ def test_session_with_headers(server):
     assert r.status_code == 200
 
 
-# https://github.com/yifeikong/curl_cffi/pull/171
+# https://github.com/lexiforest/curl_cffi/pull/171
 def test_session_with_hostname_proxies(server, proxy_server):
     proxies = {
         f"all://{server.url.host}": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"
@@ -556,7 +556,7 @@ def test_session_with_hostname_proxies(server, proxy_server):
     assert r.text == "Hello from man in the middle"
 
 
-# https://github.com/yifeikong/curl_cffi/pull/171
+# https://github.com/lexiforest/curl_cffi/pull/171
 def test_session_with_http_proxies(server, proxy_server):
     proxies = {"http": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"}
     s = requests.Session(proxies=proxies)
@@ -565,7 +565,7 @@ def test_session_with_http_proxies(server, proxy_server):
     assert r.text == "Hello from man in the middle"
 
 
-# https://github.com/yifeikong/curl_cffi/pull/171
+# https://github.com/lexiforest/curl_cffi/pull/171
 def test_session_with_all_proxies(server, proxy_server):
     proxies = {"all": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"}
     s = requests.Session(proxies=proxies)
@@ -574,7 +574,7 @@ def test_session_with_all_proxies(server, proxy_server):
     assert r.text == "Hello from man in the middle"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/222
+# https://github.com/lexiforest/curl_cffi/issues/222
 def test_closed_session_throws_error():
     with requests.Session() as s:
         pass

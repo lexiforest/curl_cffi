@@ -21,7 +21,7 @@ Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
 
 ------
 
-<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
+<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
 
 [Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi)
 is an enterprise-grade solution providing Web Scraping API that aims to simplify the
@@ -39,7 +39,7 @@ If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also
 ## Features
 
 - Supports JA3/TLS and http2 fingerprints impersonation, inlucding recent browsers and custome fingerprints.
-- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/main/benchmark).
+- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/lexiforest/curl_cffi/tree/main/benchmark).
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
@@ -69,7 +69,7 @@ To install beta releases:
 
 To install unstable version from GitHub:
 
-    git clone https://github.com/yifeikong/curl_cffi/
+    git clone https://github.com/lexiforest/curl_cffi/
     cd curl_cffi
     make preprocess
     pip install .
@@ -126,9 +126,9 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-`curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+`curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
+However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/lexiforest/curl_cffi/issues/59).
 
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.

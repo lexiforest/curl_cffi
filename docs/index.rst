@@ -25,7 +25,7 @@ Welcome to curl_cffi's documentation!
 
 curl_cffi is a Python binding for `curl-impersonate`_ via `cffi`_.
 
-.. _curl-impersonate: https://github.com/yifeikong/curl-impersonate
+.. _curl-impersonate: https://github.com/lexiforest/curl-impersonate
 .. _cffi: https://cffi.readthedocs.io/en/latest/
 
 Unlike other pure Python http clients like ``httpx`` or ``requests``, ``curl_cffi`` can
@@ -34,7 +34,7 @@ website for no obvious reason, you can give this package a try.
 
 ------
 
-.. image:: https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/scrapfly.png
+.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/scrapfly.png
    :width: 300
    :alt: Scrapfly
    :target: https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi
@@ -56,7 +56,7 @@ Features
 ------
 
 - Supports JA3/TLS and http2 fingerprints impersonation.
-- Much faster than requests/httpx, on par with aiohttp/pycurl, see `benchmarks <https://github.com/yifeikong/curl_cffi/tree/main/benchmark>`_.
+- Much faster than requests/httpx, on par with aiohttp/pycurl, see `benchmarks <https://github.com/lexiforest/curl_cffi/tree/main/benchmark>`_.
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports ``asyncio`` with proxy rotation on each request.
@@ -223,7 +223,7 @@ Click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
 Bypass Cloudflare with API
 ~~~~~~
 
-.. image:: https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/yescaptcha.png
+.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png
    :width: 149
    :alt: YesCaptcha
    :target: https://yescaptcha.com/i/stfnIO

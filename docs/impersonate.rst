@@ -4,9 +4,9 @@ Impersonate guide
 Supported browser versions
 --------------------------
 
-``curl_cffi`` supports the same browser versions as supported by our `fork <https://github.com/yifeikong/curl-impersonate>`_ of `curl-impersonate <https://github.com/lwthiker/curl-impersonate>`_:
+``curl_cffi`` supports the same browser versions as supported by our `fork <https://github.com/lexiforest/curl-impersonate>`_ of `curl-impersonate <https://github.com/lwthiker/curl-impersonate>`_:
 
-However, only Chrome-like browsers are supported. Firefox support is tracked in `#59 <https://github.com/yifeikong/curl_cffi/issues/59>`_.
+However, only Chrome-like browsers are supported. Firefox support is tracked in `#59 <https://github.com/lexiforest/curl_cffi/issues/59>`_.
 
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
@@ -148,7 +148,7 @@ For Akamai http2 fingerprints, you can fully customize the 3 parts:
 
 For a complete list of options and explanation, see the `curl-impersoante README`_.
 
-.. _curl-impersonate README: https://github.com/yifeikong/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
+.. _curl-impersonate README: https://github.com/lexiforest/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
 
 
 Should I randomize my fingerprints for each request?

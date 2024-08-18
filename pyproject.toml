@@ -1,7 +1,7 @@
 [project]
 name = "curl_cffi"
 version = "0.7.1"
-authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
+authors = [{ name = "Lyonnet", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
 dependencies = [
@@ -10,7 +10,7 @@ dependencies = [
 ]
 readme = "README.md"
 requires-python = ">=3.8"
-urls = { "repository" = "https://github.com/yifeikong/curl_cffi" }
+urls = { "repository" = "https://github.com/lexiforest/curl_cffi" }
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

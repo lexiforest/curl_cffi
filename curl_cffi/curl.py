@@ -77,7 +77,7 @@ def write_callback(ptr, size, nmemb, userdata):
     return nmemb * size
 
 
-# Credits: @alexio777 on https://github.com/yifeikong/curl_cffi/issues/4
+# Credits: @alexio777 on https://github.com/lexiforest/curl_cffi/issues/4
 def slist_to_list(head) -> List[bytes]:
     """Converts curl slist to a python list."""
     result = []

@@ -250,7 +250,7 @@ async def test_session_cookies(server):
         assert cookies["hello"] == "world"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/16
+# https://github.com/lexiforest/curl_cffi/issues/16
 async def test_session_with_headers(server):
     async with AsyncSession() as s:
         r = await s.get(str(server.url), headers={"Foo": "bar"})
@@ -267,7 +267,7 @@ async def test_session_too_many_headers(server):
         assert headers["Foo"][0] == "2"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/222
+# https://github.com/lexiforest/curl_cffi/issues/222
 async def test_closed_session_throws_error():
     async with AsyncSession() as s:
         pass
@@ -297,7 +297,7 @@ async def test_closed_session_throws_error():
         await s.ws_connect("wss://example.com")
 
 
-# https://github.com/yifeikong/curl_cffi/issues/39
+# https://github.com/lexiforest/curl_cffi/issues/39
 async def test_post_body_cleaned(server):
     async with AsyncSession() as s:
         # POST with body

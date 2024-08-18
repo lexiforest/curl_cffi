@@ -40,7 +40,7 @@ To install the latest unstable version from GitHub:
 
 .. code-block::
 
-    git clone https://github.com/yifeikong/curl_cffi/
+    git clone https://github.com/lexiforest/curl_cffi/
     cd curl_cffi
     make preprocess
     pip install .

@@ -96,10 +96,10 @@ To force curl to use http 1.1 only.
 
 Related issues:
 
-- `#19 <https://github.com/yifeikong/curl_cffi/issues/19>`_, 
-- `#42 <https://github.com/yifeikong/curl_cffi/issues/42>`_, 
-- `#79 <https://github.com/yifeikong/curl_cffi/issues/79>`_, 
-- `#165 <https://github.com/yifeikong/curl_cffi/issues/165>`_, 
+- `#19 <https://github.com/lexiforest/curl_cffi/issues/19>`_, 
+- `#42 <https://github.com/lexiforest/curl_cffi/issues/42>`_, 
+- `#79 <https://github.com/lexiforest/curl_cffi/issues/79>`_, 
+- `#165 <https://github.com/lexiforest/curl_cffi/issues/165>`_, 
 
 
 Packaging with PyInstaller
@@ -127,8 +127,8 @@ Add other paths:
 
 See also: 
 
-- `#5 <https://github.com/yifeikong/curl_cffi/issues/5>`_
-- `#48 <https://github.com/yifeikong/curl_cffi/issues/48>`_
+- `#5 <https://github.com/lexiforest/curl_cffi/issues/5>`_
+- `#48 <https://github.com/lexiforest/curl_cffi/issues/48>`_
 
 How to set proxy?
 ------
@@ -145,7 +145,7 @@ You can also use the ``http_proxy``, ``https_proxy``, and ``ws_proxy``, ``wss_pr
 environment variables, respectively.
 
 For explanation of differences between ``http_proxy`` and ``https_proxy``, please see
-`#6 <https://github.com/yifeikong/curl_cffi/issues/6>`_.
+`#6 <https://github.com/lexiforest/curl_cffi/issues/6>`_.
 
 
 How to change the order of headers?

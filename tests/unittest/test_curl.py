@@ -68,7 +68,7 @@ def test_headers(server):
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Foo"][0] == "bar"
 
-    # https://github.com/yifeikong/curl_cffi/issues/16
+    # https://github.com/lexiforest/curl_cffi/issues/16
     c.setopt(CurlOpt.HTTPHEADER, [b"Foo: baz"])
     buffer = BytesIO()
     c.setopt(CurlOpt.WRITEDATA, buffer)
@@ -90,7 +90,7 @@ def test_proxy_headers(server):
     headers = json.loads(buffer.getvalue().decode())
     assert "Foo" not in headers
 
-    # https://github.com/yifeikong/curl_cffi/issues/16
+    # https://github.com/lexiforest/curl_cffi/issues/16
     c.setopt(CurlOpt.PROXYHEADER, [b"Foo: baz"])
     buffer = BytesIO()
     c.setopt(CurlOpt.WRITEDATA, buffer)
