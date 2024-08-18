@@ -273,7 +273,7 @@ class Cookies(MutableMapping[str, str]):
         """
         ret = {}
         for cookie in self.jar:
-            if (domain is None or cookie.name == domain) and (path is None or cookie.path == path):
+            if (domain is None or cookie.domain == domain) and (path is None or cookie.path == path):
                 ret[cookie.name] = cookie.value
         return ret
 
