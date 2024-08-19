@@ -88,7 +88,7 @@ def test_upload_multiple_files_different_name(file_server):
                 "name": "image2",
                 "content_type": "image/jpg",
                 "filename": "scrapfly.png",
-                "local_path": str(ASSET_FOLDER / "scrapfly.png"),
+                "local_path": str(ASSET_FOLDER / "yescaptcha.png"),
             },
         ]
     )
