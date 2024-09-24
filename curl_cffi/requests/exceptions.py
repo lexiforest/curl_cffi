@@ -32,12 +32,12 @@ class ImpersonateError(RequestException):
 
 # not used
 class InvalidJSONError(RequestException):
-    """A JSON error occurred."""
+    """A JSON error occurred. not used"""
 
 
 # not used
 class JSONDecodeError(InvalidJSONError, json.JSONDecodeError):
-    """Couldn't decode the text into json"""
+    """Couldn't decode the text into json. not used"""
 
 
 class HTTPError(RequestException):
@@ -77,17 +77,19 @@ class ConnectTimeout(ConnectionError, Timeout):
     """The request timed out while trying to connect to the remote server.
 
     Requests that produced this error are safe to retry.
+
+    not used
     """
 
 
 # not used
 class ReadTimeout(Timeout):
-    """The server did not send any data in the allotted amount of time."""
+    """The server did not send any data in the allotted amount of time. not used"""
 
 
 # not used
 class URLRequired(RequestException):
-    """A valid URL is required to make a request."""
+    """A valid URL is required to make a request. not used"""
 
 
 class TooManyRedirects(RequestException):
@@ -96,11 +98,11 @@ class TooManyRedirects(RequestException):
 
 # not used
 class MissingSchema(RequestException, ValueError):
-    """The URL scheme (e.g. http or https) is missing."""
+    """The URL scheme (e.g. http or https) is missing. not used"""
 
 
 class InvalidSchema(RequestException, ValueError):
-    """The URL scheme provided is either invalid or unsupported."""
+    """The URL scheme provided is either invalid or unsupported. not used"""
 
 
 class InvalidURL(RequestException, ValueError):
@@ -109,37 +111,37 @@ class InvalidURL(RequestException, ValueError):
 
 # not used
 class InvalidHeader(RequestException, ValueError):
-    """The header value provided was somehow invalid."""
+    """The header value provided was somehow invalid. not used"""
 
 
 # not used
 class InvalidProxyURL(InvalidURL):
-    """The proxy URL provided is invalid."""
+    """The proxy URL provided is invalid. not used"""
 
 
 # not used
 class ChunkedEncodingError(RequestException):
-    """The server declared chunked encoding but sent an invalid chunk."""
+    """The server declared chunked encoding but sent an invalid chunk. not used"""
 
 
 # not used
 class ContentDecodingError(RequestException):
-    """Failed to decode response content."""
+    """Failed to decode response content. not used"""
 
 
 # not used
 class StreamConsumedError(RequestException, TypeError):
-    """The content for this response was already consumed."""
+    """The content for this response was already consumed. not used"""
 
 
 # does not support
 class RetryError(RequestException):
-    """Custom retries logic failed"""
+    """Custom retries logic failed. not used"""
 
 
 # not used
 class UnrewindableBodyError(RequestException):
-    """Requests encountered an error when trying to rewind a body."""
+    """Requests encountered an error when trying to rewind a body. not used"""
 
 
 class InterfaceError(RequestException):
@@ -149,14 +151,14 @@ class InterfaceError(RequestException):
 # Warnings
 
 
-# not used
+# TODO use this warning as a base
 class RequestsWarning(Warning):
-    """Base warning for Requests."""
+    """Base warning for Requests. not used"""
 
 
 # not used
 class FileModeWarning(RequestsWarning, DeprecationWarning):
-    """A file was opened in text mode, but Requests determined its binary length."""
+    """A file was opened in text mode, but Requests determined its binary length. not used"""
 
 
 # not used

@@ -14,6 +14,7 @@ Welcome to curl_cffi's documentation!
    impersonate
    cookies
    advanced
+   exceptions
    vs-requests
    faq
    api
