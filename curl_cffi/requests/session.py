@@ -163,10 +163,10 @@ def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -
     return new_url
 
 
-def _update_header_line(header_lines: List[str], key: str, value: str):
+def _update_header_line(header_lines: List[str], key: str, value: str, force: bool = False):
     """Update header line list by key value pair."""
     for idx, line in enumerate(header_lines):
-        if line.lower().startswith(key.lower() + ":"):
+        if line.lower().startswith(key.lower() + ":") and force:
             header_lines[idx] = f"{key}: {value}"
             break
     else:  # if not break
@@ -449,7 +449,7 @@ class BaseSession:
 
         # Add content-type if missing
         if json is not None:
-            _update_header_line(header_lines, "Content-Type", "application/json")
+            _update_header_line(header_lines, "Content-Type", "application/json", force=True)
         if isinstance(data, dict) and method != "POST":
             _update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
         if isinstance(data, (str, bytes)):
