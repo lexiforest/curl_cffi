@@ -452,6 +452,8 @@ class BaseSession:
             _update_header_line(header_lines, "Content-Type", "application/json")
         if isinstance(data, dict) and method != "POST":
             _update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
+        if isinstance(data, (str, bytes)):
+            _update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
         # Never send `Expect` header.
         _update_header_line(header_lines, "Expect", "")
