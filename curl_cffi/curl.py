@@ -138,7 +138,7 @@ class Curl:
 
     def _get_error(self, errcode: int, *args: Any):
         if errcode != 0:
-            errmsg = ffi.string(self._error_buffer).decode()
+            errmsg = ffi.string(self._error_buffer).decode(errors="backslashreplace")
             action = " ".join([str(a) for a in args])
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
