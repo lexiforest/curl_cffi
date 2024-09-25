@@ -456,7 +456,7 @@ class BaseSession:
             _update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
         # Never send `Expect` header.
-        _update_header_line(header_lines, "Expect", "")
+        _update_header_line(header_lines, "Expect", "", force=True)
 
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
