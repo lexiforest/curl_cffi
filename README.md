@@ -4,6 +4,7 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
 [![Generic badge](https://img.shields.io/badge/Telegram%20Group-join-blue?logo=telegram)](https://t.me/+lL9n33eZp480MGM1)
+[![Generic badge](https://img.shields.io/badge/Discord-join-purple?logo=blue)](https://discord.gg/kJqMHHgdn2)
 
 [Documentation](https://curl-cffi.readthedocs.io)
 
@@ -13,9 +14,6 @@ via [cffi](https://cffi.readthedocs.io/en/latest/).
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
-
-The fingerprints in 0.6 on Windows are all wrong, you should update to 0.7 if you are on
-Windows. Sorry for the inconvenience.
 
 Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
 
@@ -33,6 +31,27 @@ rate in detail.
 Scrapfly is a good solution if you are looking for a cloud-managed solution for `curl_cffi`.
 If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also maintain a
 [curl to python converter](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi).
+
+------
+
+### Bypass Cloudflare with API
+
+<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
+
+Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
+obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
+to register: https://yescaptcha.com/i/stfnIO
+
+------
+
+<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
+
+[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
+fingerprint; and slower with a real browser under the hood.
+
+ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
+extraction, so you can just get the data in JSON. Rotating proxies are available out of
+the box on all subscription plans.
 
 ------
 
@@ -128,7 +147,7 @@ print(r.json())
 
 `curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/lexiforest/curl_cffi/issues/59).
+However, only WebKit-based browsers are supported. Firefox support is tracked in [#59](https://github.com/lexiforest/curl_cffi/issues/59).
 
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
@@ -154,11 +173,14 @@ to specify your own customized fingerprints. See the [docs on impersonatation](h
 - safari15_5 <sup>[2]</sup>
 - safari17_0 <sup>[1]</sup>
 - safari17_2_ios <sup>[1]</sup>
+- safari18_0 <sup>[4]</sup>
+- safari18_0_ios <sup>[4]</sup>
 
 Notes:
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
+4. Added in version `0.8.0`.
 
 ### asyncio
 
@@ -215,22 +237,6 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 - Asyncio support is inspired by Tornado's curl http client.
 - The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
 
-## [Sponsor] Bypass Cloudflare with API
-
-<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
-
-Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO) to register: https://yescaptcha.com/i/stfnIO
-
-## [Sponsor] ScrapeNinja
-
-<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
-
-[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
-fingerprint; and slower with a real browser under the hood.
-
-ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
-extraction, so you can just get the data in JSON. Rotating proxies are available out of
-the box on all subscription plans.
 
 ## Sponsor
 
