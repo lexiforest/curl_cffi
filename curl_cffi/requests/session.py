@@ -21,6 +21,7 @@ from typing import (
     TypedDict,
     Union,
     cast,
+    Type,
 )
 from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
@@ -86,6 +87,7 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, Tuple[str, str]]]
+        response_factory: Optional[Type[Response]]
 
 else:
     ProxySpec = Dict[str, str]
@@ -163,10 +165,10 @@ def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -
     return new_url
 
 
-def _update_header_line(header_lines: List[str], key: str, value: str, force: bool = False):
+def _update_header_line(header_lines: List[str], key: str, value: str):
     """Update header line list by key value pair."""
     for idx, line in enumerate(header_lines):
-        if line.lower().startswith(key.lower() + ":") and force:
+        if line.lower().startswith(key.lower() + ":"):
             header_lines[idx] = f"{key}: {value}"
             break
     else:  # if not break
@@ -221,6 +223,7 @@ class BaseSession:
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
+        response_factory: Optional[Type[Response]] = None,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -244,6 +247,9 @@ class BaseSession:
         self.debug = debug
         self.interface = interface
         self.cert = cert
+        assert response_factory is None or issubclass(response_factory, Response), \
+            "The `response_factory` class must be a subclass of `curl_cffi.requests.models.Response`."
+        self.response_factory = response_factory
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -449,14 +455,14 @@ class BaseSession:
 
         # Add content-type if missing
         if json is not None:
-            _update_header_line(header_lines, "Content-Type", "application/json", force=True)
+            _update_header_line(header_lines, "Content-Type", "application/json")
         if isinstance(data, dict) and method != "POST":
             _update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
         if isinstance(data, (str, bytes)):
             _update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
         # Never send `Expect` header.
-        _update_header_line(header_lines, "Expect", "", force=True)
+        _update_header_line(header_lines, "Expect", "")
 
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
@@ -699,7 +705,7 @@ class BaseSession:
 
     def _parse_response(self, curl, buffer, header_buffer, default_encoding):
         c = curl
-        rsp = Response(c)
+        rsp = (Response if self.response_factory is None else self.response_factory)(c)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()
