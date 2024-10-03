@@ -57,7 +57,7 @@ the box on all subscription plans.
 
 ## Features
 
-- Supports JA3/TLS and http2 fingerprints impersonation, inlucding recent browsers and custome fingerprints.
+- Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custome fingerprints.
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/lexiforest/curl_cffi/tree/main/benchmark).
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
