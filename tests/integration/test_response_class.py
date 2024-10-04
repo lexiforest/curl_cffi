@@ -1,3 +1,4 @@
+import pytest
 from curl_cffi import requests
 
 def test_default_response():
@@ -20,8 +21,5 @@ def test_custom_response():
 class WrongTypeResponse: pass
 
 def test_wrong_type_custom_response():
-    try:
+    with pytest.raises(TypeError):
         requests.Session(response_class=WrongTypeResponse)
-        assert False, "session was created without raising issue for wrong response class type"
-    except TypeError:
-        print("Wrong response class type detected")

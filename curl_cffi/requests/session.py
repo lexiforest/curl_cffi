@@ -250,7 +250,7 @@ class BaseSession:
 
         if response_class is None:
             response_class = Response
-        elif issubclass(response_class, Response) is False:
+        elif not issubclass(response_class, Response):
             raise TypeError( "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
                             f" not of type `{response_class}`" )
         self.response_class = response_class
