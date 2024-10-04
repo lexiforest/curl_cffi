@@ -87,7 +87,7 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, Tuple[str, str]]]
-        response_factory: Optional[Type[Response]]
+        response_class: Optional[Type[Response]]
 
 else:
     ProxySpec = Dict[str, str]
@@ -223,7 +223,7 @@ class BaseSession:
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
-        response_factory: Optional[Type[Response]] = None,
+        response_class: Optional[Type[Response]] = None,
     ):
         self.headers = Headers(headers)
         self.cookies = Cookies(cookies)
@@ -247,9 +247,13 @@ class BaseSession:
         self.debug = debug
         self.interface = interface
         self.cert = cert
-        assert response_factory is None or issubclass(response_factory, Response), \
-            "The `response_factory` class must be a subclass of `curl_cffi.requests.models.Response`."
-        self.response_factory = response_factory
+
+        if response_class is None:
+            response_class = Response
+        elif issubclass(response_class, Response) is False:
+            raise TypeError( "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
+                            f" not of type `{response_class}`" )
+        self.response_class = response_class
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -705,7 +709,7 @@ class BaseSession:
 
     def _parse_response(self, curl, buffer, header_buffer, default_encoding):
         c = curl
-        rsp = (Response if self.response_factory is None else self.response_factory)(c)
+        rsp = self.response_class(c)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()
