@@ -165,13 +165,17 @@ def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -
     return new_url
 
 
-def _update_header_line(header_lines: List[str], key: str, value: str, force: bool = False):
+# TODO: should we move this function to headers.py?
+def _update_header_line(header_lines: List[str], key: str, value: str, replace: bool = False):
     """Update header line list by key value pair."""
+    found = False
     for idx, line in enumerate(header_lines):
-        if line.lower().startswith(key.lower() + ":") and force:
-            header_lines[idx] = f"{key}: {value}"
+        if line.lower().startswith(key.lower() + ":"):
+            found = True
+            if replace:
+                header_lines[idx] = f"{key}: {value}"
             break
-    else:  # if not break
+    if not found:
         header_lines.append(f"{key}: {value}")
 
 
@@ -459,14 +463,14 @@ class BaseSession:
 
         # Add content-type if missing
         if json is not None:
-            _update_header_line(header_lines, "Content-Type", "application/json", force=True)
+            _update_header_line(header_lines, "Content-Type", "application/json", replace=True)
         if isinstance(data, dict) and method != "POST":
             _update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
         if isinstance(data, (str, bytes)):
             _update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
         # Never send `Expect` header.
-        _update_header_line(header_lines, "Expect", "", force=True)
+        _update_header_line(header_lines, "Expect", "", replace=True)
 
         c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
