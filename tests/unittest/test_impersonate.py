@@ -136,6 +136,7 @@ def test_customized_akamai_safari():
     assert r["akamai_text"] == akamai
 
 
+@pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_sig_hash_algs():
     url = "https://tls.peet.ws/api/all"
     safari_algs = [
@@ -160,6 +161,7 @@ def test_customized_extra_fp_sig_hash_algs():
     assert safari_algs == result_algs
 
 
+@pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_tls_min_version():
     url = "https://tls.peet.ws/api/all"
     safari_min_version = CurlSslVersion.TLSv1_0
@@ -171,6 +173,7 @@ def test_customized_extra_fp_tls_min_version():
             assert len(ex["versions"]) >= 4
 
 
+@pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_grease():
     url = "https://tls.peet.ws/api/all"
     fp = requests.ExtraFingerprints(tls_grease=True)
@@ -196,6 +199,7 @@ def test_customized_extra_fp_permute():
     assert extensions != "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51"
 
 
+@pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_cert_compression():
     url = "https://tls.peet.ws/api/all"
     fp = requests.ExtraFingerprints(tls_cert_compression="zlib")
@@ -207,6 +211,7 @@ def test_customized_extra_fp_cert_compression():
     assert result_algs[0] == "zlib (1)"
 
 
+@pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_stream_weight():
     url = "https://tls.peet.ws/api/all"
     fp = requests.ExtraFingerprints(http2_stream_weight=64)
@@ -214,6 +219,7 @@ def test_customized_extra_fp_stream_weight():
     assert r["http2"]["sent_frames"][2]["priority"]["weight"] == 64
 
 
+@pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_stream_exclusive():
     url = "https://tls.peet.ws/api/all"
     fp = requests.ExtraFingerprints(http2_stream_exclusive=0)
