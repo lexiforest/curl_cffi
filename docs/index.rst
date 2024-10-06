@@ -24,7 +24,7 @@ Welcome to curl_cffi's documentation!
 
 .. _Discuss on Telegram: https://t.me/+lL9n33eZp480MGM1
 
-curl_cffi is a Python binding for `curl-impersonate`_ via `cffi`_.
+curl_cffi is a Python binding for `curl-impersonate fork`_ via `cffi`_.
 
 .. _curl-impersonate: https://github.com/lexiforest/curl-impersonate
 .. _cffi: https://cffi.readthedocs.io/en/latest/

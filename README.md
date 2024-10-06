@@ -8,7 +8,7 @@
 
 [Documentation](https://curl-cffi.readthedocs.io)
 
-Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
+Python binding for [curl-impersonate fork](https://github.com/lexiforest/curl-impersonate)
 via [cffi](https://cffi.readthedocs.io/en/latest/).
 
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can

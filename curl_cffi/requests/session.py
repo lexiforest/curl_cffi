@@ -18,10 +18,10 @@ from typing import (
     Literal,
     Optional,
     Tuple,
+    Type,
     TypedDict,
     Union,
     cast,
-    Type,
 )
 from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
@@ -255,8 +255,10 @@ class BaseSession:
         if response_class is None:
             response_class = Response
         elif not issubclass(response_class, Response):
-            raise TypeError( "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
-                            f" not of type `{response_class}`" )
+            raise TypeError(
+                "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
+                f" not of type `{response_class}`"
+            )
         self.response_class = response_class
 
         if proxy and proxies:
@@ -804,6 +806,7 @@ class Session(BaseSession):
             default_encoding: encoding for decoding response content if charset is not found in
                 headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
+            response_class: A customized subtype of ``Response`` to use.
 
         Notes:
             This class can be used as a context manager.
@@ -1100,6 +1103,7 @@ class AsyncSession(BaseSession):
             default_encoding: encoding for decoding response content if charset is not found
                 in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
+            response_class: A customized subtype of ``Response`` to use.
 
         Notes:
             This class can be used as a context manager, and it's recommended to use via
