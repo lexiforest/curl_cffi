@@ -168,6 +168,16 @@ def test_url_encode(server):
     r = requests.get(str(url))
     assert r.url == url
 
+    # Non-ASCII URL should be percent encoded as UTF-8 sequence
+    non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
+    encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
+
+    r = requests.get(non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
+    r = requests.get(encoded_non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
     # should be quoted
     url = "http://127.0.0.1:8000/e x a m p l e"
     quoted = "http://127.0.0.1:8000/e%20x%20a%20m%20p%20l%20e"
@@ -190,6 +200,14 @@ def test_url_encode(server):
     quoted = "http://127.0.0.1:8000/post.json?limit=1&tags=id%3A%3C1000&page=0"
     r = requests.get(url, quote=":")
     assert r.url == quoted
+
+    # Do not quote at all
+    url = "http://127.0.0.1:8000/query={}"
+    quoted = "http://127.0.0.1:8000/query=%7B%7D"
+    r = requests.get(url)
+    assert r.url == quoted
+    r = requests.get(url, quote=False)
+    assert r.url == url
 
 
 def test_headers(server):

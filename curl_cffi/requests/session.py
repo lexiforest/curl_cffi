@@ -29,7 +29,7 @@ from typing_extensions import Unpack
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
-from .exceptions import ImpersonateError, InvalidURL, RequestException, SessionClosed, code2error
+from .exceptions import ImpersonateError, RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType  # noqa: F401
 from .impersonate import (
