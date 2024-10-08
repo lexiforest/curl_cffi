@@ -118,36 +118,6 @@ def test_options(server):
     assert r.status_code == 200
 
 
-def test_update_url_params():
-    # should be quoted
-    url = "https://example.com/post.json?limit=1&tags=id:<1000&page=0"
-    quoted = "https://example.com/post.json?limit=1&tags=id%3A%3C1000&page=0"
-    assert _update_url_params(url) == quoted
-
-    # should not change
-    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
-    assert _update_url_params(url) == url
-
-    # update url params
-    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
-    params = {"tags": "bar"}
-    updated_url = "https://example.com/post.json?limit=1&tags=bar&page=0"
-    assert _update_url_params(url, params) == updated_url
-
-    # append url params
-    url = "https://example.com/post.json?limit=1&tags=foo&tags=a"
-    params = {"tags": "bar"}
-    updated_url = "https://example.com/post.json?limit=1&tags=foo&tags=a&tags=bar"
-    assert _update_url_params(url, params) == updated_url
-
-    # update url params in a row
-    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
-    session_params = {"tags": "a"}
-    request_params = {"tags": "bar"}
-    updated_url = "https://example.com/post.json?limit=1&tags=bar&page=0"
-    assert _update_url_params(url, session_params, request_params) == updated_url
-
-
 def test_params(server):
     r = requests.get(str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"})
     assert r.content == b'{"params": {"foo": ["bar"]}}'
@@ -178,6 +148,66 @@ def test_update_params(server):
         params=[("foo", "1"), ("foo", "2")],
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["z", "1", "2"]}}'
+
+
+def test_url_encode(server):
+    # https://github.com/lexiforest/curl_cffi/issues/394
+
+    # FIXME: should use server.url, but it always encode
+
+    # should not change
+    url = "http://127.0.0.1:8000/%2f%2f%2f"
+    r = requests.get(str(url))
+    assert r.url == str(url)
+
+    url = "http://127.0.0.1:8000/imaginary-pagination:7"
+    r = requests.get(str(url))
+    assert r.url == str(url)
+
+    url = "http://127.0.0.1:8000/post.json?limit=1&tags=foo&page=0"
+    r = requests.get(str(url))
+    assert r.url == url
+
+    # Non-ASCII URL should be percent encoded as UTF-8 sequence
+    non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
+    encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
+
+    r = requests.get(non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
+    r = requests.get(encoded_non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
+    # should be quoted
+    url = "http://127.0.0.1:8000/e x a m p l e"
+    quoted = "http://127.0.0.1:8000/e%20x%20a%20m%20p%20l%20e"
+    r = requests.get(str(url))
+    assert r.url == quoted
+
+    # I have seen discussions that ask how to prevent requests from quoting unwanted
+    # parts, like `:`. So, let's make it explicit that you want to quote some chars.
+    #
+    # See:
+    # 1. https://stackoverflow.com/q/57365497/1061155
+    # 2. https://stackoverflow.com/q/23496750/1061155
+
+    url = "http://127.0.0.1:8000/imaginary-pagination:7"
+    quoted = "http://127.0.0.1:8000/imaginary-pagination%3A7"
+    r = requests.get(url, quote=":")
+    assert r.url == quoted
+
+    url = "http://127.0.0.1:8000/post.json?limit=1&tags=id:<1000&page=0"
+    quoted = "http://127.0.0.1:8000/post.json?limit=1&tags=id%3A%3C1000&page=0"
+    r = requests.get(url, quote=":")
+    assert r.url == quoted
+
+    # Do not quote at all
+    url = "http://127.0.0.1:8000/query={}"
+    quoted = "http://127.0.0.1:8000/query=%7B%7D"
+    r = requests.get(url)
+    assert r.url == quoted
+    r = requests.get(url, quote=False)
+    assert r.url == url
 
 
 def test_headers(server):
