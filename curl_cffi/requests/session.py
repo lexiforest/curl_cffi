@@ -103,12 +103,30 @@ def _is_absolute_url(url: str) -> bool:
     return bool(parsed_url.scheme and parsed_url.hostname)
 
 
-def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -> str:
+SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
+
+
+def _quote_path_and_params(url: str, quote_str: str = ""):
+    safe = "".join(SAFE_CHARS - set(quote_str))
+    parsed_url = urlparse(url)
+    parsed_get_args = parse_qsl(parsed_url.query)
+    encoded_get_args = urlencode(parsed_get_args, doseq=True, safe=safe)
+    return ParseResult(
+        parsed_url.scheme,
+        parsed_url.netloc,
+        quote(parsed_url.path, safe=safe),
+        parsed_url.params,
+        encoded_get_args,
+        parsed_url.fragment,
+    ).geturl()
+
+
+def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     """Add URL query params to provided URL being aware of existing.
 
     Parameters:
         url: string of target URL
-        params: list of dict or list containing requested params to be added
+        params: dict containing requested params to be added
 
     Returns:
         string with updated URL
@@ -126,27 +144,20 @@ def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -
     parsed_get_args = parse_qsl(parsed_url.query)
 
     # Merging URL arguments dict with new params
-    for params in params_list:
-        if not params:
-            continue
-
-        # Check the args appearance count of keys
-        old_args_counter = Counter(x[0] for x in parsed_get_args)
-        if isinstance(params, dict):
-            params = list(params.items())
-        new_args_counter = Counter(x[0] for x in params)
-
-        for key, value in params:
-            # Bool and dict values should be converted to json-friendly values
-            if isinstance(value, (bool, dict)):
-                value = dumps(value)
-
-            # k:v is 1-to-1 mapping, we have to search and update it, e.g. k=v
-            if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
-                parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
-            # k:v is 1-to-list mapping, simply append them, e.g. k=v1&k=v2
-            else:
-                parsed_get_args.append((key, value))
+    old_args_counter = Counter(x[0] for x in parsed_get_args)
+    if isinstance(params, dict):
+        params = list(params.items())
+    new_args_counter = Counter(x[0] for x in params)
+    for key, value in params:
+        # Bool and Dict values should be converted to json-friendly values
+        # you may throw this part away if you don't like it :)
+        if isinstance(value, (bool, dict)):
+            value = dumps(value)
+        # 1 to 1 mapping, we have to search and update it.
+        if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
+            parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
+        else:
+            parsed_get_args.append((key, value))
 
     # Converting URL argument to proper query string
     encoded_get_args = urlencode(parsed_get_args, doseq=True)
@@ -156,7 +167,7 @@ def _update_url_params(url: str, *params_list: Union[Dict, List, Tuple, None]) -
     new_url = ParseResult(
         parsed_url.scheme,
         parsed_url.netloc,
-        quote(parsed_url.path),
+        parsed_url.path,
         parsed_url.params,
         encoded_get_args,
         parsed_url.fragment,
@@ -390,6 +401,7 @@ class BaseSession:
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
+        quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
@@ -411,10 +423,15 @@ class BaseSession:
         if method == "HEAD":
             c.setopt(CurlOpt.NOBODY, 1)
 
-        # url, always unquote and re-quote
-        url = _update_url_params(url, self.params, params)
+        # url
+        if self.params:
+            url = _update_url_params(url, self.params)
+        if params:
+            url = _update_url_params(url, params)
         if self.base_url:
             url = urljoin(self.base_url, url)
+        if quote is not False:
+            url = _quote_path_and_params(url, quote_str=quote)
         c.setopt(CurlOpt.URL, url.encode())
 
         # data/body/json
@@ -939,6 +956,7 @@ class Session(BaseSession):
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+        quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
@@ -983,6 +1001,7 @@ class Session(BaseSession):
             akamai=akamai,
             extra_fp=extra_fp,
             default_headers=default_headers,
+            quote=quote,
             http_version=http_version,
             interface=interface,
             stream=stream,
@@ -1233,6 +1252,7 @@ class AsyncSession(BaseSession):
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+        quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
@@ -1270,6 +1290,7 @@ class AsyncSession(BaseSession):
             akamai=akamai,
             extra_fp=extra_fp,
             default_headers=default_headers,
+            quote=quote,
             http_version=http_version,
             interface=interface,
             stream=stream,

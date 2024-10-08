@@ -28,7 +28,7 @@ __all__ = [
 
 from functools import partial
 from io import BytesIO
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from ..const import CurlHttpVersion, CurlWsFlag
 from ..curl import CurlMime
@@ -68,6 +68,7 @@ def request(
     thread: Optional[ThreadType] = None,
     default_headers: Optional[bool] = None,
     default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+    quote: Union[str, Literal[False]] = "",
     curl_options: Optional[dict] = None,
     http_version: Optional[CurlHttpVersion] = None,
     debug: bool = False,
@@ -111,7 +112,11 @@ def request(
             choices: eventlet, gevent.
         default_headers: whether to set default browser headers when impersonating.
         default_encoding: encoding for decoding response content if charset is not found in headers.
-                Defaults to "utf-8". Can be set to a callable for automatic detection.
+            Defaults to "utf-8". Can be set to a callable for automatic detection.
+        quote: Set characters to be quoted, i.e. percent-encoded. Default safe string
+            is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character will be removed
+            from the safe string, thus quoted. If set to False, the url will be kept as is,
+            without any automatic percent-encoding, you must encode the URL yourself.
         curl_options: extra curl options to use.
         http_version: limiting http version, defaults to http2.
         debug: print extra curl debug info.
@@ -151,6 +156,7 @@ def request(
             extra_fp=extra_fp,
             default_headers=default_headers,
             default_encoding=default_encoding,
+            quote=quote,
             http_version=http_version,
             interface=interface,
             cert=cert,
