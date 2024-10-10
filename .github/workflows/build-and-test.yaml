@@ -35,7 +35,7 @@ jobs:
       - run: |
           make preprocess
           pipx run build --sdist
-      - uses: actions/upload-artifact@v3  # https://github.com/actions/upload-artifact/issues/478
+      - uses: actions/upload-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
         with:
           path: ./dist/*.tar.gz
 
@@ -74,7 +74,7 @@ jobs:
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
 
-      - uses: actions/upload-artifact@v3  # https://github.com/actions/upload-artifact/issues/478
+      - uses: actions/upload-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
         with:
           path: ./wheelhouse/*.whl
 
