@@ -94,7 +94,7 @@ else:
     BaseSessionParams = TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH"]
+HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -1080,6 +1080,8 @@ class Session(BaseSession):
     patch = partialmethod(request, "PATCH")
     delete = partialmethod(request, "DELETE")
     options = partialmethod(request, "OPTIONS")
+    trace = partialmethod(request, "TRACE")
+    query = partialmethod(request, "QUERY")
 
 
 class AsyncSession(BaseSession):
@@ -1364,3 +1366,5 @@ class AsyncSession(BaseSession):
     patch = partialmethod(request, "PATCH")
     delete = partialmethod(request, "DELETE")
     options = partialmethod(request, "OPTIONS")
+    trace = partialmethod(request, "TRACE")
+    query = partialmethod(request, "QUERY")
