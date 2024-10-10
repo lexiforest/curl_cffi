@@ -1,13 +1,29 @@
 Change Log
 ==========
 
+Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
+
+v0.8
+----
+
+- v0.8.0
+    - Added more recent impersonate versions, Safari 18.0 for iOS and macOS.
+    - Added ``quote`` parameter for setting which letter should be quoted in URL.
+    - Added ``response_class`` parameter for using a customized ``Response`` class.
+
 v0.7
 ----
 
+- v0.7.3
+    - Bugfixes.
+
+- v0.7.2
+    - Added requests-like exception hierarchy.
+
 - v0.7.1
-    - Added `Cookies.get_dict()`, for compatibility with `requests`.
+    - Added ``Cookies.get_dict()``, for compatibility with ``requests``.
     - Fixed type conversion in C shim, by @qishipai.
-    - Fixed cookie `subdomains` attribute.
+    - Fixed cookie ``subdomains`` attribute.
 
 - v0.7.0
     - Added more recent impersonate versions, up to Chrome 124.
