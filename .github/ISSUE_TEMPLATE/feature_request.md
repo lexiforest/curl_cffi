@@ -1,9 +1,8 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: "[Feature]"
+about: Suggest an idea or feature for this project
+title: ""
 labels: enhancement
-assignees: yifeikong
 
 ---
 
