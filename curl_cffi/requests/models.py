@@ -277,6 +277,33 @@ class Response:
         if self.astream_task:
             await self.astream_task
 
+
+    def markdown(self) -> str:
+        """
+        Extract markdown text from the response content.
+        
+        Returns:
+            str: The markdown text extracted from the response content.
+        
+        Raises:
+            ImportError: If the required dependencies for markdown extraction are not installed.
+        """
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            raise ImportError("BeautifulSoup is required for markdown extraction. Install it using 'pip install beautifulsoup4'.")
+
+        try:
+            import html2text
+        except ImportError:
+            raise ImportError("html2text is required for markdown extraction. Install it using 'pip install html2text'.")
+
+        soup = BeautifulSoup(self.content, 'html.parser')
+        text_maker = html2text.HTML2Text()
+        text_maker.ignore_links = True
+        return text_maker.handle(str(soup))
+
+
     # It prints the status code of the response instead of
     # the object's memory location.
     def __repr__(self) -> str:
