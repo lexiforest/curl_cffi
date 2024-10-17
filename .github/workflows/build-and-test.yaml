@@ -38,6 +38,7 @@ jobs:
       - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
         with:
           path: ./dist/*.tar.gz
+          overwrite: true
 
       - uses: actions/setup-python@v5
         with:
@@ -77,6 +78,7 @@ jobs:
       - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
         with:
           path: ./wheelhouse/*.whl
+          overwrite: true
 
   upload_all:
     needs: [bdist, sdist]
