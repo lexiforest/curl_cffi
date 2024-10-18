@@ -149,6 +149,13 @@ def test_update_params(server):
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["z", "1", "2"]}}'
 
+    # empty values should be kept
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params?a=")),
+        params=[("foo", "1"), ("foo", "2")],
+    )
+    assert r.content == b'{"params": {"a": [""], "foo": ["1", "2"]}}'
+
 
 def test_url_encode(server):
     # https://github.com/lexiforest/curl_cffi/issues/394
@@ -207,6 +214,11 @@ def test_url_encode(server):
     r = requests.get(url)
     assert r.url == quoted
     r = requests.get(url, quote=False)
+    assert r.url == url
+
+    # empty values should be kept
+    url = "http://127.0.0.1:8000/api?param1=value1&param2=&param3=value3"
+    r = requests.get(url)
     assert r.url == url
 
 

@@ -109,7 +109,7 @@ SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 def _quote_path_and_params(url: str, quote_str: str = ""):
     safe = "".join(SAFE_CHARS - set(quote_str))
     parsed_url = urlparse(url)
-    parsed_get_args = parse_qsl(parsed_url.query)
+    parsed_get_args = parse_qsl(parsed_url.query, keep_blank_values=True)
     encoded_get_args = urlencode(parsed_get_args, doseq=True, safe=safe)
     return ParseResult(
         parsed_url.scheme,
@@ -141,7 +141,7 @@ def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     parsed_url = urlparse(url)
 
     # Extracting URL arguments from parsed URL, NOTE the result is a list, not dict
-    parsed_get_args = parse_qsl(parsed_url.query)
+    parsed_get_args = parse_qsl(parsed_url.query, keep_blank_values=True)
 
     # Merging URL arguments dict with new params
     old_args_counter = Counter(x[0] for x in parsed_get_args)

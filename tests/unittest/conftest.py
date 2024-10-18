@@ -262,7 +262,7 @@ async def echo_path(scope, receive, send):
 
 
 async def echo_params(scope, receive, send):
-    body = {"params": parse_qs(scope["query_string"].decode())}
+    body = {"params": parse_qs(scope["query_string"].decode(), keep_blank_values=True)}
     await send(
         {
             "type": "http.response.start",
