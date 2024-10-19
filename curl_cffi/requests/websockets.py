@@ -1,9 +1,11 @@
 import asyncio
+import select
 import struct
 from enum import IntEnum
 from typing import Callable, Optional, Tuple
 
-from ..const import CurlECode, CurlWsFlag
+from .._wrapper import ffi, lib
+from ..const import CurlECode, CurlWsFlag, CurlInfo
 from ..curl import CurlError
 
 ON_MESSAGE_T = Callable[["WebSocket", bytes], None]
@@ -64,14 +66,17 @@ class WebSocket:
         """
         chunks = []
         flags = 0
-        # TODO use select here
+        sock_fd = ffi.new("long*")
+        lib.curl_easy_getinfo(self.curl._curl, CurlInfo.ACTIVESOCKET, sock_fd)
         while True:
             try:
-                chunk, frame = self.curl.ws_recv()
-                flags = frame.flags
-                chunks.append(chunk)
-                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                    break
+                rlist, _, _ = select.select([sock_fd[0]], [], [], 5.0)
+                if rlist:
+                    chunk, frame = self.curl.ws_recv()
+                    flags = frame.flags
+                    chunks.append(chunk)
+                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                        break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     pass
