@@ -70,7 +70,7 @@ class WebSocket:
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
             raise WebSocketError(
-                "Invalid close code", WsCloseCode.ABNORMAL_CLOSURE
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
             )
         while True:
             try:
