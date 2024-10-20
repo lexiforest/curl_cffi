@@ -5,6 +5,7 @@ from enum import IntEnum
 from typing import Callable, Optional, Tuple
 
 from .._wrapper import ffi, lib
+from ..aio import CURL_SOCKET_BAD
 from ..const import CurlECode, CurlWsFlag, CurlInfo
 from ..curl import CurlError
 
@@ -67,6 +68,10 @@ class WebSocket:
         chunks = []
         flags = 0
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        if sock_fd == CURL_SOCKET_BAD:
+            raise WebSocketError(
+                "Invalid close code", WsCloseCode.ABNORMAL_CLOSURE
+            )
         while True:
             try:
                 rlist, _, _ = select.select([sock_fd], [], [], 5.0)
