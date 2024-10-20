@@ -66,11 +66,10 @@ class WebSocket:
         """
         chunks = []
         flags = 0
-        sock_fd = ffi.new("long*")
-        lib.curl_easy_getinfo(self.curl._curl, CurlInfo.ACTIVESOCKET, sock_fd)
+        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         while True:
             try:
-                rlist, _, _ = select.select([sock_fd[0]], [], [], 5.0)
+                rlist, _, _ = select.select([sock_fd], [], [], 5.0)
                 if rlist:
                     chunk, frame = self.curl.ws_recv()
                     flags = frame.flags
