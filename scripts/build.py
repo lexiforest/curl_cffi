@@ -38,7 +38,7 @@ def detect_arch():
                 global tmpdir
                 if "CI" in os.environ:
                     tmpdir = "./tmplibdir"
-                    os.mkdir(tmpdir)
+                    os.makedirs(tmpdir, exist_ok=True)
                     arch["libdir"] = tmpdir
                 else:
                     tmpdir = tempfile.TemporaryDirectory()
