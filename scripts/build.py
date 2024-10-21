@@ -12,8 +12,6 @@ from cffi import FFI
 # this is the upstream libcurl-impersonate version
 __version__ = "0.8.0"
 
-tmpdir = None
-
 
 def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
@@ -38,8 +36,13 @@ def detect_arch():
                 arch["libdir"] = os.path.expanduser(arch["libdir"])
             else:
                 global tmpdir
-                tmpdir = tempfile.TemporaryDirectory()
-                arch["libdir"] = tmpdir.name
+                if "CI" in os.environ:
+                    tmpdir = "./tmplibdir"
+                    os.makedirs(tmpdir, exist_ok=True)
+                    arch["libdir"] = tmpdir
+                else:
+                    tmpdir = tempfile.TemporaryDirectory()
+                    arch["libdir"] = tmpdir.name
             return arch
     raise Exception(f"Unsupported arch: {uname}")
 
@@ -69,8 +72,13 @@ def download_libcurl():
     os.makedirs(arch["libdir"], exist_ok=True)
     shutil.unpack_archive(file, arch["libdir"])
 
+    print("Files after unpacking")
+    print(os.listdir(arch["libdir"]))
+
 
 def get_curl_archives():
+    print("Files for linking")
+    print(os.listdir(arch["libdir"]))
     if arch["system"] == "Linux" and arch.get("link_type") == "static":
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
