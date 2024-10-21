@@ -462,7 +462,11 @@ class BaseSession:
                 c.setopt(CurlOpt.CUSTOMREQUEST, method)
 
         # headers
-        h = Headers(self.headers)
+        h = (
+            Headers(self.headers) 
+            if not isinstance(self.headers, Headers) 
+            else self.headers
+        )
         h.update(headers)
 
         # remove Host header if it's unnecessary, otherwise curl may get confused.
