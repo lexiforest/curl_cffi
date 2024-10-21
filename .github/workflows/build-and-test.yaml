@@ -32,15 +32,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: |
+
+      - name: build sdist
+        run: |
           make preprocess
           pip install build
           python -m build --sdist
           pip install ./dist/*.tar.gz
-      - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
         with:
           path: ./dist/*.tar.gz
           overwrite: true

@@ -69,8 +69,13 @@ def download_libcurl():
     os.makedirs(arch["libdir"], exist_ok=True)
     shutil.unpack_archive(file, arch["libdir"])
 
+    print("Files after unpacking")
+    print(os.listdir(arch["libdir"]))
+
 
 def get_curl_archives():
+    print("Files for linking")
+    print(os.listdir(arch["libdir"]))
     if arch["system"] == "Linux" and arch.get("link_type") == "static":
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
