@@ -12,8 +12,6 @@ from cffi import FFI
 # this is the upstream libcurl-impersonate version
 __version__ = "0.8.0"
 
-tmpdir = None
-
 
 def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
@@ -38,8 +36,13 @@ def detect_arch():
                 arch["libdir"] = os.path.expanduser(arch["libdir"])
             else:
                 global tmpdir
-                tmpdir = tempfile.TemporaryDirectory()
-                arch["libdir"] = tmpdir.name
+                if "CI" in os.environ:
+                    tmpdir = "./tmplibdir"
+                    os.mkdir(tmpdir)
+                    arch["libdir"] = tmpdir
+                else:
+                    tmpdir = tempfile.TemporaryDirectory()
+                    arch["libdir"] = tmpdir.name
             return arch
     raise Exception(f"Unsupported arch: {uname}")
 
