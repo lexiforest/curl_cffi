@@ -85,13 +85,11 @@ jobs:
         path: ./wheelhouse/*.whl
 
     - uses: actions/download-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
-      if: startsWith(github.ref, 'refs/tags/')
       with:
         pattern: curl_cffi-*
-        path: dist
 
     - run: |
-        unzip dist/*.zip -d dist
+        unzip *.zip -d dist
         ls -al
 
 
@@ -104,9 +102,6 @@ jobs:
       with:
         pattern: curl_cffi-*
         path: dist
-    - run: |
-        gunzip *.zip
-        ls -al
 
     # - uses: pypa/gh-action-pypi-publish@v1.8.14
     #   if: startsWith(github.ref, 'refs/tags/')
