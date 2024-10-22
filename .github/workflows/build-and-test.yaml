@@ -89,8 +89,8 @@ jobs:
         pattern: curl_cffi-*
 
     - run: |
-        unzip *.zip -d dist
-        ls -al
+        unzip \*.zip -d dist
+        ls -al dist
 
 
   upload_all:
