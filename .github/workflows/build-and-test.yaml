@@ -87,9 +87,11 @@ jobs:
     - uses: actions/download-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
       with:
         pattern: curl_cffi-*
+        path: download
 
     - run: |
-        unzip \*.zip -d dist
+        ls download
+        unzip download/\*.zip -d dist
         ls -al dist
 
 
