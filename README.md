@@ -19,21 +19,6 @@ Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
 
 ------
 
-<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
-
-[Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi)
-is an enterprise-grade solution providing Web Scraping API that aims to simplify the
-scraping process by managing everything: real browser rendering, rotating proxies, and
-fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the
-observability by providing an analytical dashboard and measuring the success rate/block
-rate in detail.
-
-Scrapfly is a good solution if you are looking for a cloud-managed solution for `curl_cffi`.
-If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also maintain a
-[curl to python converter](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi).
-
-------
-
 ### Bypass Cloudflare with API
 
 <a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
@@ -166,6 +151,7 @@ to specify your own customized fingerprints. See the [docs on impersonatation](h
 - chrome120 <sup>[1]</sup>
 - chrome123 <sup>[3]</sup>
 - chrome124 <sup>[3]</sup>
+- chrome131 <sup>[4]</sup>
 - chrome99_android
 - edge99
 - edge101
