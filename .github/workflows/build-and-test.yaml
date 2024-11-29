@@ -85,11 +85,6 @@ jobs:
         name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
         path: ./wheelhouse/*.whl
 
-    - uses: actions/download-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
-      with:
-        pattern: curl_cffi-*
-        path: download
-
   upload_all:
     needs: [bdist, sdist]
     runs-on: ubuntu-latest
@@ -100,9 +95,6 @@ jobs:
         pattern: curl_cffi-*
         merge-multiple: true
         path: dist
-
-    - run: |
-        ls -al dist
 
     - uses: pypa/gh-action-pypi-publish@v1.8.14
       if: startsWith(github.ref, 'refs/tags/')
