@@ -92,8 +92,8 @@ jobs:
 
     - run: |
         ls download
-        unzip download/\*.zip -d dist
-        ls -al dist
+        unzip download/\*.zip -d download
+        ls -al download
 
 
   upload_all:
@@ -104,17 +104,18 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       with:
         pattern: curl_cffi-*
-        path: dist
+        path: download
 
     # - uses: pypa/gh-action-pypi-publish@v1.8.14
     #   if: startsWith(github.ref, 'refs/tags/')
     #   with:
     #     password: ${{ secrets.PYPI_TOKEN }}
+    #     packages-dir: download/
 
     # - name: Upload release files
     #   if: startsWith(github.ref, 'refs/tags/')
     #   uses: softprops/action-gh-release@v2
     #   with:
     #     files: |
-    #       ./dist/*.whl
-    #       ./dist/*.tar.gz
+    #       ./download/*.whl
+    #       ./download/*.tar.gz
