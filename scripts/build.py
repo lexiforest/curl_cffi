@@ -132,6 +132,7 @@ ffibuilder.set_source(
         str(root_dir / "ffi/shim.c"),
     ],
     extra_compile_args=(["-Wno-implicit-function-declaration"] if system == "Darwin" else []),
+    extra_link_args=(["-lstdc++"]),
 )
 
 with open(root_dir / "ffi/cdef.c") as f:
