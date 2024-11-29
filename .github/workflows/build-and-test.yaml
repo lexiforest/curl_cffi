@@ -106,16 +106,16 @@ jobs:
         pattern: curl_cffi-*
         path: download
 
-    # - uses: pypa/gh-action-pypi-publish@v1.8.14
-    #   if: startsWith(github.ref, 'refs/tags/')
-    #   with:
-    #     password: ${{ secrets.PYPI_TOKEN }}
-    #     packages-dir: download/
+    - uses: pypa/gh-action-pypi-publish@v1.8.14
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        password: ${{ secrets.PYPI_TOKEN }}
+        packages-dir: download/
 
-    # - name: Upload release files
-    #   if: startsWith(github.ref, 'refs/tags/')
-    #   uses: softprops/action-gh-release@v2
-    #   with:
-    #     files: |
-    #       ./download/*.whl
-    #       ./download/*.tar.gz
+    - name: Upload release files
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ./download/*.whl
+          ./download/*.tar.gz
