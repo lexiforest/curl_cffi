@@ -30,7 +30,7 @@ from typing_extensions import Unpack
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
-from .exceptions import ImpersonateError, RequestException, SessionClosed, code2error
+from .exceptions import InvalidURL, ImpersonateError, RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType  # noqa: F401
 from .impersonate import (
@@ -150,7 +150,6 @@ def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     new_args_counter = Counter(x[0] for x in params)
     for key, value in params:
         # Bool and Dict values should be converted to json-friendly values
-        # you may throw this part away if you don't like it :)
         if isinstance(value, (bool, dict)):
             value = dumps(value)
         # 1 to 1 mapping, we have to search and update it.
@@ -174,6 +173,57 @@ def _update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     ).geturl()
 
     return new_url
+
+
+# Adapted from: https://github.com/psf/requests/blob/1ae6fc3137a11e11565ed22436aa1e77277ac98c/src%2Frequests%2Futils.py#L633-L682
+# License: Apache 2.0
+
+# The unreserved URI characters (RFC 3986)
+UNRESERVED_SET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" + "0123456789-._~"
+)
+
+
+def unquote_unreserved(uri: str) -> str:
+    """Un-escape any percent-escape sequences in a URI that are unreserved
+    characters. This leaves all reserved, illegal and non-ASCII bytes encoded.
+    """
+    parts = uri.split("%")
+    for i in range(1, len(parts)):
+        h = parts[i][0:2]
+        if len(h) == 2 and h.isalnum():
+            try:
+                c = chr(int(h, 16))
+            except ValueError:
+                raise InvalidURL(f"Invalid percent-escape sequence: '{h}'")
+
+            if c in UNRESERVED_SET:
+                parts[i] = c + parts[i][2:]
+            else:
+                parts[i] = f"%{parts[i]}"
+        else:
+            parts[i] = f"%{parts[i]}"
+    return "".join(parts)
+
+
+def requote_uri(uri: str) -> str:
+    """Re-quote the given URI.
+
+    This function passes the given URI through an unquote/quote cycle to
+    ensure that it is fully and consistently quoted.
+    """
+    safe_with_percent = "!#$%&'()*+,/:;=?@[]~|"
+    safe_without_percent = "!#$&'()*+,/:;=?@[]~|"
+    try:
+        # Unquote only the unreserved characters
+        # Then quote only illegal characters (do not quote reserved,
+        # unreserved, or '%')
+        return quote(unquote_unreserved(uri), safe=safe_with_percent)
+    except InvalidURL:
+        # We couldn't unquote the given URI, so let's try quoting it, but
+        # there may be unquoted '%'s in the URI. We need to make sure they're
+        # properly quoted so they do not cause issues elsewhere.
+        return quote(uri, safe=safe_without_percent)
 
 
 # TODO: should we move this function to headers.py?
@@ -430,8 +480,10 @@ class BaseSession:
             url = _update_url_params(url, params)
         if self.base_url:
             url = urljoin(self.base_url, url)
-        if quote is not False:
+        if quote:
             url = _quote_path_and_params(url, quote_str=quote)
+        if quote is not False:
+            url = requote_uri(url)
         c.setopt(CurlOpt.URL, url.encode())
 
         # data/body/json
