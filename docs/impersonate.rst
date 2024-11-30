@@ -25,6 +25,7 @@ to specify your own customized fingerprints. See below for details.
 - chrome120 :sup:`1`
 - chrome123 :sup:`3`
 - chrome124 :sup:`3`
+- chrome131 :sup:`4`
 - chrome99_android
 - edge99
 - edge101
@@ -32,12 +33,15 @@ to specify your own customized fingerprints. See below for details.
 - safari15_5 :sup:`2`
 - safari17_0 :sup:`1`
 - safari17_2_ios :sup:`1`
+- safari18_0 :sup:`4`
+- safari18_0_ios :sup:`4`
 
 Notes:
 
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were `not correct <https://github.com/lwthiker/curl-impersonate/issues/215>`_.
 3. Added in version `0.7.0`.
+4. Added in version `0.8.0`.
 
 Which version to use?
 ---------------------

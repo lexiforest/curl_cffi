@@ -44,3 +44,5 @@ To install the latest unstable version from GitHub:
     cd curl_cffi
     make preprocess
     pip install .
+
+Or you can download the wheels from github actions artifacts.

@@ -7,7 +7,7 @@ v0.8
 ----
 
 - v0.8.0
-    - Added more recent impersonate versions, Safari 18.0 for iOS and macOS.
+    - Added more recent impersonate versions, Safari 18.0 for iOS and macOS, Chrome 131.
     - Added ``quote`` parameter for setting which letter should be quoted in URL.
     - Added ``response_class`` parameter for using a customized ``Response`` class.
 
