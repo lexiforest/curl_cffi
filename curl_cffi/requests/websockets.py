@@ -222,7 +222,7 @@ class WebSocket(BaseWebSocket):
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
         max_recv_speed: int = 0,
-        curl_options: Optional[dict] = None,
+        curl_options: Optional[Dict[CurlOpt, str]] = None,
     ):
         """Connect to the WebSocket.
 
@@ -466,7 +466,7 @@ class WebSocket(BaseWebSocket):
                 if "message" in self._emitters:
                     if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                         try:
-                            msg = msg.decode()
+                            msg = msg.decode()  # type: ignore
                         except UnicodeDecodeError:
                             self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)

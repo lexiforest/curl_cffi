@@ -337,7 +337,7 @@ def set_curl_options(
     multipart: Optional[CurlMime] = None,
     queue_class: Any = None,
     event_class: Any = None,
-    curl_options: Optional[dict] = None,
+    curl_options: Optional[Dict[CurlOpt, str]] = None,
 ):
     c = curl
 
@@ -564,7 +564,7 @@ def set_curl_options(
     # impersonate
     if impersonate:
         impersonate = normalize_browser_type(impersonate)
-        ret = c.impersonate(impersonate, default_headers=default_headers)
+        ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
