@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from functools import partialmethod
 from io import BytesIO
-from json import dumps
 from typing import (
     TYPE_CHECKING,
     Any,

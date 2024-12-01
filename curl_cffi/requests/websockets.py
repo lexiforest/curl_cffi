@@ -5,10 +5,21 @@ from select import select
 import struct
 from enum import IntEnum
 from json import loads, dumps
-from typing import Any, Callable, Dict, Final, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Final,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    TypeVar,
+    Union,
+)
 
 from .options import set_curl_options
-from .._wrapper import ffi, lib
 from ..aio import CURL_SOCKET_BAD
 from ..const import CurlECode, CurlOpt, CurlWsFlag, CurlInfo
 from ..curl import Curl, CurlError
@@ -32,6 +43,7 @@ if TYPE_CHECKING:
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
 
 not_set: Final[Any] = object()
+
 
 class WsCloseCode(IntEnum):
     OK = 1000
@@ -533,7 +545,9 @@ class AsyncWebSocket(BaseWebSocket):
             raise TypeError("Concurrent call to recv_fragment() is not allowed")
 
         async with self._recv_lock:
-            chunk, frame = await asyncio.wait_for(self.loop.run_in_executor(None, self.curl.ws_recv), timeout)
+            chunk, frame = await asyncio.wait_for(
+                self.loop.run_in_executor(None, self.curl.ws_recv), timeout
+            )
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
                     self._close_code, self._close_reason = self._unpack_close_frame(chunk)
@@ -593,7 +607,9 @@ class AsyncWebSocket(BaseWebSocket):
             raise TypeError("Received non-text frame")
         return data.decode()
 
-    async def recv_json(self, *, loads: Callable[[str], T] = loads, timeout: Optional[float] = None) -> T:
+    async def recv_json(
+        self, *, loads: Callable[[str], T] = loads, timeout: Optional[float] = None
+    ) -> T:
         """Receive a JSON frame.
 
         Parameters:

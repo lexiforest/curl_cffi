@@ -84,7 +84,7 @@ def update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
 
     >> url = 'http://stackoverflow.com/test?answers=true'
     >> new_params = {'answers': False, 'data': ['some','values']}
-    >> _update_url_params(url, new_params)
+    >> update_url_params(url, new_params)
     'http://stackoverflow.com/test?data=some&data=values&answers=false'
     """
     # Unquoting and parse
@@ -130,7 +130,9 @@ def update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
 # License: Apache 2.0
 
 # The unreserved URI characters (RFC 3986)
-UNRESERVED_SET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" + "0123456789-._~")
+UNRESERVED_SET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" + "0123456789-._~"
+)
 
 
 def unquote_unreserved(uri: str) -> str:
@@ -295,6 +297,7 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
     curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
     curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
     curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
+
 
 def set_curl_options(
     curl: Curl,

@@ -10,7 +10,6 @@ from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.models import Response
-from curl_cffi.requests.session import _update_url_params
 
 
 def test_head(server):

@@ -321,7 +321,7 @@ class Curl:
                 lib.curl_slist_free_all(self._proxy_headers)
             self._proxy_headers = ffi.NULL
 
-    def duphandle(self) -> "Curl":
+    def duphandle(self) -> Curl:
         """Wrapper for ``curl_easy_duphandle``.
 
         This is not a full copy of entire curl object in python. For example, headers
