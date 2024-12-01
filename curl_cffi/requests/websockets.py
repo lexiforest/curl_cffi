@@ -577,7 +577,7 @@ class AsyncWebSocket(BaseWebSocket):
         chunks = []
         flags = 0
 
-        sock_fd = loop.run_in_executor(None, self.curl.getinfo, CurlInfo.ACTIVESOCKET)
+        sock_fd = await loop.run_in_executor(None, self.curl.getinfo, CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
             raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
         while True:
