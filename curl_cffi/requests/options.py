@@ -605,8 +605,8 @@ def set_curl_options(
 
     # set extra curl options, must come after impersonate, because it will alter some options
     if curl_options:
-        for k, v in curl_options.items():
-            c.setopt(k, v)
+        for option, setting in curl_options.items():
+            c.setopt(option, setting)
 
     buffer = None
     q = None

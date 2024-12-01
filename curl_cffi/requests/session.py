@@ -771,7 +771,6 @@ class AsyncSession(BaseSession):
         akamai: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
-        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
@@ -802,8 +801,6 @@ class AsyncSession(BaseSession):
             akamai: akamai string to impersonate.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
             default_headers: whether to set default browser headers.
-            default_encoding: encoding for decoding response content if charset is not found
-                in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
             quote: Set characters to be quoted, i.e. percent-encoded. Default safe string
                 is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character will be removed
                 from the safe string, thus quoted. If set to False, the url will be kept as is,
@@ -849,7 +846,7 @@ class AsyncSession(BaseSession):
         )
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
-        self.loop.run_in_executor(None, curl.perform)
+        await self.loop.run_in_executor(None, curl.perform)
         return AsyncWebSocket(self, curl, autoclose=autoclose)
 
     async def request(
