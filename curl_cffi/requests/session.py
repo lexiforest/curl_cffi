@@ -20,7 +20,7 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
+from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urlparse
 
 from typing_extensions import Unpack
 
@@ -247,8 +247,6 @@ class BaseSession:
         """Merge curl options from session and request."""
         if self.params:
             url = update_url_params(url, self.params)
-        if self.base_url:
-            url = urljoin(self.base_url, url)
 
         _headers = Headers(self.headers)
         _headers.update(headers)
@@ -261,6 +259,7 @@ class BaseSession:
             method=method,
             url=url,
             params=params,
+            base_url=self.base_url,
             data=data,
             json=json,
             headers=_headers,

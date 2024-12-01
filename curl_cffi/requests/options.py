@@ -19,7 +19,7 @@ from typing import (
     Tuple,
     Union,
 )
-from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urlparse
+from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
 from .. import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -305,6 +305,7 @@ def set_curl_options(
     url: str,
     *,
     params: Optional[Union[Dict, List, Tuple]] = None,
+    base_url: Optional[str] = None,
     data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
     json: Optional[dict] = None,
     headers: Optional[HeaderTypes] = None,
@@ -354,6 +355,8 @@ def set_curl_options(
     # url
     if params:
         url = update_url_params(url, params)
+    if base_url:
+        url = urljoin(base_url, url)
     if quote:
         url = quote_path_and_params(url, quote_str=quote)
     if quote is not False:
