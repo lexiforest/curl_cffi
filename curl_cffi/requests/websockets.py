@@ -381,7 +381,7 @@ class WebSocket(BaseWebSocket):
             flags: flags for the frame.
         """
         if self.closed:
-            raise TypeError("WebSocket is closed")
+            raise SessionClosed("WebSocket is closed")
 
         # curl expects bytes
         if isinstance(payload, str):
@@ -525,7 +525,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def __aiter__(self) -> Self:
         if self.closed:
-            raise TypeError("WebSocket is closed")
+            raise SessionClosed("WebSocket is closed")
         return self
 
     async def __anext__(self) -> bytes:
@@ -541,7 +541,7 @@ class AsyncWebSocket(BaseWebSocket):
             timeout: how many seconds to wait before giving up.
         """
         if self.closed:
-            raise TypeError("WebSocket is closed")
+            raise SessionClosed("WebSocket is closed")
         if self._recv_lock.locked():
             raise TypeError("Concurrent call to recv_fragment() is not allowed")
 
@@ -551,7 +551,7 @@ class AsyncWebSocket(BaseWebSocket):
             )
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
-                    self._close_code, self._close_reason = self._unpack_close_frame(chunk)
+                    code, message = self._close_code, self._close_reason = self._unpack_close_frame(chunk)
                 except WebSocketError as e:
                     # Follow the spec to close the connection
                     # Errors do not respect autoclose
@@ -559,7 +559,7 @@ class AsyncWebSocket(BaseWebSocket):
                     await self.close(e.code)
                     raise
                 if self.autoclose:
-                    await self.close()
+                    await self.close(code, message.encode())
 
         return chunk, frame
 
@@ -628,7 +628,7 @@ class AsyncWebSocket(BaseWebSocket):
             flags: flags for the frame.
         """
         if self.closed:
-            raise TypeError("WebSocket is closed")
+            raise SessionClosed("WebSocket is closed")
 
         # curl expects bytes
         if isinstance(payload, str):
