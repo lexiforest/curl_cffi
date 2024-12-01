@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import math
 import queue
@@ -25,8 +27,6 @@ from typing import (
 )
 from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
-from typing_extensions import Unpack
-
 from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
@@ -53,6 +53,7 @@ with suppress(ImportError):
     import eventlet.tpool
 
 if TYPE_CHECKING:
+    from typing_extensions import Unpack
 
     class ProxySpec(TypedDict, total=False):
         all: str
