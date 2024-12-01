@@ -20,6 +20,7 @@ from typing import (
 )
 
 from .options import set_curl_options
+from .exceptions import SessionClosed
 from ..aio import CURL_SOCKET_BAD
 from ..const import CurlECode, CurlOpt, CurlWsFlag, CurlInfo
 from ..curl import Curl, CurlError
@@ -177,7 +178,7 @@ class WebSocket(BaseWebSocket):
 
     def __iter__(self) -> WebSocket:
         if self.closed:
-            raise TypeError("WebSocket is closed")
+            raise SessionClosed("WebSocket is closed")
         return self
 
     def __next__(self) -> bytes:
@@ -309,7 +310,7 @@ class WebSocket(BaseWebSocket):
     def recv_fragment(self) -> Tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes."""
         if self.closed:
-            raise TypeError("WebSocket is closed")
+            raise SessionClosed("WebSocket is closed")
 
         chunk, frame = self.curl.ws_recv()
         if frame.flags & CurlWsFlag.CLOSE:
@@ -360,7 +361,7 @@ class WebSocket(BaseWebSocket):
         """Receive a text frame."""
         data, flags = self.recv()
         if not flags & CurlWsFlag.TEXT:
-            raise TypeError("Received non-text frame")
+            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA)
         return data.decode()
 
     def recv_json(self, *, loads: Callable[[str], T] = loads) -> T:
@@ -604,7 +605,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
         data, flags = await self.recv(timeout=timeout)
         if not flags & CurlWsFlag.TEXT:
-            raise TypeError("Received non-text frame")
+            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA)
         return data.decode()
 
     async def recv_json(

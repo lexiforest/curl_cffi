@@ -818,7 +818,7 @@ class AsyncSession(BaseSession):
         self._check_session_closed()
 
         curl = await self.pop_curl()
-        req, buffer, header_buffer, *_ = self._merge_curl_options(
+        self._merge_curl_options(
             curl=curl,
             method="GET",
             url=url,
@@ -850,17 +850,8 @@ class AsyncSession(BaseSession):
         )
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
-        try:
-            task = self.acurl.add_handle(curl)
-            await task
-        except CurlError as e:
-            rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
-            rsp.request = req
-            error = code2error(e.code, str(e))
-            self.release_curl(curl)
-            raise error(str(e), e.code, rsp) from e
-        else:
-            return AsyncWebSocket(self, curl, autoclose=autoclose)
+        self.loop.run_in_executor(None, curl.perform)
+        return AsyncWebSocket(self, curl, autoclose=autoclose)
 
     async def request(
         self,

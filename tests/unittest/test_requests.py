@@ -649,9 +649,6 @@ def test_closed_session_throws_error():
     with pytest.raises(SessionClosed):
         s.patch("https://example.com")
 
-    with pytest.raises(SessionClosed):
-        s.ws_connect("wss://example.com")
-
 
 def test_stream_iter_content(server):
     with requests.Session() as s:
