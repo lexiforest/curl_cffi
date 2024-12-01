@@ -291,7 +291,7 @@ class BaseSession:
         response_class: Optional[Type[Response]] = None,
     ):
         self.headers = Headers(headers)
-        self.cookies = Cookies(cookies)
+        self._cookies = Cookies(cookies)
         self.auth = auth
         self.base_url = base_url
         self.params = params
@@ -551,7 +551,7 @@ class BaseSession:
         c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
         c.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
 
-        for morsel in self.cookies.get_cookies_for_curl(req):
+        for morsel in self._cookies.get_cookies_for_curl(req):
             # print("Setting", morsel.to_curl_format())
             curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
         if cookies:
@@ -813,9 +813,9 @@ class BaseSession:
         morsels = [CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)]
         # for l in c.getinfo(CurlInfo.COOKIELIST):
         #     print("Curl Cookies", l.decode())
-        self.cookies.update_cookies_from_curl(morsels)
-        rsp.cookies = self.cookies
-        # print("Cookies after extraction", self.cookies)
+        self._cookies.update_cookies_from_curl(morsels)
+        rsp.cookies = self._cookies
+        # print("Cookies after extraction", self._cookies)
         rsp.primary_ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
         rsp.local_ip = cast(bytes, c.getinfo(CurlInfo.LOCAL_IP)).decode()
         rsp.default_encoding = default_encoding
@@ -831,6 +831,14 @@ class BaseSession:
     def _check_session_closed(self):
         if self._closed:
             raise SessionClosed("Session is closed, cannot send request.")
+
+    @property
+    def cookies(self) -> Cookies:
+        return self._cookies
+
+    @cookies.setter
+    def cookies(self, cookies: CookieTypes) -> None:
+        self._cookies = Cookies(cookies)
 
 
 class Session(BaseSession):
