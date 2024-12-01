@@ -17,6 +17,7 @@ __all__ = [
     "Headers",
     "Request",
     "Response",
+    "AsyncWebSocket",
     "WebSocket",
     "WebSocketError",
     "WsCloseCode",
@@ -38,7 +39,7 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Request, Response
 from .session import AsyncSession, HttpMethod, ProxySpec, Session, ThreadType
-from .websockets import WebSocket, WebSocketError, WsCloseCode
+from .websockets import AsyncWebSocket, WebSocket, WebSocketError, WsCloseCode
 
 
 def request(

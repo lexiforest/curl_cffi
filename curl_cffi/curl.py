@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import re
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import Any, List, Literal, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, List, Literal, Optional, Tuple, Union, cast
 
 import certifi
 
@@ -12,6 +14,15 @@ from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 DEFAULT_CACERT = certifi.where()
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
 STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
+
+if TYPE_CHECKING:
+
+    class CurlWsFrame:
+        age: int
+        flags: int
+        offset: int
+        bytesleft: int
+        len: int
 
 
 class CurlError(Exception):
@@ -234,7 +245,7 @@ class Curl:
             0x200000: "long*",
             0x300000: "double*",
             0x400000: "struct curl_slist **",
-            0x500000: "long*"
+            0x500000: "long*",
         }
         ret_cast_option = {
             0x100000: ffi.string,
@@ -379,7 +390,7 @@ class Curl:
         ffi.release(self._error_buffer)
         self._resolve = ffi.NULL
 
-    def ws_recv(self, n: int = 1024) -> Tuple[bytes, Any]:
+    def ws_recv(self, n: int = 1024) -> Tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
 
         Args:
@@ -421,10 +432,6 @@ class Curl:
         ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
         return n_sent[0]
-
-    def ws_close(self) -> None:
-        """Send the close frame."""
-        self.ws_send(b"", CurlWsFlag.CLOSE)
 
 
 class CurlMime:
