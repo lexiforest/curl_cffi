@@ -200,28 +200,38 @@ async with AsyncSession() as s:
 ### WebSockets
 
 ```python
-from curl_cffi.requests import Session, WebSocket
+from curl_cffi.requests import WebSocket
 
-def on_message(ws: WebSocket, message):
+def on_message(ws: WebSocket, message: str | bytes):
     print(message)
 
-with Session() as s:
-    ws = s.ws_connect(
-        "wss://api.gemini.com/v1/marketdata/BTCUSD",
-        on_message=on_message,
-    )
-    ws.run_forever()
+ws = WebSocket(on_message=on_message)
+ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 ```
 
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
+
+### asyncio WebSockets
+
+```python
+import asyncio
+from curl_cffi.requests import AsyncSession
+
+async with AsyncSession() as s:
+    ws = await s.ws_connect("wss://echo.websocket.org")
+    await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+    async for message in ws:
+        print(message)
+```
 
 ## Acknowledgement
 
 - Originally forked from [multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), which is under the MIT license.
 - Headers/Cookies files are copied from [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), which is under the BSD license.
 - Asyncio support is inspired by Tornado's curl http client.
-- The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
+- The synchronous WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
+- The asynchronous WebSocket API is inspired by [aiohttp](https://github.com/aio-libs/aiohttp).
 
 
 ## Sponsor
