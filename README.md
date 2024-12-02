@@ -153,6 +153,7 @@ to specify your own customized fingerprints. See the [docs on impersonatation](h
 - chrome124 <sup>[3]</sup>
 - chrome131 <sup>[4]</sup>
 - chrome99_android
+- chrome131_android <sup>[4]</sup>
 - edge99
 - edge101
 - safari15_3 <sup>[2]</sup>

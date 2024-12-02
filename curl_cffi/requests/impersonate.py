@@ -23,6 +23,7 @@ BrowserTypeLiteral = Literal[
     "chrome124",
     "chrome131",
     "chrome99_android",
+    "chrome131_android",
     # Safari
     "safari15_3",
     "safari15_5",
@@ -52,7 +53,7 @@ DEFAULT_CHROME = "chrome131"
 DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari18_0"
 DEFAULT_SAFARI_IOS = "safari18_0_ios"
-DEFAULT_CHROME_ANDROID = "chrome99_android"
+DEFAULT_CHROME_ANDROID = "chrome131_android"
 
 
 REAL_TARGET_MAP = {
@@ -60,7 +61,7 @@ REAL_TARGET_MAP = {
     "edge": "edge101",
     "safari": "safari17_0",
     "safari_ios": "safari17_2_ios",
-    "chrome_android": "chrome99_android",
+    "chrome_android": "chrome131_android",
 }
 
 
@@ -95,6 +96,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     chrome124 = "chrome124"
     chrome131 = "chrome131"
     chrome99_android = "chrome99_android"
+    chrome131_android = "chrome131_android"
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
     safari17_0 = "safari17_0"
