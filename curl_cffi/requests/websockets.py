@@ -306,6 +306,7 @@ class WebSocket(BaseWebSocket):
         # https://curl.se/docs/websocket.html
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         curl.perform()
+        return self
 
     def recv_fragment(self) -> Tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes."""
