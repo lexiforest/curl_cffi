@@ -20,7 +20,7 @@ from typing import (
 )
 
 from .options import set_curl_options
-from .exceptions import SessionClosed
+from .exceptions import SessionClosed, Timeout
 from ..aio import CURL_SOCKET_BAD
 from ..const import CurlECode, CurlOpt, CurlWsFlag, CurlInfo
 from ..curl import Curl, CurlError
@@ -546,9 +546,12 @@ class AsyncWebSocket(BaseWebSocket):
             raise TypeError("Concurrent call to recv_fragment() is not allowed")
 
         async with self._recv_lock:
-            chunk, frame = await asyncio.wait_for(
-                self.loop.run_in_executor(None, self.curl.ws_recv), timeout
-            )
+            try:
+                chunk, frame = await asyncio.wait_for(
+                    self.loop.run_in_executor(None, self.curl.ws_recv), timeout
+                )
+            except asyncio.TimeoutError:
+                raise Timeout("WebSocket recv_fragment() timed out")
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
                     code, message = self._close_code, self._close_reason = self._unpack_close_frame(chunk)
