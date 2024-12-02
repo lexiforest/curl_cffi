@@ -524,7 +524,7 @@ class AsyncWebSocket(BaseWebSocket):
             self._loop = asyncio.get_running_loop()
         return self._loop
 
-    async def __aiter__(self) -> Self:
+    def __aiter__(self) -> Self:
         if self.closed:
             raise SessionClosed("WebSocket is closed")
         return self
