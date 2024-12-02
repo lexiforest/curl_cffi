@@ -14,8 +14,6 @@ async def main():
 
         async for message in ws:
             print(message)
-            if ws.closed:
-                break
 
         print("<<< Websocket closed!")
 
