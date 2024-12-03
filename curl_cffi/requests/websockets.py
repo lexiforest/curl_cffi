@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from select import select
 import struct
 from enum import IntEnum
-from json import loads, dumps
+from functools import partial
+from json import dumps, loads
+from select import select
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -14,26 +16,25 @@ from typing import (
     Literal,
     Optional,
     Tuple,
-    TYPE_CHECKING,
     TypeVar,
     Union,
 )
 
-from .options import set_curl_options
-from .exceptions import SessionClosed, Timeout
 from ..aio import CURL_SOCKET_BAD
-from ..const import CurlECode, CurlOpt, CurlWsFlag, CurlInfo
+from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
+from .exceptions import SessionClosed, Timeout
+from .options import set_curl_options
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from ..const import CurlHttpVersion
+    from ..curl import CurlWsFrame
     from .cookies import CookieTypes
     from .headers import HeaderTypes
     from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
     from .session import AsyncSession, ProxySpec
-    from ..const import CurlHttpVersion
-    from ..curl import CurlWsFrame
 
     T = TypeVar("T")
 
@@ -44,6 +45,9 @@ if TYPE_CHECKING:
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
 
 not_set: Final[Any] = object()
+
+# We need a partial for dumps() because a custom function may not accept the parameter
+dumps = partial(dumps, separators=(",", ":"))
 
 
 class WsCloseCode(IntEnum):
@@ -68,6 +72,14 @@ class WebSocketError(CurlError):
 
     def __init__(self, message: str, code: Union[WsCloseCode, CurlECode, Literal[0]] = 0):
         super().__init__(message, code)  # type: ignore
+
+
+class WebSocketClosed(WebSocketError, SessionClosed):
+    """WebSocket is already closed."""
+
+
+class WebSocketTimeout(WebSocketError, Timeout):
+    """WebSocket operation timed out."""
 
 
 async def aselect(fd, *, loop: asyncio.AbstractEventLoop, timeout: Optional[float] = None) -> bool:
@@ -178,7 +190,7 @@ class WebSocket(BaseWebSocket):
 
     def __iter__(self) -> WebSocket:
         if self.closed:
-            raise SessionClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is closed")
         return self
 
     def __next__(self) -> bytes:
@@ -265,12 +277,7 @@ class WebSocket(BaseWebSocket):
             curl_options: extra curl options to use.
         """
         if not self.closed:
-            raise TypeError("WebSocket is already connected")
-
-        if proxy and proxies:
-            raise TypeError("Cannot specify both 'proxy' and 'proxies'")
-        if proxy:
-            proxies = {"all": proxy}
+            raise RuntimeError("WebSocket is already connected")
 
         self.curl = curl = Curl(debug=self.debug)
         set_curl_options(
@@ -311,7 +318,7 @@ class WebSocket(BaseWebSocket):
     def recv_fragment(self) -> Tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes."""
         if self.closed:
-            raise SessionClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is closed")
 
         chunk, frame = self.curl.ws_recv()
         if frame.flags & CurlWsFlag.CLOSE:
@@ -382,7 +389,7 @@ class WebSocket(BaseWebSocket):
             flags: flags for the frame.
         """
         if self.closed:
-            raise SessionClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is closed")
 
         # curl expects bytes
         if isinstance(payload, str):
@@ -436,9 +443,6 @@ class WebSocket(BaseWebSocket):
         libcurl automatically handles pings and pongs.
         ref: https://curl.se/libcurl/c/libcurl-ws.html
         """
-        if not self.closed:
-            raise TypeError("WebSocket is already connected")
-
         self.connect(url, **kwargs)
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
@@ -526,7 +530,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     def __aiter__(self) -> Self:
         if self.closed:
-            raise SessionClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is closed")
         return self
 
     async def __anext__(self) -> bytes:
@@ -542,7 +546,7 @@ class AsyncWebSocket(BaseWebSocket):
             timeout: how many seconds to wait before giving up.
         """
         if self.closed:
-            raise SessionClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is closed")
         if self._recv_lock.locked():
             raise TypeError("Concurrent call to recv_fragment() is not allowed")
 
@@ -552,7 +556,7 @@ class AsyncWebSocket(BaseWebSocket):
                     self.loop.run_in_executor(None, self.curl.ws_recv), timeout
                 )
             except asyncio.TimeoutError:
-                raise Timeout("WebSocket recv_fragment() timed out")
+                raise WebSocketTimeout("WebSocket recv_fragment() timed out")
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
                     code, message = self._close_code, self._close_reason = self._unpack_close_frame(chunk)
@@ -632,7 +636,7 @@ class AsyncWebSocket(BaseWebSocket):
             flags: flags for the frame.
         """
         if self.closed:
-            raise SessionClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is closed")
 
         # curl expects bytes
         if isinstance(payload, str):
