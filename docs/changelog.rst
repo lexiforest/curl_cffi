@@ -4,6 +4,9 @@ Change Log
 v0.7
 ----
 
+- v0.7.4
+    - Fixed url quote issue in 0.7.2 and 0.7.3
+
 - v0.7.1
     - Added `Cookies.get_dict()`, for compatibility with `requests`.
     - Fixed type conversion in C shim, by @qishipai.
