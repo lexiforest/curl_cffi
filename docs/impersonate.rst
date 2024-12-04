@@ -27,6 +27,7 @@ to specify your own customized fingerprints. See below for details.
 - chrome124 :sup:`3`
 - chrome131 :sup:`4`
 - chrome99_android
+- chrome131_android :sup:`4`
 - edge99
 - edge101
 - safari15_3 :sup:`2`
