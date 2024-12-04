@@ -1,27 +1,40 @@
-from curl_cffi.requests import Session
+from curl_cffi.requests import AsyncSession, WebSocket
 
 
 def test_websocket(ws_server):
-    with Session() as s:
-        s.ws_connect(ws_server.url)
+    ws = WebSocket()
+    ws.connect(ws_server.url)
 
 
 def test_hello(ws_server):
-    with Session() as s:
-        ws = s.ws_connect(ws_server.url)
-        ws.send(b"Foo me once")
-        content, _ = ws.recv()
-        assert content == b"Foo me once"
+    ws = WebSocket()
+    ws.connect(ws_server.url)
+    ws.send(b"Foo me once")
+    content, _ = ws.recv()
+    assert content == b"Foo me once"
 
 
 def test_hello_twice(ws_server):
-    with Session() as s:
-        w = s.ws_connect(ws_server.url)
+    ws = WebSocket()
+    ws.connect(ws_server.url)
 
-        w.send(b"Bar")
-        reply, _ = w.recv()
+    ws.send(b"Bar")
+    reply, _ = ws.recv()
+
+    for _ in range(10):
+        ws.send_str("Bar")
+        reply = ws.recv_str()
+        assert reply == "Bar"
+
+
+async def test_hello_twice_async(ws_server):
+    async with AsyncSession() as s:
+        ws = await s.ws_connect(ws_server.url)
+
+        await ws.send(b"Bar")
+        reply, _ = await ws.recv()
 
         for _ in range(10):
-            w.send(b"Bar")
-            reply, _ = w.recv()
-            assert reply == b"Bar"
+            await ws.send_str("Bar")
+            reply = await ws.recv_str()
+            assert reply == "Bar"
