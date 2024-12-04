@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import struct
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -432,6 +433,23 @@ class Curl:
         ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
         return n_sent[0]
+
+    def ws_close(self, code: int = 1000, message: bytes = b"") -> int:
+        """Close a websocket connection. Shorthand for :meth:`ws_send`
+        with close code and message. Note that to completely close the connection,
+        you must close the curl handle after this call with :meth:`close`.
+
+        Args:
+            code: close code.
+            message: close message.
+
+        Returns:
+            0 if no error.
+
+        Raises:
+            CurlError: if failed.
+        """
+        return self.ws_send(struct.pack("!H", code) + message)
 
 
 class CurlMime:

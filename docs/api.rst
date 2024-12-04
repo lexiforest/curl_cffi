@@ -24,6 +24,7 @@ Curl
    .. automethod:: close
    .. automethod:: ws_recv
    .. automethod:: ws_send
+   .. automethod:: ws_close
 
 AsyncCurl
 ~~~~~~
