@@ -19,6 +19,17 @@ Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
 
 ------
 
+<a href="https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/proxycurl.png" alt="ProxyCurl" height="47" width="149"></a>
+
+Scrape public LinkedIn profile data at scale with [Proxycurl APIs](https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi). Built for developers, by developers.
+
+- GDPR, CCPA, SOC2 compliant
+- High rate limit (300 requests/min), Fast (APIs respond in ~2s), High accuracy
+- Fresh data - 88% of data is scraped real-time, other 12% is <29 days
+- Tons of data points returned per profile
+
+------
+
 ### Bypass Cloudflare with API
 
 <a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
