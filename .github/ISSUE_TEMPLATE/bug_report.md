@@ -6,7 +6,8 @@ labels: bug
 
 ---
 
-Please check the following items before reporting a bug, otherwise it may be closed immediately.
+Please check the following items and answer all the questions when reporting a bug, 
+otherwise it will be closed immediately.
 
 - [ ] **This is NOT a site-related "bugs"**, e.g. some site blocks me when using curl_cffi,
     UNLESS it has been verified that the reason is missing pieces in the impersonation.

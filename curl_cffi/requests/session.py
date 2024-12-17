@@ -22,18 +22,15 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urlparse
+from urllib.parse import urlparse
 
-from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
-from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
+from ..aio import AsyncCurl
+from ..const import CurlHttpVersion, CurlInfo, CurlOpt
+from ..curl import Curl, CurlError, CurlMime
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
-from .impersonate import (
-    BrowserTypeLiteral,
-    ExtraFingerprints,
-    ExtraFpDict,
-)
+from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Response
 from .options import set_curl_options, update_url_params
 from .websockets import AsyncWebSocket
@@ -97,21 +94,6 @@ def _is_absolute_url(url: str) -> bool:
 
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
-
-
-def _quote_path_and_params(url: str, quote_str: str = ""):
-    safe = "".join(SAFE_CHARS - set(quote_str))
-    parsed_url = urlparse(url)
-    parsed_get_args = parse_qsl(parsed_url.query, keep_blank_values=True)
-    encoded_get_args = urlencode(parsed_get_args, doseq=True, safe=safe)
-    return ParseResult(
-        parsed_url.scheme,
-        parsed_url.netloc,
-        quote(parsed_url.path, safe=safe),
-        parsed_url.params,
-        encoded_get_args,
-        parsed_url.fragment,
-    ).geturl()
 
 
 def _peek_queue(q: queue.Queue, default=None):

@@ -7,18 +7,7 @@ import warnings
 from collections import Counter
 from io import BytesIO
 from json import dumps
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    cast,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
 from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
 from .. import CurlHttpVersion, CurlOpt, CurlSslVersion

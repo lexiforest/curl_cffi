@@ -161,7 +161,7 @@ class WebSocket(BaseWebSocket):
         on_error: Optional[ON_ERROR_T] = None,
     ):
         """
-        Parameters:
+        Args:
             autoclose: whether to close the WebSocket after receiving a close frame.
             skip_utf8_validation: whether to skip UTF-8 validation for text frames in run_forever().
             debug: print extra curl debug info.
@@ -242,7 +242,7 @@ class WebSocket(BaseWebSocket):
         libcurl automatically handles pings and pongs.
         ref: https://curl.se/libcurl/c/libcurl-ws.html
 
-        Parameters:
+        Args:
             url: url for the requests.
             params: query string for the requests.
             headers: headers to send.
@@ -339,7 +339,7 @@ class WebSocket(BaseWebSocket):
         """
         Receive a frame as bytes.
 
-        libcurl split frames into fragments, so we have to collect all the chunks for
+        libcurl splits frames into fragments, so we have to collect all the chunks for
         a frame.
         """
         chunks = []
@@ -375,7 +375,7 @@ class WebSocket(BaseWebSocket):
     def recv_json(self, *, loads: Callable[[str], T] = loads) -> T:
         """Receive a JSON frame.
 
-        Parameters:
+        args:
             loads: JSON decoder, default is json.loads.
         """
         data = self.recv_str()
@@ -384,7 +384,7 @@ class WebSocket(BaseWebSocket):
     def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
         """Send a data frame.
 
-        Parameters:
+        Args:
             payload: data to send.
             flags: flags for the frame.
         """
@@ -399,7 +399,7 @@ class WebSocket(BaseWebSocket):
     def send_binary(self, payload: bytes):
         """Send a binary frame.
 
-        Parameters:
+        Args:
             payload: binary data to send.
         """
         return self.send(payload, CurlWsFlag.BINARY)
@@ -407,7 +407,7 @@ class WebSocket(BaseWebSocket):
     def send_bytes(self, payload: bytes):
         """Send a binary frame. Same as :meth:`send_binary`.
 
-        Parameters:
+        Args:
             payload: binary data to send.
         """
         return self.send(payload, CurlWsFlag.BINARY)
@@ -415,7 +415,7 @@ class WebSocket(BaseWebSocket):
     def send_str(self, payload: str):
         """Send a text frame.
 
-        Parameters:
+        Args:
             payload: text data to send.
         """
         return self.send(payload, CurlWsFlag.TEXT)
@@ -423,7 +423,7 @@ class WebSocket(BaseWebSocket):
     def send_json(self, payload: Any, *, dumps: Callable[[Any], str] = dumps):
         """Send a JSON frame.
 
-        Parameters:
+        Args:
             payload: data to send.
             dumps: JSON encoder, default is json.dumps.
         """
@@ -432,7 +432,7 @@ class WebSocket(BaseWebSocket):
     def ping(self, payload: Union[str, bytes]):
         """Send a ping frame.
 
-        Parameters:
+        Args:
             payload: data to send.
         """
         return self.send(payload, CurlWsFlag.PING)
@@ -497,7 +497,7 @@ class WebSocket(BaseWebSocket):
     def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
         """Close the connection.
 
-        Parameters:
+        Args:
             code: close code.
             message: close reason.
         """
@@ -542,7 +542,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv_fragment(self, *, timeout: Optional[float] = None) -> Tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes.
 
-        Parameters:
+        Args:
             timeout: how many seconds to wait before giving up.
         """
         if self.closed:
@@ -559,7 +559,9 @@ class AsyncWebSocket(BaseWebSocket):
                 raise WebSocketTimeout("WebSocket recv_fragment() timed out")
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
-                    code, message = self._close_code, self._close_reason = self._unpack_close_frame(chunk)
+                    code, message = self._close_code, self._close_reason = self._unpack_close_frame(
+                        chunk
+                    )
                 except WebSocketError as e:
                     # Follow the spec to close the connection
                     # Errors do not respect autoclose
@@ -575,10 +577,10 @@ class AsyncWebSocket(BaseWebSocket):
         """
         Receive a frame as bytes.
 
-        libcurl split frames into fragments, so we have to collect all the chunks for
+        libcurl splits frames into fragments, so we have to collect all the chunks for
         a frame.
 
-        Parameters:
+        Args:
             timeout: how many seconds to wait before giving up.
         """
         loop = self.loop
@@ -608,7 +610,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv_str(self, *, timeout: Optional[float] = None) -> str:
         """Receive a text frame.
 
-        Parameters:
+        Args:
             timeout: how many seconds to wait before giving up.
         """
         data, flags = await self.recv(timeout=timeout)
@@ -621,7 +623,7 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> T:
         """Receive a JSON frame.
 
-        Parameters:
+        Args:
             loads: JSON decoder, default is json.loads.
             timeout: how many seconds to wait before giving up.
         """
@@ -631,7 +633,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
         """Send a data frame.
 
-        Parameters:
+        Args:
             payload: data to send.
             flags: flags for the frame.
         """
@@ -649,7 +651,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def send_binary(self, payload: bytes):
         """Send a binary frame.
 
-        Parameters:
+        Args:
             payload: binary data to send.
         """
         return await self.send(payload, CurlWsFlag.BINARY)
@@ -657,7 +659,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def send_bytes(self, payload: bytes):
         """Send a binary frame. Same as :meth:`send_binary`.
 
-        Parameters:
+        Args:
             payload: binary data to send.
         """
         return await self.send(payload, CurlWsFlag.BINARY)
@@ -665,7 +667,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def send_str(self, payload: str):
         """Send a text frame.
 
-        Parameters:
+        Args:
             payload: text data to send.
         """
         return await self.send(payload, CurlWsFlag.TEXT)
@@ -673,7 +675,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def send_json(self, payload: Any, *, dumps: Callable[[Any], str] = dumps):
         """Send a JSON frame.
 
-        Parameters:
+        Args:
             payload: data to send.
             dumps: JSON encoder, default is json.dumps.
         """
@@ -682,7 +684,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def ping(self, payload: Union[str, bytes]):
         """Send a ping frame.
 
-        Parameters:
+        Args:
             payload: data to send.
         """
         return await self.send(payload, CurlWsFlag.PING)
@@ -690,7 +692,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
         """Close the connection.
 
-        Parameters:
+        Args:
             code: close code.
             message: close reason.
         """
