@@ -6,6 +6,7 @@ from io import BytesIO
 import pytest
 from charset_normalizer import detect
 
+import curl_cffi
 from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
@@ -19,6 +20,11 @@ def test_head(server):
 
 def test_get(server):
     r = requests.get(str(server.url))
+    assert r.status_code == 200
+
+
+def test_direct_import(server):
+    r = curl_cffi.get(str(server.url))
     assert r.status_code == 200
 
 
