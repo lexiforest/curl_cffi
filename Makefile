@@ -53,7 +53,7 @@ build: .preprocessed
 lint:
 	ruff check --exclude issues
 	ruff format --diff
-	mypy --install-types --non-interactive .
+	mypy --install-types --non-interactive . --exclude 'issues/.*'
 
 format:
 	ruff check --fix

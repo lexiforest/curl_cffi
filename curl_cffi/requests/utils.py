@@ -437,7 +437,7 @@ def set_curl_options(
     base_cookies, cookies = cookies_list
 
     if base_cookies:
-        for morsel in base_cookies.get_cookies_for_curl(req):
+        for morsel in base_cookies.get_cookies_for_curl(req):  # type: ignore
             curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
     if cookies:
         temp_cookies = Cookies(cookies)
@@ -488,7 +488,7 @@ def set_curl_options(
             c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(timeout))
 
     # allow_redirects
-    c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
+    c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))  # type: ignore
 
     # max_redirects
     c.setopt(CurlOpt.MAXREDIRS, max_redirects)
