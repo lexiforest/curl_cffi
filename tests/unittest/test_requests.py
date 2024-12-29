@@ -9,6 +9,7 @@ from charset_normalizer import detect
 from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
+from curl_cffi.requests.exceptions import HTTPError
 from curl_cffi.requests.models import Response
 
 
@@ -401,6 +402,15 @@ def test_reason(server):
     r = requests.get(str(server.url.copy_with(path="/redirect_301")), allow_redirects=True)
     assert r.status_code == 200
     assert r.reason == "OK"
+
+
+def test_raise_for_status(server):
+    r = requests.get(str(server.url.copy_with(path="/status/400")))
+    assert r.status_code == 400
+    try:
+        r.raise_for_status()
+    except HTTPError as e:
+        assert e.response.status_code == 400  # type: ignore
 
 
 #######################################################################################

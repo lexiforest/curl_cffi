@@ -143,7 +143,7 @@ class Response:
     def raise_for_status(self):
         """Raise an error if status code is not in [200, 400)"""
         if not self.ok:
-            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}")
+            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
 
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
