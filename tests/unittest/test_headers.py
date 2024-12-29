@@ -1,5 +1,5 @@
 from curl_cffi.requests import Headers
-from curl_cffi.requests.options import update_header_line
+from curl_cffi.requests.utils import update_header_line
 
 
 def test_headers():
