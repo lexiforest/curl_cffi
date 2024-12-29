@@ -96,10 +96,10 @@ To install unstable version from GitHub:
 ### requests-like
 
 ```python
-from curl_cffi import requests
+import curl_cffi
 
 # Notice the impersonate parameter
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -108,27 +108,27 @@ print(r.json())
 # To keep using the latest browser version as `curl_cffi` updates,
 # simply set impersonate="chrome" without specifying a version.
 # Other similar values are: "safari" and "safari_ios"
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
 # To pin a specific version, use version numbers together.
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
 
 # To impersonate other than browsers, bring your own ja3/akamai strings
 # See examples directory for details.
-r = requests.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
+r = curl_cffi.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
 
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
 ```
 
 ### Sessions
 
 ```python
-s = requests.Session()
+s = curl_cffi.Session()
 
 # httpbin is a http test website, this endpoint makes the server set cookies
 s.get("https://httpbin.org/cookies/set/foo/bar")
@@ -183,7 +183,7 @@ Notes:
 ### asyncio
 
 ```python
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 async with AsyncSession() as s:
     r = await s.get("https://example.com")
@@ -193,7 +193,7 @@ More concurrency:
 
 ```python
 import asyncio
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 urls = [
     "https://google.com/",
@@ -212,7 +212,7 @@ async with AsyncSession() as s:
 ### WebSockets
 
 ```python
-from curl_cffi.requests import WebSocket
+from curl_cffi import WebSocket
 
 def on_message(ws: WebSocket, message: str | bytes):
     print(message)
@@ -228,7 +228,7 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 
 ```python
 import asyncio
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 async with AsyncSession() as s:
     ws = await s.ws_connect("wss://echo.websocket.org")
