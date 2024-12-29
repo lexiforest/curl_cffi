@@ -51,9 +51,9 @@ build: .preprocessed
 	python -m build --wheel
 
 lint:
-	ruff check
+	ruff check --exclude issues
 	ruff format --diff
-	mypy --install-types --non-interactive .
+	mypy --install-types --non-interactive . --exclude 'issues/.*'
 
 format:
 	ruff check --fix

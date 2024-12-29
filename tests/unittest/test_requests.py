@@ -10,7 +10,6 @@ from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.models import Response
-from curl_cffi.requests.session import _update_url_params
 
 
 def test_head(server):
@@ -649,9 +648,6 @@ def test_closed_session_throws_error():
 
     with pytest.raises(SessionClosed):
         s.patch("https://example.com")
-
-    with pytest.raises(SessionClosed):
-        s.ws_connect("wss://example.com")
 
 
 def test_stream_iter_content(server):

@@ -146,10 +146,31 @@ Request, Response and WebSocket
 .. autoclass:: curl_cffi.requests.WebSocket
 
    .. automethod:: __init__
+   .. automethod:: connect
+   .. automethod:: recv_fragment
    .. automethod:: recv
+   .. automethod:: recv_str
+   .. automethod:: recv_json
    .. automethod:: send
+   .. automethod:: send_binary
+   .. automethod:: send_bytes
+   .. automethod:: send_str
+   .. automethod:: send_json
+   .. automethod:: ping
    .. automethod:: run_forever
    .. automethod:: close
-   .. automethod:: arecv
-   .. automethod:: asend
 
+.. autoclass:: curl_cffi.requests.AsyncWebSocket
+
+   .. automethod:: __init__
+   .. automethod:: recv_fragment
+   .. automethod:: recv
+   .. automethod:: recv_str
+   .. automethod:: recv_json
+   .. automethod:: send
+   .. automethod:: send_binary
+   .. automethod:: send_bytes
+   .. automethod:: send_str
+   .. automethod:: send_json
+   .. automethod:: ping
+   .. automethod:: close
