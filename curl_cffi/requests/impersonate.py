@@ -4,6 +4,7 @@ from enum import Enum
 from typing import List, Literal, Optional, TypedDict
 
 from ..const import CurlOpt, CurlSslVersion
+from ..utils import _SHOW_WARNINGS
 
 BrowserTypeLiteral = Literal[
     # Edge
@@ -303,7 +304,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.ECH, "")
     # compress certificate
     elif extension_id == 27:
-        if enable:
+        if _SHOW_WARNINGS and enable:
             warnings.warn(
                 "Cert compression setting to brotli, "
                 "you had better specify which to use: zlib/brotli",

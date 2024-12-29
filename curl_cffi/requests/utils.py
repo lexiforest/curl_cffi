@@ -27,6 +27,7 @@ from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urlj
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
+from ..utils import _SHOW_WARNINGS
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
@@ -246,12 +247,13 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
 
     if extensions.endswith("-21"):
         extensions = extensions[:-3]
-        warnings.warn(
-            "Padding(21) extension found in ja3 string, whether to add it should "
-            "be managed by the SSL engine. The TLS client hello packet may contain "
-            "or not contain this extension, any of which should be correct.",
-            stacklevel=1,
-        )
+        if _SHOW_WARNINGS:
+            warnings.warn(
+                "Padding(21) extension found in ja3 string, whether to add it should "
+                "be managed by the SSL engine. The TLS client hello packet may contain "
+                "or not contain this extension, any of which should be correct.",
+                stacklevel=1,
+            )
     extension_ids = set(int(e) for e in extensions.split("-"))
     toggle_extensions_by_ids(curl, extension_ids)
 
@@ -521,7 +523,7 @@ def set_curl_options(
             c.setopt(CurlOpt.PROXY, proxy)
 
             if parts.scheme == "https":
-                if proxy.startswith("https://"):
+                if _SHOW_WARNINGS and proxy.startswith("https://"):
                     warnings.warn(
                         "Make sure you are using https over https proxy, otherwise, "
                         "the proxy prefix should be 'http://' not 'https://', "
@@ -579,7 +581,7 @@ def set_curl_options(
 
     # ja3 string
     if ja3:
-        if impersonate:
+        if _SHOW_WARNINGS and impersonate:
             warnings.warn("JA3 was altered after browser version was set.", stacklevel=1)
         permute = False
         if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
@@ -590,7 +592,7 @@ def set_curl_options(
 
     # akamai string
     if akamai:
-        if impersonate:
+        if _SHOW_WARNINGS and impersonate:
             warnings.warn("Akamai was altered after browser version was set.", stacklevel=1)
         set_akamai_options(c, akamai)
 
@@ -598,7 +600,7 @@ def set_curl_options(
     if extra_fp:
         if isinstance(extra_fp, dict):
             extra_fp = ExtraFingerprints(**extra_fp)
-        if impersonate:
+        if _SHOW_WARNINGS and impersonate:
             warnings.warn(
                 "Extra fingerprints was altered after browser version was set.",
                 stacklevel=1,
