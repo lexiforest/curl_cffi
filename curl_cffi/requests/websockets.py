@@ -98,17 +98,13 @@ class BaseWebSocket:
         self._close_code: Optional[int] = None
         self._close_reason: Optional[str] = None
         self.debug = debug
+        self.closed = False
 
     @property
     def curl(self):
         if self._curl is not_set:
             self._curl = Curl(debug=self.debug)
         return self._curl
-
-    @property
-    def closed(self) -> bool:
-        """Whether the WebSocket is closed."""
-        return self.curl is not_set
 
     @property
     def close_code(self) -> Optional[int]:
@@ -144,10 +140,8 @@ class BaseWebSocket:
 
     def terminate(self):
         """Terminate the underlying connection."""
-        if self.curl is not_set:
-            return
+        self.closed = True
         self.curl.close()
-        self.curl = not_set
 
 
 class WebSocket(BaseWebSocket):
@@ -281,8 +275,6 @@ class WebSocket(BaseWebSocket):
             max_recv_speed: maximum receive speed, bytes per second.
             curl_options: extra curl options to use.
         """
-        if not self.closed:
-            raise RuntimeError("WebSocket is already connected")
 
         curl = self.curl
 
@@ -395,7 +387,7 @@ class WebSocket(BaseWebSocket):
             flags: flags for the frame.
         """
         if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
+            raise WebSocketClosed("WebSocket is already closed")
 
         # curl expects bytes
         if isinstance(payload, str):
@@ -704,9 +696,6 @@ class AsyncWebSocket(BaseWebSocket):
             code: close code.
             message: close reason.
         """
-        if self.curl is not_set:
-            return
-
         # TODO: As per spec, we should wait for the server to close the connection
         # But this is not a requirement
         msg = self._pack_close_frame(code, message)
