@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+__all__ = ["set_curl_options", "not_set"]
+
+
 import asyncio
 import math
 import queue
@@ -7,10 +10,22 @@ import warnings
 from collections import Counter
 from io import BytesIO
 from json import dumps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Final,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
 
-from .. import CurlHttpVersion, CurlOpt, CurlSslVersion
+from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
@@ -37,7 +52,7 @@ HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE",
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
-not_set = object()
+not_set: Final[Any] = object()
 
 
 def is_absolute_url(url: str) -> bool:
@@ -64,7 +79,7 @@ def quote_path_and_params(url: str, quote_str: str = ""):
 def update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
     """Add URL query params to provided URL being aware of existing.
 
-    Parameters:
+    Args:
         url: string of target URL
         params: dict containing requested params to be added
 
@@ -195,7 +210,7 @@ def peek_aio_queue(q: asyncio.Queue, default=None):
 
 
 def toggle_extensions_by_ids(curl: Curl, extension_ids):
-    # TODO find a better representation, rather than magic numbers
+    # TODO: find a better representation, rather than magic numbers
     default_enabled = {0, 51, 13, 43, 65281, 23, 10, 45, 35, 11, 16}
 
     to_enable_ids = extension_ids - default_enabled
@@ -293,27 +308,25 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params: Optional[Union[Dict, List, Tuple]] = None,
+    params_list: List[Union[Dict, List, Tuple, None]] = [],
     base_url: Optional[str] = None,
     data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
     json: Optional[dict] = None,
-    headers: Optional[HeaderTypes] = None,
-    session_cookies: Optional[Cookies] = None,
-    cookies: Optional[CookieTypes] = None,
+    headers_list: List[Optional[HeaderTypes]] = [],
+    cookies_list: List[Optional[CookieTypes]] = [],
     files: Optional[Dict] = None,
     auth: Optional[Tuple[str, str]] = None,
     timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
-    allow_redirects: bool = True,
+    allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
-    proxies: Optional[ProxySpec] = None,
+    proxies_list: List[Optional[ProxySpec]] = [],
     proxy: Optional[str] = None,
     proxy_auth: Optional[Tuple[str, str]] = None,
-    verify: Optional[Union[bool, str]] = None,
-    session_verify: Optional[Union[bool, str]] = None,
+    verify_list: List[Union[bool, str, None]] = [],
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
-    impersonate: Optional[BrowserTypeLiteral] = None,
+    impersonate: Optional[Union[BrowserTypeLiteral, str]] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
     extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
@@ -342,6 +355,9 @@ def set_curl_options(
         c.setopt(CurlOpt.NOBODY, 1)
 
     # url
+    base_params, params = params_list
+    if base_params:
+        url = update_url_params(url, base_params)
     if params:
         url = update_url_params(url, params)
     if base_url:
@@ -380,7 +396,9 @@ def set_curl_options(
             c.setopt(CurlOpt.CUSTOMREQUEST, method)
 
     # headers
-    h = Headers(headers)
+    base_headers, headers = headers_list
+    h = Headers(base_headers)
+    h.update(headers)
 
     # remove Host header if it's unnecessary, otherwise curl may get confused.
     # Host header will be automatically added by curl if it's not present.
@@ -416,9 +434,10 @@ def set_curl_options(
     c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
     c.setopt(CurlOpt.COOKIELIST, "ALL")  # remove all the old cookies first.
 
-    if session_cookies:
-        for morsel in session_cookies.get_cookies_for_curl(req):
-            # print("Setting", morsel.to_curl_format())
+    base_cookies, cookies = cookies_list
+
+    if base_cookies:
+        for morsel in base_cookies.get_cookies_for_curl(req):
             curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
     if cookies:
         temp_cookies = Cookies(cookies)
@@ -446,7 +465,7 @@ def set_curl_options(
         c.setopt(CurlOpt.PASSWORD, password.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
 
     # timeout
-    if timeout in (None, not_set):
+    if timeout is None:
         timeout = 0  # indefinitely
 
     if isinstance(timeout, tuple):
@@ -469,22 +488,19 @@ def set_curl_options(
             c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(timeout))
 
     # allow_redirects
-    c.setopt(
-        CurlOpt.FOLLOWLOCATION,
-        int(allow_redirects),
-    )
+    c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
 
     # max_redirects
-    c.setopt(
-        CurlOpt.MAXREDIRS,
-        max_redirects,
-    )
+    c.setopt(CurlOpt.MAXREDIRS, max_redirects)
 
     # proxies
+    base_proxies, proxies = proxies_list
     if proxy and proxies:
         raise TypeError("Cannot specify both 'proxy' and 'proxies'")
     if proxy:
         proxies = {"all": proxy}
+    if proxies is None:
+        proxies = base_proxies
 
     if proxies:
         parts = urlparse(url)
@@ -524,7 +540,8 @@ def set_curl_options(
                 c.setopt(CurlOpt.PROXYPASSWORD, password.encode())
 
     # verify
-    if verify is False or not session_verify and verify is None:
+    base_verify, verify = verify_list
+    if verify is False or not base_verify and verify is None:
         c.setopt(CurlOpt.SSL_VERIFYPEER, 0)
         c.setopt(CurlOpt.SSL_VERIFYHOST, 0)
 
@@ -533,8 +550,8 @@ def set_curl_options(
         c.setopt(CurlOpt.CAINFO, verify)
 
     # cert for the session
-    if verify in (None, True) and isinstance(session_verify, str):
-        c.setopt(CurlOpt.CAINFO, session_verify)
+    if verify in (None, True) and isinstance(base_verify, str):
+        c.setopt(CurlOpt.CAINFO, base_verify)
 
     # referer
     if referer:

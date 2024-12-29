@@ -11,7 +11,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Final,
     List,
     Literal,
     Optional,
@@ -24,7 +23,7 @@ from ..aio import CURL_SOCKET_BAD
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
 from .exceptions import SessionClosed, Timeout
-from .options import set_curl_options
+from .utils import not_set, set_curl_options
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -44,7 +43,6 @@ if TYPE_CHECKING:
     ON_OPEN_T = Callable[["WebSocket"], None]
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
 
-not_set: Final[Any] = object()
 
 # We need a partial for dumps() because a custom function may not accept the parameter
 dumps = partial(dumps, separators=(",", ":"))
@@ -94,11 +92,18 @@ async def aselect(fd, *, loop: asyncio.AbstractEventLoop, timeout: Optional[floa
 
 
 class BaseWebSocket:
-    def __init__(self, curl: Curl, *, autoclose: bool = True):
-        self.curl: Curl = curl
+    def __init__(self, curl: Curl, *, autoclose: bool = True, debug: bool = False):
+        self._curl: Curl = curl
         self.autoclose: bool = autoclose
         self._close_code: Optional[int] = None
         self._close_reason: Optional[str] = None
+        self.debug = debug
+
+    @property
+    def curl(self):
+        if self._curl is not_set:
+            self._curl = Curl(debug=self.debug)
+        return self._curl
 
     @property
     def closed(self) -> bool:
@@ -128,10 +133,10 @@ class BaseWebSocket:
             try:
                 code = struct.unpack_from("!H", frame)[0]
                 reason = frame[2:].decode()
-            except UnicodeDecodeError:
-                raise WebSocketError("Invalid close message", WsCloseCode.INVALID_DATA)
-            except Exception:
-                raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR)
+            except UnicodeDecodeError as e:
+                raise WebSocketError("Invalid close message", WsCloseCode.INVALID_DATA) from e
+            except Exception as e:
+                raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR) from e
             else:
                 if code < 3000 and (code not in WsCloseCode or code == 1005):
                     raise WebSocketError("Invalid close code", WsCloseCode.PROTOCOL_ERROR)
@@ -150,6 +155,7 @@ class WebSocket(BaseWebSocket):
 
     def __init__(
         self,
+        curl: Union[Curl, Any] = not_set,
         *,
         autoclose: bool = True,
         skip_utf8_validation: bool = False,
@@ -172,9 +178,8 @@ class WebSocket(BaseWebSocket):
             on_message: message receive callback, ``def on_message(ws, message)``
             on_error: error callback, ``def on_error(ws, exception)``
         """
-        super().__init__(not_set, autoclose=autoclose)
+        super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.skip_utf8_validation = skip_utf8_validation
-        self.debug = debug
 
         self._emitters: dict[str, Callable] = {}
         if on_open:
@@ -279,22 +284,23 @@ class WebSocket(BaseWebSocket):
         if not self.closed:
             raise RuntimeError("WebSocket is already connected")
 
-        self.curl = curl = Curl(debug=self.debug)
+        curl = self.curl
+
         set_curl_options(
             curl=curl,
             method="GET",
             url=url,
-            params=params,
-            headers=headers,
-            cookies=cookies,
+            params_list=[None, params],
+            headers_list=[None, headers],
+            cookies_list=[None, cookies],
             auth=auth,
             timeout=timeout,
             allow_redirects=allow_redirects,
             max_redirects=max_redirects,
-            proxies=proxies,
+            proxies_list=[None, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth,
-            verify=verify,
+            verify_list=[None, verify],
             referer=referer,
             accept_encoding=accept_encoding,
             impersonate=impersonate,
@@ -375,7 +381,7 @@ class WebSocket(BaseWebSocket):
     def recv_json(self, *, loads: Callable[[str], T] = loads) -> T:
         """Receive a JSON frame.
 
-        args:
+        Args:
             loads: JSON decoder, default is json.loads.
         """
         data = self.recv_str()
@@ -473,10 +479,10 @@ class WebSocket(BaseWebSocket):
                     if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                         try:
                             msg = msg.decode()  # type: ignore
-                        except UnicodeDecodeError:
+                        except UnicodeDecodeError as e:
                             self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)
-                            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA)
+                            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA) from e
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
                         self._emit("message", msg)
                 if flags & CurlWsFlag.CLOSE:
@@ -515,8 +521,10 @@ class WebSocket(BaseWebSocket):
 class AsyncWebSocket(BaseWebSocket):
     """An async WebSocket implementation using libcurl."""
 
-    def __init__(self, session: AsyncSession, curl: Curl, *, autoclose: bool = True):
-        super().__init__(curl, autoclose=autoclose)
+    def __init__(
+        self, session: AsyncSession, curl: Curl, *, autoclose: bool = True, debug: bool = False
+    ):
+        super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session = session
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._recv_lock = asyncio.Lock()
@@ -555,8 +563,8 @@ class AsyncWebSocket(BaseWebSocket):
                 chunk, frame = await asyncio.wait_for(
                     self.loop.run_in_executor(None, self.curl.ws_recv), timeout
                 )
-            except asyncio.TimeoutError:
-                raise WebSocketTimeout("WebSocket recv_fragment() timed out")
+            except asyncio.TimeoutError as e:
+                raise WebSocketTimeout("WebSocket recv_fragment() timed out") from e
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
                     code, message = self._close_code, self._close_reason = self._unpack_close_frame(
