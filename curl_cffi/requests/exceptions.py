@@ -5,7 +5,7 @@
 import json
 from typing import Literal, Union
 
-from .. import CurlError
+from ..curl import CurlError
 from ..const import CurlECode
 
 

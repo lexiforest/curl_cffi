@@ -4,7 +4,7 @@ import warnings
 from concurrent.futures import Future
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
-from .. import Curl
+from ..curl import Curl
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
