@@ -41,7 +41,14 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Request, Response
 from .session import AsyncSession, HttpMethod, ProxySpec, Session, ThreadType
-from .websockets import AsyncWebSocket, WebSocket, WebSocketClosed, WebSocketError, WebSocketTimeout, WsCloseCode
+from .websockets import (
+    AsyncWebSocket,
+    WebSocket,
+    WebSocketClosed,
+    WebSocketError,
+    WebSocketTimeout,
+    WsCloseCode,
+)
 
 
 def request(
