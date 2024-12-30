@@ -415,11 +415,16 @@ def set_curl_options(
     # See: https://stackoverflow.com/a/32911474/1061155
     header_lines = []
     for k, v in h.multi_items():
-        header_lines.append(f"{k}: {v}" if v else f"{k};")
+        if v is None:
+            header_lines.append(f"{k}:")  # Explictly disable this header
+        elif v == "":
+            header_lines.append(f"{k};")  # Add an empty valued header
+        else:
+            header_lines.append(f"{k}: {v}")
 
     # Add content-type if missing
     if json is not None:
-        update_header_line(header_lines, "Content-Type", "application/json", replace=True)
+        update_header_line(header_lines, "Content-Type", "application/json")
     if isinstance(data, dict) and method != "POST":
         update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
     if isinstance(data, (str, bytes)):

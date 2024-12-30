@@ -246,6 +246,19 @@ def test_empty_header_included(server):
     assert headers["Xxx"][0] == ""
 
 
+def test_explict_remove_header(server):
+    r = requests.get(str(server.url.copy_with(path="/echo_headers")), json={"foo": "bar"})
+    headers = r.json()
+    assert headers["Content-type"][0] == "application/json"
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")),
+        json={"foo": "bar"},
+        headers={"Content-Type": None},
+    )
+    headers = r.json()
+    assert "Content-type" not in headers
+
+
 def test_expect_header_omitted(server):
     r = requests.get(str(server.url.copy_with(path="/echo_headers")), headers={"expect": "100"})
     headers = r.json()
