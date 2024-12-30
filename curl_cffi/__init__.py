@@ -10,6 +10,7 @@ __all__ = [
     "CurlHttpVersion",
     "CurlSslVersion",
     "CurlWsFlag",
+    "config_warnings",
     "ffi",
     "lib",
 ]
@@ -31,3 +32,6 @@ from .const import (
     CurlWsFlag,
 )
 from .curl import Curl, CurlError, CurlMime
+from .utils import config_warnings
+
+config_warnings(on=False)

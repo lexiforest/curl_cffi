@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 from ..aio import AsyncCurl
 from ..const import CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
-from ..utils import _SHOW_WARNINGS
+from ..utils import CurlCffiWarning
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
@@ -320,8 +320,10 @@ class Session(BaseSession):
     @property
     def curl(self):
         if self._use_thread_local_curl:
-            if _SHOW_WARNINGS and self._is_customized_curl:
-                warnings.warn("Creating fresh curl handle in different thread.", stacklevel=2)
+            if self._is_customized_curl:
+                warnings.warn(
+                    "Creating fresh curl handle in different thread.", CurlCffiWarning, stacklevel=2
+                )
             if not getattr(self._local, "curl", None):
                 self._local.curl = Curl(debug=self.debug)
             return self._local.curl

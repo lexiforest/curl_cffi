@@ -11,7 +11,7 @@ import certifi
 
 from ._wrapper import ffi, lib
 from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
-from .utils import _SHOW_WARNINGS
+from .utils import CurlCffiWarning
 
 DEFAULT_CACERT = certifi.where()
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
@@ -85,8 +85,8 @@ def write_callback(ptr, size, nmemb, userdata):
     if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:  # noqa: SIM109
         return wrote
     # should make this an exception in future versions
-    if _SHOW_WARNINGS and wrote != nmemb * size:
-        warnings.warn("Wrote bytes != received bytes.", RuntimeWarning, stacklevel=2)
+    if wrote != nmemb * size:
+        warnings.warn("Wrote bytes != received bytes.", CurlCffiWarning, stacklevel=2)
     return nmemb * size
 
 
@@ -130,8 +130,8 @@ class Curl:
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
-        if _SHOW_WARNINGS and ret != 0:
-            warnings.warn("Failed to set error buffer", stacklevel=2)
+        if ret != 0:
+            warnings.warn("Failed to set error buffer", CurlCffiWarning, stacklevel=2)
         if self._debug:
             self.setopt(CurlOpt.VERBOSE, 1)
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)

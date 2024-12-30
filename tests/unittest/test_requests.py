@@ -11,6 +11,7 @@ from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import HTTPError
 from curl_cffi.requests.models import Response
+from curl_cffi.utils import CurlCffiWarning, config_warnings
 
 
 def test_head(server):
@@ -302,7 +303,7 @@ def test_cookies(server):
 
 
 def test_secure_cookies(server):
-    with pytest.warns(UserWarning, match="changed"):
+    with pytest.warns(CurlCffiWarning, match="changed"):
         r = requests.get(
             str(server.url.copy_with(path="/echo_cookies")),
             cookies={"__Secure-foo": "bar", "__Host-hello": "world"},

@@ -6,9 +6,9 @@ from typing import Any, Dict, Set
 from weakref import WeakKeyDictionary, WeakSet
 
 from ._wrapper import ffi, lib
-from .utils import _SHOW_WARNINGS
 from .const import CurlMOpt
 from .curl import DEFAULT_CACERT, Curl
+from .utils import CurlCffiWarning
 
 __all__ = ["AsyncCurl"]
 
@@ -37,8 +37,7 @@ if sys.platform == "win32":
         if not isinstance(asyncio_loop, getattr(asyncio, "ProactorEventLoop", type(None))):
             return asyncio_loop
 
-        if _SHOW_WARNINGS:
-            warnings.warn(PROACTOR_WARNING, RuntimeWarning, stacklevel=2)
+        warnings.warn(PROACTOR_WARNING, CurlCffiWarning, stacklevel=2)
 
         from ._asyncio_selector import AddThreadSelectorEventLoop
 
@@ -204,8 +203,10 @@ class AsyncCurl:
 
     def process_data(self, sockfd: int, ev_bitmask: int):
         """Call curl_multi_info_read to read data for given socket."""
-        if _SHOW_WARNINGS and not self._curlm:
-            warnings.warn("Curlm alread closed! quitting from process_data", stacklevel=2)
+        if not self._curlm:
+            warnings.warn(
+                "Curlm alread closed! quitting from process_data", CurlCffiWarning, stacklevel=2
+            )
             return
 
         self.socket_action(sockfd, ev_bitmask)

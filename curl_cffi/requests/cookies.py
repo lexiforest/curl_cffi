@@ -13,7 +13,7 @@ from http.cookies import _unquote
 from typing import Dict, Iterator, List, MutableMapping, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-from ..utils import _SHOW_WARNINGS
+from ..utils import CurlCffiWarning
 from .errors import CookieConflict, RequestsError
 
 CookieTypes = Union["Cookies", CookieJar, Dict[str, str], List[Tuple[str, str]]]
@@ -192,19 +192,19 @@ class Cookies(MutableMapping[str, str]):
         """
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
         if name.startswith("__Secure-") and secure is False:
-            if _SHOW_WARNINGS:
-                warnings.warn(
-                    "`secure` changed to True for `__Secure-` prefixed cookies",
-                    stacklevel=2,
-                )
+            warnings.warn(
+                "`secure` changed to True for `__Secure-` prefixed cookies",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
             secure = True
         elif name.startswith("__Host-") and (secure is False or domain or path != "/"):
-            if _SHOW_WARNINGS:
-                warnings.warn(
-                    "`host` changed to True, `domain` removed, `path` changed to `/` "
-                    "for `__Host-` prefixed cookies",
-                    stacklevel=2,
-                )
+            warnings.warn(
+                "`host` changed to True, `domain` removed, `path` changed to `/` "
+                "for `__Host-` prefixed cookies",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
             secure = True
             domain = ""
             path = "/"

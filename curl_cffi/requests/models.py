@@ -5,7 +5,7 @@ from concurrent.futures import Future
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 from ..curl import Curl
-from ..utils import _SHOW_WARNINGS
+from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
@@ -174,8 +174,12 @@ class Response:
         """
         iterate streaming content chunk by chunk in bytes.
         """
-        if _SHOW_WARNINGS and chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
+        if chunk_size:
+            warnings.warn(
+                "chunk_size is ignored, there is no way to tell curl that.",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
         if decode_unicode:
             raise NotImplementedError()
 
@@ -237,8 +241,12 @@ class Response:
         """
         iterate streaming content chunk by chunk in bytes.
         """
-        if _SHOW_WARNINGS and chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
+        if chunk_size:
+            warnings.warn(
+                "chunk_size is ignored, there is no way to tell curl that.",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
         if decode_unicode:
             raise NotImplementedError()
 
