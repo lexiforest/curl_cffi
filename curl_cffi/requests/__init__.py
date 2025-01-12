@@ -37,7 +37,7 @@ from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints
 from .models import Request, Response
-from .session import AsyncSession, HttpMethod, ProxySpec, Session, ThreadType, RequestParams
+from .session import AsyncSession, HttpMethod, ProxySpec, Session, ThreadType, RequestParams, Unpack
 from .websockets import (
     AsyncWebSocket,
     WebSocket,
@@ -48,8 +48,6 @@ from .websockets import (
 )
 
 if TYPE_CHECKING:
-    from typing_extensions import Unpack
-
     class SessionRequestParams(RequestParams):
         thread: Optional[ThreadType]
         curl_options: Optional[dict]

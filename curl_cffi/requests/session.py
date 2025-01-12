@@ -113,7 +113,11 @@ if TYPE_CHECKING:
         stream: Optional[bool]
 
 else:
-    Unpack = dict
+    class _Unpack:
+        @staticmethod
+        def __getitem__(*args, **kwargs): pass
+    Unpack = _Unpack()
+
     ProxySpec = Dict[str, str]
     BaseSessionParams = TypedDict
     StreamRequestParams, RequestParams = TypedDict, TypedDict
