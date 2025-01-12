@@ -49,12 +49,13 @@ from .websockets import (
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
-    
+
     class SessionRequestParams(RequestParams):
         thread: Optional[ThreadType]
         curl_options: Optional[dict]
         debug: Optional[bool]
 else:
+    Unpack = dict
     SessionRequestParams = TypedDict
 
 def request(

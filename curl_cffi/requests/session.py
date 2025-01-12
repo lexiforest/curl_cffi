@@ -113,6 +113,7 @@ if TYPE_CHECKING:
         stream: Optional[bool]
 
 else:
+    Unpack = dict
     ProxySpec = Dict[str, str]
     BaseSessionParams = TypedDict
     StreamRequestParams, RequestParams = TypedDict, TypedDict
