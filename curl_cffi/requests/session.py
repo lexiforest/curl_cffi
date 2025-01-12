@@ -6,7 +6,6 @@ import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from functools import partialmethod
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
@@ -79,9 +78,49 @@ if TYPE_CHECKING:
         cert: Optional[Union[str, Tuple[str, str]]]
         response_class: Optional[Type[Response]]
 
+    class StreamRequestParams(TypedDict, total=False):
+        params: Optional[Union[Dict, List, Tuple]]
+        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]]
+        json: Optional[dict]
+        headers: Optional[HeaderTypes]
+        cookies: Optional[CookieTypes]
+        files: Optional[Dict]
+        auth: Optional[Tuple[str, str]]
+        timeout: Optional[Union[float, Tuple[float, float], object]]
+        allow_redirects: Optional[bool]
+        max_redirects: Optional[int]
+        proxies: Optional[ProxySpec]
+        proxy: Optional[str]
+        proxy_auth: Optional[Tuple[str, str]]
+        verify: Optional[bool]
+        referer: Optional[str]
+        accept_encoding: Optional[str]
+        content_callback: Optional[Callable]
+        impersonate: Optional[BrowserTypeLiteral]
+        ja3: Optional[str]
+        akamai: Optional[str]
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
+        default_headers: Optional[bool]
+        default_encoding: Union[str, Callable[[bytes], str]]
+        quote: Union[str, Literal[False]]
+        http_version: Optional[CurlHttpVersion]
+        interface: Optional[str]
+        cert: Optional[Union[str, Tuple[str, str]]]
+        max_recv_speed: int
+        multipart: Optional[CurlMime]
+
+    class RequestParams(StreamRequestParams):
+        stream: Optional[bool]
+
 else:
+    class _Unpack:
+        @staticmethod
+        def __getitem__(*args, **kwargs): pass
+    Unpack = _Unpack()
+
     ProxySpec = Dict[str, str]
     BaseSessionParams = TypedDict
+    StreamRequestParams, RequestParams = TypedDict, TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
 HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
@@ -348,9 +387,14 @@ class Session(BaseSession):
         self.curl.close()
 
     @contextmanager
-    def stream(self, *args, **kwargs):
+    def stream(
+        self, 
+        method: HttpMethod,
+        url: str,
+        **kwargs: Unpack[StreamRequestParams],
+    ):
         """Equivalent to ``with request(..., stream=True) as r:``"""
-        rsp = self.request(*args, **kwargs, stream=True)
+        rsp = self.request(method=method, url=url, **kwargs, stream=True)
         try:
             yield rsp
         finally:
@@ -422,7 +466,7 @@ class Session(BaseSession):
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
-        stream: bool = False,
+        stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
     ) -> Response:
@@ -537,15 +581,32 @@ class Session(BaseSession):
             finally:
                 c.reset()
 
-    head = partialmethod(request, "HEAD")
-    get = partialmethod(request, "GET")
-    post = partialmethod(request, "POST")
-    put = partialmethod(request, "PUT")
-    patch = partialmethod(request, "PATCH")
-    delete = partialmethod(request, "DELETE")
-    options = partialmethod(request, "OPTIONS")
-    trace = partialmethod(request, "TRACE")
-    query = partialmethod(request, "QUERY")
+    def head(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="HEAD", url=url, **kwargs)
+
+    def get(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="GET", url=url, **kwargs)
+
+    def post(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="POST", url=url, **kwargs)
+
+    def put(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="PUT", url=url, **kwargs)
+
+    def patch(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="PATCH", url=url, **kwargs)
+
+    def delete(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="DELETE", url=url, **kwargs)
+
+    def options(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="OPTIONS", url=url, **kwargs)
+
+    def trace(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="TRACE", url=url, **kwargs)
+
+    def query(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="QUERY", url=url, **kwargs)
 
 
 class AsyncSession(BaseSession):
@@ -674,9 +735,14 @@ class AsyncSession(BaseSession):
             curl.close()
 
     @asynccontextmanager
-    async def stream(self, *args, **kwargs):
+    async def stream(
+        self,
+        method: HttpMethod,
+        url: str,
+        **kwargs: Unpack[StreamRequestParams],
+    ):
         """Equivalent to ``async with request(..., stream=True) as r:``"""
-        rsp = await self.request(*args, **kwargs, stream=True)
+        rsp = await self.request(method=method, url=url, **kwargs, stream=True)
         try:
             yield rsp
         finally:
@@ -815,7 +881,7 @@ class AsyncSession(BaseSession):
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
-        stream: bool = False,
+        stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
     ):
@@ -917,12 +983,29 @@ class AsyncSession(BaseSession):
             finally:
                 self.release_curl(curl)
 
-    head = partialmethod(request, "HEAD")
-    get = partialmethod(request, "GET")
-    post = partialmethod(request, "POST")
-    put = partialmethod(request, "PUT")
-    patch = partialmethod(request, "PATCH")
-    delete = partialmethod(request, "DELETE")
-    options = partialmethod(request, "OPTIONS")
-    trace = partialmethod(request, "TRACE")
-    query = partialmethod(request, "QUERY")
+    def head(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="HEAD", url=url, **kwargs)
+
+    def get(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="GET", url=url, **kwargs)
+
+    def post(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="POST", url=url, **kwargs)
+
+    def put(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="PUT", url=url, **kwargs)
+
+    def patch(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="PATCH", url=url, **kwargs)
+
+    def delete(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="DELETE", url=url, **kwargs)
+
+    def options(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="OPTIONS", url=url, **kwargs)
+
+    def trace(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="TRACE", url=url, **kwargs)
+
+    def query(self, url: str, **kwargs: Unpack[RequestParams]):
+        return self.request(method="QUERY", url=url, **kwargs)

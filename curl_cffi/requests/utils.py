@@ -337,7 +337,7 @@ def set_curl_options(
     http_version: Optional[CurlHttpVersion] = None,
     interface: Optional[str] = None,
     cert: Optional[Union[str, Tuple[str, str]]] = None,
-    stream: bool = False,
+    stream: Optional[bool] = None,
     max_recv_speed: int = 0,
     multipart: Optional[CurlMime] = None,
     queue_class: Any = None,
