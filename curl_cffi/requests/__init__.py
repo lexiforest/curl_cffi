@@ -53,7 +53,6 @@ if TYPE_CHECKING:
         curl_options: Optional[dict]
         debug: Optional[bool]
 else:
-    Unpack = dict
     SessionRequestParams = TypedDict
 
 def request(
