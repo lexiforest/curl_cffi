@@ -29,7 +29,7 @@ __all__ = [
     "ProxySpec",
 ]
 
-from typing import Optional, Unpack, TYPE_CHECKING, TypedDict
+from typing import Optional, TYPE_CHECKING, TypedDict
 
 from ..const import CurlWsFlag
 from .cookies import Cookies, CookieTypes
@@ -48,6 +48,8 @@ from .websockets import (
 )
 
 if TYPE_CHECKING:
+    from typing_extensions import Unpack
+    
     class SessionRequestParams(RequestParams):
         thread: Optional[ThreadType]
         curl_options: Optional[dict]

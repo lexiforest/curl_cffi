@@ -6,7 +6,6 @@ import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from functools import partialmethod
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
@@ -462,7 +461,7 @@ class Session(BaseSession):
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
-        stream: bool = False,
+        stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
     ) -> Response:
@@ -877,7 +876,7 @@ class AsyncSession(BaseSession):
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
-        stream: bool = False,
+        stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
     ):
