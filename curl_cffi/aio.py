@@ -85,8 +85,8 @@ def timer_function(curlm, timeout_ms: int, clientp: "AsyncCurl"):
     """
     async_curl = ffi.from_handle(clientp)
 
-    # A timeout_ms value <= 0 means you should delete the timer.
-    if timeout_ms <= 0:
+    # A timeout_ms value < 0 means you should delete the timer.
+    if timeout_ms < 0:
         for timer in async_curl._timers:
             timer.cancel()
         async_curl._timers = WeakSet()
