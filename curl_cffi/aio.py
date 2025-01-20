@@ -85,8 +85,8 @@ def timer_function(curlm, timeout_ms: int, clientp: "AsyncCurl"):
     """
     async_curl = ffi.from_handle(clientp)
 
-    # A timeout_ms value of -1 means you should delete the timer.
-    if timeout_ms == -1:
+    # A timeout_ms value <= 0 means you should delete the timer.
+    if timeout_ms <= 0:
         for timer in async_curl._timers:
             timer.cancel()
         async_curl._timers = WeakSet()
@@ -205,7 +205,7 @@ class AsyncCurl:
         """Call curl_multi_info_read to read data for given socket."""
         if not self._curlm:
             warnings.warn(
-                "Curlm alread closed! quitting from process_data", CurlCffiWarning, stacklevel=2
+                "Curlm already closed! quitting from process_data", CurlCffiWarning, stacklevel=2
             )
             return
 
