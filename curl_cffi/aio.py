@@ -205,7 +205,7 @@ class AsyncCurl:
         """Call curl_multi_info_read to read data for given socket."""
         if not self._curlm:
             warnings.warn(
-                "Curlm alread closed! quitting from process_data", CurlCffiWarning, stacklevel=2
+                "Curlm already closed! quitting from process_data", CurlCffiWarning, stacklevel=2
             )
             return
 
