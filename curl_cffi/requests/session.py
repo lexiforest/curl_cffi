@@ -260,10 +260,10 @@ class BaseSession:
         # for l in c.getinfo(CurlInfo.COOKIELIST):
         #     print("Curl Cookies", l.decode())
         update_sess_cookies = update_sess_cookies if update_sess_cookies is not None else self.update_sess_cookies
-        if update_sess_cookies:
-            cookies = self._cookies
-        else:
+        if update_sess_cookies is False:
             cookies = Cookies()
+        else:
+            cookies = self._cookies
         cookies.update_cookies_from_curl(morsels=morsels)
         rsp.cookies = cookies
         # print("Cookies after extraction", self._cookies)
