@@ -20,6 +20,7 @@ curl-*/
 .preprocessed
 include/
 .DS_Store
+poetry.lock
 
 .mypy_cache/
 .ruff_cache/
