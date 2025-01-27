@@ -848,7 +848,11 @@ class AsyncSession(BaseSession[R]):
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(cast(AsyncSession[R], self), curl, autoclose=autoclose)
+        return AsyncWebSocket(
+            cast(AsyncSession[Response], self),
+            curl,
+            autoclose=autoclose,
+        )
 
     async def request(
         self,
