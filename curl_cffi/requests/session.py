@@ -205,14 +205,12 @@ class BaseSession(Generic[R]):
         self.interface = interface
         self.cert = cert
 
-        if response_class is None:
-            response_class = Response
-        elif not issubclass(response_class, Response):
+        if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
                 "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
                 f" not of type `{response_class}`"
             )
-        self.response_class = response_class
+        self.response_class = response_class or Response
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -238,7 +236,7 @@ class BaseSession(Generic[R]):
         header_lines = header_buffer.getvalue().splitlines()
 
         # TODO: history urls
-        header_list = []
+        header_list: List[bytes] = []
         for header_line in header_lines:
             if not header_line.strip():
                 continue
@@ -850,7 +848,7 @@ class AsyncSession(BaseSession[R]):
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(self, curl, autoclose=autoclose)
+        return AsyncWebSocket(self[R], curl, autoclose=autoclose)
 
     async def request(
         self,
