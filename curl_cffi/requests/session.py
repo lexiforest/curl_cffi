@@ -226,7 +226,7 @@ class BaseSession(Generic[R]):
 
     def _parse_response(self, curl, buffer, header_buffer, default_encoding) -> R:
         c = curl
-        rsp = self.response_class(c)
+        rsp = cast(R, self.response_class(c))
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()
@@ -848,7 +848,7 @@ class AsyncSession(BaseSession[R]):
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(self[R], curl, autoclose=autoclose)
+        return AsyncWebSocket(cast(AsyncSession[R], self), curl, autoclose=autoclose)
 
     async def request(
         self,
