@@ -4,6 +4,7 @@ import platform
 import shutil
 import struct
 import tempfile
+from glob import glob
 from pathlib import Path
 from urllib.request import urlretrieve
 
@@ -71,6 +72,12 @@ def download_libcurl():
     print("Unpacking downloaded files...")
     os.makedirs(arch["libdir"], exist_ok=True)
     shutil.unpack_archive(file, arch["libdir"])
+
+    if arch["system"] == "Windows":
+        for file in glob(os.path.join(arch["libdir"], "lib/*.lib")):
+            shutil.move(file, arch["libdir"])
+        for file in glob(os.path.join(arch["libdir"], "bin/*.dll")):
+            shutil.move(file, arch["libdir"])
 
     print("Files after unpacking")
     print(os.listdir(arch["libdir"]))
