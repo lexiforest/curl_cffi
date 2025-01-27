@@ -106,7 +106,17 @@ def get_curl_archives():
 
 def get_curl_libraries():
     if arch["system"] == "Windows":
-        return ["libcurl"]
+        return [
+            "libcurl",
+            "zstd",
+            "zlib",
+            "ssl",
+            "nghttp2",
+            "crypto",
+            "brotlienc",
+            "brotlidec",
+            "brotlicommon",
+        ]
     elif arch["system"] == "Darwin" or (
         arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
     ):
