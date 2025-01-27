@@ -8,6 +8,7 @@ on:
       - main
       - bugfix/*
       - feature/*
+      - release/*
     tags:
       - v*
 
