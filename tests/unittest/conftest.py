@@ -126,6 +126,8 @@ async def app(scope, receive, send):
         await hello_world_gbk(scope, receive, send)
     elif scope["path"].startswith("/windows1251"):
         await hello_world_windows1251(scope, receive, send)
+    elif scope["path"].startswith("/cookies_now"):
+        await set_cookies_now(scope, receive, send)
     elif scope["path"].startswith("http://"):
         await http_proxy(scope, receive, send)
     elif scope["method"] == "CONNECT":
@@ -414,6 +416,20 @@ async def delete_cookies(scope, receive, send):
             "headers": [
                 [b"content-type", b"text/plain"],
                 [b"set-cookie", b"foo=; Max-Age=0"],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Hello, world!"})
+
+
+async def set_cookies_now(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/plain"],
+                [b"set-cookie", f"foo={time.time()}".encode()],
             ],
         }
     )
