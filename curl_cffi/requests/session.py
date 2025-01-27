@@ -77,6 +77,7 @@ if TYPE_CHECKING:
         interface: Optional[str]
         cert: Optional[Union[str, Tuple[str, str]]]
         response_class: Optional[Type[Response]]
+        update_sess_cookies: Optional[bool]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[Dict, List, Tuple]]
@@ -108,6 +109,7 @@ if TYPE_CHECKING:
         cert: Optional[Union[str, Tuple[str, str]]]
         max_recv_speed: int
         multipart: Optional[CurlMime]
+        update_sess_cookies: Optional[bool]
 
     class RequestParams(StreamRequestParams):
         stream: Optional[bool]
@@ -178,6 +180,7 @@ class BaseSession:
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
         response_class: Optional[Type[Response]] = None,
+        update_sess_cookies: Optional[bool] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -210,6 +213,7 @@ class BaseSession:
                 f" not of type `{response_class}`"
             )
         self.response_class = response_class
+        self.update_sess_cookies = True if update_sess_cookies is None else update_sess_cookies
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -223,7 +227,7 @@ class BaseSession:
 
         self._closed = False
 
-    def _parse_response(self, curl, buffer, header_buffer, default_encoding):
+    def _parse_response(self, curl, buffer, header_buffer, default_encoding, update_sess_cookies):
         c = curl
         rsp = self.response_class(c)
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
@@ -255,8 +259,13 @@ class BaseSession:
         morsels = [CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)]
         # for l in c.getinfo(CurlInfo.COOKIELIST):
         #     print("Curl Cookies", l.decode())
-        self._cookies.update_cookies_from_curl(morsels)
-        rsp.cookies = self._cookies
+        update_sess_cookies = update_sess_cookies if update_sess_cookies is not None else self.update_sess_cookies
+        if update_sess_cookies is False:
+            cookies = Cookies()
+        else:
+            cookies = self._cookies
+        cookies.update_cookies_from_curl(morsels=morsels)
+        rsp.cookies = cookies
         # print("Cookies after extraction", self._cookies)
 
         rsp.primary_ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
@@ -469,6 +478,7 @@ class Session(BaseSession):
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
+        update_sess_cookies: Optional[bool] = None,
     ) -> Response:
         """Send the request, see ``requests.request`` for details on parameters."""
 
@@ -527,7 +537,7 @@ class Session(BaseSession):
                 try:
                     c.perform()
                 except CurlError as e:
-                    rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
+                    rsp = self._parse_response(c, buffer, header_buffer, default_encoding, update_sess_cookies)
                     rsp.request = req
                     cast(queue.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
                 finally:
@@ -545,7 +555,7 @@ class Session(BaseSession):
 
             # Wait for the first chunk
             cast(threading.Event, header_recved).wait()
-            rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
+            rsp = self._parse_response(c, buffer, header_buffer, default_encoding, update_sess_cookies)
             header_parsed.set()
 
             # Raise the exception if something wrong happens when receiving the header.
@@ -570,12 +580,12 @@ class Session(BaseSession):
                 else:
                     c.perform()
             except CurlError as e:
-                rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
+                rsp = self._parse_response(c, buffer, header_buffer, default_encoding, update_sess_cookies)
                 rsp.request = req
                 error = code2error(e.code, str(e))
                 raise error(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
+                rsp = self._parse_response(c, buffer, header_buffer, default_encoding, update_sess_cookies)
                 rsp.request = req
                 return rsp
             finally:
@@ -884,6 +894,7 @@ class AsyncSession(BaseSession):
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
+        update_sess_cookies: Optional[bool] = None,
     ):
         """Send the request, see ``curl_cffi.requests.request`` for details on parameters."""
 
@@ -935,7 +946,7 @@ class AsyncSession(BaseSession):
                 try:
                     await task
                 except CurlError as e:
-                    rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+                    rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
                     rsp.request = req
                     cast(asyncio.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
                 finally:
@@ -955,7 +966,7 @@ class AsyncSession(BaseSession):
             # Unlike threads, coroutines does not use preemptive scheduling.
             # For asyncio, there is no need for a header_parsed event, the
             # _parse_response will execute in the foreground, no background tasks running.
-            rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+            rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
 
             first_element = _peek_aio_queue(cast(asyncio.Queue, q))
             if isinstance(first_element, RequestException):
@@ -972,12 +983,12 @@ class AsyncSession(BaseSession):
                 task = self.acurl.add_handle(curl)
                 await task
             except CurlError as e:
-                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
                 rsp.request = req
                 error = code2error(e.code, str(e))
                 raise error(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
                 rsp.request = req
                 return rsp
             finally:
