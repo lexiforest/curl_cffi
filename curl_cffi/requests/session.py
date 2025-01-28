@@ -21,6 +21,7 @@ from typing import (
     Union,
     cast,
     Generic,
+    TypeVar
 )
 from urllib.parse import urlparse
 
@@ -43,15 +44,9 @@ with suppress(ImportError):
     import eventlet.tpool
 
 if sys.version_info >= (3, 12):
-    from typing import TypeVar
     R = TypeVar('R', bound=Response, default=Response)
 else:
-    try:
-        from typing_extensions import TypeVar
-        R = TypeVar('R', bound=Response, default=Response)
-    except ImportError:
-        from typing import TypeVar
-        R = TypeVar('R', bound=Response)
+    R = TypeVar('R', bound=Response)
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
