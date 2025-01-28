@@ -44,13 +44,13 @@ with suppress(ImportError):
 
 try:
     from typing_extensions import TypeVar
+    R = TypeVar('R', bound=Response, default=Response)
 except ImportError:
     from typing import TypeVar
-    
-if sys.version >= (3, 12):
-    R = TypeVar('R', bound=Response, default=Response)
-else:
-    R = TypeVar('R', bound=Response)
+    if sys.version >= (3, 12):
+        R = TypeVar('R', bound=Response, default=Response)
+    else:
+        R = TypeVar('R', bound=Response)
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
