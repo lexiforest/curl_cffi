@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import asyncio
 import queue
 import threading
@@ -19,8 +20,8 @@ from typing import (
     TypedDict,
     Union,
     cast,
+    Generic,
 )
-from typing_extensions import TypeVar, Generic
 from urllib.parse import urlparse
 
 from ..aio import AsyncCurl
@@ -41,7 +42,15 @@ with suppress(ImportError):
 with suppress(ImportError):
     import eventlet.tpool
 
-R = TypeVar('R', bound=Response, default=Response)
+try:
+    from typing_extensions import TypeVar
+except ImportError:
+    from typing import TypeVar
+    
+if sys.version >= (3, 12):
+    R = TypeVar('R', bound=Response, default=Response)
+else:
+    R = TypeVar('R', bound=Response)
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
