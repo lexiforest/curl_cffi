@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import asyncio
 import queue
 import threading
@@ -19,6 +20,8 @@ from typing import (
     TypedDict,
     Union,
     cast,
+    Generic,
+    TypeVar
 )
 from urllib.parse import urlparse
 
@@ -40,6 +43,11 @@ with suppress(ImportError):
 with suppress(ImportError):
     import eventlet.tpool
 
+if sys.version_info >= (3, 12):
+    R = TypeVar('R', bound=Response, default=Response)
+else:
+    R = TypeVar('R', bound=Response)
+
 if TYPE_CHECKING:
     from typing_extensions import Unpack
 
@@ -50,7 +58,7 @@ if TYPE_CHECKING:
         ws: str
         wss: str
 
-    class BaseSessionParams(TypedDict, total=False):
+    class BaseSessionParams(Generic[R], TypedDict, total=False):
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
         auth: Optional[Tuple[str, str]]
@@ -76,7 +84,7 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, Tuple[str, str]]]
-        response_class: Optional[Type[Response]]
+        response_class: Optional[Type[R]]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[Dict, List, Tuple]]
@@ -109,7 +117,7 @@ if TYPE_CHECKING:
         max_recv_speed: int
         multipart: Optional[CurlMime]
 
-    class RequestParams(StreamRequestParams):
+    class RequestParams(StreamRequestParams, total=False):
         stream: Optional[bool]
 
 else:
@@ -146,7 +154,7 @@ def _peek_aio_queue(q: asyncio.Queue, default=None):
         return default
 
 
-class BaseSession:
+class BaseSession(Generic[R]):
     """Provide common methods for setting curl options and reading info in sessions."""
 
     def __init__(
@@ -177,7 +185,7 @@ class BaseSession:
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
-        response_class: Optional[Type[Response]] = None,
+        response_class: Optional[Type[R]] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -202,14 +210,12 @@ class BaseSession:
         self.interface = interface
         self.cert = cert
 
-        if response_class is None:
-            response_class = Response
-        elif not issubclass(response_class, Response):
+        if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
                 "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
                 f" not of type `{response_class}`"
             )
-        self.response_class = response_class
+        self.response_class = response_class or Response
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -223,9 +229,9 @@ class BaseSession:
 
         self._closed = False
 
-    def _parse_response(self, curl, buffer, header_buffer, default_encoding):
+    def _parse_response(self, curl, buffer, header_buffer, default_encoding) -> R:
         c = curl
-        rsp = self.response_class(c)
+        rsp = cast(R, self.response_class(c))
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()
@@ -235,7 +241,7 @@ class BaseSession:
         header_lines = header_buffer.getvalue().splitlines()
 
         # TODO: history urls
-        header_list = []
+        header_list: List[bytes] = []
         for header_line in header_lines:
             if not header_line.strip():
                 continue
@@ -285,8 +291,7 @@ class BaseSession:
         # This ensures that the cookies property is always converted to Cookies.
         self._cookies = Cookies(cookies)
 
-
-class Session(BaseSession):
+class Session(BaseSession[R]):
     """A request session, cookies and connections will be reused. This object is thread-safe,
     but it's recommended to use a separate session for each thread."""
 
@@ -295,7 +300,7 @@ class Session(BaseSession):
         curl: Optional[Curl] = None,
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
-        **kwargs: Unpack[BaseSessionParams],
+        **kwargs: Unpack[BaseSessionParams[R]],
     ):
         """
         Parameters set in the init method will be overriden by the same parameter in request method.
@@ -469,7 +474,7 @@ class Session(BaseSession):
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
-    ) -> Response:
+    ):
         """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
@@ -609,7 +614,7 @@ class Session(BaseSession):
         return self.request(method="QUERY", url=url, **kwargs)
 
 
-class AsyncSession(BaseSession):
+class AsyncSession(BaseSession[R]):
     """An async request session, cookies and connections will be reused."""
 
     def __init__(
@@ -618,7 +623,7 @@ class AsyncSession(BaseSession):
         loop=None,
         async_curl: Optional[AsyncCurl] = None,
         max_clients: int = 10,
-        **kwargs: Unpack[BaseSessionParams],
+        **kwargs: Unpack[BaseSessionParams[R]],
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -848,7 +853,11 @@ class AsyncSession(BaseSession):
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(self, curl, autoclose=autoclose)
+        return AsyncWebSocket(
+            cast(AsyncSession[Response], self),
+            curl,
+            autoclose=autoclose,
+        )
 
     async def request(
         self,
