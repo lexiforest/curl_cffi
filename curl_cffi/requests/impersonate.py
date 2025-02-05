@@ -32,12 +32,15 @@ BrowserTypeLiteral = Literal[
     "safari17_2_ios",
     "safari18_0",
     "safari18_0_ios",
+    # Firefox
+    "firefox133",
     # alias
     "chrome",
     "edge",
     "safari",
     "safari_ios",
     "chrome_android",
+    "firefox",
     # Canonical names
     # "edge_99",
     # "edge_101",
@@ -55,6 +58,7 @@ DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari18_0"
 DEFAULT_SAFARI_IOS = "safari18_0_ios"
 DEFAULT_CHROME_ANDROID = "chrome131_android"
+DEFAULT_FIREFOX = "firefox133"
 
 
 REAL_TARGET_MAP = {
@@ -63,6 +67,7 @@ REAL_TARGET_MAP = {
     "safari": "safari17_0",
     "safari_ios": "safari17_2_ios",
     "chrome_android": "chrome131_android",
+    "firefox": "firefox133",
 }
 
 
@@ -77,6 +82,8 @@ def normalize_browser_type(item):
         return DEFAULT_SAFARI_IOS
     elif item == "chrome_android":
         return DEFAULT_CHROME_ANDROID
+    elif item == "firefox":
+        return DEFAULT_FIREFOX
     else:
         return item
 
@@ -104,6 +111,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     safari17_2_ios = "safari17_2_ios"
     safari18_0 = "safari18_0"
     safari18_0_ios = "safari18_0_ios"
+    firefox133 = "firefox133"
 
 
 @dataclass

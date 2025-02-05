@@ -19,7 +19,7 @@ from typing import (
     Union,
 )
 
-from ..aio import CURL_SOCKET_BAD
+from ..aio import CURL_SOCKET_BAD, _get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
 from .exceptions import SessionClosed, Timeout
@@ -525,7 +525,7 @@ class AsyncWebSocket(BaseWebSocket):
     @property
     def loop(self):
         if self._loop is None:
-            self._loop = asyncio.get_running_loop()
+            self._loop = _get_selector(asyncio.get_running_loop())
         return self._loop
 
     def __aiter__(self) -> Self:
