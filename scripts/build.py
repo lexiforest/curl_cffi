@@ -100,6 +100,18 @@ def get_curl_archives():
             f"{arch['libdir']}/libbrotlienc.a",
             f"{arch['libdir']}/libbrotlicommon.a",
         ]
+    if arch["system"] == "Windows":
+        return [
+            f"{arch['libdir']}/libcurl.lib",
+            f"{arch['libdir']}/zstd.lib",
+            f"{arch['libdir']}/zlib.lib",
+            f"{arch['libdir']}/ssl.lib",
+            f"{arch['libdir']}/nghttp2.lib",
+            f"{arch['libdir']}/crypto.lib",
+            f"{arch['libdir']}/brotlidec.lib",
+            f"{arch['libdir']}/brotlienc.lib",
+            f"{arch['libdir']}/brotlicommon.lib",
+        ]
     else:
         return []
 
