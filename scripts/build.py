@@ -154,6 +154,7 @@ ffibuilder.set_source(
     library_dirs=[arch["libdir"]],
     source_extension=".c",
     include_dirs=[
+        os.path.join(arch["libdir"], "include"),  # for Windows
         str(root_dir / "include"),
         str(root_dir / "ffi"),
     ],
