@@ -100,18 +100,6 @@ def get_curl_archives():
             f"{arch['libdir']}/libbrotlienc.a",
             f"{arch['libdir']}/libbrotlicommon.a",
         ]
-    if arch["system"] == "Windows":
-        return [
-            f"{arch['libdir']}/libcurl.lib",
-            f"{arch['libdir']}/zstd.lib",
-            f"{arch['libdir']}/zlib.lib",
-            f"{arch['libdir']}/ssl.lib",
-            f"{arch['libdir']}/nghttp2.lib",
-            f"{arch['libdir']}/crypto.lib",
-            f"{arch['libdir']}/brotlidec.lib",
-            f"{arch['libdir']}/brotlienc.lib",
-            f"{arch['libdir']}/brotlicommon.lib",
-        ]
     else:
         return []
 
@@ -158,7 +146,6 @@ ffibuilder.set_source(
     library_dirs=[arch["libdir"]],
     source_extension=".c",
     include_dirs=[
-        os.path.join(arch["libdir"], "include"),  # for Windows
         str(root_dir / "include"),
         str(root_dir / "ffi"),
     ],
@@ -166,7 +153,7 @@ ffibuilder.set_source(
         str(root_dir / "ffi/shim.c"),
     ],
     extra_compile_args=(["-Wno-implicit-function-declaration"] if system == "Darwin" else []),
-    extra_link_args=(["-lstdc++"]),
+    extra_link_args=(["-lstdc++"] if system != "Windows" else []),
 )
 
 with open(root_dir / "ffi/cdef.c") as f:
