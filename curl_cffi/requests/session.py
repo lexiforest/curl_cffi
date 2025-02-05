@@ -43,7 +43,8 @@ with suppress(ImportError):
 with suppress(ImportError):
     import eventlet.tpool
 
-if sys.version_info >= (3, 12):
+# Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
+if sys.version_info >= (3, 13):
     R = TypeVar('R', bound=Response, default=Response)
 else:
     R = TypeVar('R', bound=Response)
