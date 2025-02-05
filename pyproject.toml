@@ -83,7 +83,7 @@ build = [
     "cp38-macosx_x86_64",
     "cp39-macosx_arm64",
     "cp38-win_amd64",
-    "cp38-win32",
+    # "cp38-win32",
     "cp38-manylinux_x86_64",
     "cp38-manylinux_aarch64",
     "cp38-manylinux_i686",
