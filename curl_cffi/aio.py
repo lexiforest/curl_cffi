@@ -22,7 +22,7 @@ if sys.platform == "win32":
         asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
     """
 
-    def _get_selector(asyncio_loop) -> asyncio.AbstractEventLoop:
+    def get_selector(asyncio_loop: asyncio.AbstractEventLoop) -> asyncio.AbstractEventLoop:
         """Get selector-compatible loop
 
         Returns an object with ``add_reader`` family of methods,
@@ -58,7 +58,7 @@ if sys.platform == "win32":
 
 else:
 
-    def _get_selector(loop) -> asyncio.AbstractEventLoop:
+    def get_selector(loop: asyncio.AbstractEventLoop) -> asyncio.AbstractEventLoop:
         return loop
 
 
@@ -135,7 +135,7 @@ class AsyncCurl:
         self._curl2future: Dict[Curl, asyncio.Future] = {}  # curl to future map
         self._curl2curl: Dict[ffi.CData, Curl] = {}  # c curl to Curl
         self._sockfds: Set[int] = set()  # sockfds
-        self.loop = _get_selector(loop if loop is not None else asyncio.get_running_loop())
+        self.loop = get_selector(loop if loop is not None else asyncio.get_running_loop())
         self._checker = self.loop.create_task(self._force_timeout())
         self._timers: WeakSet[asyncio.TimerHandle] = WeakSet()
         self._setup()
