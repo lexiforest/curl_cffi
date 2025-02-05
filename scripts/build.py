@@ -119,6 +119,10 @@ def get_curl_archives():
 def get_curl_libraries():
     if arch["system"] == "Windows":
         return [
+            "Crypt32",
+            "Secur32",
+            "wldap32",
+            "Normaliz",
             "libcurl",
             "zstd",
             "zlib",
