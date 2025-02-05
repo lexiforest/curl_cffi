@@ -5,8 +5,8 @@
 import json
 from typing import Literal, Union
 
-from .. import CurlError
 from ..const import CurlECode
+from ..curl import CurlError
 
 
 # Note IOError is an alias of OSError in Python 3.x
