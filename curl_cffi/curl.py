@@ -187,11 +187,15 @@ class Curl:
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
+            )
         elif option == CurlOpt.HEADERDATA:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
+            )
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -216,7 +220,9 @@ class Curl:
             ret = lib._curl_easy_setopt(self._curl, option, self._headers)
         elif option == CurlOpt.PROXYHEADER:
             for proxy_header in value:
-                self._proxy_headers = lib.curl_slist_append(self._proxy_headers, proxy_header)
+                self._proxy_headers = lib.curl_slist_append(
+                    self._proxy_headers, proxy_header
+                )
             ret = lib._curl_easy_setopt(self._curl, option, self._proxy_headers)
         elif option == CurlOpt.RESOLVE:
             for resolve in value:
@@ -279,7 +285,9 @@ class Curl:
         Returns:
             0 if no error.
         """
-        return lib.curl_easy_impersonate(self._curl, target.encode(), int(default_headers))
+        return lib.curl_easy_impersonate(
+            self._curl, target.encode(), int(default_headers)
+        )
 
     def _ensure_cacert(self) -> None:
         if not self._is_cert_set:

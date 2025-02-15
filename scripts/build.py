@@ -152,7 +152,9 @@ ffibuilder.set_source(
     sources=[
         str(root_dir / "ffi/shim.c"),
     ],
-    extra_compile_args=(["-Wno-implicit-function-declaration"] if system == "Darwin" else []),
+    extra_compile_args=(
+        ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
+    ),
     extra_link_args=(["-lstdc++"] if system != "Windows" else []),
 )
 

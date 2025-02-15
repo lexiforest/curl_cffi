@@ -155,7 +155,9 @@ class Response:
         """
         pending = None
 
-        for chunk in self.iter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
+        for chunk in self.iter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
@@ -221,7 +223,9 @@ class Response:
         """
         pending = None
 
-        async for chunk in self.aiter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
+        async for chunk in self.aiter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()

@@ -10,4 +10,3 @@ def config_warnings(on: bool = False):
         warnings.simplefilter("default", category=CurlCffiWarning)
     else:
         warnings.simplefilter("ignore", category=CurlCffiWarning)
-

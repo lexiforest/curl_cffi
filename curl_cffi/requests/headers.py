@@ -50,7 +50,9 @@ def normalize_header_key(
     """
     Coerce str/bytes into a strictly byte-wise HTTP header key.
     """
-    bytes_value = value if isinstance(value, bytes) else value.encode(encoding or "ascii")
+    bytes_value = (
+        value if isinstance(value, bytes) else value.encode(encoding or "ascii")
+    )
 
     return bytes_value.lower() if lower else bytes_value
 
@@ -80,7 +82,9 @@ class Headers(MutableMapping[str, Optional[str]]):
     HTTP headers, as a case-insensitive multi-dict.
     """
 
-    def __init__(self, headers: Optional[HeaderTypes] = None, encoding: Optional[str] = None):
+    def __init__(
+        self, headers: Optional[HeaderTypes] = None, encoding: Optional[str] = None
+    ):
         if not headers:
             self._list: list[tuple[bytes, bytes, Optional[bytes]]] = []
         elif isinstance(headers, Headers):
@@ -188,7 +192,10 @@ class Headers(MutableMapping[str, Optional[str]]):
         comma separated value.
         """
         return [
-            (key.decode(self.encoding), value.decode(self.encoding) if value is not None else value)
+            (
+                key.decode(self.encoding),
+                value.decode(self.encoding) if value is not None else value,
+            )
             for key, _, value in self._list
         ]
 
@@ -243,7 +250,9 @@ class Headers(MutableMapping[str, Optional[str]]):
         normalized_key = key.lower().encode(self.encoding)
 
         items = [
-            header_value.decode(self.encoding) if header_value is not None else header_value
+            header_value.decode(self.encoding)
+            if header_value is not None
+            else header_value
             for _, header_key, header_value in self._list
             if header_key == normalized_key
         ]
@@ -262,11 +271,15 @@ class Headers(MutableMapping[str, Optional[str]]):
         Retains insertion order.
         """
         set_key = key.encode(self._encoding or "utf-8")
-        set_value = value.encode(self._encoding or "utf-8") if value is not None else value
+        set_value = (
+            value.encode(self._encoding or "utf-8") if value is not None else value
+        )
         lookup_key = set_key.lower()
 
         found_indexes = [
-            idx for idx, (_, item_key, _) in enumerate(self._list) if item_key == lookup_key
+            idx
+            for idx, (_, item_key, _) in enumerate(self._list)
+            if item_key == lookup_key
         ]
 
         for idx in reversed(found_indexes[1:]):
@@ -285,7 +298,9 @@ class Headers(MutableMapping[str, Optional[str]]):
         del_key = key.lower().encode(self.encoding)
 
         pop_indexes = [
-            idx for idx, (_, item_key, _) in enumerate(self._list) if item_key.lower() == del_key
+            idx
+            for idx, (_, item_key, _) in enumerate(self._list)
+            if item_key.lower() == del_key
         ]
 
         if not pop_indexes:

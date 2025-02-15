@@ -21,7 +21,15 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
+from urllib.parse import (
+    ParseResult,
+    parse_qsl,
+    quote,
+    unquote,
+    urlencode,
+    urljoin,
+    urlparse,
+)
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -47,7 +55,9 @@ if TYPE_CHECKING:
     from .session import ProxySpec
 
 
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
+HttpMethod = Literal[
+    "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
+]
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
@@ -108,7 +118,9 @@ def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
             value = dumps(value)
         # 1 to 1 mapping, we have to search and update it.
         if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
-            parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
+            parsed_get_args = [
+                (x if x[0] != key else (key, value)) for x in parsed_get_args
+            ]
         else:
             parsed_get_args.append((key, value))
 
@@ -181,7 +193,9 @@ def requote_uri(uri: str) -> str:
 
 
 # TODO: should we move this function to headers.py?
-def update_header_line(header_lines: list[str], key: str, value: str, replace: bool = False):
+def update_header_line(
+    header_lines: list[str], key: str, value: str, replace: bool = False
+):
     """Update header line list by key value pair."""
     found = False
     for idx, line in enumerate(header_lines):
@@ -311,7 +325,7 @@ def set_curl_options(
     params_list: list[Union[dict, list, tuple, None]] = [],
     base_url: Optional[str] = None,
     data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-    json: Optional[dict] = None,
+    json: Optional[dict | list] = None,
     headers_list: list[Optional[HeaderTypes]] = [],
     cookies_list: list[Optional[CookieTypes]] = [],
     files: Optional[dict] = None,
@@ -424,7 +438,9 @@ def set_curl_options(
     if json is not None:
         update_header_line(header_lines, "Content-Type", "application/json")
     if isinstance(data, dict) and method != "POST":
-        update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
+        update_header_line(
+            header_lines, "Content-Type", "application/x-www-form-urlencoded"
+        )
     if isinstance(data, (str, bytes)):
         update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
@@ -586,7 +602,9 @@ def set_curl_options(
     if ja3:
         if impersonate:
             warnings.warn(
-                "JA3 was altered after browser version was set.", CurlCffiWarning, stacklevel=1
+                "JA3 was altered after browser version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
             )
         permute = False
         if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
@@ -599,7 +617,9 @@ def set_curl_options(
     if akamai:
         if impersonate:
             warnings.warn(
-                "Akamai was altered after browser version was set.", CurlCffiWarning, stacklevel=1
+                "Akamai was altered after browser version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
             )
         set_akamai_options(c, akamai)
 

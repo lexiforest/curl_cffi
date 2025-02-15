@@ -4,7 +4,9 @@ from typing import cast
 
 
 class CustomResponse(requests.Response):
-    def __init__(self, curl: Curl | None = None, request: requests.Request | None = None):
+    def __init__(
+        self, curl: Curl | None = None, request: requests.Request | None = None
+    ):
         super().__init__(curl, request)
         self.local_port = cast(int, curl.getinfo(CurlInfo.LOCAL_PORT))
         self.connect_time = cast(float, curl.getinfo(CurlInfo.CONNECT_TIME))

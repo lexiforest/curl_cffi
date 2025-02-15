@@ -77,7 +77,9 @@ class SelectorThread:
         self._real_loop = real_loop
 
         self._select_cond = threading.Condition()
-        self._select_args: Optional[tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]] = None
+        self._select_args: Optional[
+            tuple[list[_FileDescriptorLike], list[_FileDescriptorLike]]
+        ] = None
         self._closing_selector = False
         self._thread: Optional[threading.Thread] = None
         self._thread_manager_handle = self._thread_manager()
@@ -90,7 +92,9 @@ class SelectorThread:
         # When the loop starts, start the thread. Not too soon because we can't
         # clean up if we get to this point but the event loop is closed without
         # starting.
-        self._real_loop.call_soon(lambda: self._real_loop.create_task(thread_manager_anext()))
+        self._real_loop.call_soon(
+            lambda: self._real_loop.create_task(thread_manager_anext())
+        )
 
         self._readers: dict[_FileDescriptorLike, Callable] = {}
         self._writers: dict[_FileDescriptorLike, Callable] = {}
@@ -226,7 +230,9 @@ class SelectorThread:
                 # Swallow it too for consistency.
                 pass
 
-    def _handle_select(self, rs: list[_FileDescriptorLike], ws: list[_FileDescriptorLike]) -> None:
+    def _handle_select(
+        self, rs: list[_FileDescriptorLike], ws: list[_FileDescriptorLike]
+    ) -> None:
         for r in rs:
             self._handle_event(r, self._readers)
         for w in ws:

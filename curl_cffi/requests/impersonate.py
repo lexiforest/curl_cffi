@@ -332,7 +332,9 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
     # server_name
     elif extension_id == 0:
-        raise NotImplementedError("It's unlikely that the server_name(0) extension being changed.")
+        raise NotImplementedError(
+            "It's unlikely that the server_name(0) extension being changed."
+        )
     # ALPN
     elif extension_id == 16:
         if enable:

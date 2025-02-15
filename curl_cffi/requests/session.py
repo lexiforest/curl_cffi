@@ -18,7 +18,7 @@ from typing import (
     Union,
     cast,
     Generic,
-    TypeVar
+    TypeVar,
 )
 from urllib.parse import urlparse
 
@@ -42,9 +42,9 @@ with suppress(ImportError):
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
-    R = TypeVar('R', bound=Response, default=Response)
+    R = TypeVar("R", bound=Response, default=Response)
 else:
-    R = TypeVar('R', bound=Response)
+    R = TypeVar("R", bound=Response)
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
@@ -119,9 +119,12 @@ if TYPE_CHECKING:
         stream: Optional[bool]
 
 else:
+
     class _Unpack:
         @staticmethod
-        def __getitem__(*args, **kwargs): pass
+        def __getitem__(*args, **kwargs):
+            pass
+
     Unpack = _Unpack()
 
     ProxySpec = dict[str, str]
@@ -129,7 +132,9 @@ else:
     StreamRequestParams, RequestParams = TypedDict, TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
+HttpMethod = Literal[
+    "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
+]
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -256,7 +261,9 @@ class BaseSession(Generic[R]):
         rsp.headers = Headers(header_list)
 
         # cookies
-        morsels = [CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)]
+        morsels = [
+            CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)
+        ]
         # for l in c.getinfo(CurlInfo.COOKIELIST):
         #     print("Curl Cookies", l.decode())
         self._cookies.update_cookies_from_curl(morsels)
@@ -288,6 +295,7 @@ class BaseSession(Generic[R]):
     def cookies(self, cookies: CookieTypes) -> None:
         # This ensures that the cookies property is always converted to Cookies.
         self._cookies = Cookies(cookies)
+
 
 class Session(BaseSession[R]):
     """A request session, cookies and connections will be reused. This object is thread-safe,
@@ -364,7 +372,9 @@ class Session(BaseSession[R]):
         if self._use_thread_local_curl:
             if self._is_customized_curl:
                 warnings.warn(
-                    "Creating fresh curl handle in different thread.", CurlCffiWarning, stacklevel=2
+                    "Creating fresh curl handle in different thread.",
+                    CurlCffiWarning,
+                    stacklevel=2,
                 )
             if not getattr(self._local, "curl", None):
                 self._local.curl = Curl(debug=self.debug)
@@ -391,7 +401,7 @@ class Session(BaseSession[R]):
 
     @contextmanager
     def stream(
-        self, 
+        self,
         method: HttpMethod,
         url: str,
         **kwargs: Unpack[StreamRequestParams],
@@ -497,8 +507,12 @@ class Session(BaseSession[R]):
             files=files,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
-            max_redirects=self.max_redirects if max_redirects is None else max_redirects,
+            allow_redirects=self.allow_redirects
+            if allow_redirects is None
+            else allow_redirects,
+            max_redirects=self.max_redirects
+            if max_redirects is None
+            else max_redirects,
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -510,7 +524,9 @@ class Session(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers if default_headers is None else default_headers,
+            default_headers=self.default_headers
+            if default_headers is None
+            else default_headers,
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -530,9 +546,13 @@ class Session(BaseSession[R]):
                 try:
                     c.perform()
                 except CurlError as e:
-                    rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
+                    rsp = self._parse_response(
+                        c, buffer, header_buffer, default_encoding
+                    )
                     rsp.request = req
-                    cast(queue.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
+                    cast(queue.Queue, q).put_nowait(
+                        RequestException(str(e), e.code, rsp)
+                    )
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
@@ -827,8 +847,12 @@ class AsyncSession(BaseSession[R]):
             cookies_list=[self.cookies, cookies],
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
-            max_redirects=self.max_redirects if max_redirects is None else max_redirects,
+            allow_redirects=self.allow_redirects
+            if allow_redirects is None
+            else allow_redirects,
+            max_redirects=self.max_redirects
+            if max_redirects is None
+            else max_redirects,
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -839,7 +863,9 @@ class AsyncSession(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers if default_headers is None else default_headers,
+            default_headers=self.default_headers
+            if default_headers is None
+            else default_headers,
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -910,8 +936,12 @@ class AsyncSession(BaseSession[R]):
             files=files,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
-            max_redirects=self.max_redirects if max_redirects is None else max_redirects,
+            allow_redirects=self.allow_redirects
+            if allow_redirects is None
+            else allow_redirects,
+            max_redirects=self.max_redirects
+            if max_redirects is None
+            else max_redirects,
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -923,7 +953,9 @@ class AsyncSession(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers if default_headers is None else default_headers,
+            default_headers=self.default_headers
+            if default_headers is None
+            else default_headers,
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -942,9 +974,13 @@ class AsyncSession(BaseSession[R]):
                 try:
                     await task
                 except CurlError as e:
-                    rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+                    rsp = self._parse_response(
+                        curl, buffer, header_buffer, default_encoding
+                    )
                     rsp.request = req
-                    cast(asyncio.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
+                    cast(asyncio.Queue, q).put_nowait(
+                        RequestException(str(e), e.code, rsp)
+                    )
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
@@ -979,12 +1015,16 @@ class AsyncSession(BaseSession[R]):
                 task = self.acurl.add_handle(curl)
                 await task
             except CurlError as e:
-                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+                rsp = self._parse_response(
+                    curl, buffer, header_buffer, default_encoding
+                )
                 rsp.request = req
                 error = code2error(e.code, str(e))
                 raise error(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
+                rsp = self._parse_response(
+                    curl, buffer, header_buffer, default_encoding
+                )
                 rsp.request = req
                 return rsp
             finally:
