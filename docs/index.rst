@@ -35,21 +35,17 @@ website for no obvious reason, you can give this package a try.
 
 ------
 
-.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/scrapfly.png
+.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/proxycurl.png
    :width: 300
-   :alt: Scrapfly
-   :target: https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi
+   :alt: ProxyCurl
+   :target: https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi
 
-`Scrapfly <https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi>`_
-is an enterprise-grade solution providing Web Scraping API that aims to simplify the
-scraping process by managing everything: real browser rendering, rotating proxies, and
-fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the
-observability by providing an analytical dashboard and measuring the success rate/block
-rate in details.
+Scrape public LinkedIn profile data at scale with `Proxycurl APIs <https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi>`_. Built for developers, by developers.
 
-Scrapfly is a good solution if you are looking for a cloud-managed solution for ``curl_cffi``.
-If you are managing TLS/HTTP fingerprint by yourself with ``curl_cffi``, they also maintain
-a `curl to python converter <https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi>`_ .
+- GDPR, CCPA, SOC2 compliant
+- High rate limit (300 requests/min), Fast (APIs respond in ~2s), High accuracy
+- Fresh data - 88% of data is scraped real-time, other 12% is <29 days
+- Tons of data points returned per profile
 
 ------
 

@@ -164,6 +164,7 @@ to specify your own customized fingerprints. See the [docs on impersonatation](h
 - chrome123 <sup>[3]</sup>
 - chrome124 <sup>[3]</sup>
 - chrome131 <sup>[4]</sup>
+- chrome133a <sup>[5][6]</sup>
 - chrome99_android
 - chrome131_android <sup>[4]</sup>
 - edge99
@@ -182,6 +183,7 @@ Notes:
 3. Added in version `0.7.0`.
 4. Added in version `0.8.0`.
 5. Added in version `0.9.0`.
+6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 
 ### asyncio
 
