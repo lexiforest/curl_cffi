@@ -23,6 +23,7 @@ BrowserTypeLiteral = Literal[
     "chrome123",
     "chrome124",
     "chrome131",
+    "chrome133a",
     "chrome99_android",
     "chrome131_android",
     # Safari
@@ -103,6 +104,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     chrome123 = "chrome123"
     chrome124 = "chrome124"
     chrome131 = "chrome131"
+    chrome133a = "chrome133a"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari15_3 = "safari15_3"
