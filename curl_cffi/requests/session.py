@@ -87,7 +87,7 @@ if TYPE_CHECKING:
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
         data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]]
-        json: Optional[dict]
+        json: Optional[dict | list]
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
         files: Optional[dict]
@@ -444,7 +444,7 @@ class Session(BaseSession[R]):
         url: str,
         params: Optional[Union[dict, list, tuple]] = None,
         data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-        json: Optional[dict] = None,
+        json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,
@@ -863,7 +863,7 @@ class AsyncSession(BaseSession[R]):
         url: str,
         params: Optional[Union[dict, list, tuple]] = None,
         data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-        json: Optional[dict] = None,
+        json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,

@@ -171,7 +171,7 @@ class Headers(MutableMapping[str, Optional[str]]):
         Return `(key, value)` items of headers. Concatenate headers
         into a single comma separated value when a key occurs multiple times.
         """
-        values_dict: Dict[str, str] = {}
+        values_dict: dict[str, str] = {}
         for _, key, value in self._list:
             str_key = key.decode(self.encoding)
             str_value = value.decode(self.encoding) if value is not None else "None"
