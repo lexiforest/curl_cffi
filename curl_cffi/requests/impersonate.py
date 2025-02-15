@@ -1,7 +1,7 @@
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict
 
 from ..const import CurlOpt, CurlSslVersion
 from ..utils import CurlCffiWarning
@@ -122,7 +122,7 @@ class ExtraFingerprints:
     tls_grease: bool = False
     tls_permute_extensions: bool = False
     tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
-    tls_signature_algorithms: Optional[List[str]] = None
+    tls_signature_algorithms: Optional[list[str]] = None
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
 
@@ -132,7 +132,7 @@ class ExtraFpDict(TypedDict, total=False):
     tls_grease: bool
     tls_permute_extensions: bool
     tls_cert_compression: Literal["zlib", "brotli"]
-    tls_signature_algorithms: Optional[List[str]]
+    tls_signature_algorithms: Optional[list[str]]
     http2_stream_weight: int
     http2_stream_exclusive: int
 

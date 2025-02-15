@@ -14,9 +14,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
     Final,
-    List,
     Literal,
     Optional,
     Tuple,
@@ -77,7 +75,7 @@ def quote_path_and_params(url: str, quote_str: str = ""):
     ).geturl()
 
 
-def update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
+def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     """Add URL query params to provided URL being aware of existing.
 
     Args:
@@ -183,7 +181,7 @@ def requote_uri(uri: str) -> str:
 
 
 # TODO: should we move this function to headers.py?
-def update_header_line(header_lines: List[str], key: str, value: str, replace: bool = False):
+def update_header_line(header_lines: list[str], key: str, value: str, replace: bool = False):
     """Update header line list by key value pair."""
     found = False
     for idx, line in enumerate(header_lines):
@@ -310,21 +308,21 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: List[Union[Dict, List, Tuple, None]] = [],
+    params_list: list[Union[dict, list, tuple, None]] = [],
     base_url: Optional[str] = None,
-    data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
+    data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
     json: Optional[dict] = None,
-    headers_list: List[Optional[HeaderTypes]] = [],
-    cookies_list: List[Optional[CookieTypes]] = [],
-    files: Optional[Dict] = None,
-    auth: Optional[Tuple[str, str]] = None,
-    timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+    headers_list: list[Optional[HeaderTypes]] = [],
+    cookies_list: list[Optional[CookieTypes]] = [],
+    files: Optional[dict] = None,
+    auth: Optional[tuple[str, str]] = None,
+    timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
     allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
-    proxies_list: List[Optional[ProxySpec]] = [],
+    proxies_list: list[Optional[ProxySpec]] = [],
     proxy: Optional[str] = None,
-    proxy_auth: Optional[Tuple[str, str]] = None,
-    verify_list: List[Union[bool, str, None]] = [],
+    proxy_auth: Optional[tuple[str, str]] = None,
+    verify_list: list[Union[bool, str, None]] = [],
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
@@ -342,7 +340,7 @@ def set_curl_options(
     multipart: Optional[CurlMime] = None,
     queue_class: Any = None,
     event_class: Any = None,
-    curl_options: Optional[Dict[CurlOpt, str]] = None,
+    curl_options: Optional[dict[CurlOpt, str]] = None,
 ):
     c = curl
 

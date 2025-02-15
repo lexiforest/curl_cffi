@@ -2,7 +2,7 @@ import asyncio
 import sys
 import warnings
 from contextlib import suppress
-from typing import Any, Dict, Set
+from typing import Any
 from weakref import WeakKeyDictionary, WeakSet
 
 from ._wrapper import ffi, lib
@@ -132,9 +132,9 @@ class AsyncCurl:
         """
         self._curlm = lib.curl_multi_init()
         self._cacert = cacert or DEFAULT_CACERT
-        self._curl2future: Dict[Curl, asyncio.Future] = {}  # curl to future map
-        self._curl2curl: Dict[ffi.CData, Curl] = {}  # c curl to Curl
-        self._sockfds: Set[int] = set()  # sockfds
+        self._curl2future: dict[Curl, asyncio.Future] = {}  # curl to future map
+        self._curl2curl: dict[ffi.CData, Curl] = {}  # c curl to Curl
+        self._sockfds: set[int] = set()  # sockfds
         self.loop = get_selector(loop if loop is not None else asyncio.get_running_loop())
         self._checker = self.loop.create_task(self._force_timeout())
         self._timers: WeakSet[asyncio.TimerHandle] = WeakSet()

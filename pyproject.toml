@@ -16,7 +16,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -75,20 +74,17 @@ package-data = { curl_cffi = ["libcurl.dll"] }
 
 
 [tool.cibuildwheel]
-# musllinux(alpine) is not supported because we download the binaries from upstream.
-# TODO build binaries inside musllinux/manylinux
-# skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 # Building for these platforms is enough since we are using abi3 packages
 build = [
-    "cp38-macosx_x86_64",
+    "cp39-macosx_x86_64",
     "cp39-macosx_arm64",
-    "cp38-win_amd64",
-    "cp38-win32",
-    "cp38-manylinux_x86_64",
-    "cp38-manylinux_aarch64",
-    "cp38-manylinux_i686",
-    "cp38-musllinux_x86_64",
-    "cp38-musllinux_aarch64",
+    "cp39-win_amd64",
+    "cp39-win32",
+    "cp39-manylinux_x86_64",
+    "cp39-manylinux_aarch64",
+    "cp39-manylinux_i686",
+    "cp39-musllinux_x86_64",
+    "cp39-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
@@ -135,7 +131,7 @@ profile = "black"
 line_length = 100
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 ignore_missing_imports = true
 #warn_unused_ignores = true
 #strict = true

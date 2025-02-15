@@ -11,11 +11,8 @@ from io import BytesIO
 from typing import (
     TYPE_CHECKING,
     Callable,
-    Dict,
-    List,
     Literal,
     Optional,
-    Tuple,
     Type,
     TypedDict,
     Union,
@@ -62,14 +59,14 @@ if TYPE_CHECKING:
     class BaseSessionParams(Generic[R], TypedDict, total=False):
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
-        auth: Optional[Tuple[str, str]]
+        auth: Optional[tuple[str, str]]
         proxies: Optional[ProxySpec]
         proxy: Optional[str]
-        proxy_auth: Optional[Tuple[str, str]]
+        proxy_auth: Optional[tuple[str, str]]
         base_url: Optional[str]
         params: Optional[dict]
         verify: bool
-        timeout: Union[float, Tuple[float, float]]
+        timeout: Union[float, tuple[float, float]]
         trust_env: bool
         allow_redirects: bool
         max_redirects: int
@@ -84,23 +81,23 @@ if TYPE_CHECKING:
         http_version: Optional[CurlHttpVersion]
         debug: bool
         interface: Optional[str]
-        cert: Optional[Union[str, Tuple[str, str]]]
+        cert: Optional[Union[str, tuple[str, str]]]
         response_class: Optional[Type[R]]
 
     class StreamRequestParams(TypedDict, total=False):
-        params: Optional[Union[Dict, List, Tuple]]
-        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]]
+        params: Optional[Union[dict, list, tuple]]
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]]
         json: Optional[dict]
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
-        files: Optional[Dict]
-        auth: Optional[Tuple[str, str]]
-        timeout: Optional[Union[float, Tuple[float, float], object]]
+        files: Optional[dict]
+        auth: Optional[tuple[str, str]]
+        timeout: Optional[Union[float, tuple[float, float], object]]
         allow_redirects: Optional[bool]
         max_redirects: Optional[int]
         proxies: Optional[ProxySpec]
         proxy: Optional[str]
-        proxy_auth: Optional[Tuple[str, str]]
+        proxy_auth: Optional[tuple[str, str]]
         verify: Optional[bool]
         referer: Optional[str]
         accept_encoding: Optional[str]
@@ -114,7 +111,7 @@ if TYPE_CHECKING:
         quote: Union[str, Literal[False]]
         http_version: Optional[CurlHttpVersion]
         interface: Optional[str]
-        cert: Optional[Union[str, Tuple[str, str]]]
+        cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
         multipart: Optional[CurlMime]
 
@@ -127,7 +124,7 @@ else:
         def __getitem__(*args, **kwargs): pass
     Unpack = _Unpack()
 
-    ProxySpec = Dict[str, str]
+    ProxySpec = dict[str, str]
     BaseSessionParams = TypedDict
     StreamRequestParams, RequestParams = TypedDict, TypedDict
 
@@ -163,14 +160,14 @@ class BaseSession(Generic[R]):
         *,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        auth: Optional[Tuple[str, str]] = None,
+        auth: Optional[tuple[str, str]] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         base_url: Optional[str] = None,
         params: Optional[dict] = None,
         verify: bool = True,
-        timeout: Union[float, Tuple[float, float]] = 30,
+        timeout: Union[float, tuple[float, float]] = 30,
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
@@ -185,7 +182,7 @@ class BaseSession(Generic[R]):
         http_version: Optional[CurlHttpVersion] = None,
         debug: bool = False,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         response_class: Optional[Type[R]] = None,
     ):
         self.headers = Headers(headers)
@@ -242,7 +239,7 @@ class BaseSession(Generic[R]):
         header_lines = header_buffer.getvalue().splitlines()
 
         # TODO: history urls
-        header_list: List[bytes] = []
+        header_list: list[bytes] = []
         for header_line in header_lines:
             if not header_line.strip():
                 continue
@@ -445,19 +442,19 @@ class Session(BaseSession[R]):
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[Dict, List, Tuple]] = None,
-        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
         json: Optional[dict] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        files: Optional[Dict] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -471,7 +468,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
@@ -758,16 +755,16 @@ class AsyncSession(BaseSession[R]):
         self,
         url: str,
         autoclose: bool = True,
-        params: Optional[Union[Dict, List, Tuple]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -779,7 +776,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
@@ -864,19 +861,19 @@ class AsyncSession(BaseSession[R]):
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[Dict, List, Tuple]] = None,
-        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
         json: Optional[dict] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        files: Optional[Dict] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -890,7 +887,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,

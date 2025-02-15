@@ -91,7 +91,7 @@ def write_callback(ptr, size, nmemb, userdata):
 
 
 # Credits: @alexio777 on https://github.com/lexiforest/curl_cffi/issues/4
-def slist_to_list(head) -> List[bytes]:
+def slist_to_list(head) -> list[bytes]:
     """Converts curl slist to a python list."""
     result = []
     ptr = head
@@ -362,7 +362,7 @@ class Curl:
         return m.group(1) if m else b""
 
     @staticmethod
-    def parse_status_line(status_line: bytes) -> Tuple[CurlHttpVersion, int, bytes]:
+    def parse_status_line(status_line: bytes) -> tuple[CurlHttpVersion, int, bytes]:
         """Parse status line.
 
         Returns:
@@ -526,7 +526,7 @@ class CurlMime:
             ret = lib.curl_mime_data(part, data, len(data))
 
     @classmethod
-    def from_list(cls, files: List[dict]):
+    def from_list(cls, files: list[dict]):
         """Create a multipart instance from a list of dict, for keys, see ``addpart``"""
         form = cls()
         for file in files:

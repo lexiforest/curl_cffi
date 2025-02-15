@@ -2,7 +2,7 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
@@ -78,8 +78,8 @@ class Response:
         self.http_version = 0
         self.primary_ip: str = ""
         self.local_ip: str = ""
-        self.history: List[Dict[str, Any]] = []
-        self.infos: Dict[str, Any] = {}
+        self.history: list[dict[str, Any]] = []
+        self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None

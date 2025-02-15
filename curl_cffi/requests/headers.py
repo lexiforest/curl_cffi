@@ -2,44 +2,26 @@
 # which is licensed under the BSD License.
 # See https://github.com/encode/httpx/blob/master/LICENSE.md
 
-import sys
 
-# typing.Mapping is deprecated in favor of abc.Mapping
-# see: https://docs.python.org/3/library/typing.html#typing.Mapping
-if sys.version_info < (3, 9, 0):
-    from collections.abc import Mapping as AbcMapping
-    from typing import (
-        ItemsView,
-        Iterable,
-        Iterator,
-        KeysView,
-        Mapping,
-        MutableMapping,
-        Sequence,
-        ValuesView,
-    )
-else:
-    from collections.abc import (
-        ItemsView,
-        Iterable,
-        Iterator,
-        KeysView,
-        Mapping,
-        MutableMapping,
-        Sequence,
-        ValuesView,
-    )
+from collections.abc import (
+    ItemsView,
+    Iterable,
+    Iterator,
+    KeysView,
+    Mapping,
+    MutableMapping,
+    Sequence,
+    ValuesView,
+)
 
-    AbcMapping = Mapping  # type: ignore[misc]
-
-from typing import Any, AnyStr, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, AnyStr, Optional, Union, cast
 
 HeaderTypes = Union[
     "Headers",
     Mapping[str, Optional[str]],
     Mapping[bytes, Optional[bytes]],
-    Sequence[Tuple[str, str]],
-    Sequence[Tuple[bytes, bytes]],
+    Sequence[tuple[str, str]],
+    Sequence[tuple[bytes, bytes]],
     Sequence[Union[str, bytes]],
 ]
 
@@ -52,8 +34,8 @@ SENSITIVE_HEADERS = {"authorization", "proxy-authorization"}
 
 
 def obfuscate_sensitive_headers(
-    items: Iterable[Tuple[AnyStr, Optional[AnyStr]]],
-) -> Iterator[Tuple[AnyStr, Optional[AnyStr]]]:
+    items: Iterable[tuple[AnyStr, Optional[AnyStr]]],
+) -> Iterator[tuple[AnyStr, Optional[AnyStr]]]:
     for k, v in items:
         if to_str(k.lower()) in SENSITIVE_HEADERS:
             v = b"[secure]" if isinstance(v, bytes) else "[secure]"  # type: ignore
@@ -100,10 +82,10 @@ class Headers(MutableMapping[str, Optional[str]]):
 
     def __init__(self, headers: Optional[HeaderTypes] = None, encoding: Optional[str] = None):
         if not headers:
-            self._list = []  # type: List[Tuple[bytes, bytes, Optional[bytes]]]
+            self._list: list[tuple[bytes, bytes, Optional[bytes]]] = []
         elif isinstance(headers, Headers):
             self._list = list(headers._list)
-        elif isinstance(headers, AbcMapping):
+        elif isinstance(headers, Mapping):
             self._list = [
                 (
                     normalize_header_key(k, lower=False, encoding=encoding),
@@ -164,7 +146,7 @@ class Headers(MutableMapping[str, Optional[str]]):
         self._encoding = value
 
     @property
-    def raw(self) -> List[Tuple[bytes, Optional[bytes]]]:
+    def raw(self) -> list[tuple[bytes, Optional[bytes]]]:
         """
         Returns a list of the raw header items, as byte pairs.
         """
@@ -174,7 +156,7 @@ class Headers(MutableMapping[str, Optional[str]]):
         return {key.decode(self.encoding): None for _, key, _ in self._list}.keys()
 
     def values(self) -> ValuesView[Optional[str]]:
-        values_dict: Dict[str, str] = {}
+        values_dict: dict[str, str] = {}
         for _, key, value in self._list:
             str_key = key.decode(self.encoding)
             str_value = value.decode(self.encoding) if value is not None else "None"
@@ -199,7 +181,7 @@ class Headers(MutableMapping[str, Optional[str]]):
                 values_dict[str_key] = str_value
         return values_dict.items()
 
-    def multi_items(self) -> List[Tuple[str, Optional[str]]]:
+    def multi_items(self) -> list[tuple[str, Optional[str]]]:
         """
         Return a list of `(key, value)` pairs of headers. Allow multiple
         occurrences of the same key without concatenating into a single
@@ -220,7 +202,7 @@ class Headers(MutableMapping[str, Optional[str]]):
         except KeyError:
             return default
 
-    def get_list(self, key: str, split_commas: bool = False) -> List[Optional[str]]:
+    def get_list(self, key: str, split_commas: bool = False) -> list[Optional[str]]:
         """
         Return a list of all header values for a given key.
         If `split_commas=True` is passed, then any comma separated header

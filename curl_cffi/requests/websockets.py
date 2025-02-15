@@ -10,8 +10,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
-    List,
     Literal,
     Optional,
     Tuple,
@@ -211,7 +209,7 @@ class WebSocket(BaseWebSocket):
     def connect(
         self,
         url: str,
-        params: Optional[Union[Dict, List, Tuple]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         auth: Optional[Tuple[str, str]] = None,
@@ -234,7 +232,7 @@ class WebSocket(BaseWebSocket):
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
         max_recv_speed: int = 0,
-        curl_options: Optional[Dict[CurlOpt, str]] = None,
+        curl_options: Optional[dict[CurlOpt, str]] = None,
     ):
         """Connect to the WebSocket.
 
