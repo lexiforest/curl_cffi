@@ -180,7 +180,7 @@ class Cookies(MutableMapping[str, str]):
         self.jar.clear_expired_cookies()
         return morsels
 
-    def update_cookies_from_curl(self, morsels: List[CurlMorsel]):
+    def update_cookies_from_curl(self, morsels: list[CurlMorsel]):
         for morsel in morsels:
             cookie = morsel.to_cookiejar_cookie()
             self.jar.set_cookie(cookie)
