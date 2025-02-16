@@ -13,6 +13,33 @@ __all__ = [
     "config_warnings",
     "ffi",
     "lib",
+    "Session",
+    "AsyncSession",
+    "BrowserType",
+    "BrowserTypeLiteral",
+    "request",
+    "head",
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "options",
+    "Cookies",
+    "Headers",
+    "Request",
+    "Response",
+    "AsyncWebSocket",
+    "WebSocket",
+    "WebSocketError",
+    "WebSocketClosed",
+    "WebSocketTimeout",
+    "WsCloseCode",
+    "ExtraFingerprints",
+    "CookieTypes",
+    "HeaderTypes",
+    "ProxySpec",
+    "exceptions",
 ]
 
 import _cffi_backend  # noqa: F401  # required by _wrapper
@@ -32,6 +59,37 @@ from .const import (
     CurlWsFlag,
 )
 from .curl import Curl, CurlError, CurlMime
+
+from .requests import (
+    AsyncSession,
+    AsyncWebSocket,
+    BrowserType,
+    BrowserTypeLiteral,
+    Cookies,
+    CookieTypes,
+    ExtraFingerprints,
+    Headers,
+    HeaderTypes,
+    ProxySpec,
+    Request,
+    Response,
+    Session,
+    WebSocket,
+    WebSocketClosed,
+    WebSocketError,
+    WebSocketTimeout,
+    WsCloseCode,
+    delete,
+    exceptions,
+    get,
+    head,
+    options,
+    patch,
+    post,
+    put,
+    request,
+)
+
 from .utils import config_warnings
 
 config_warnings(on=False)
