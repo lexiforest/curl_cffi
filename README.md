@@ -15,7 +15,10 @@ Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` ca
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
+Minimum supported python versions:
+
+- Since 0.10, Python 3.9
+- 0.9 and below, Python 3.8
 
 ------
 
@@ -143,8 +146,6 @@ print(r.json())
 
 `curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-However, only WebKit-based browsers are supported. Firefox support is tracked in [#59](https://github.com/lexiforest/curl_cffi/issues/59).
-
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
 
@@ -163,6 +164,7 @@ to specify your own customized fingerprints. See the [docs on impersonatation](h
 - chrome123 <sup>[3]</sup>
 - chrome124 <sup>[3]</sup>
 - chrome131 <sup>[4]</sup>
+- chrome133a <sup>[5][6]</sup>
 - chrome99_android
 - chrome131_android <sup>[4]</sup>
 - edge99
@@ -173,12 +175,15 @@ to specify your own customized fingerprints. See the [docs on impersonatation](h
 - safari17_2_ios <sup>[1]</sup>
 - safari18_0 <sup>[4]</sup>
 - safari18_0_ios <sup>[4]</sup>
+- firefox133 <sup>[5]</sup>
 
 Notes:
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
 4. Added in version `0.8.0`.
+5. Added in version `0.9.0`.
+6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 
 ### asyncio
 

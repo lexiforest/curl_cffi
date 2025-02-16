@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.8.1b1"
+version = "0.9.0"
 authors = [{ name = "Lyonnet", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { file = "LICENSE" }
@@ -9,14 +9,13 @@ dependencies = [
     "certifi>=2024.2.2",
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 urls = { "repository" = "https://github.com/lexiforest/curl_cffi" }
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -75,26 +74,23 @@ package-data = { curl_cffi = ["libcurl.dll"] }
 
 
 [tool.cibuildwheel]
-# musllinux(alpine) is not supported because we download the binaries from upstream.
-# TODO build binaries inside musllinux/manylinux
-# skip = ["*-musllinux_*", "*-win32", "*-manylinux_i686"]
 # Building for these platforms is enough since we are using abi3 packages
 build = [
-    "cp38-macosx_x86_64",
+    "cp39-macosx_x86_64",
     "cp39-macosx_arm64",
-    "cp38-win_amd64",
-    "cp38-win32",
-    "cp38-manylinux_x86_64",
-    "cp38-manylinux_aarch64",
-    "cp38-manylinux_i686",
-    "cp38-musllinux_x86_64",
-    "cp38-musllinux_aarch64",
+    "cp39-win_amd64",
+    "cp39-win32",
+    "cp39-manylinux_x86_64",
+    "cp39-manylinux_aarch64",
+    "cp39-manylinux_i686",
+    "cp39-musllinux_x86_64",
+    "cp39-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
-test-skip = "cp38-manylinux_i686"  # trustme not available
+test-skip = "cp39-manylinux_i686"  # trustme not available
 build-verbosity = 1
 
 
@@ -119,7 +115,7 @@ asyncio_mode = "auto"
 
 
 [tool.ruff]
-line-length = 100
+line-length = 88
 
 [tool.ruff.lint]
 select = [
@@ -132,10 +128,10 @@ select = [
 
 [tool.isort]
 profile = "black"
-line_length = 100
+line_length = 88
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 ignore_missing_imports = true
 #warn_unused_ignores = true
 #strict = true

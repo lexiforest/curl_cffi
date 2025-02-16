@@ -29,18 +29,23 @@ __all__ = [
     "ProxySpec",
 ]
 
-from functools import partial
-from io import BytesIO
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Optional, TYPE_CHECKING, TypedDict
 
-from ..const import CurlHttpVersion, CurlWsFlag
-from ..curl import CurlMime
+from ..const import CurlWsFlag
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
-from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
+from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints
 from .models import Request, Response
-from .session import AsyncSession, HttpMethod, ProxySpec, Session, ThreadType
+from .session import (
+    AsyncSession,
+    HttpMethod,
+    ProxySpec,
+    Session,
+    ThreadType,
+    RequestParams,
+    Unpack,
+)
 from .websockets import (
     AsyncWebSocket,
     WebSocket,
@@ -50,43 +55,23 @@ from .websockets import (
     WsCloseCode,
 )
 
+if TYPE_CHECKING:
+
+    class SessionRequestParams(RequestParams):
+        thread: Optional[ThreadType]
+        curl_options: Optional[dict]
+        debug: Optional[bool]
+else:
+    SessionRequestParams = TypedDict
+
 
 def request(
     method: HttpMethod,
     url: str,
-    params: Optional[Union[Dict, List, Tuple]] = None,
-    data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
-    json: Optional[dict] = None,
-    headers: Optional[HeaderTypes] = None,
-    cookies: Optional[CookieTypes] = None,
-    files: Optional[Dict] = None,
-    auth: Optional[Tuple[str, str]] = None,
-    timeout: Union[float, Tuple[float, float]] = 30,
-    allow_redirects: bool = True,
-    max_redirects: int = 30,
-    proxies: Optional[ProxySpec] = None,
-    proxy: Optional[str] = None,
-    proxy_auth: Optional[Tuple[str, str]] = None,
-    verify: Optional[bool] = None,
-    referer: Optional[str] = None,
-    accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
-    content_callback: Optional[Callable] = None,
-    impersonate: Optional[BrowserTypeLiteral] = None,
-    ja3: Optional[str] = None,
-    akamai: Optional[str] = None,
-    extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
     thread: Optional[ThreadType] = None,
-    default_headers: Optional[bool] = None,
-    default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
-    quote: Union[str, Literal[False]] = "",
     curl_options: Optional[dict] = None,
-    http_version: Optional[CurlHttpVersion] = None,
-    debug: bool = False,
-    interface: Optional[str] = None,
-    cert: Optional[Union[str, Tuple[str, str]]] = None,
-    stream: bool = False,
-    max_recv_speed: int = 0,
-    multipart: Optional[CurlMime] = None,
+    debug: Optional[bool] = None,
+    **kwargs: Unpack[RequestParams],
 ) -> Response:
     """Send an http request.
 
@@ -139,49 +124,42 @@ def request(
     Returns:
         A ``Response`` object.
     """
+    debug = False if debug is None else debug
     with Session(thread=thread, curl_options=curl_options, debug=debug) as s:
-        return s.request(
-            method=method,
-            url=url,
-            params=params,
-            data=data,
-            json=json,
-            headers=headers,
-            cookies=cookies,
-            files=files,
-            auth=auth,
-            timeout=timeout,
-            allow_redirects=allow_redirects,
-            max_redirects=max_redirects,
-            proxies=proxies,
-            proxy=proxy,
-            proxy_auth=proxy_auth,
-            verify=verify,
-            referer=referer,
-            accept_encoding=accept_encoding,
-            content_callback=content_callback,
-            impersonate=impersonate,
-            ja3=ja3,
-            akamai=akamai,
-            extra_fp=extra_fp,
-            default_headers=default_headers,
-            default_encoding=default_encoding,
-            quote=quote,
-            http_version=http_version,
-            interface=interface,
-            cert=cert,
-            stream=stream,
-            max_recv_speed=max_recv_speed,
-            multipart=multipart,
-        )
+        return s.request(method=method, url=url, **kwargs)
 
 
-head = partial(request, "HEAD")
-get = partial(request, "GET")
-post = partial(request, "POST")
-put = partial(request, "PUT")
-patch = partial(request, "PATCH")
-delete = partial(request, "DELETE")
-options = partial(request, "OPTIONS")
-trace = partial(request, "TRACE")
-query = partial(request, "QUERY")
+def head(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="HEAD", url=url, **kwargs)
+
+
+def get(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="GET", url=url, **kwargs)
+
+
+def post(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="POST", url=url, **kwargs)
+
+
+def put(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="PUT", url=url, **kwargs)
+
+
+def patch(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="PATCH", url=url, **kwargs)
+
+
+def delete(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="DELETE", url=url, **kwargs)
+
+
+def options(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="OPTIONS", url=url, **kwargs)
+
+
+def trace(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="TRACE", url=url, **kwargs)
+
+
+def query(url: str, **kwargs: Unpack[SessionRequestParams]):
+    return request(method="QUERY", url=url, **kwargs)

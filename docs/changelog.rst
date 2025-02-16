@@ -3,6 +3,14 @@ Change Log
 
 Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
 
+v0.9
+----
+
+- v0.9.0
+    - Brought back Windows support
+    - Added support for Firefox
+    - Added support for Chrome 133a
+
 v0.8
 ----
 

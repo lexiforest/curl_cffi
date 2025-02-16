@@ -104,7 +104,9 @@ async def async_examples():
                 assert r.status_code == 200
                 print("CHUNK", chunk)
 
-        print("\n======================================================================")
+        print(
+            "\n======================================================================"
+        )
         print("Break when reading")
         print("=====================================================================\n")
         async with s.stream("GET", "https://httpbin.org/drip") as r:

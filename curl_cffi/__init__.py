@@ -10,6 +10,7 @@ __all__ = [
     "CurlHttpVersion",
     "CurlSslVersion",
     "CurlWsFlag",
+    "config_warnings",
     "ffi",
     "lib",
     "Session",
@@ -58,6 +59,7 @@ from .const import (
     CurlWsFlag,
 )
 from .curl import Curl, CurlError, CurlMime
+
 from .requests import (
     AsyncSession,
     AsyncWebSocket,
@@ -87,3 +89,7 @@ from .requests import (
     put,
     request,
 )
+
+from .utils import config_warnings
+
+config_warnings(on=False)

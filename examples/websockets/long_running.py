@@ -28,7 +28,9 @@ def on_open(ws: WebSocket):
 
 
 def on_close(ws: WebSocket, code: int, reason: str):
-    print(f"<<< Websocket closed! code: {code}, reason: {reason}, clean: {code in (1000, 1001)}")
+    print(
+        f"<<< Websocket closed! code: {code}, reason: {reason}, clean: {code in (1000, 1001)}"
+    )
 
 
 ws = WebSocket(

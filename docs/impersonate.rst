@@ -26,6 +26,7 @@ to specify your own customized fingerprints. See below for details.
 - chrome123 :sup:`3`
 - chrome124 :sup:`3`
 - chrome131 :sup:`4`
+- chrome133a :sup:`5` :sup:`6`
 - chrome99_android
 - chrome131_android :sup:`4`
 - edge99
@@ -36,6 +37,7 @@ to specify your own customized fingerprints. See below for details.
 - safari17_2_ios :sup:`1`
 - safari18_0 :sup:`4`
 - safari18_0_ios :sup:`4`
+- firefox133 :sup:`5`
 
 Notes:
 
@@ -43,6 +45,8 @@ Notes:
 2. Fixed in version `0.6.0`, previous http2 fingerprints were `not correct <https://github.com/lwthiker/curl-impersonate/issues/215>`_.
 3. Added in version `0.7.0`.
 4. Added in version `0.8.0`.
+5. Added in version `0.9.0`.
+6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 
 Which version to use?
 ---------------------

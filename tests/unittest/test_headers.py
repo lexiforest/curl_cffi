@@ -34,3 +34,9 @@ def test_replace_header():
     assert header_lines == ["Content-Type: application/json"]
     update_header_line(header_lines, "Host", "example.com", replace=True)
     assert header_lines == ["Content-Type: application/json", "Host: example.com"]
+
+
+def test_none_headers():
+    """Allow using None to explictly remove headers"""
+    headers = Headers({"Content-Type": None})
+    assert headers["content-type"] is None

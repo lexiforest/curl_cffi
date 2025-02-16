@@ -2,9 +2,10 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 
 from ..curl import Curl
+from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
@@ -77,8 +78,8 @@ class Response:
         self.http_version = 0
         self.primary_ip: str = ""
         self.local_ip: str = ""
-        self.history: List[Dict[str, Any]] = []
-        self.infos: Dict[str, Any] = {}
+        self.history: list[dict[str, Any]] = []
+        self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None
@@ -143,7 +144,7 @@ class Response:
     def raise_for_status(self):
         """Raise an error if status code is not in [200, 400)"""
         if not self.ok:
-            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}")
+            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
 
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
@@ -154,7 +155,9 @@ class Response:
         """
         pending = None
 
-        for chunk in self.iter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
+        for chunk in self.iter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
@@ -174,7 +177,11 @@ class Response:
         iterate streaming content chunk by chunk in bytes.
         """
         if chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
+            warnings.warn(
+                "chunk_size is ignored, there is no way to tell curl that.",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
         if decode_unicode:
             raise NotImplementedError()
 
@@ -216,7 +223,9 @@ class Response:
         """
         pending = None
 
-        async for chunk in self.aiter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
+        async for chunk in self.aiter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
@@ -237,7 +246,11 @@ class Response:
         iterate streaming content chunk by chunk in bytes.
         """
         if chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
+            warnings.warn(
+                "chunk_size is ignored, there is no way to tell curl that.",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
         if decode_unicode:
             raise NotImplementedError()
 
