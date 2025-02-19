@@ -5,7 +5,6 @@ import struct
 from enum import IntEnum
 from functools import partial
 from json import dumps, loads
-from select import select
 import time
 from typing import (
     TYPE_CHECKING,
