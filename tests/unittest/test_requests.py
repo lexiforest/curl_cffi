@@ -917,7 +917,7 @@ def test_response_ip(server):
 
 def test_cookies_update_disabled(server):
     s = requests.Session()
-    url = str(server.url.copy_with(path="/cookies_now"))
+    url = str(server.url.copy_with(path="/unique_cookie"))
     delete_url = str(server.url.copy_with(path="/delete_cookies"))
 
     # First we make a request with default params (session says update True). Checking
