@@ -934,6 +934,7 @@ def test_cookies_update_disabled(server):
     # different from the session one previously set.
     r2 = s.get(url, discard_cookies=True)
     assert r2.cookies is not s.cookies
+    assert r2.cookies is not r1.cookies # r1.cookies is s.cookies but check anyways
     assert r2.cookies.get("foo") is not None
     assert r2.cookies["foo"] != first_foo
     
