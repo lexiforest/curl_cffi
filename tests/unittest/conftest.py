@@ -423,13 +423,15 @@ async def delete_cookies(scope, receive, send):
 
 
 async def set_cookies_now(scope, receive, send):
+    t = "foo={:.22f}".format(time.time())
+    print("Sending cookie now:", t)
     await send(
         {
             "type": "http.response.start",
             "status": 200,
             "headers": [
                 [b"content-type", b"text/plain"],
-                [b"set-cookie", "foo={:.22f}".format(time.time()).encode()],
+                [b"set-cookie", t.encode()],
             ],
         }
     )
