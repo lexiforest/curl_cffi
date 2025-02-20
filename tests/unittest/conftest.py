@@ -429,7 +429,7 @@ async def set_cookies_now(scope, receive, send):
             "status": 200,
             "headers": [
                 [b"content-type", b"text/plain"],
-                [b"set-cookie", f"foo={time.time()}".encode()],
+                [b"set-cookie", "foo={:.22f}".format(time.time()).encode()],
             ],
         }
     )
