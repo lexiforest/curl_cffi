@@ -4,13 +4,14 @@ import platform
 import shutil
 import struct
 import tempfile
+from glob import glob
 from pathlib import Path
 from urllib.request import urlretrieve
 
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "0.8.2"
+__version__ = "0.9.3"
 
 
 def detect_arch():
@@ -72,6 +73,12 @@ def download_libcurl():
     os.makedirs(arch["libdir"], exist_ok=True)
     shutil.unpack_archive(file, arch["libdir"])
 
+    if arch["system"] == "Windows":
+        for file in glob(os.path.join(arch["libdir"], "lib/*.lib")):
+            shutil.move(file, arch["libdir"])
+        for file in glob(os.path.join(arch["libdir"], "bin/*.dll")):
+            shutil.move(file, arch["libdir"])
+
     print("Files after unpacking")
     print(os.listdir(arch["libdir"]))
 
@@ -99,7 +106,21 @@ def get_curl_archives():
 
 def get_curl_libraries():
     if arch["system"] == "Windows":
-        return ["libcurl"]
+        return [
+            "Crypt32",
+            "Secur32",
+            "wldap32",
+            "Normaliz",
+            "libcurl",
+            "zstd",
+            "zlib",
+            "ssl",
+            "nghttp2",
+            "crypto",
+            "brotlienc",
+            "brotlidec",
+            "brotlicommon",
+        ]
     elif arch["system"] == "Darwin" or (
         arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
     ):
@@ -131,8 +152,10 @@ ffibuilder.set_source(
     sources=[
         str(root_dir / "ffi/shim.c"),
     ],
-    extra_compile_args=(["-Wno-implicit-function-declaration"] if system == "Darwin" else []),
-    extra_link_args=(["-lstdc++"]),
+    extra_compile_args=(
+        ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
+    ),
+    extra_link_args=(["-lstdc++"] if system != "Windows" else []),
 )
 
 with open(root_dir / "ffi/cdef.c") as f:

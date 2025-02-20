@@ -1,7 +1,7 @@
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict
 
 from ..const import CurlOpt, CurlSslVersion
 from ..utils import CurlCffiWarning
@@ -23,6 +23,7 @@ BrowserTypeLiteral = Literal[
     "chrome123",
     "chrome124",
     "chrome131",
+    "chrome133a",
     "chrome99_android",
     "chrome131_android",
     # Safari
@@ -32,12 +33,15 @@ BrowserTypeLiteral = Literal[
     "safari17_2_ios",
     "safari18_0",
     "safari18_0_ios",
+    # Firefox
+    "firefox133",
     # alias
     "chrome",
     "edge",
     "safari",
     "safari_ios",
     "chrome_android",
+    "firefox",
     # Canonical names
     # "edge_99",
     # "edge_101",
@@ -55,6 +59,7 @@ DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari18_0"
 DEFAULT_SAFARI_IOS = "safari18_0_ios"
 DEFAULT_CHROME_ANDROID = "chrome131_android"
+DEFAULT_FIREFOX = "firefox133"
 
 
 REAL_TARGET_MAP = {
@@ -63,6 +68,7 @@ REAL_TARGET_MAP = {
     "safari": "safari17_0",
     "safari_ios": "safari17_2_ios",
     "chrome_android": "chrome131_android",
+    "firefox": "firefox133",
 }
 
 
@@ -77,6 +83,8 @@ def normalize_browser_type(item):
         return DEFAULT_SAFARI_IOS
     elif item == "chrome_android":
         return DEFAULT_CHROME_ANDROID
+    elif item == "firefox":
+        return DEFAULT_FIREFOX
     else:
         return item
 
@@ -96,6 +104,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     chrome123 = "chrome123"
     chrome124 = "chrome124"
     chrome131 = "chrome131"
+    chrome133a = "chrome133a"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari15_3 = "safari15_3"
@@ -104,6 +113,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     safari17_2_ios = "safari17_2_ios"
     safari18_0 = "safari18_0"
     safari18_0_ios = "safari18_0_ios"
+    firefox133 = "firefox133"
 
 
 @dataclass
@@ -112,7 +122,7 @@ class ExtraFingerprints:
     tls_grease: bool = False
     tls_permute_extensions: bool = False
     tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
-    tls_signature_algorithms: Optional[List[str]] = None
+    tls_signature_algorithms: Optional[list[str]] = None
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
 
@@ -122,7 +132,7 @@ class ExtraFpDict(TypedDict, total=False):
     tls_grease: bool
     tls_permute_extensions: bool
     tls_cert_compression: Literal["zlib", "brotli"]
-    tls_signature_algorithms: Optional[List[str]]
+    tls_signature_algorithms: Optional[list[str]]
     http2_stream_weight: int
     http2_stream_exclusive: int
 
@@ -322,7 +332,9 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
     # server_name
     elif extension_id == 0:
-        raise NotImplementedError("It's unlikely that the server_name(0) extension being changed.")
+        raise NotImplementedError(
+            "It's unlikely that the server_name(0) extension being changed."
+        )
     # ALPN
     elif extension_id == 16:
         if enable:

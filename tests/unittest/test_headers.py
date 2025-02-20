@@ -40,4 +40,3 @@ def test_none_headers():
     """Allow using None to explictly remove headers"""
     headers = Headers({"Content-Type": None})
     assert headers["content-type"] is None
-

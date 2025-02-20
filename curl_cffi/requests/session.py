@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import asyncio
 import queue
 import threading
@@ -10,15 +11,14 @@ from io import BytesIO
 from typing import (
     TYPE_CHECKING,
     Callable,
-    Dict,
-    List,
     Literal,
     Optional,
-    Tuple,
     Type,
     TypedDict,
     Union,
     cast,
+    Generic,
+    TypeVar,
 )
 from urllib.parse import urlparse
 
@@ -40,6 +40,12 @@ with suppress(ImportError):
 with suppress(ImportError):
     import eventlet.tpool
 
+# Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
+if sys.version_info >= (3, 13):
+    R = TypeVar("R", bound=Response, default=Response)
+else:
+    R = TypeVar("R", bound=Response)
+
 if TYPE_CHECKING:
     from typing_extensions import Unpack
 
@@ -50,17 +56,17 @@ if TYPE_CHECKING:
         ws: str
         wss: str
 
-    class BaseSessionParams(TypedDict, total=False):
+    class BaseSessionParams(Generic[R], TypedDict, total=False):
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
-        auth: Optional[Tuple[str, str]]
+        auth: Optional[tuple[str, str]]
         proxies: Optional[ProxySpec]
         proxy: Optional[str]
-        proxy_auth: Optional[Tuple[str, str]]
+        proxy_auth: Optional[tuple[str, str]]
         base_url: Optional[str]
         params: Optional[dict]
         verify: bool
-        timeout: Union[float, Tuple[float, float]]
+        timeout: Union[float, tuple[float, float]]
         trust_env: bool
         allow_redirects: bool
         max_redirects: int
@@ -75,24 +81,24 @@ if TYPE_CHECKING:
         http_version: Optional[CurlHttpVersion]
         debug: bool
         interface: Optional[str]
-        cert: Optional[Union[str, Tuple[str, str]]]
-        response_class: Optional[Type[Response]]
+        cert: Optional[Union[str, tuple[str, str]]]
+        response_class: Optional[Type[R]]
         update_sess_cookies: Optional[bool]
 
     class StreamRequestParams(TypedDict, total=False):
-        params: Optional[Union[Dict, List, Tuple]]
-        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]]
-        json: Optional[dict]
+        params: Optional[Union[dict, list, tuple]]
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]]
+        json: Optional[dict | list]
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
-        files: Optional[Dict]
-        auth: Optional[Tuple[str, str]]
-        timeout: Optional[Union[float, Tuple[float, float], object]]
+        files: Optional[dict]
+        auth: Optional[tuple[str, str]]
+        timeout: Optional[Union[float, tuple[float, float], object]]
         allow_redirects: Optional[bool]
         max_redirects: Optional[int]
         proxies: Optional[ProxySpec]
         proxy: Optional[str]
-        proxy_auth: Optional[Tuple[str, str]]
+        proxy_auth: Optional[tuple[str, str]]
         verify: Optional[bool]
         referer: Optional[str]
         accept_encoding: Optional[str]
@@ -106,26 +112,31 @@ if TYPE_CHECKING:
         quote: Union[str, Literal[False]]
         http_version: Optional[CurlHttpVersion]
         interface: Optional[str]
-        cert: Optional[Union[str, Tuple[str, str]]]
+        cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
         multipart: Optional[CurlMime]
         update_sess_cookies: Optional[bool]
 
-    class RequestParams(StreamRequestParams):
+    class RequestParams(StreamRequestParams, total=False):
         stream: Optional[bool]
 
 else:
+
     class _Unpack:
         @staticmethod
-        def __getitem__(*args, **kwargs): pass
+        def __getitem__(*args, **kwargs):
+            pass
+
     Unpack = _Unpack()
 
-    ProxySpec = Dict[str, str]
+    ProxySpec = dict[str, str]
     BaseSessionParams = TypedDict
     StreamRequestParams, RequestParams = TypedDict, TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
+HttpMethod = Literal[
+    "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
+]
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -148,7 +159,7 @@ def _peek_aio_queue(q: asyncio.Queue, default=None):
         return default
 
 
-class BaseSession:
+class BaseSession(Generic[R]):
     """Provide common methods for setting curl options and reading info in sessions."""
 
     def __init__(
@@ -156,14 +167,14 @@ class BaseSession:
         *,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        auth: Optional[Tuple[str, str]] = None,
+        auth: Optional[tuple[str, str]] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         base_url: Optional[str] = None,
         params: Optional[dict] = None,
         verify: bool = True,
-        timeout: Union[float, Tuple[float, float]] = 30,
+        timeout: Union[float, tuple[float, float]] = 30,
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
@@ -178,8 +189,8 @@ class BaseSession:
         http_version: Optional[CurlHttpVersion] = None,
         debug: bool = False,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
-        response_class: Optional[Type[Response]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
+        response_class: Optional[Type[R]] = None,
         update_sess_cookies: Optional[bool] = None,
     ):
         self.headers = Headers(headers)
@@ -205,14 +216,12 @@ class BaseSession:
         self.interface = interface
         self.cert = cert
 
-        if response_class is None:
-            response_class = Response
-        elif not issubclass(response_class, Response):
+        if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
                 "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
                 f" not of type `{response_class}`"
             )
-        self.response_class = response_class
+        self.response_class = response_class or Response
         self.update_sess_cookies = True if update_sess_cookies is None else update_sess_cookies
 
         if proxy and proxies:
@@ -227,9 +236,9 @@ class BaseSession:
 
         self._closed = False
 
-    def _parse_response(self, curl, buffer, header_buffer, default_encoding, update_sess_cookies):
+    def _parse_response(self, curl, buffer, header_buffer, default_encoding, update_sess_cookies) -> R:
         c = curl
-        rsp = self.response_class(c)
+        rsp = cast(R, self.response_class(c))
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
         if buffer:
             rsp.content = buffer.getvalue()
@@ -239,7 +248,7 @@ class BaseSession:
         header_lines = header_buffer.getvalue().splitlines()
 
         # TODO: history urls
-        header_list = []
+        header_list: list[bytes] = []
         for header_line in header_lines:
             if not header_line.strip():
                 continue
@@ -256,7 +265,9 @@ class BaseSession:
         rsp.headers = Headers(header_list)
 
         # cookies
-        morsels = [CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)]
+        morsels = [
+            CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)
+        ]
         # for l in c.getinfo(CurlInfo.COOKIELIST):
         #     print("Curl Cookies", l.decode())
         update_sess_cookies = update_sess_cookies if update_sess_cookies is not None else self.update_sess_cookies
@@ -295,7 +306,7 @@ class BaseSession:
         self._cookies = Cookies(cookies)
 
 
-class Session(BaseSession):
+class Session(BaseSession[R]):
     """A request session, cookies and connections will be reused. This object is thread-safe,
     but it's recommended to use a separate session for each thread."""
 
@@ -304,7 +315,7 @@ class Session(BaseSession):
         curl: Optional[Curl] = None,
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
-        **kwargs: Unpack[BaseSessionParams],
+        **kwargs: Unpack[BaseSessionParams[R]],
     ):
         """
         Parameters set in the init method will be overriden by the same parameter in request method.
@@ -370,7 +381,9 @@ class Session(BaseSession):
         if self._use_thread_local_curl:
             if self._is_customized_curl:
                 warnings.warn(
-                    "Creating fresh curl handle in different thread.", CurlCffiWarning, stacklevel=2
+                    "Creating fresh curl handle in different thread.",
+                    CurlCffiWarning,
+                    stacklevel=2,
                 )
             if not getattr(self._local, "curl", None):
                 self._local.curl = Curl(debug=self.debug)
@@ -397,7 +410,7 @@ class Session(BaseSession):
 
     @contextmanager
     def stream(
-        self, 
+        self,
         method: HttpMethod,
         url: str,
         **kwargs: Unpack[StreamRequestParams],
@@ -448,19 +461,19 @@ class Session(BaseSession):
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[Dict, List, Tuple]] = None,
-        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
-        json: Optional[dict] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        files: Optional[Dict] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -474,12 +487,12 @@ class Session(BaseSession):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         update_sess_cookies: Optional[bool] = None,
-    ) -> Response:
+    ):
         """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
@@ -504,8 +517,12 @@ class Session(BaseSession):
             files=files,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
-            max_redirects=self.max_redirects if max_redirects is None else max_redirects,
+            allow_redirects=self.allow_redirects
+            if allow_redirects is None
+            else allow_redirects,
+            max_redirects=self.max_redirects
+            if max_redirects is None
+            else max_redirects,
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -517,7 +534,9 @@ class Session(BaseSession):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers if default_headers is None else default_headers,
+            default_headers=self.default_headers
+            if default_headers is None
+            else default_headers,
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -537,9 +556,13 @@ class Session(BaseSession):
                 try:
                     c.perform()
                 except CurlError as e:
-                    rsp = self._parse_response(c, buffer, header_buffer, default_encoding, update_sess_cookies)
+                    rsp = self._parse_response(
+                        c, buffer, header_buffer, default_encoding, update_sess_cookies
+                    )
                     rsp.request = req
-                    cast(queue.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
+                    cast(queue.Queue, q).put_nowait(
+                        RequestException(str(e), e.code, rsp)
+                    )
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
@@ -619,7 +642,7 @@ class Session(BaseSession):
         return self.request(method="QUERY", url=url, **kwargs)
 
 
-class AsyncSession(BaseSession):
+class AsyncSession(BaseSession[R]):
     """An async request session, cookies and connections will be reused."""
 
     def __init__(
@@ -628,7 +651,7 @@ class AsyncSession(BaseSession):
         loop=None,
         async_curl: Optional[AsyncCurl] = None,
         max_clients: int = 10,
-        **kwargs: Unpack[BaseSessionParams],
+        **kwargs: Unpack[BaseSessionParams[R]],
     ):
         """
         Parameters set in the init method will be override by the same parameter in request method.
@@ -762,16 +785,16 @@ class AsyncSession(BaseSession):
         self,
         url: str,
         autoclose: bool = True,
-        params: Optional[Union[Dict, List, Tuple]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -783,7 +806,7 @@ class AsyncSession(BaseSession):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
@@ -834,8 +857,12 @@ class AsyncSession(BaseSession):
             cookies_list=[self.cookies, cookies],
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
-            max_redirects=self.max_redirects if max_redirects is None else max_redirects,
+            allow_redirects=self.allow_redirects
+            if allow_redirects is None
+            else allow_redirects,
+            max_redirects=self.max_redirects
+            if max_redirects is None
+            else max_redirects,
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -846,7 +873,9 @@ class AsyncSession(BaseSession):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers if default_headers is None else default_headers,
+            default_headers=self.default_headers
+            if default_headers is None
+            else default_headers,
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -858,25 +887,29 @@ class AsyncSession(BaseSession):
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(self, curl, autoclose=autoclose)
+        return AsyncWebSocket(
+            cast(AsyncSession[Response], self),
+            curl,
+            autoclose=autoclose,
+        )
 
     async def request(
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[Dict, List, Tuple]] = None,
-        data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
-        json: Optional[dict] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        files: Optional[Dict] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -890,7 +923,7 @@ class AsyncSession(BaseSession):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
@@ -914,8 +947,12 @@ class AsyncSession(BaseSession):
             files=files,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects if allow_redirects is None else allow_redirects,
-            max_redirects=self.max_redirects if max_redirects is None else max_redirects,
+            allow_redirects=self.allow_redirects
+            if allow_redirects is None
+            else allow_redirects,
+            max_redirects=self.max_redirects
+            if max_redirects is None
+            else max_redirects,
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -927,7 +964,9 @@ class AsyncSession(BaseSession):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers if default_headers is None else default_headers,
+            default_headers=self.default_headers
+            if default_headers is None
+            else default_headers,
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -946,9 +985,13 @@ class AsyncSession(BaseSession):
                 try:
                     await task
                 except CurlError as e:
-                    rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
+                    rsp = self._parse_response(
+                        curl, buffer, header_buffer, default_encoding, update_sess_cookies
+                    )
                     rsp.request = req
-                    cast(asyncio.Queue, q).put_nowait(RequestException(str(e), e.code, rsp))
+                    cast(asyncio.Queue, q).put_nowait(
+                        RequestException(str(e), e.code, rsp)
+                    )
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
@@ -983,12 +1026,16 @@ class AsyncSession(BaseSession):
                 task = self.acurl.add_handle(curl)
                 await task
             except CurlError as e:
-                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
+                rsp = self._parse_response(
+                    curl, buffer, header_buffer, default_encoding, update_sess_cookies
+                )
                 rsp.request = req
                 error = code2error(e.code, str(e))
                 raise error(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, update_sess_cookies)
+                rsp = self._parse_response(
+                    curl, buffer, header_buffer, default_encoding, update_sess_cookies
+                )
                 rsp.request = req
                 return rsp
             finally:

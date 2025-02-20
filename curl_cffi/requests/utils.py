@@ -14,16 +14,22 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
     Final,
-    List,
     Literal,
     Optional,
     Tuple,
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
+from urllib.parse import (
+    ParseResult,
+    parse_qsl,
+    quote,
+    unquote,
+    urlencode,
+    urljoin,
+    urlparse,
+)
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -49,7 +55,9 @@ if TYPE_CHECKING:
     from .session import ProxySpec
 
 
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
+HttpMethod = Literal[
+    "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
+]
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
@@ -77,7 +85,7 @@ def quote_path_and_params(url: str, quote_str: str = ""):
     ).geturl()
 
 
-def update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
+def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     """Add URL query params to provided URL being aware of existing.
 
     Args:
@@ -110,7 +118,9 @@ def update_url_params(url: str, params: Union[Dict, List, Tuple]) -> str:
             value = dumps(value)
         # 1 to 1 mapping, we have to search and update it.
         if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
-            parsed_get_args = [(x if x[0] != key else (key, value)) for x in parsed_get_args]
+            parsed_get_args = [
+                (x if x[0] != key else (key, value)) for x in parsed_get_args
+            ]
         else:
             parsed_get_args.append((key, value))
 
@@ -183,7 +193,9 @@ def requote_uri(uri: str) -> str:
 
 
 # TODO: should we move this function to headers.py?
-def update_header_line(header_lines: List[str], key: str, value: str, replace: bool = False):
+def update_header_line(
+    header_lines: list[str], key: str, value: str, replace: bool = False
+):
     """Update header line list by key value pair."""
     found = False
     for idx, line in enumerate(header_lines):
@@ -310,21 +322,21 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: List[Union[Dict, List, Tuple, None]] = [],
+    params_list: list[Union[dict, list, tuple, None]] = [],
     base_url: Optional[str] = None,
-    data: Optional[Union[Dict[str, str], List[Tuple], str, BytesIO, bytes]] = None,
-    json: Optional[dict] = None,
-    headers_list: List[Optional[HeaderTypes]] = [],
-    cookies_list: List[Optional[CookieTypes]] = [],
-    files: Optional[Dict] = None,
-    auth: Optional[Tuple[str, str]] = None,
-    timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+    data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+    json: Optional[dict | list] = None,
+    headers_list: list[Optional[HeaderTypes]] = [],
+    cookies_list: list[Optional[CookieTypes]] = [],
+    files: Optional[dict] = None,
+    auth: Optional[tuple[str, str]] = None,
+    timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
     allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
-    proxies_list: List[Optional[ProxySpec]] = [],
+    proxies_list: list[Optional[ProxySpec]] = [],
     proxy: Optional[str] = None,
-    proxy_auth: Optional[Tuple[str, str]] = None,
-    verify_list: List[Union[bool, str, None]] = [],
+    proxy_auth: Optional[tuple[str, str]] = None,
+    verify_list: list[Union[bool, str, None]] = [],
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
@@ -342,7 +354,7 @@ def set_curl_options(
     multipart: Optional[CurlMime] = None,
     queue_class: Any = None,
     event_class: Any = None,
-    curl_options: Optional[Dict[CurlOpt, str]] = None,
+    curl_options: Optional[dict[CurlOpt, str]] = None,
 ):
     c = curl
 
@@ -426,7 +438,9 @@ def set_curl_options(
     if json is not None:
         update_header_line(header_lines, "Content-Type", "application/json")
     if isinstance(data, dict) and method != "POST":
-        update_header_line(header_lines, "Content-Type", "application/x-www-form-urlencoded")
+        update_header_line(
+            header_lines, "Content-Type", "application/x-www-form-urlencoded"
+        )
     if isinstance(data, (str, bytes)):
         update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
@@ -588,7 +602,9 @@ def set_curl_options(
     if ja3:
         if impersonate:
             warnings.warn(
-                "JA3 was altered after browser version was set.", CurlCffiWarning, stacklevel=1
+                "JA3 was altered after browser version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
             )
         permute = False
         if isinstance(extra_fp, ExtraFingerprints) and extra_fp.tls_permute_extensions:
@@ -601,7 +617,9 @@ def set_curl_options(
     if akamai:
         if impersonate:
             warnings.warn(
-                "Akamai was altered after browser version was set.", CurlCffiWarning, stacklevel=1
+                "Akamai was altered after browser version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
             )
         set_akamai_options(c, akamai)
 

@@ -91,7 +91,7 @@ def write_callback(ptr, size, nmemb, userdata):
 
 
 # Credits: @alexio777 on https://github.com/lexiforest/curl_cffi/issues/4
-def slist_to_list(head) -> List[bytes]:
+def slist_to_list(head) -> list[bytes]:
     """Converts curl slist to a python list."""
     result = []
     ptr = head
@@ -187,11 +187,15 @@ class Curl:
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
+            )
         elif option == CurlOpt.HEADERDATA:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
+            )
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -216,7 +220,9 @@ class Curl:
             ret = lib._curl_easy_setopt(self._curl, option, self._headers)
         elif option == CurlOpt.PROXYHEADER:
             for proxy_header in value:
-                self._proxy_headers = lib.curl_slist_append(self._proxy_headers, proxy_header)
+                self._proxy_headers = lib.curl_slist_append(
+                    self._proxy_headers, proxy_header
+                )
             ret = lib._curl_easy_setopt(self._curl, option, self._proxy_headers)
         elif option == CurlOpt.RESOLVE:
             for resolve in value:
@@ -279,7 +285,9 @@ class Curl:
         Returns:
             0 if no error.
         """
-        return lib.curl_easy_impersonate(self._curl, target.encode(), int(default_headers))
+        return lib.curl_easy_impersonate(
+            self._curl, target.encode(), int(default_headers)
+        )
 
     def _ensure_cacert(self) -> None:
         if not self._is_cert_set:
@@ -362,7 +370,7 @@ class Curl:
         return m.group(1) if m else b""
 
     @staticmethod
-    def parse_status_line(status_line: bytes) -> Tuple[CurlHttpVersion, int, bytes]:
+    def parse_status_line(status_line: bytes) -> tuple[CurlHttpVersion, int, bytes]:
         """Parse status line.
 
         Returns:
@@ -526,7 +534,7 @@ class CurlMime:
             ret = lib.curl_mime_data(part, data, len(data))
 
     @classmethod
-    def from_list(cls, files: List[dict]):
+    def from_list(cls, files: list[dict]):
         """Create a multipart instance from a list of dict, for keys, see ``addpart``"""
         form = cls()
         for file in files:

@@ -12,3 +12,21 @@ into a bdist wheel, which is a binary package format used by PyPI. However, the
 right way is to download curl and curl-impersonate sources on our side and compile
 them all together.
 
+macOS
+------
+
+To install the local editable build:
+
+.. code-block:: shell
+
+    # This is for using the libcurl-impersonate built by GitHub actions
+
+    sudo mkdir /Users/runner
+    sudo chmod 777 /Users/runner
+
+    # Dependencies
+    brew install libidn2 zstd
+
+    # Then install
+    pip install -e .[test]
+    pip install -e .[dev]
