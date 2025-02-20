@@ -932,7 +932,7 @@ def test_cookies_update_disabled(server):
     # `r2.cookies` should be different than `s.cookies` since we generate a new `Cookies`
     # object. We also make sure we have our cookie in the response, and that it is
     # different from the session one previously set.
-    r2 = s.get(url, update_sess_cookies=False)
+    r2 = s.get(url, discard_cookies=True)
     assert r2.cookies is not s.cookies
     assert r2.cookies.get("foo") is not None
     assert r2.cookies["foo"] != first_foo
@@ -940,11 +940,11 @@ def test_cookies_update_disabled(server):
     # Third, we test the session's default value (it will be the one set if the request
     # doesn't precise what it wants). So we disable it, and then try to delete our
     # cookie. But since update is false, we make sure it is still there.
-    s.update_sess_cookies = False
+    s.discard_cookies = True
     r3 = s.get(delete_url)
     assert "foo" in s.cookies
 
     # Fourth, we re enable it, and the deletion should be applied.
-    s.update_sess_cookies = True
+    s.discard_cookies = False
     r4 = s.get(delete_url)
     assert "foo" not in s.cookies

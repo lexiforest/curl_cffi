@@ -120,7 +120,7 @@ def request(
         stream: streaming the response, default False.
         max_recv_speed: maximum receive speed, bytes per second.
         multipart: upload files using the multipart format, see examples for details.
-        update_sess_cookies: should we update the session's cookies from the response ? Default to True.
+        discard_cookies: prevents updating session cookies after receiving a response. Default to False.
 
     Returns:
         A ``Response`` object.
