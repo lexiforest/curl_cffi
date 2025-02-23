@@ -50,7 +50,7 @@ The simplest way is to turn off cert verification by ``verify=False``:
 
 .. code-block:: python
 
-    r = requests.get("https://example.com", verify=False)
+    r = curl_cffi.get("https://example.com", verify=False)
 
 
 ErrCode: 77, Reason: error setting certificate verify locations
@@ -89,9 +89,9 @@ To force curl to use http 1.1 only.
 
 .. code-block:: python
 
-    from curl_cffi import requests, CurlHttpVersion
+    import curl_cffi
 
-    r = requests.get("https://postman-echo.com", http_version=CurlHttpVersion.V1_1)
+    r = curl_cffi.get("https://postman-echo.com", http_version=curl_cffi.CurlHttpVersion.V1_1)
 
 Related issues:
 
@@ -136,9 +136,9 @@ You can use the ``proxy`` parameter:
 
 .. code-block:: python
 
-    from curl_cffi import requests
+    import curl_cffi
 
-    requests.get(url, proxy="http://user:pass@example.com:3128")
+    curl_cffi.get(url, proxy="http://user:pass@example.com:3128")
 
 You can also use the ``http_proxy``, ``https_proxy``, and ``ws_proxy``, ``wss_proxy``
 environment variables, respectively.
@@ -165,8 +165,8 @@ Use ``chardet`` or ``cchardet``
 
 .. code-block::
 
-    >>> from curl_cffi import requests
-    >>> r = requests.get("https://example.com/messy_codec.html")
+    >>> import curl_cffi
+    >>> r = curl_cffi.get("https://example.com/messy_codec.html")
     >>> import chardet
     >>> chardet.detect(r.content)
     {'encoding': 'GB2312', 'confidence': 0.99, 'language': 'Chinese'}
