@@ -10,8 +10,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
-    List,
     Literal,
     Optional,
     Tuple,
@@ -71,7 +69,9 @@ class WsCloseCode(IntEnum):
 class WebSocketError(CurlError):
     """WebSocket-specific error."""
 
-    def __init__(self, message: str, code: Union[WsCloseCode, CurlECode, Literal[0]] = 0):
+    def __init__(
+        self, message: str, code: Union[WsCloseCode, CurlECode, Literal[0]] = 0
+    ):
         super().__init__(message, code)  # type: ignore
 
 
@@ -83,7 +83,9 @@ class WebSocketTimeout(WebSocketError, Timeout):
     """WebSocket operation timed out."""
 
 
-async def aselect(fd, *, loop: asyncio.AbstractEventLoop, timeout: Optional[float] = None) -> bool:
+async def aselect(
+    fd, *, loop: asyncio.AbstractEventLoop, timeout: Optional[float] = None
+) -> bool:
     future = loop.create_future()
     loop.add_reader(fd, future.set_result, None)
     future.add_done_callback(lambda _: loop.remove_reader(fd))
@@ -133,12 +135,18 @@ class BaseWebSocket:
                 code = struct.unpack_from("!H", frame)[0]
                 reason = frame[2:].decode()
             except UnicodeDecodeError as e:
-                raise WebSocketError("Invalid close message", WsCloseCode.INVALID_DATA) from e
+                raise WebSocketError(
+                    "Invalid close message", WsCloseCode.INVALID_DATA
+                ) from e
             except Exception as e:
-                raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR) from e
+                raise WebSocketError(
+                    "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
+                ) from e
             else:
                 if code < 3000 and (code not in WsCloseCode or code == 1005):
-                    raise WebSocketError("Invalid close code", WsCloseCode.PROTOCOL_ERROR)
+                    raise WebSocketError(
+                        "Invalid close code", WsCloseCode.PROTOCOL_ERROR
+                    )
         return code, reason
 
     def terminate(self):
@@ -214,7 +222,7 @@ class WebSocket(BaseWebSocket):
     def connect(
         self,
         url: str,
-        params: Optional[Union[Dict, List, Tuple]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         auth: Optional[Tuple[str, str]] = None,
@@ -237,7 +245,7 @@ class WebSocket(BaseWebSocket):
         interface: Optional[str] = None,
         cert: Optional[Union[str, Tuple[str, str]]] = None,
         max_recv_speed: int = 0,
-        curl_options: Optional[Dict[CurlOpt, str]] = None,
+        curl_options: Optional[dict[CurlOpt, str]] = None,
     ):
         """Connect to the WebSocket.
 
@@ -348,7 +356,9 @@ class WebSocket(BaseWebSocket):
 
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            )
         last_received_time = time.time()
         while True:
             try:
@@ -356,7 +366,7 @@ class WebSocket(BaseWebSocket):
                 # If too much time has passed since the last data, pause a bit
                 if current_time - last_received_time > TIMEOUT_THRESHOLD:
                     time.sleep(SLEEP_DELAY)
-                
+
                 chunk, frame = self.recv_fragment()
                 flags = frame.flags
                 last_received_time = time.time()
@@ -452,7 +462,9 @@ class WebSocket(BaseWebSocket):
         self.connect(url, **kwargs)
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            )
 
         self._emit("open")
 
@@ -467,7 +479,7 @@ class WebSocket(BaseWebSocket):
                 # If too much time has passed since the last data, pause a bit
                 if current_time - last_received_time > TIMEOUT_THRESHOLD:
                     time.sleep(SLEEP_DELAY)
-                
+
                 msg, frame = self.recv_fragment()
                 flags = frame.flags
                 last_received_time = time.time()
@@ -485,7 +497,9 @@ class WebSocket(BaseWebSocket):
                         except UnicodeDecodeError as e:
                             self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)
-                            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA) from e
+                            raise WebSocketError(
+                                "Invalid UTF-8", WsCloseCode.INVALID_DATA
+                            ) from e
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
                         self._emit("message", msg)
                 if flags & CurlWsFlag.CLOSE:
@@ -525,7 +539,12 @@ class AsyncWebSocket(BaseWebSocket):
     """An async WebSocket implementation using libcurl."""
 
     def __init__(
-        self, session: AsyncSession, curl: Curl, *, autoclose: bool = True, debug: bool = False
+        self,
+        session: AsyncSession,
+        curl: Curl,
+        *,
+        autoclose: bool = True,
+        debug: bool = False,
     ):
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session = session
@@ -550,7 +569,9 @@ class AsyncWebSocket(BaseWebSocket):
             raise StopAsyncIteration
         return msg
 
-    async def recv_fragment(self, *, timeout: Optional[float] = None) -> Tuple[bytes, CurlWsFrame]:
+    async def recv_fragment(
+        self, *, timeout: Optional[float] = None
+    ) -> Tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes.
 
         Args:
@@ -570,8 +591,8 @@ class AsyncWebSocket(BaseWebSocket):
                 raise WebSocketTimeout("WebSocket recv_fragment() timed out") from e
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
-                    code, message = self._close_code, self._close_reason = self._unpack_close_frame(
-                        chunk
+                    code, message = self._close_code, self._close_reason = (
+                        self._unpack_close_frame(chunk)
                     )
                 except WebSocketError as e:
                     # Follow the spec to close the connection
@@ -598,10 +619,13 @@ class AsyncWebSocket(BaseWebSocket):
         chunks = []
         flags = 0
 
-        sock_fd = await loop.run_in_executor(None, self.curl.getinfo, CurlInfo.ACTIVESOCKET)
+        sock_fd = await loop.run_in_executor(
+            None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
+        )
         if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
-        
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            )
         last_received_time = time.time()
         while True:
             try:
@@ -609,16 +633,12 @@ class AsyncWebSocket(BaseWebSocket):
                 # If too much time has passed since the last data, pause a bit
                 if current_time - last_received_time > TIMEOUT_THRESHOLD:
                     await asyncio.sleep(SLEEP_DELAY)
-
                 chunk, frame = await self.recv_fragment(timeout=timeout)
-                flags = frame.flags
                 last_received_time = time.time()
-
+                flags = frame.flags
                 chunks.append(chunk)
-
                 if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
                     break
-
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     pass
@@ -650,7 +670,9 @@ class AsyncWebSocket(BaseWebSocket):
         data = await self.recv_str(timeout=timeout)
         return loads(data)
 
-    async def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
+    async def send(
+        self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY
+    ):
         """Send a data frame.
 
         Args:
@@ -666,7 +688,9 @@ class AsyncWebSocket(BaseWebSocket):
 
         # TODO: Why does concurrently sending fail
         async with self._send_lock:
-            return await self.loop.run_in_executor(None, self.curl.ws_send, payload, flags)
+            return await self.loop.run_in_executor(
+                None, self.curl.ws_send, payload, flags
+            )
 
     async def send_binary(self, payload: bytes):
         """Send a binary frame.
