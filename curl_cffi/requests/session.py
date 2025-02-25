@@ -271,7 +271,9 @@ class BaseSession(Generic[R]):
         # print("Cookies after extraction", self._cookies)
 
         rsp.primary_ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
+        rsp.primary_port = cast(int, c.getinfo(CurlInfo.PRIMARY_PORT))
         rsp.local_ip = cast(bytes, c.getinfo(CurlInfo.LOCAL_IP)).decode()
+        rsp.local_port = cast(int, c.getinfo(CurlInfo.LOCAL_PORT))
         rsp.default_encoding = default_encoding
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
