@@ -2,7 +2,8 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from typing import Any, Awaitable, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
+from collections.abc import Awaitable
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
@@ -51,7 +52,9 @@ class Response:
         encoding: http body encoding.
         charset: alias for encoding.
         primary_ip: primary ip of the server.
+        primary_port: primary port of the server.
         local_ip: local ip used in this connection.
+        local_port: local port used in this connection.
         charset_encoding: encoding specified by the Content-Type header.
         default_encoding: encoding for decoding response content if charset is not found in
                 headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
@@ -77,7 +80,9 @@ class Response:
         self.redirect_url = ""
         self.http_version = 0
         self.primary_ip: str = ""
+        self.primary_port: int = 0
         self.local_ip: str = ""
+        self.local_port: int = 0
         self.history: list[dict[str, Any]] = []
         self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None

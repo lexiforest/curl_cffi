@@ -11,7 +11,7 @@ from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import HTTPError
 from curl_cffi.requests.models import Response
-from curl_cffi.utils import CurlCffiWarning, config_warnings
+from curl_cffi.utils import CurlCffiWarning
 
 
 def test_head(server):
@@ -901,16 +901,19 @@ def test_max_recv_speed(server):
 
 
 def test_curl_infos(server):
-    s = requests.Session(curl_infos=[CurlInfo.PRIMARY_IP])
+    s = requests.Session(curl_infos=[CurlInfo.PRIMARY_IP, CurlInfo.PRIMARY_PORT])
 
     r = s.get(str(server.url))
 
     assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"  # pyright: ignore
+    assert r.infos[CurlInfo.PRIMARY_PORT] == 8000
 
 
-def test_response_ip(server):
+def test_response_ip_and_port(server):
     s = requests.Session()
     r = s.get(str(server.url))
 
     assert r.primary_ip == "127.0.0.1"
+    assert r.primary_port == 8000
     assert r.local_ip == "127.0.0.1"
+    assert r.local_port != 0
