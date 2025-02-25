@@ -404,10 +404,10 @@ class Curl:
         """Receive a frame from a websocket connection.
 
         Args:
-            n: maximum data to receive.
+            n: maximum data to receive per read.
 
         Returns:
-            a tuple of frame content and curl frame meta struct.
+            a tuple of complete frame content and curl frame meta struct.
 
         Raises:
             CurlError: if failed.
@@ -415,14 +415,22 @@ class Curl:
         buffer = ffi.new("char[]", n)
         n_recv = ffi.new("int *")
         p_frame = ffi.new("struct curl_ws_frame **")
+        chunks = []
+        total_received = 0
 
-        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
-        self._check_error(ret, "WS_RECV")
+        while True:
+            ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
+            self._check_error(ret, "WS_RECV")
+            
+            frame = p_frame[0]
+            chunks.append(ffi.buffer(buffer)[: n_recv[0]])
+            total_received += n_recv[0]
 
-        # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
-        frame = p_frame[0]
+            # Check if we've received the complete frame
+            if frame.bytesleft == 0:
+                break
 
-        return ffi.buffer(buffer)[: n_recv[0]], frame
+        return b''.join(chunks), frame
 
     def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
         """Send data to a websocket connection.
