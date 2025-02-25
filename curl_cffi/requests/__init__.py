@@ -57,7 +57,7 @@ from .websockets import (
 
 if TYPE_CHECKING:
 
-    class SessionRequestParams(RequestParams):
+    class SessionRequestParams(RequestParams, total=False):
         thread: Optional[ThreadType]
         curl_options: Optional[dict]
         debug: Optional[bool]
