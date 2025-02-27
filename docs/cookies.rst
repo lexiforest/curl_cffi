@@ -14,7 +14,7 @@ Using pickle:
     # example from: https://github.com/encode/httpx/issues/895
     import pickle
     # import httpx
-    from curl_cffi import requests
+    import curl_cffi
 
     def save_cookies(client):
         with open("cookies.pk", "wb") as f:
@@ -27,11 +27,11 @@ Using pickle:
             return pickle.load(f)
 
     # client = httpx.Client(cookies=load_cookies())
-    client = requests.Session()
+    client = curl_cffi.Session()
     client.get("https://httpbin.org/cookies/set/foo/bar")
     save_cookies(client)
 
-    client = requests.Session()
+    client = curl_cffi.Session()
     client.cookies.jar._cookies.update(load_cookies())
     print(client.cookies.get("foo"))
 

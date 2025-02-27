@@ -1,10 +1,10 @@
 import asyncio
 
-from curl_cffi import requests
+import curl_cffi
 
 
 async def main():
-    async with requests.AsyncSession() as s:
+    async with curl_cffi.AsyncSession() as s:
         r = await s.get("https://httpbin.org/headers")
         print(r.text)
 
