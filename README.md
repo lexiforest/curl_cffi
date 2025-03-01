@@ -150,7 +150,7 @@ Browser versions will be added **only** when their fingerprints change. If you s
 chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
 
 If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
-to specify your own customized fingerprints. See the [docs on impersonatation](https://curl-cffi.readthedocs.io/en/latest/impersonate.html) for details.
+to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate.html) for details.
 
 - chrome99
 - chrome100
