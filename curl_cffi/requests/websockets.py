@@ -5,7 +5,7 @@ import struct
 from enum import IntEnum
 from functools import partial
 from json import dumps, loads
-from select import select
+import time
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -16,6 +16,9 @@ from typing import (
     TypeVar,
     Union,
 )
+
+TIMEOUT_THRESHOLD = 1.0   # 1 second of inactivity
+SLEEP_DELAY = 0.1         # Sleep for 300ms when no data is flowing
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -356,15 +359,20 @@ class WebSocket(BaseWebSocket):
             raise WebSocketError(
                 "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
             )
+        last_received_time = time.time()
         while True:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if rlist:
-                    chunk, frame = self.recv_fragment()
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                current_time = time.time()
+                # If too much time has passed since the last data, pause a bit
+                if current_time - last_received_time > TIMEOUT_THRESHOLD:
+                    time.sleep(SLEEP_DELAY)
+
+                chunk, frame = self.recv_fragment()
+                flags = frame.flags
+                last_received_time = time.time()
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     pass
@@ -464,14 +472,17 @@ class WebSocket(BaseWebSocket):
         # TODO: Reconnect logic
         chunks = []
         keep_running = True
+        last_received_time = time.time()
         while keep_running:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if not rlist:
-                    continue
+                current_time = time.time()
+                # If too much time has passed since the last data, pause a bit
+                if current_time - last_received_time > TIMEOUT_THRESHOLD:
+                    time.sleep(SLEEP_DELAY)
 
                 msg, frame = self.recv_fragment()
                 flags = frame.flags
+                last_received_time = time.time()
                 self._emit("data", msg, frame)
 
                 if not (frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0):
@@ -615,15 +626,19 @@ class AsyncWebSocket(BaseWebSocket):
             raise WebSocketError(
                 "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
             )
+        last_received_time = time.time()
         while True:
             try:
-                rlist = await aselect(sock_fd, loop=loop, timeout=timeout)
-                if rlist:
-                    chunk, frame = await self.recv_fragment(timeout=timeout)
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                current_time = time.time()
+                # If too much time has passed since the last data, pause a bit
+                if current_time - last_received_time > TIMEOUT_THRESHOLD:
+                    await asyncio.sleep(SLEEP_DELAY)
+                chunk, frame = await self.recv_fragment(timeout=timeout)
+                last_received_time = time.time()
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     pass
