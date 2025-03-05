@@ -239,7 +239,7 @@ def test_url_encode(server):
     assert r.url == url
 
     # path should not be unquoted when params supplied
-    url = f'https://httpbin.org/anything/%2F%3Dsilly%3D%2F'
+    url = f'http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F'
     r = requests.get(url)
     assert r.url == url
     params = {'foo': 'bar'}
