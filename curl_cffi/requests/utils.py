@@ -100,8 +100,7 @@ def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     >> update_url_params(url, new_params)
     'http://stackoverflow.com/test?data=some&data=values&answers=false'
     """
-    # Unquoting and parse
-    url = unquote(url)
+    # No need to unquote, since requote_uri will be called later.
     parsed_url = urlparse(url)
 
     # Extracting URL arguments from parsed URL, NOTE the result is a list, not dict
