@@ -137,32 +137,32 @@ def test_update_params(server):
 
     # The old param is already multiple, append it, too
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?foo=1&foo=2")), params={"foo": 3}
+        str(server.url.copy_with(path="/echo_params", query=b"foo=1&foo=2")), params={"foo": 3}
     )
     assert r.content == b'{"params": {"foo": ["1", "2", "3"]}}'
 
     # 1 to 1 mapping, we have to update it.
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"}
+        str(server.url.copy_with(path="/echo_params", query=b"foo=z")), params={"foo": "bar"}
     )
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
     # does not break old ones
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=1&a=2&foo=z")),
         params={"foo": "bar"},
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["bar"]}}'
 
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=1&a=2&foo=z")),
         params=[("foo", "1"), ("foo", "2")],
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["z", "1", "2"]}}'
 
     # empty values should be kept
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=")),
         params=[("foo", "1"), ("foo", "2")],
     )
     assert r.content == b'{"params": {"a": [""], "foo": ["1", "2"]}}'
