@@ -17,7 +17,6 @@ from typing import (
     Final,
     Literal,
     Optional,
-    Tuple,
     Union,
     cast,
 )
@@ -347,7 +346,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[CurlHttpVersion] = None,
     interface: Optional[str] = None,
-    cert: Optional[Union[str, Tuple[str, str]]] = None,
+    cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
     multipart: Optional[CurlMime] = None,

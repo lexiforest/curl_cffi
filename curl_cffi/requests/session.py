@@ -13,7 +13,6 @@ from typing import (
     Callable,
     Literal,
     Optional,
-    Type,
     TypedDict,
     Union,
     cast,
@@ -82,7 +81,7 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
-        response_class: Optional[Type[R]]
+        response_class: Optional[type[R]]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -188,7 +187,7 @@ class BaseSession(Generic[R]):
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
-        response_class: Optional[Type[R]] = None,
+        response_class: Optional[type[R]] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property

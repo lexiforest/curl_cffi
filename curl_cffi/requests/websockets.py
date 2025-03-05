@@ -12,7 +12,6 @@ from typing import (
     Callable,
     Literal,
     Optional,
-    Tuple,
     TypeVar,
     Union,
 )
@@ -123,7 +122,7 @@ class BaseWebSocket:
         return struct.pack("!H", code) + reason
 
     @staticmethod
-    def _unpack_close_frame(frame: bytes) -> Tuple[int, str]:
+    def _unpack_close_frame(frame: bytes) -> tuple[int, str]:
         if len(frame) < 2:
             code = WsCloseCode.UNKNOWN
             reason = ""
@@ -222,13 +221,13 @@ class WebSocket(BaseWebSocket):
         params: Optional[Union[dict, list, tuple]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: bool = True,
         max_redirects: int = 30,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -240,7 +239,7 @@ class WebSocket(BaseWebSocket):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
         curl_options: Optional[dict[CurlOpt, str]] = None,
     ):
@@ -321,7 +320,7 @@ class WebSocket(BaseWebSocket):
         curl.perform()
         return self
 
-    def recv_fragment(self) -> Tuple[bytes, CurlWsFrame]:
+    def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes."""
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
@@ -341,7 +340,7 @@ class WebSocket(BaseWebSocket):
 
         return chunk, frame
 
-    def recv(self) -> Tuple[bytes, int]:
+    def recv(self) -> tuple[bytes, int]:
         """
         Receive a frame as bytes.
 
@@ -560,7 +559,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def recv_fragment(
         self, *, timeout: Optional[float] = None
-    ) -> Tuple[bytes, CurlWsFrame]:
+    ) -> tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes.
 
         Args:
@@ -594,7 +593,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         return chunk, frame
 
-    async def recv(self, *, timeout: Optional[float] = None) -> Tuple[bytes, int]:
+    async def recv(self, *, timeout: Optional[float] = None) -> tuple[bytes, int]:
         """
         Receive a frame as bytes.
 
