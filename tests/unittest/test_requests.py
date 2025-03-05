@@ -137,32 +137,32 @@ def test_update_params(server):
 
     # The old param is already multiple, append it, too
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?foo=1&foo=2")), params={"foo": 3}
+        str(server.url.copy_with(path="/echo_params", query=b"foo=1&foo=2")), params={"foo": 3}
     )
     assert r.content == b'{"params": {"foo": ["1", "2", "3"]}}'
 
     # 1 to 1 mapping, we have to update it.
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"}
+        str(server.url.copy_with(path="/echo_params", query=b"foo=z")), params={"foo": "bar"}
     )
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
     # does not break old ones
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=1&a=2&foo=z")),
         params={"foo": "bar"},
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["bar"]}}'
 
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=1&a=2&foo=z")),
         params=[("foo", "1"), ("foo", "2")],
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["z", "1", "2"]}}'
 
     # empty values should be kept
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=")),
         params=[("foo", "1"), ("foo", "2")],
     )
     assert r.content == b'{"params": {"a": [""], "foo": ["1", "2"]}}'
@@ -180,23 +180,21 @@ def test_url_encode(server):
 
     url = "http://127.0.0.1:8000/imaginary-pagination:7"
     r = requests.get(str(url))
-    assert r.url == str(url)
+    assert r.url == url
 
     url = "http://127.0.0.1:8000/post.json?limit=1&tags=foo&page=0"
     r = requests.get(str(url))
     assert r.url == url
 
-    # NOTE: this seems to be unnecessary
-
     # Non-ASCII URL should be percent encoded as UTF-8 sequence
-    # non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
-    # encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
-    #
-    # r = requests.get(non_ascii_url)
-    # assert r.url == encoded_non_ascii_url
+    non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
+    encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
 
-    # r = requests.get(encoded_non_ascii_url)
-    # assert r.url == encoded_non_ascii_url
+    r = requests.get(non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
+    r = requests.get(encoded_non_ascii_url)
+    assert r.url == encoded_non_ascii_url
 
     # should be quoted
     url = "http://127.0.0.1:8000/e x a m p l e"
@@ -239,6 +237,14 @@ def test_url_encode(server):
     url = "http://127.0.0.1:8000/api?param1=value1&param2=&param3=value3"
     r = requests.get(url)
     assert r.url == url
+
+    # path should not be unquoted when params supplied
+    url = f'http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F'
+    r = requests.get(url)
+    assert r.url == url
+    params = {'foo': 'bar'}
+    r = requests.get(url, params=params)
+    assert r.url == url + "?foo=bar"
 
 
 def test_headers(server):
