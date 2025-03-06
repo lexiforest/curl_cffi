@@ -357,13 +357,16 @@ class WebSocket(BaseWebSocket):
             )
         while True:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if rlist:
-                    chunk, frame = self.recv_fragment()
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                # Try to receive the first fragment first
+                chunk, frame = self.recv_fragment()
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
+                else:
+                    rlist, _, _ = select([sock_fd], [], [], 5.0)
+                    if rlist:
+                        continue
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     pass
