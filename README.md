@@ -176,6 +176,7 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 - safari18_0 <sup>[4]</sup>
 - safari18_0_ios <sup>[4]</sup>
 - firefox133 <sup>[5]</sup>
+- firefox135 <sup>[7]</sup>
 
 Notes:
 1. Added in version `0.6.0`.
@@ -184,6 +185,7 @@ Notes:
 4. Added in version `0.8.0`.
 5. Added in version `0.9.0`.
 6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
+5. Added in version `0.10.0`.
 
 ### asyncio
 
