@@ -363,13 +363,11 @@ class WebSocket(BaseWebSocket):
                 chunks.append(chunk)
                 if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
                     break
-                else:
-                    rlist, _, _ = select([sock_fd], [], [], 5.0)
-                    if rlist:
-                        continue
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    # According to https://curl.se/libcurl/c/curl_ws_recv.html
+                    # in real application: wait for socket here, e.g. using select()
+                    _, _, _ = select([sock_fd], [], [], 0.5)
                 else:
                     raise
 
