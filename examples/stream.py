@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import closing
 
-from curl_cffi import requests
+import curl_cffi
 
 try:
     # Python 3.10+
@@ -19,7 +19,7 @@ except ImportError:
 
 URL = "https://httpbin.org/stream/20"
 
-with requests.Session() as s:
+with curl_cffi.Session() as s:
     print("\n======================================================================")
     print("Iterating over chunks")
     print("=====================================================================\n")
@@ -77,7 +77,7 @@ with requests.Session() as s:
 
 
 async def async_examples():
-    async with requests.AsyncSession() as s:
+    async with curl_cffi.AsyncSession() as s:
         print("\n====================================================================")
         print("Using asyncio")
         print("====================================================================\n")

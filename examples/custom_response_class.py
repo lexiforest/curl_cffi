@@ -1,11 +1,11 @@
-from curl_cffi import requests
-from curl_cffi.curl import Curl, CurlInfo
+import curl_cffi
+from curl_cffi import Curl, CurlInfo
 from typing import cast
 
 
-class CustomResponse(requests.Response):
+class CustomResponse(curl_cffi.Response):
     def __init__(
-        self, curl: Curl | None = None, request: requests.Request | None = None
+      self, curl: Curl | None = None, request: curl_cffi.Request | None = None
     ):
         super().__init__(curl, request)
         self.local_port = cast(int, curl.getinfo(CurlInfo.LOCAL_PORT))
@@ -19,7 +19,7 @@ class CustomResponse(requests.Response):
         return "this is a custom method"
 
 
-session = requests.Session(response_class=CustomResponse)
+session = curl_cffi.Session(response_class=CustomResponse)
 response: CustomResponse = session.get("http://example.com")
 print(f"{response.status=}")
 print(response.custom_method())
