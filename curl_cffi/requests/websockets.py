@@ -357,16 +357,17 @@ class WebSocket(BaseWebSocket):
             )
         while True:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if rlist:
-                    chunk, frame = self.recv_fragment()
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                # Try to receive the first fragment first
+                chunk, frame = self.recv_fragment()
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    # According to https://curl.se/libcurl/c/curl_ws_recv.html
+                    # in real application: wait for socket here, e.g. using select()
+                    _, _, _ = select([sock_fd], [], [], 0.5)
                 else:
                     raise
 
@@ -465,10 +466,6 @@ class WebSocket(BaseWebSocket):
         keep_running = True
         while keep_running:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if not rlist:
-                    continue
-
                 msg, frame = self.recv_fragment()
                 flags = frame.flags
                 self._emit("data", msg, frame)
@@ -495,7 +492,7 @@ class WebSocket(BaseWebSocket):
                     self._emit("close", self._close_code or 0, self._close_reason or "")
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    _, _, _ = select([sock_fd], [], [], 5.0)
                 else:
                     self._emit("error", e)
                     if not self.closed:
@@ -616,16 +613,14 @@ class AsyncWebSocket(BaseWebSocket):
             )
         while True:
             try:
-                rlist = await aselect(sock_fd, loop=loop, timeout=timeout)
-                if rlist:
-                    chunk, frame = await self.recv_fragment(timeout=timeout)
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                chunk, frame = await self.recv_fragment(timeout=timeout)
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    await aselect(sock_fd, loop=loop, timeout=timeout)
                 else:
                     raise
 
