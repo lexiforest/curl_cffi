@@ -10,25 +10,8 @@ import warnings
 from collections import Counter
 from io import BytesIO
 from json import dumps
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Final,
-    Literal,
-    Optional,
-    Union,
-    cast,
-)
-from urllib.parse import (
-    ParseResult,
-    parse_qsl,
-    quote,
-    unquote,
-    urlencode,
-    urljoin,
-    urlparse,
-)
+from typing import TYPE_CHECKING, Any, Callable, Final, Literal, Optional, Union, cast
+from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -526,12 +509,9 @@ def set_curl_options(
         proxy = cast(Optional[str], proxies.get(parts.scheme, proxies.get("all")))
         if parts.hostname:
             proxy = (
-                cast(
-                    Optional[str],
-                    proxies.get(
-                        f"{parts.scheme}://{parts.hostname}",
-                        proxies.get(f"all://{parts.hostname}"),
-                    ),
+                proxies.get(
+                    f"{parts.scheme}://{parts.hostname}",
+                    proxies.get(f"all://{parts.hostname}"),
                 )
                 or proxy
             )
