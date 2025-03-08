@@ -21,7 +21,6 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    Set,
     TypeVar,
     Union,
 )
@@ -38,7 +37,7 @@ _FileDescriptorLike = Union[int, _HasFileno]
 
 
 # Collection of selector thread event loops to shut down on exit.
-_selector_loops: Set["SelectorThread"] = set()
+_selector_loops: set["SelectorThread"] = set()
 
 
 def _atexit_callback() -> None:

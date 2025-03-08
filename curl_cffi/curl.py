@@ -5,7 +5,7 @@ import struct
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Literal, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 
 import certifi
 
@@ -239,7 +239,7 @@ class Curl:
 
         return ret
 
-    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, List]:
+    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list]:
         """Wrapper for ``curl_easy_getinfo``. Gets information in response after curl perform.
 
         Parameters:
@@ -254,12 +254,14 @@ class Curl:
             0x300000: "double*",
             0x400000: "struct curl_slist **",
             0x500000: "long*",
+            0x600000: "int64_t*",
         }
         ret_cast_option = {
             0x100000: ffi.string,
             0x200000: int,
             0x300000: float,
             0x500000: int,
+            0x600000: int,
         }
         c_value = ffi.new(ret_option[option & 0xF00000])
         ret = lib.curl_easy_getinfo(self._curl, option, c_value)
@@ -348,7 +350,7 @@ class Curl:
             self._set_error_buffer()
         self._resolve = ffi.NULL
 
-    def parse_cookie_headers(self, headers: List[bytes]) -> SimpleCookie:
+    def parse_cookie_headers(self, headers: list[bytes]) -> SimpleCookie:
         """Extract ``cookies.SimpleCookie`` from header lines.
 
         Parameters:
@@ -400,7 +402,7 @@ class Curl:
         ffi.release(self._error_buffer)
         self._resolve = ffi.NULL
 
-    def ws_recv(self, n: int = 1024) -> Tuple[bytes, CurlWsFrame]:
+    def ws_recv(self, n: int = 1024) -> tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
 
         Args:

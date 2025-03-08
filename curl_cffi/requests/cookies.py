@@ -10,7 +10,8 @@ import warnings
 from dataclasses import dataclass
 from http.cookiejar import Cookie, CookieJar
 from http.cookies import _unquote
-from typing import Iterator, MutableMapping, Optional, Union
+from typing import Optional, Union
+from collections.abc import Iterator, MutableMapping
 from urllib.parse import urlparse
 
 from ..utils import CurlCffiWarning

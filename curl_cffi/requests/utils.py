@@ -10,26 +10,8 @@ import warnings
 from collections import Counter
 from io import BytesIO
 from json import dumps
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Final,
-    Literal,
-    Optional,
-    Tuple,
-    Union,
-    cast,
-)
-from urllib.parse import (
-    ParseResult,
-    parse_qsl,
-    quote,
-    unquote,
-    urlencode,
-    urljoin,
-    urlparse,
-)
+from typing import TYPE_CHECKING, Any, Callable, Final, Literal, Optional, Union, cast
+from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -100,8 +82,7 @@ def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     >> update_url_params(url, new_params)
     'http://stackoverflow.com/test?data=some&data=values&answers=false'
     """
-    # Unquoting and parse
-    url = unquote(url)
+    # No need to unquote, since requote_uri will be called later.
     parsed_url = urlparse(url)
 
     # Extracting URL arguments from parsed URL, NOTE the result is a list, not dict
@@ -348,7 +329,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[CurlHttpVersion] = None,
     interface: Optional[str] = None,
-    cert: Optional[Union[str, Tuple[str, str]]] = None,
+    cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
     multipart: Optional[CurlMime] = None,
@@ -528,12 +509,9 @@ def set_curl_options(
         proxy = cast(Optional[str], proxies.get(parts.scheme, proxies.get("all")))
         if parts.hostname:
             proxy = (
-                cast(
-                    Optional[str],
-                    proxies.get(
-                        f"{parts.scheme}://{parts.hostname}",
-                        proxies.get(f"all://{parts.hostname}"),
-                    ),
+                proxies.get(
+                    f"{parts.scheme}://{parts.hostname}",
+                    proxies.get(f"all://{parts.hostname}"),
                 )
                 or proxy
             )
