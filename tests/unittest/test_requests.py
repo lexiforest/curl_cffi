@@ -137,13 +137,15 @@ def test_update_params(server):
 
     # The old param is already multiple, append it, too
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params", query=b"foo=1&foo=2")), params={"foo": 3}
+        str(server.url.copy_with(path="/echo_params", query=b"foo=1&foo=2")),
+        params={"foo": 3},
     )
     assert r.content == b'{"params": {"foo": ["1", "2", "3"]}}'
 
     # 1 to 1 mapping, we have to update it.
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params", query=b"foo=z")), params={"foo": "bar"}
+        str(server.url.copy_with(path="/echo_params", query=b"foo=z")),
+        params={"foo": "bar"},
     )
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
@@ -239,10 +241,10 @@ def test_url_encode(server):
     assert r.url == url
 
     # path should not be unquoted when params supplied
-    url = f'http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F'
+    url = f"http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
     r = requests.get(url)
     assert r.url == url
-    params = {'foo': 'bar'}
+    params = {"foo": "bar"}
     r = requests.get(url, params=params)
     assert r.url == url + "?foo=bar"
 

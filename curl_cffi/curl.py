@@ -254,14 +254,14 @@ class Curl:
             0x300000: "double*",
             0x400000: "struct curl_slist **",
             0x500000: "long*",
-            0x600000: "int64_t*"
+            0x600000: "int64_t*",
         }
         ret_cast_option = {
             0x100000: ffi.string,
             0x200000: int,
             0x300000: float,
             0x500000: int,
-            0x600000: int
+            0x600000: int,
         }
         c_value = ffi.new(ret_option[option & 0xF00000])
         ret = lib.curl_easy_getinfo(self._curl, option, c_value)
