@@ -18,6 +18,7 @@ except ImportError:
     from json import loads
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
+STREAM_END = object()
 
 
 def clear_queue(q: queue.Queue):
@@ -201,9 +202,8 @@ class Response:
                 raise chunk
 
             # end of stream.
-            if chunk is None:
-                self.curl.reset()
-                return
+            if chunk is STREAM_END:
+                break
 
             yield chunk
 
@@ -270,7 +270,7 @@ class Response:
                 raise chunk
 
             # end of stream.
-            if chunk is None:
+            if chunk is STREAM_END:
                 await self.aclose()
                 return
 

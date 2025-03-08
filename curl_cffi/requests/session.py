@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import sys
 import asyncio
 import queue
+import sys
 import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -11,13 +11,13 @@ from io import BytesIO
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Generic,
     Literal,
     Optional,
     TypedDict,
+    TypeVar,
     Union,
     cast,
-    Generic,
-    TypeVar,
 )
 from urllib.parse import urlparse
 
@@ -29,7 +29,7 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
-from .models import Response
+from .models import STREAM_END, Response
 from .utils import not_set, set_curl_options
 from .websockets import AsyncWebSocket, WebSocket
 
@@ -551,14 +551,11 @@ class Session(BaseSession[R]):
                         c, buffer, header_buffer, default_encoding
                     )
                     rsp.request = req
-                    cast(queue.Queue, q).put_nowait(
-                        RequestException(str(e), e.code, rsp)
-                    )
+                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
-                    # None acts as a sentinel
-                    cast(queue.Queue, q).put(None)
+                    q.put(STREAM_END)  # type: ignore
 
             def cleanup(fut):
                 header_parsed.wait()
@@ -568,12 +565,12 @@ class Session(BaseSession[R]):
             stream_task.add_done_callback(cleanup)
 
             # Wait for the first chunk
-            cast(threading.Event, header_recved).wait()
+            header_recved.wait()  # type: ignore
             rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
             header_parsed.set()
 
             # Raise the exception if something wrong happens when receiving the header.
-            first_element = _peek_queue(cast(queue.Queue, q))
+            first_element = _peek_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
                 c.reset()
                 raise first_element
@@ -979,14 +976,11 @@ class AsyncSession(BaseSession[R]):
                         curl, buffer, header_buffer, default_encoding
                     )
                     rsp.request = req
-                    cast(asyncio.Queue, q).put_nowait(
-                        RequestException(str(e), e.code, rsp)
-                    )
+                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
-                    # None acts as a sentinel
-                    await cast(asyncio.Queue, q).put(None)
+                    await q.put(STREAM_END)  # type: ignore
 
             def cleanup(fut):
                 self.release_curl(curl)
@@ -1001,7 +995,7 @@ class AsyncSession(BaseSession[R]):
             # _parse_response will execute in the foreground, no background tasks running.
             rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
 
-            first_element = _peek_aio_queue(cast(asyncio.Queue, q))
+            first_element = _peek_aio_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
                 self.release_curl(curl)
                 raise first_element
