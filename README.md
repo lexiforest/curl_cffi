@@ -20,6 +20,12 @@ Minimum supported python versions:
 - Since 0.10, Python 3.9
 - 0.9 and below, Python 3.8
 
+## Sponsors
+
+<p align="center">
+ Maintenance of this project is made possible by all the <a href="https://github.com/lexiforest/curl_cffi/graphs/contributors">contributors</a> and <a href="https://github.com/sponsors/lexiforest">sponsors</a>. If you'd like to sponsor this project and have your avatar or company logo appear below <a href="https://github.com/sponsors/lexiforest">click here</a>. 💖
+</p>
+
 ------
 
 <a href="https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/proxycurl.png" alt="ProxyCurl" height="63" width="120"></a>
@@ -33,6 +39,12 @@ Scrape public LinkedIn profile data at scale with [Proxycurl APIs](https://nubel
 
 ------
 
+<a href="https://serpapi.com/" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/serpapi.png" alt="SerpAPI" height="63" width="67"></a>
+
+Scrape Google and other search engines from [SerpApi](https://serpapi.com/)'s fast, easy, and complete API. 0.66s average response time (≤ 0.5s for Ludicrous Speed Max accounts), 99.95% SLAs, pay for successful responses only.
+
+------
+
 ### Bypass Cloudflare with API
 
 <a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
@@ -40,17 +52,6 @@ Scrape public LinkedIn profile data at scale with [Proxycurl APIs](https://nubel
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
 to register: https://yescaptcha.com/i/stfnIO
-
-------
-
-<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
-
-[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
-fingerprint; and slower with a real browser under the hood.
-
-ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
-extraction, so you can just get the data in JSON. Rotating proxies are available out of
-the box on all subscription plans.
 
 ------
 
@@ -256,3 +257,4 @@ async with AsyncSession() as s:
 ## Sponsor
 
 <a href="https://buymeacoffee.com/yifei" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
