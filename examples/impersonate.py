@@ -37,7 +37,8 @@ extra_fp = {
     # tls_signature_algorithms: Optional[List[str]] = None
     # http2_stream_weight: int = 256
     # http2_stream_exclusive: int = 1
-    # See requests/impersonate.py and tests/unittest/test_impersonate.py for more examples
+    # See requests/impersonate.py and tests/unittest/test_impersonate.py for more
+    # examples
 }
 
 

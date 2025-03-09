@@ -241,7 +241,7 @@ def test_url_encode(server):
     assert r.url == url
 
     # path should not be unquoted when params supplied
-    url = f"http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
+    url = "http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
     r = requests.get(url)
     assert r.url == url
     params = {"foo": "bar"}
@@ -648,7 +648,8 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
         params={"to": "http://google.com:8000/echo_cookies"},
     )
     cookies = r.json()
-    # cookies without domains are bound to the first domain, which is example.com in this case.
+    # cookies without domains are bound to the first domain, which is example.com in
+    # this case.
     assert len(cookies) == 1
     assert cookies["hello"] == "world"
 

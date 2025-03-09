@@ -57,8 +57,9 @@ class Response:
         local_ip: local ip used in this connection.
         local_port: local port used in this connection.
         charset_encoding: encoding specified by the Content-Type header.
-        default_encoding: encoding for decoding response content if charset is not found in
-                headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+        default_encoding: encoding for decoding response content if charset is not found
+            in headers. Defaults to "utf-8". Can be set to a callable for automatic
+            detection.
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
@@ -102,10 +103,11 @@ class Response:
         Determines the encoding to decode byte content into text.
 
         The method follows a specific priority to decide the encoding:
-        1. If `.encoding` has been explicitly set, it is used.
-        2. The encoding specified by the `charset` parameter in the `Content-Type` header.
-        3. The encoding specified by the `default_encoding` attribute. This can either be
-           a string (e.g., "utf-8") or a callable for charset autodetection.
+        1. If ``.encoding`` has been explicitly set, it is used.
+        2. The encoding specified by the ``charset`` parameter in the ``Content-Type``
+            header.
+        3. The encoding specified by the ``default_encoding`` attribute. This can either
+            be a string (e.g., "utf-8") or a callable for charset autodetection.
         """
         if not hasattr(self, "_encoding"):
             encoding = self.charset_encoding
@@ -295,7 +297,6 @@ class Response:
         if self.astream_task:
             await self.astream_task
 
-    # It prints the status code of the response instead of
-    # the object's memory location.
+    # It prints the status code of the response instead of the object's memory location.
     def __repr__(self) -> str:
         return f"<Response [{self.status_code}]>"

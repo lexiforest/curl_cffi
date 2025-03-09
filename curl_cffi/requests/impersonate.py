@@ -362,5 +362,6 @@ def toggle_extension(curl, extension_id: int, enable: bool):
         pass
     else:
         raise NotImplementedError(
-            f"This extension({extension_id}) can not be toggled for now, it may be updated later."
+            f"This extension({extension_id}) can not be toggled for now, it may be "
+            "updated later."
         )

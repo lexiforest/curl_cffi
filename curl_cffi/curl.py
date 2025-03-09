@@ -110,7 +110,7 @@ class Curl:
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
         Parameters:
-            cacert: CA cert path to use, by default, curl_cffi uses certs from ``certifi``.
+            cacert: CA cert path to use, by default, certs from ``certifi`` are used.
             debug: whether to show curl debug messages.
             handle: a curl handle instance from ``curl_easy_init``.
         """
@@ -155,7 +155,8 @@ class Curl:
             action = " ".join([str(a) for a in args])
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
-                "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
+                "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
+                "details.",
                 code=cast(CurlECode, errcode),
             )
 
@@ -240,7 +241,8 @@ class Curl:
         return ret
 
     def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list]:
-        """Wrapper for ``curl_easy_getinfo``. Gets information in response after curl perform.
+        """Wrapper for ``curl_easy_getinfo``. Gets information in response after
+        curl.perform.
 
         Parameters:
             option: option to get info of, using constants from ``CurlInfo`` enum
@@ -320,7 +322,8 @@ class Curl:
             self.clean_after_perform(clear_headers)
 
     def clean_after_perform(self, clear_headers: bool = True) -> None:
-        """Clean up handles and buffers after perform, called at the end of `perform`."""
+        """Clean up handles and buffers after ``perform``, called at the end of
+        ``perform``."""
         self._write_handle = None
         self._header_handle = None
         self._body_handle = None
@@ -367,7 +370,8 @@ class Curl:
 
     @staticmethod
     def get_reason_phrase(status_line: bytes) -> bytes:
-        """Extract reason phrase, like ``OK``, ``Not Found`` from response status line."""
+        """Extract reason phrase, like ``OK``, ``Not Found`` from response status
+        line."""
         m = REASON_PHRASE_RE.match(status_line)
         return m.group(1) if m else b""
 
@@ -549,8 +553,8 @@ class CurlMime:
         c.setopt(CurlOpt.MIMEPOST, self._form)
 
     def close(self) -> None:
-        """Close the mime instance and underlying files. This method must be called after
-        ``perform`` or ``request``."""
+        """Close the mime instance and underlying files. This method must be called
+        after ``perform`` or ``request``."""
         lib.curl_mime_free(self._form)
         self._form = ffi.NULL
 

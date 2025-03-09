@@ -125,6 +125,9 @@ select = [
     "B",  # flake8-bugbear
     "SIM",  # flake8-simplify
 ]
+ignore = [
+    "UP007"
+]
 
 [tool.isort]
 profile = "black"
