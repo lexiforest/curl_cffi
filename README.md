@@ -15,10 +15,7 @@ Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` ca
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Minimum supported python versions:
-
-- Since 0.10, Python 3.9
-- 0.9 and below, Python 3.8
+Python 3.9 is the minimum supported version since v0.10.
 
 ## Sponsors
 
@@ -99,6 +96,16 @@ To install unstable version from GitHub:
 
 ### requests-like
 
+v0.9:
+
+```py
+from curl_cffi import requests
+
+r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+```
+
+v0.10:
+
 ```python
 import curl_cffi
 
@@ -130,6 +137,16 @@ r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", 
 ```
 
 ### Sessions
+
+v0.9:
+
+```py
+from curl_cffi import requests
+
+s = requests.Session()
+```
+
+v0.10:
 
 ```python
 s = curl_cffi.Session()
@@ -188,7 +205,7 @@ Notes:
 6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 5. Added in version `0.10.0`.
 
-### asyncio
+### Asyncio
 
 ```python
 from curl_cffi import AsyncSession
@@ -232,7 +249,7 @@ ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
 
-### asyncio WebSockets
+### Asyncio WebSockets
 
 ```python
 import asyncio
