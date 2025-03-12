@@ -40,3 +40,15 @@ def test_none_headers():
     """Allow using None to explictly remove headers"""
     headers = Headers({"Content-Type": None})
     assert headers["content-type"] is None
+
+
+def test_wrapped_headers_preserve_encoding():
+    headers = Headers({"foo": "bar"}, encoding="utf-8")
+    wrapped_headers = Headers(headers)
+    assert wrapped_headers.encoding == "utf-8"
+
+
+def test_wrapped_headers_change_encoding():
+    headers = Headers({"foo": "bar"}, encoding="utf-8")
+    wrapped_headers = Headers(headers, encoding="ascii")
+    assert wrapped_headers.encoding == "ascii"

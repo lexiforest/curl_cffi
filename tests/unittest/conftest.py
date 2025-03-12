@@ -708,7 +708,7 @@ def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)
 
 
 @file_app.post("/files")
-def upload_multi_files(images: typing.List[UploadFile]):
+def upload_multi_files(images: list[UploadFile]):
     files = []
     for image in images:
         content = image.file.read()

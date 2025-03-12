@@ -70,7 +70,7 @@ with open(CONST_FILE, "w") as f:
     f.write(
         '''
 class CurlHttpVersion(IntEnum):
-    """``CURL_HTTP_VERSION`` constants extracted from libcurl, see comments for details."""
+    """``CURL_HTTP_VERSION`` constants from libcurl, see comments for details."""
 
     NONE = 0
     V1_0 = 1  # please use HTTP 1.0 in the request */
@@ -82,7 +82,7 @@ class CurlHttpVersion(IntEnum):
 
 
 class CurlWsFlag(IntEnum):
-    """``CURL_WS_FLAG`` constants extracted from libcurl, see comments for details."""
+    """``CURL_WS_FLAG`` constants from libcurl, see comments for details."""
 
     TEXT = 1 << 0
     BINARY = 1 << 1
@@ -93,7 +93,7 @@ class CurlWsFlag(IntEnum):
 
 
 class CurlSslVersion(IntEnum):
-    """``CURL_SSLVERSION`` constants extracted from libcurl, see comments for details."""
+    """``CURL_SSLVERSION`` constants from libcurl, see comments for details."""
 
     DEFAULT = 0
     TLSv1 = 1

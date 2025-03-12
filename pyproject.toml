@@ -1,9 +1,9 @@
 [project]
 name = "curl_cffi"
-version = "0.9.0"
+version = "0.10.0b2"
 authors = [{ name = "Lyonnet", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
-license = { file = "LICENSE" }
+license = { text = "MIT License" }
 dependencies = [
     "cffi>=1.12.0",
     "certifi>=2024.2.2",
@@ -124,6 +124,9 @@ select = [
     "UP",  # pyupgrade
     "B",  # flake8-bugbear
     "SIM",  # flake8-simplify
+]
+ignore = [
+    "UP007"
 ]
 
 [tool.isort]

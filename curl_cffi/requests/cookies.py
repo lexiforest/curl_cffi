@@ -10,7 +10,8 @@ import warnings
 from dataclasses import dataclass
 from http.cookiejar import Cookie, CookieJar
 from http.cookies import _unquote
-from typing import Iterator, MutableMapping, Optional, Union
+from typing import Optional, Union
+from collections.abc import Iterator, MutableMapping
 from urllib.parse import urlparse
 
 from ..utils import CurlCffiWarning
@@ -164,7 +165,8 @@ class Cookies(MutableMapping[str, str]):
         return host
 
     def get_cookies_for_curl(self, request) -> list[CurlMorsel]:
-        """the process is similar to `cookiejar.add_cookie_header`, but load all cookies"""
+        """the process is similar to ``cookiejar.add_cookie_header``, but load all
+        cookies"""
         self.jar._cookies_lock.acquire()  # type: ignore
         morsels = []
         try:

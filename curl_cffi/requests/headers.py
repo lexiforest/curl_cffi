@@ -89,6 +89,7 @@ class Headers(MutableMapping[str, Optional[str]]):
             self._list: list[tuple[bytes, bytes, Optional[bytes]]] = []
         elif isinstance(headers, Headers):
             self._list = list(headers._list)
+            encoding = encoding or headers.encoding
         elif isinstance(headers, Mapping):
             self._list = [
                 (

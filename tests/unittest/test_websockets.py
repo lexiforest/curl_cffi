@@ -44,6 +44,17 @@ def test_hello_twice(ws_server):
         assert content == b"Foo me once"
 
 
+def test_receive_large_messages(ws_server):
+    ws = WebSocket()
+    ws.connect(ws_server.url)
+    for _ in range(10):
+        ws.send("*" * 10000)
+    for _ in range(10):
+        buffer, _ = ws.recv()
+        assert len(buffer) == 10000
+    ws.close()
+
+
 async def test_hello_twice_async(ws_server):
     async with AsyncSession() as s:
         ws = await s.ws_connect(ws_server.url)

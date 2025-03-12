@@ -10,26 +10,8 @@ import warnings
 from collections import Counter
 from io import BytesIO
 from json import dumps
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Final,
-    Literal,
-    Optional,
-    Tuple,
-    Union,
-    cast,
-)
-from urllib.parse import (
-    ParseResult,
-    parse_qsl,
-    quote,
-    unquote,
-    urlencode,
-    urljoin,
-    urlparse,
-)
+from typing import TYPE_CHECKING, Any, Callable, Final, Literal, Optional, Union, cast
+from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -100,8 +82,7 @@ def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     >> update_url_params(url, new_params)
     'http://stackoverflow.com/test?data=some&data=values&answers=false'
     """
-    # Unquoting and parse
-    url = unquote(url)
+    # No need to unquote, since requote_uri will be called later.
     parsed_url = urlparse(url)
 
     # Extracting URL arguments from parsed URL, NOTE the result is a list, not dict
@@ -160,8 +141,8 @@ def unquote_unreserved(uri: str) -> str:
         if len(h) == 2 and h.isalnum():
             try:
                 c = chr(int(h, 16))
-            except ValueError:
-                raise InvalidURL(f"Invalid percent-escape sequence: '{h}'")
+            except ValueError as e:
+                raise InvalidURL(f"Invalid percent-escape sequence: '{h}'") from e
 
             if c in UNRESERVED_SET:
                 parts[i] = c + parts[i][2:]
@@ -322,21 +303,21 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: list[Union[dict, list, tuple, None]] = [],
+    params_list: list[Union[dict, list, tuple, None]] = [],  # noqa: B006
     base_url: Optional[str] = None,
     data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
     json: Optional[dict | list] = None,
-    headers_list: list[Optional[HeaderTypes]] = [],
-    cookies_list: list[Optional[CookieTypes]] = [],
+    headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
+    cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
     files: Optional[dict] = None,
     auth: Optional[tuple[str, str]] = None,
     timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
     allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
-    proxies_list: list[Optional[ProxySpec]] = [],
+    proxies_list: list[Optional[ProxySpec]] = [],  # noqa: B006
     proxy: Optional[str] = None,
     proxy_auth: Optional[tuple[str, str]] = None,
-    verify_list: list[Union[bool, str, None]] = [],
+    verify_list: list[Union[bool, str, None]] = [],  # noqa: B006
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
@@ -348,7 +329,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[CurlHttpVersion] = None,
     interface: Optional[str] = None,
-    cert: Optional[Union[str, Tuple[str, str]]] = None,
+    cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
     multipart: Optional[CurlMime] = None,
@@ -399,7 +380,7 @@ def set_curl_options(
         body = dumps(json, separators=(",", ":")).encode()
 
     # Tell libcurl to be aware of bodies and related headers when,
-    # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do;
+    # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do
     # 2. GET/DELETE with body, although it's against the RFC, some applications.
     #   e.g. Elasticsearch, use this.
     if body or method in ("POST", "PUT", "PATCH"):
@@ -528,12 +509,9 @@ def set_curl_options(
         proxy = cast(Optional[str], proxies.get(parts.scheme, proxies.get("all")))
         if parts.hostname:
             proxy = (
-                cast(
-                    Optional[str],
-                    proxies.get(
-                        f"{parts.scheme}://{parts.hostname}",
-                        proxies.get(f"all://{parts.hostname}"),
-                    ),
+                proxies.get(  # type: ignore
+                    f"{parts.scheme}://{parts.hostname}",
+                    proxies.get(f"all://{parts.hostname}"),
                 )
                 or proxy
             )
@@ -639,7 +617,8 @@ def set_curl_options(
     if http_version:
         c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
-    # set extra curl options, must come after impersonate, because it will alter some options
+    # set extra curl options, must come after impersonate, because it will alter some
+    # options
     if curl_options:
         for option, setting in curl_options.items():
             c.setopt(option, setting)

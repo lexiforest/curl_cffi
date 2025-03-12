@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import sys
 import asyncio
 import queue
+import sys
 import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -11,14 +11,13 @@ from io import BytesIO
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Generic,
     Literal,
     Optional,
-    Type,
     TypedDict,
+    TypeVar,
     Union,
     cast,
-    Generic,
-    TypeVar,
 )
 from urllib.parse import urlparse
 
@@ -30,7 +29,7 @@ from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
-from .models import Response
+from .models import STREAM_END, Response
 from .utils import not_set, set_curl_options
 from .websockets import AsyncWebSocket, WebSocket
 
@@ -82,7 +81,7 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
-        response_class: Optional[Type[R]]
+        response_class: Optional[type[R]]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -188,7 +187,7 @@ class BaseSession(Generic[R]):
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
-        response_class: Optional[Type[R]] = None,
+        response_class: Optional[type[R]] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -215,8 +214,9 @@ class BaseSession(Generic[R]):
 
         if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
-                "`response_class` must be a subclass of `curl_cffi.requests.models.Response`"
-                f" not of type `{response_class}`"
+                "`response_class` must be a subclass of "
+                "`curl_cffi.requests.models.Response`, "
+                f"not of type `{response_class}`"
             )
         self.response_class = response_class or Response
 
@@ -271,7 +271,9 @@ class BaseSession(Generic[R]):
         # print("Cookies after extraction", self._cookies)
 
         rsp.primary_ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
+        rsp.primary_port = cast(int, c.getinfo(CurlInfo.PRIMARY_PORT))
         rsp.local_ip = cast(bytes, c.getinfo(CurlInfo.LOCAL_IP)).decode()
+        rsp.local_port = cast(int, c.getinfo(CurlInfo.LOCAL_PORT))
         rsp.default_encoding = default_encoding
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
@@ -298,8 +300,8 @@ class BaseSession(Generic[R]):
 
 
 class Session(BaseSession[R]):
-    """A request session, cookies and connections will be reused. This object is thread-safe,
-    but it's recommended to use a separate session for each thread."""
+    """A request session, cookies and connections will be reused. This object is
+    thread-safe, but it's recommended to use a separate session for each thread."""
 
     def __init__(
         self,
@@ -309,7 +311,8 @@ class Session(BaseSession[R]):
         **kwargs: Unpack[BaseSessionParams[R]],
     ):
         """
-        Parameters set in the init method will be overriden by the same parameter in request method.
+        Parameters set in the ``__init__`` method will be overriden by the same
+        parameter in request method.
 
         Args:
             curl: curl object to use in the session. If not provided, a new one will be
@@ -319,8 +322,10 @@ class Session(BaseSession[R]):
                 choices: eventlet, gevent.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
-            auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
-            proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is
+                supported.
+            proxies: dict of proxies to use, prefer to use proxy if they are the same.
+                format: ``{"http": proxy_url, "https": proxy_url}``.
             proxy: proxy to use, format: "http://proxy_url".
                 Cannot be used with the above parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
@@ -334,10 +339,11 @@ class Session(BaseSession[R]):
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
-            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             interface: which interface use.
-            default_encoding: encoding for decoding response content if charset is not found in
-                headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+            default_encoding: encoding for decoding response content if charset is not
+                found in headers. Defaults to "utf-8". Can be set to a callable for
+                automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
             response_class: A customized subtype of ``Response`` to use.
 
@@ -550,14 +556,11 @@ class Session(BaseSession[R]):
                         c, buffer, header_buffer, default_encoding
                     )
                     rsp.request = req
-                    cast(queue.Queue, q).put_nowait(
-                        RequestException(str(e), e.code, rsp)
-                    )
+                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
-                    # None acts as a sentinel
-                    cast(queue.Queue, q).put(None)
+                    q.put(STREAM_END)  # type: ignore
 
             def cleanup(fut):
                 header_parsed.wait()
@@ -567,12 +570,12 @@ class Session(BaseSession[R]):
             stream_task.add_done_callback(cleanup)
 
             # Wait for the first chunk
-            cast(threading.Event, header_recved).wait()
+            header_recved.wait()  # type: ignore
             rsp = self._parse_response(c, buffer, header_buffer, default_encoding)
             header_parsed.set()
 
             # Raise the exception if something wrong happens when receiving the header.
-            first_element = _peek_queue(cast(queue.Queue, q))
+            first_element = _peek_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
                 c.reset()
                 raise first_element
@@ -644,7 +647,8 @@ class AsyncSession(BaseSession[R]):
         **kwargs: Unpack[BaseSessionParams[R]],
     ):
         """
-        Parameters set in the init method will be override by the same parameter in request method.
+        Parameters set in the ``__init__`` method will be override by the same parameter
+        in request method.
 
         Parameters:
             loop: loop to use, if not provided, the running loop will be used.
@@ -653,8 +657,10 @@ class AsyncSession(BaseSession[R]):
                 this will affect the concurrency ratio.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
-            auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
-            proxies: dict of proxies to use, format: {"http": proxy_url, "https": proxy_url}.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is
+                supported.
+            proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
+                same. format: ``{"http": proxy_url, "https": proxy_url}``.
             proxy: proxy to use, format: "http://proxy_url".
                 Cannot be used with the above parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
@@ -668,9 +674,10 @@ class AsyncSession(BaseSession[R]):
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
-            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
-            default_encoding: encoding for decoding response content if charset is not found
-                in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
+            default_encoding: encoding for decoding response content if charset is not
+                found in headers. Defaults to "utf-8". Can be set to a callable for
+                automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
             response_class: A customized subtype of ``Response`` to use.
 
@@ -807,11 +814,13 @@ class AsyncSession(BaseSession[R]):
             params: query string for the requests.
             headers: headers to send.
             cookies: cookies to use.
-            auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is
+                supported.
             timeout: how many seconds to wait before giving up.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
-            proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
+            proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
+                same. format: ``{"http": proxy_url, "https": proxy_url}``.
             proxy: proxy to use, format: "http://user@pass:proxy_url".
                 Can't be used with `proxies` parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
@@ -821,12 +830,13 @@ class AsyncSession(BaseSession[R]):
             impersonate: which browser version to impersonate.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
-            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
-            quote: Set characters to be quoted, i.e. percent-encoded. Default safe string
-                is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character will be removed
-                from the safe string, thus quoted. If set to False, the url will be kept as is,
-                without any automatic percent-encoding, you must encode the URL yourself.
+            quote: Set characters to be quoted, i.e. percent-encoded. Default safe
+                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character
+                will be removed from the safe string, thus quoted. If set to False, the
+                url will be kept as is, without any automatic percent-encoding, you must
+                encode the URL yourself.
             curl_options: extra curl options to use.
             http_version: limiting http version, defaults to http2.
             interface: which interface to use.
@@ -918,7 +928,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
     ):
-        """Send the request, see ``curl_cffi.requests.request`` for details on parameters."""
+        """Send the request, see ``curl_cffi.requests.request`` for details on args."""
 
         self._check_session_closed()
 
@@ -978,14 +988,11 @@ class AsyncSession(BaseSession[R]):
                         curl, buffer, header_buffer, default_encoding
                     )
                     rsp.request = req
-                    cast(asyncio.Queue, q).put_nowait(
-                        RequestException(str(e), e.code, rsp)
-                    )
+                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
-                    # None acts as a sentinel
-                    await cast(asyncio.Queue, q).put(None)
+                    await q.put(STREAM_END)  # type: ignore
 
             def cleanup(fut):
                 self.release_curl(curl)
@@ -997,10 +1004,11 @@ class AsyncSession(BaseSession[R]):
 
             # Unlike threads, coroutines does not use preemptive scheduling.
             # For asyncio, there is no need for a header_parsed event, the
-            # _parse_response will execute in the foreground, no background tasks running.
+            # _parse_response will execute in the foreground, no background tasks
+            # running.
             rsp = self._parse_response(curl, buffer, header_buffer, default_encoding)
 
-            first_element = _peek_aio_queue(cast(asyncio.Queue, q))
+            first_element = _peek_aio_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
                 self.release_curl(curl)
                 raise first_element

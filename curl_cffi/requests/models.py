@@ -2,7 +2,8 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from typing import Any, Awaitable, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
+from collections.abc import Awaitable
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
@@ -17,6 +18,7 @@ except ImportError:
     from json import loads
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
+STREAM_END = object()
 
 
 def clear_queue(q: queue.Queue):
@@ -51,10 +53,13 @@ class Response:
         encoding: http body encoding.
         charset: alias for encoding.
         primary_ip: primary ip of the server.
+        primary_port: primary port of the server.
         local_ip: local ip used in this connection.
+        local_port: local port used in this connection.
         charset_encoding: encoding specified by the Content-Type header.
-        default_encoding: encoding for decoding response content if charset is not found in
-                headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+        default_encoding: encoding for decoding response content if charset is not found
+            in headers. Defaults to "utf-8". Can be set to a callable for automatic
+            detection.
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
@@ -77,7 +82,9 @@ class Response:
         self.redirect_url = ""
         self.http_version = 0
         self.primary_ip: str = ""
+        self.primary_port: int = 0
         self.local_ip: str = ""
+        self.local_port: int = 0
         self.history: list[dict[str, Any]] = []
         self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
@@ -96,10 +103,11 @@ class Response:
         Determines the encoding to decode byte content into text.
 
         The method follows a specific priority to decide the encoding:
-        1. If `.encoding` has been explicitly set, it is used.
-        2. The encoding specified by the `charset` parameter in the `Content-Type` header.
-        3. The encoding specified by the `default_encoding` attribute. This can either be
-           a string (e.g., "utf-8") or a callable for charset autodetection.
+        1. If ``.encoding`` has been explicitly set, it is used.
+        2. The encoding specified by the ``charset`` parameter in the ``Content-Type``
+            header.
+        3. The encoding specified by the ``default_encoding`` attribute. This can either
+            be a string (e.g., "utf-8") or a callable for charset autodetection.
         """
         if not hasattr(self, "_encoding"):
             encoding = self.charset_encoding
@@ -196,9 +204,8 @@ class Response:
                 raise chunk
 
             # end of stream.
-            if chunk is None:
-                self.curl.reset()
-                return
+            if chunk is STREAM_END:
+                break
 
             yield chunk
 
@@ -265,7 +272,7 @@ class Response:
                 raise chunk
 
             # end of stream.
-            if chunk is None:
+            if chunk is STREAM_END:
                 await self.aclose()
                 return
 
@@ -290,7 +297,6 @@ class Response:
         if self.astream_task:
             await self.astream_task
 
-    # It prints the status code of the response instead of
-    # the object's memory location.
+    # It prints the status code of the response instead of the object's memory location.
     def __repr__(self) -> str:
         return f"<Response [{self.status_code}]>"

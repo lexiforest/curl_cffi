@@ -12,7 +12,6 @@ from typing import (
     Callable,
     Literal,
     Optional,
-    Tuple,
     TypeVar,
     Union,
 )
@@ -123,7 +122,7 @@ class BaseWebSocket:
         return struct.pack("!H", code) + reason
 
     @staticmethod
-    def _unpack_close_frame(frame: bytes) -> Tuple[int, str]:
+    def _unpack_close_frame(frame: bytes) -> tuple[int, str]:
         if len(frame) < 2:
             code = WsCloseCode.UNKNOWN
             reason = ""
@@ -171,7 +170,8 @@ class WebSocket(BaseWebSocket):
         """
         Args:
             autoclose: whether to close the WebSocket after receiving a close frame.
-            skip_utf8_validation: whether to skip UTF-8 validation for text frames in run_forever().
+            skip_utf8_validation: whether to skip UTF-8 validation for text frames in
+                run_forever().
             debug: print extra curl debug info.
 
             on_open: open callback, ``def on_open(ws)``
@@ -222,13 +222,13 @@ class WebSocket(BaseWebSocket):
         params: Optional[Union[dict, list, tuple]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        auth: Optional[Tuple[str, str]] = None,
-        timeout: Optional[Union[float, Tuple[float, float], object]] = not_set,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
         allow_redirects: bool = True,
         max_redirects: int = 30,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
-        proxy_auth: Optional[Tuple[str, str]] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
@@ -240,7 +240,7 @@ class WebSocket(BaseWebSocket):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[CurlHttpVersion] = None,
         interface: Optional[str] = None,
-        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
         curl_options: Optional[dict[CurlOpt, str]] = None,
     ):
@@ -254,11 +254,13 @@ class WebSocket(BaseWebSocket):
             params: query string for the requests.
             headers: headers to send.
             cookies: cookies to use.
-            auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is
+                supported.
             timeout: how many seconds to wait before giving up.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
-            proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
+            proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
+                same. format: ``{"http": proxy_url, "https": proxy_url}``.
             proxy: proxy to use, format: "http://user@pass:proxy_url".
                 Can't be used with `proxies` parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
@@ -268,14 +270,16 @@ class WebSocket(BaseWebSocket):
             impersonate: which browser version to impersonate.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
-            extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
-            default_encoding: encoding for decoding response content if charset is not found
-                in headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
-            quote: Set characters to be quoted, i.e. percent-encoded. Default safe string
-                is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character will be removed
-                from the safe string, thus quoted. If set to False, the url will be kept as is,
-                without any automatic percent-encoding, you must encode the URL yourself.
+            default_encoding: encoding for decoding response content if charset is not
+                found in headers. Defaults to "utf-8". Can be set to a callable for
+                automatic detection.
+            quote: Set characters to be quoted, i.e. percent-encoded. Default safe
+                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character
+                will be removed from the safe string, thus quoted. If set to False, the
+                url will be kept as is, without any automatic percent-encoding, you must
+                encode the URL yourself.
             curl_options: extra curl options to use.
             http_version: limiting http version, defaults to http2.
             interface: which interface to use.
@@ -321,7 +325,7 @@ class WebSocket(BaseWebSocket):
         curl.perform()
         return self
 
-    def recv_fragment(self) -> Tuple[bytes, CurlWsFrame]:
+    def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes."""
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
@@ -341,7 +345,7 @@ class WebSocket(BaseWebSocket):
 
         return chunk, frame
 
-    def recv(self) -> Tuple[bytes, int]:
+    def recv(self) -> tuple[bytes, int]:
         """
         Receive a frame as bytes.
 
@@ -358,16 +362,17 @@ class WebSocket(BaseWebSocket):
             )
         while True:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if rlist:
-                    chunk, frame = self.recv_fragment()
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                # Try to receive the first fragment first
+                chunk, frame = self.recv_fragment()
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    # According to https://curl.se/libcurl/c/curl_ws_recv.html
+                    # in real application: wait for socket here, e.g. using select()
+                    _, _, _ = select([sock_fd], [], [], 0.5)
                 else:
                     raise
 
@@ -466,10 +471,6 @@ class WebSocket(BaseWebSocket):
         keep_running = True
         while keep_running:
             try:
-                rlist, _, _ = select([sock_fd], [], [], 5.0)
-                if not rlist:
-                    continue
-
                 msg, frame = self.recv_fragment()
                 flags = frame.flags
                 self._emit("data", msg, frame)
@@ -496,7 +497,7 @@ class WebSocket(BaseWebSocket):
                     self._emit("close", self._close_code or 0, self._close_reason or "")
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    _, _, _ = select([sock_fd], [], [], 5.0)
                 else:
                     self._emit("error", e)
                     if not self.closed:
@@ -560,7 +561,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def recv_fragment(
         self, *, timeout: Optional[float] = None
-    ) -> Tuple[bytes, CurlWsFrame]:
+    ) -> tuple[bytes, CurlWsFrame]:
         """Receive a single frame as bytes.
 
         Args:
@@ -594,7 +595,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         return chunk, frame
 
-    async def recv(self, *, timeout: Optional[float] = None) -> Tuple[bytes, int]:
+    async def recv(self, *, timeout: Optional[float] = None) -> tuple[bytes, int]:
         """
         Receive a frame as bytes.
 
@@ -617,16 +618,14 @@ class AsyncWebSocket(BaseWebSocket):
             )
         while True:
             try:
-                rlist = await aselect(sock_fd, loop=loop, timeout=timeout)
-                if rlist:
-                    chunk, frame = await self.recv_fragment(timeout=timeout)
-                    flags = frame.flags
-                    chunks.append(chunk)
-                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                        break
+                chunk, frame = await self.recv_fragment(timeout=timeout)
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    pass
+                    await aselect(sock_fd, loop=loop, timeout=timeout)
                 else:
                     raise
 
