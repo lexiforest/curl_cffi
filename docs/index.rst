@@ -124,12 +124,12 @@ requests-like
 
 .. code-block:: python
 
-    from curl_cffi import requests
+    import curl_cffi
 
     url = "https://tools.scrapfly.io/api/fp/ja3"
 
     # Notice the impersonate parameter
-    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
+    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
 
     print(r.json())
     # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -138,14 +138,14 @@ requests-like
     # To keep using the latest browser version as `curl_cffi` updates,
     # simply set impersonate="chrome" without specifying a version.
     # Other similar values are: "safari" and "safari_ios"
-    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
     # http/socks proxies are supported
     proxies = {"https": "http://localhost:3128"}
-    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
+    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 
     proxies = {"https": "socks://localhost:3128"}
-    r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
+    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
 
 Sessions
 ~~~~~~
@@ -169,7 +169,7 @@ asyncio
 
 .. code-block:: python
 
-    from curl_cffi.requests import AsyncSession
+    from curl_cffi import AsyncSession
 
     async with AsyncSession() as s:
         r = await s.get("https://example.com")
@@ -179,7 +179,7 @@ More concurrency:
 .. code-block:: python
 
     import asyncio
-    from curl_cffi.requests import AsyncSession
+    from curl_cffi import AsyncSession
 
     urls = [
         "https://google.com/",
@@ -199,7 +199,7 @@ WebSockets
 
 .. code-block:: python
 
-    from curl_cffi.requests import Session, WebSocket
+    from curl_cffi import Session, WebSocket
 
     def on_message(ws: WebSocket, message):
         print(message)

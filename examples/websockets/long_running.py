@@ -1,4 +1,4 @@
-from curl_cffi.requests import WebSocket
+from curl_cffi import WebSocket
 
 msg_count = 0
 

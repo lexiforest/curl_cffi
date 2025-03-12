@@ -57,9 +57,9 @@ browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
 
 .. code-block:: python
 
-    from curl_cffi import requests
+    import curl_cffi
 
-    requests.get(url, impersonate="chrome")
+    curl_cffi.get(url, impersonate="chrome")
 
 iOS has restrictions on WebView and TLS libs, so ``safari_x_ios`` should work for most apps.
 If you encountered an android app with custom fingerprints, you can try the ``safari_ios``
@@ -116,7 +116,7 @@ You can retrieve the JA3 and Akamai strings using tools like WireShark or from T
    }
 
 
-   r = requests.get(
+   r = curl_cffi.get(
        url, ja3=okhttp4_android10_ja3, akamai=okhttp4_android10_akamai, extra_fp=extra_fp
    )
    print(r.json())
@@ -127,13 +127,14 @@ To modify them, use ``curl.setopt(CurlOpt, value)``, for example:
 
 .. code-block:: python
 
-   from curl_cffi import Curl, CurlOpt, requests
+   import curl_cffi
+   from curl_cffi import Curl, CurlOpt
 
    c = Curl()
    c.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, "masp")
 
    # or
-   requests.get(url, curl_options={CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, "masp"})
+   curl_cffi.get(url, curl_options={CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, "masp"})
 
 Here are a list of options:
 

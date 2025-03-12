@@ -15,10 +15,7 @@ Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` ca
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Minimum supported python versions:
-
-- Since 0.10, Python 3.9
-- 0.9 and below, Python 3.8
+Python 3.9 is the minimum supported version since v0.10.
 
 ## Sponsors
 
@@ -99,11 +96,21 @@ To install unstable version from GitHub:
 
 ### requests-like
 
-```python
+v0.9:
+
+```py
 from curl_cffi import requests
 
-# Notice the impersonate parameter
 r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+```
+
+v0.10:
+
+```python
+import curl_cffi
+
+# Notice the impersonate parameter
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -112,27 +119,37 @@ print(r.json())
 # To keep using the latest browser version as `curl_cffi` updates,
 # simply set impersonate="chrome" without specifying a version.
 # Other similar values are: "safari" and "safari_ios"
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
 
 # To pin a specific version, use version numbers together.
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
 
 # To impersonate other than browsers, bring your own ja3/akamai strings
 # See examples directory for details.
-r = requests.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
+r = curl_cffi.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
 
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
 ```
 
 ### Sessions
 
-```python
+v0.9:
+
+```py
+from curl_cffi import requests
+
 s = requests.Session()
+```
+
+v0.10:
+
+```python
+s = curl_cffi.Session()
 
 # httpbin is a http test website, this endpoint makes the server set cookies
 s.get("https://httpbin.org/cookies/set/foo/bar")
@@ -188,10 +205,10 @@ Notes:
 6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 5. Added in version `0.10.0`.
 
-### asyncio
+### Asyncio
 
 ```python
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 async with AsyncSession() as s:
     r = await s.get("https://example.com")
@@ -201,7 +218,7 @@ More concurrency:
 
 ```python
 import asyncio
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 urls = [
     "https://google.com/",
@@ -220,7 +237,7 @@ async with AsyncSession() as s:
 ### WebSockets
 
 ```python
-from curl_cffi.requests import WebSocket
+from curl_cffi import WebSocket
 
 def on_message(ws: WebSocket, message: str | bytes):
     print(message)
@@ -232,11 +249,11 @@ ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
 
-### asyncio WebSockets
+### Asyncio WebSockets
 
 ```python
 import asyncio
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 async with AsyncSession() as s:
     ws = await s.ws_connect("wss://echo.websocket.org")

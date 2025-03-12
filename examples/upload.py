@@ -7,9 +7,9 @@ We do not support requests.post(url, files=...), for 2 reasons.
 You use the multipart instead, it's very simple and straightforward.
 """
 
-from curl_cffi import CurlMime, requests
+import curl_cffi
 
-mp = CurlMime()
+mp = curl_cffi.CurlMime()
 mp.addpart(
     name="image",  # form field name
     content_type="image/png",  # mime type
@@ -29,7 +29,7 @@ mp.addpart(
 )
 
 # from a list
-mp = CurlMime.from_list(
+mp = curl_cffi.CurlMime.from_list(
     [
         {
             "name": "text",
@@ -46,7 +46,7 @@ mp = CurlMime.from_list(
     ]
 )
 
-r = requests.post("https://httpbin.org/post", data={"foo": "bar"}, multipart=mp)
+r = curl_cffi.post("https://httpbin.org/post", data={"foo": "bar"}, multipart=mp)
 print(r.json())
 
 # close the form object, otherwise you have to wait for GC to recycle it. If you files
