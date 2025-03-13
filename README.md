@@ -9,7 +9,7 @@
 [Documentation](https://curl-cffi.readthedocs.io)
 
 Python binding for [curl-impersonate fork](https://github.com/lexiforest/curl-impersonate)
-via [cffi](https://cffi.readthedocs.io/en/latest/).
+via [cffi](https://cffi.readthedocs.io/en/latest/). For commercial support, visit [impersonate.pro](https://impersonate.pro).
 
 Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
 impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
@@ -22,17 +22,6 @@ Python 3.9 is the minimum supported version since v0.10.
 <p align="center">
  Maintenance of this project is made possible by all the <a href="https://github.com/lexiforest/curl_cffi/graphs/contributors">contributors</a> and <a href="https://github.com/sponsors/lexiforest">sponsors</a>. If you'd like to sponsor this project and have your avatar or company logo appear below <a href="https://github.com/sponsors/lexiforest">click here</a>. 💖
 </p>
-
-------
-
-<a href="https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/proxycurl.png" alt="ProxyCurl" height="63" width="120"></a>
-
-Scrape public LinkedIn profile data at scale with [Proxycurl APIs](https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi). Built for developers, by developers.
-
-- GDPR, CCPA, SOC2 compliant
-- High rate limit (300 requests/min), Fast (APIs respond in ~2s), High accuracy
-- Fresh data - 88% of data is scraped real-time, other 12% is <29 days
-- Tons of data points returned per profile
 
 ------
 
@@ -101,7 +90,7 @@ v0.9:
 ```py
 from curl_cffi import requests
 
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome")
 ```
 
 v0.10:
@@ -110,7 +99,7 @@ v0.10:
 import curl_cffi
 
 # Notice the impersonate parameter
-r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -119,10 +108,15 @@ print(r.json())
 # To keep using the latest browser version as `curl_cffi` updates,
 # simply set impersonate="chrome" without specifying a version.
 # Other similar values are: "safari" and "safari_ios"
-r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
+
+# Randomly choose a browser version based on current market share in real world
+# from: https://caniuse.com/usage-table
+# NOTE: this is a pro feature.
+r = curl_cffi.get("https://example.com", impersonate="realworld")
 
 # To pin a specific version, use version numbers together.
-r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome124")
 
 # To impersonate other than browsers, bring your own ja3/akamai strings
 # See examples directory for details.
@@ -130,10 +124,10 @@ r = curl_cffi.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
 
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", proxies=proxies)
 ```
 
 ### Sessions
@@ -162,39 +156,32 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
+### Supported impersonate browsers
+
 `curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
-chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
+Open source version of curl_cffi includes versions whose fingerprints differ from previous versions.
+If you see a version, e.g. `chrome135`, were skipped, you can simply impersonate it with your own headers and the previous version.
+
+If you don't want to look up the headers etc, by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro),
+we have comprehensive browser fingerprints database for almost all the browser versions on various platforms.
 
 If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
 to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate.html) for details.
 
-- chrome99
-- chrome100
-- chrome101
-- chrome104
-- chrome107
-- chrome110
-- chrome116 <sup>[1]</sup>
-- chrome119 <sup>[1]</sup>
-- chrome120 <sup>[1]</sup>
-- chrome123 <sup>[3]</sup>
-- chrome124 <sup>[3]</sup>
-- chrome131 <sup>[4]</sup>
-- chrome133a <sup>[5][6]</sup>
-- chrome99_android
-- chrome131_android <sup>[4]</sup>
-- edge99
-- edge101
-- safari15_3 <sup>[2]</sup>
-- safari15_5 <sup>[2]</sup>
-- safari17_0 <sup>[1]</sup>
-- safari17_2_ios <sup>[1]</sup>
-- safari18_0 <sup>[4]</sup>
-- safari18_0_ios <sup>[4]</sup>
-- firefox133 <sup>[5]</sup>
-- firefox135 <sup>[7]</sup>
+|Browser|Open Source| Pro version|
+|---|---|---|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119 <sup>[1]</sup>, chrome120 <sup>[1]</sup>, chrome123 <sup>[3]</sup>, chrome124 <sup>[3]</sup>, chrome131 <sup>[4]</sup>, chrome133a <sup>[5][6]</sup>|chrome132, chrome134, chrome135|
+|Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
+|Chrome iOS|N/A|coming soon|
+|Safari|safari15_3 <sup>[2]</sup>, safari15_5 <sup>[2]</sup>, safari17_0 <sup>[1]</sup>,|coming soon|
+|Safari iOS| safari17_2_ios <sup>[1]</sup>, safari18_0 <sup>[4]</sup>, safari18_0_ios <sup>[4]</sup>|coming soon|
+|Firefox|firefox133 <sup>[5]</sup>, firefox135 <sup>[7]</sup>|coming soon|
+|Firefox Android|N/A|firefox135_android|
+|Edge|edge99, edge101|edge133, edge135|
+|Opera|N/A|coming soon|
+|Brave|N/A|coming soon|
+
 
 Notes:
 1. Added in version `0.6.0`.
