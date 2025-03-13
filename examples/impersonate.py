@@ -43,7 +43,7 @@ extra_fp = {
 
 
 r = curl_cffi.get(
-  url, ja3=okhttp4_android10_ja3, akamai=okhttp4_android10_akamai, extra_fp=extra_fp
+    url, ja3=okhttp4_android10_ja3, akamai=okhttp4_android10_akamai, extra_fp=extra_fp
 )
 
 print(r.json())

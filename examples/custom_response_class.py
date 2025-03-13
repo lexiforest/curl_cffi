@@ -5,7 +5,7 @@ from typing import cast
 
 class CustomResponse(curl_cffi.Response):
     def __init__(
-      self, curl: Curl | None = None, request: curl_cffi.Request | None = None
+        self, curl: Curl | None = None, request: curl_cffi.Request | None = None
     ):
         super().__init__(curl, request)
         self.local_port = cast(int, curl.getinfo(CurlInfo.LOCAL_PORT))
