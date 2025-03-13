@@ -85,11 +85,11 @@ class Headers(MutableMapping[str, Optional[str]]):
     def __init__(
         self, headers: Optional[HeaderTypes] = None, encoding: Optional[str] = None
     ):
-        if not headers:
-            self._list: list[tuple[bytes, bytes, Optional[bytes]]] = []
-        elif isinstance(headers, Headers):
+        if isinstance(headers, Headers):
             self._list = list(headers._list)
             encoding = encoding or headers.encoding
+        elif not headers:
+            self._list: list[tuple[bytes, bytes, Optional[bytes]]] = []
         elif isinstance(headers, Mapping):
             self._list = [
                 (
