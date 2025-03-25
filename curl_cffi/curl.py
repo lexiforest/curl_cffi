@@ -48,17 +48,17 @@ CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
 
 
 @ffi.def_extern()
-def debug_function(curl, typ: int, data, size: int, clientp) -> int:
+def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     """ffi callback for curl debug info"""
     callback = ffi.from_handle(clientp)
     text = ffi.buffer(data, size)[:]
-    callback(typ, text)
+    callback(type_, text)
     return 0
 
-def debug_function_default(typ: int, text: bytes) -> None:
-    if typ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
+def debug_function_default(type_: int, text: bytes) -> None:
+    if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
-    elif typ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
+    elif type_ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
         print(text.decode("utf-8", "replace"))
     else:
         print(text.decode(), end="")
