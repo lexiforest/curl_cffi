@@ -126,6 +126,7 @@ class Curl:
         self._is_cert_set = False
         self._write_handle = None
         self._header_handle = None
+        self._debug_handle = None
         self._body_handle = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
@@ -208,12 +209,12 @@ class Curl:
         elif option == CurlOpt.HEADERFUNCTION:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback)
+            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
             option = CurlOpt.HEADERDATA
         elif option == CurlOpt.DEBUGFUNCTION:
             if value is True: value = debug_function_default
             c_value = ffi.new_handle(value)
-            self._header_handle = c_value
+            self._debug_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
             option = CurlOpt.DEBUGDATA
         elif value_type == "char*":
@@ -335,6 +336,7 @@ class Curl:
         ``perform``."""
         self._write_handle = None
         self._header_handle = None
+        self._debug_handle = None
         self._body_handle = None
         if clear_headers:
             if self._headers != ffi.NULL:
