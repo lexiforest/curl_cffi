@@ -104,5 +104,14 @@ class CurlSslVersion(IntEnum):
     TLSv1_2 = 6
     TLSv1_3 = 7
     MAX_DEFAULT = 1 << 16
+
+
+class CurlIpResolve(IntEnum):
+    """``CURL_IPRESOLVE`` constants from libcurl, see comments for details."""
+
+    WHATEVER = 0 # default, uses addresses to all IP versions that your system allows
+    V4 = 1 # uses only IPv4 addresses/connections
+    V6 = 2 # uses only IPv6 addresses/connections
+
 '''
     )
