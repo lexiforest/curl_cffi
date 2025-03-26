@@ -48,6 +48,12 @@ def test_wrapped_headers_preserve_encoding():
     assert wrapped_headers.encoding == "utf-8"
 
 
+def test_wrapped_empty_headers_preserve_encoding():
+    headers = Headers({}, encoding="utf-8")
+    wrapped_headers = Headers(headers)
+    assert wrapped_headers.encoding == "utf-8"
+
+
 def test_wrapped_headers_change_encoding():
     headers = Headers({"foo": "bar"}, encoding="utf-8")
     wrapped_headers = Headers(headers, encoding="ascii")

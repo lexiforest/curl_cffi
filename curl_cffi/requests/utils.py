@@ -392,7 +392,9 @@ def set_curl_options(
 
     # headers
     base_headers, headers = headers_list
-    h = Headers(base_headers)
+    # let headers encoding take precedence over base headers encoding
+    encoding = headers.encoding if isinstance(headers, Headers) else None
+    h = Headers(base_headers, encoding=encoding)
     h.update(headers)
 
     # remove Host header if it's unnecessary, otherwise curl may get confused.
