@@ -48,16 +48,20 @@ CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
 
 
 @ffi.def_extern()
-def debug_function(curl, type: int, data, size, clientp) -> int:
+def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     """ffi callback for curl debug info"""
+    callback = ffi.from_handle(clientp)
     text = ffi.buffer(data, size)[:]
-    if type in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
+    callback(type_, text)
+    return 0
+
+def debug_function_default(type_: int, text: bytes) -> None:
+    if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
-    elif type in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
+    elif type_ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
         print(text.decode("utf-8", "replace"))
     else:
         print(text.decode(), end="")
-    return 0
 
 
 @ffi.def_extern()
@@ -122,6 +126,7 @@ class Curl:
         self._is_cert_set = False
         self._write_handle = None
         self._header_handle = None
+        self._debug_handle = None
         self._body_handle = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
@@ -133,13 +138,12 @@ class Curl:
         if ret != 0:
             warnings.warn("Failed to set error buffer", CurlCffiWarning, stacklevel=2)
         if self._debug:
-            self.setopt(CurlOpt.VERBOSE, 1)
-            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+            self.debug()
 
     def debug(self) -> None:
         """Set debug to True"""
         self.setopt(CurlOpt.VERBOSE, 1)
-        lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+        self.setopt(CurlOpt.DEBUGFUNCTION, True)
 
     def __del__(self) -> None:
         self.close()
@@ -207,6 +211,12 @@ class Curl:
             self._header_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback)
             option = CurlOpt.HEADERDATA
+        elif option == CurlOpt.DEBUGFUNCTION:
+            if value is True: value = debug_function_default
+            c_value = ffi.new_handle(value)
+            self._debug_handle = c_value
+            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+            option = CurlOpt.DEBUGDATA
         elif value_type == "char*":
             c_value = value.encode() if isinstance(value, str) else value
             # Must keep a reference, otherwise may be GCed.
@@ -326,6 +336,7 @@ class Curl:
         ``perform``."""
         self._write_handle = None
         self._header_handle = None
+        self._debug_handle = None
         self._body_handle = None
         if clear_headers:
             if self._headers != ffi.NULL:
