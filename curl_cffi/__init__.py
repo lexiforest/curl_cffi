@@ -12,6 +12,7 @@ __all__ = [
     "CurlWsFlag",
     "config_warnings",
     "ffi",
+    "is_pro",
     "lib",
     "Session",
     "AsyncSession",
@@ -90,6 +91,6 @@ from .requests import (
     request,
 )
 
-from .utils import config_warnings
+from .utils import config_warnings, is_pro
 
 config_warnings(on=False)

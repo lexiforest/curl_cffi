@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+import curl_cffi
 from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt
 
 #######################################################################################
@@ -343,3 +344,8 @@ def test_duphandle(server):
     c = c.duphandle()
     with pytest.raises(CurlError):
         c.perform()
+
+
+def test_is_pro():
+    assert curl_cffi.is_pro() is False
+

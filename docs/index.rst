@@ -24,7 +24,8 @@ Welcome to curl_cffi's documentation!
 
 .. _Discuss on Telegram: https://t.me/+lL9n33eZp480MGM1
 
-curl_cffi is a Python binding for `curl-impersonate fork`_ via `cffi`_.
+curl_cffi is a Python binding for `curl-impersonate fork`_ via `cffi`_. For commercial
+support, visit `impersonate.pro <https://impersonate.pro>`_.
 
 .. _curl-impersonate: https://github.com/lexiforest/curl-impersonate
 .. _cffi: https://cffi.readthedocs.io/en/latest/
@@ -36,20 +37,17 @@ website for no obvious reason, you can give this package a try.
 Sponsors
 ------
 
-ProxyCurl
+SerpAPI
 ~~~~~~
 
-.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/proxycurl.png
-   :width: 300
-   :alt: ProxyCurl
-   :target: https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi
+.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/serpapi.png
+   :width: 100
+   :alt: SerpAPI
+   :target: https://serpapi.com
 
-Scrape public LinkedIn profile data at scale with `Proxycurl APIs <https://nubela.co/proxycurl/?utm_campaign=influencer_marketing&utm_source=github&utm_medium=social&utm_term=-&utm_content=lexiforest-curl_cffi>`_. Built for developers, by developers.
-
-- GDPR, CCPA, SOC2 compliant
-- High rate limit (300 requests/min), Fast (APIs respond in ~2s), High accuracy
-- Fresh data - 88% of data is scraped real-time, other 12% is <29 days
-- Tons of data points returned per profile
+Scrape Google and other search engines from `SerpApi <https://serpapi.com/>`_'s fast, easy,
+and complete API. 0.66s average response time (≤ 0.5s for Ludicrous Speed Max accounts),
+99.95% SLAs, pay for successful responses only.
 
 Bypass Cloudflare with API
 ~~~~~~
