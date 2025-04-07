@@ -252,6 +252,7 @@ TLS_EXTENSION_NAME_MAP = {
     60: "sequence_number_encryption_algorithms",
     61: "rrc",
     17513: "application_settings",  # BoringSSL private usage
+    17613: "application_settings new",  # BoringSSL private usage
     # 62-2569:"Unassigned
     # 2570:"Reserved
     # 2571-6681:"Unassigned
@@ -332,6 +333,13 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
         else:
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+    elif extension_id == 17613:
+        if enable:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
+            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 1)
+        else:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 0)
     # server_name
     elif extension_id == 0:
         raise NotImplementedError(
