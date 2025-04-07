@@ -542,7 +542,7 @@ def test_session_preset_cookies(server):
     assert cookies["foo"] == "bar"
     # new cookies should be added
     assert cookies["hello"] == "world"
-    # XXX request cookies will always be added to the entire session
+    # XXX: request cookies will always be added to the entire session
     # request cookies should not be added to session cookiejar
     # assert s.cookies.get("hello") is None
 
@@ -617,7 +617,7 @@ def test_cookies_mislead_by_host(server):
     s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
     s.cookies.set("foo", "bar")
     print("URL is: ", str(server.url))
-    # TODO replace hard-coded url with server.url.replace(host="example.com")
+    # TODO: replace hard-coded url with server.url.replace(host="example.com")
     r = s.get("http://example.com:8000", headers={"Host": "example.com"})
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar"

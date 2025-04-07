@@ -90,7 +90,7 @@ def normalize_browser_type(item):
         return item
 
 
-class BrowserType(str, Enum):  # todo: remove in version 1.x
+class BrowserType(str, Enum):  # TODO: remove in version 1.x
     edge99 = "edge99"
     edge101 = "edge101"
     chrome99 = "chrome99"

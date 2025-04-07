@@ -34,7 +34,7 @@ def test_impersonate_non_exist(server):
         requests.get(str(server.url), impersonate="chrome2952")
 
 
-# TODO implement local ja3/akamai verification server with th1.
+# TODO: implement local ja3/akamai verification server with th1.
 
 
 @pytest.mark.skip(reason="warning is used")
@@ -78,7 +78,7 @@ def test_customized_ja3_ciphers():
     assert ciphers == "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171"
 
 
-# TODO change to parameterized test
+# TODO: change to parameterized test
 def test_customized_ja3_extensions():
     url = "https://tls.browserleaks.com/json"
     ja3 = (
