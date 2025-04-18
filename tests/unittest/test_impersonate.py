@@ -204,6 +204,7 @@ def test_customized_extra_fp_grease():
     assert "TLS_GREASE" in r["tls"]["ciphers"][0]
 
 
+@pytest.mark.skip(reason="website is down")
 def test_customized_extra_fp_permute():
     url = "https://tls.browserleaks.com/json"
     ja3 = (
