@@ -2,33 +2,35 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 0.9.5
-CURL_VERSION := curl-8_7_1
+VERSION := 1.0.0rc2
+CURL_VERSION := curl-8_13_0
 
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
 	unzip -q -o curl.zip
 	mv curl-$(CURL_VERSION) $(CURL_VERSION)
 
-curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
+curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
 	curl -L "https://github.com/lexiforest/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
-.preprocessed: curl-impersonate-$(VERSION)/chrome/patches
+.preprocessed: curl-impersonate-$(VERSION)/patches
 	cd $(CURL_VERSION)
-	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
+	# for p in $</curl*.patch; do patch -p1 < ../$$p; done
+	patch -p1 < ../$</curl.patch
 	# Re-generate the configure script
 	autoreconf -fi
 	mkdir -p ../include/curl
 	cp -R include/curl/* ../include/curl/
 	# Sentinel files: https://tech.davis-hansson.com/p/make/
+	cd ..
 	touch .preprocessed
 
 local-curl: $(CURL_VERSION)
-	cp /usr/local/lib/libcurl-impersonate-chrome* /Users/runner/work/_temp/install/lib/
+	cp /usr/local/lib/libcurl-impersonate* /Users/runner/work/_temp/install/lib/
 	cd $(CURL_VERSION)
-	for p in ../curl-impersonate/chrome/patches/curl-*.patch; do patch -p1 < ../$$p; done
+	for p in ../curl-impersonate/patches/curl*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
 	autoreconf -fi
 	mkdir -p ../include/curl
@@ -36,13 +38,13 @@ local-curl: $(CURL_VERSION)
 	# Sentinel files: https://tech.davis-hansson.com/p/make/
 	touch .preprocessed
 
-gen-const: .preprocessed
+gen-const:
 	python scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
 
-install-editable: .preprocessed
+install-editable:
 	pip install -e .
 
 build: .preprocessed

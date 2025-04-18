@@ -42,7 +42,6 @@ class CurlOpt(IntEnum):
     CUSTOMREQUEST = 10000 + 36
     STDERR = 10000 + 37
     POSTQUOTE = 10000 + 39
-    OBSOLETE40 = 10000 + 40
     VERBOSE = 0 + 41
     HEADER = 0 + 42
     NOPROGRESS = 0 + 43
@@ -70,7 +69,6 @@ class CurlOpt(IntEnum):
     FILETIME = 0 + 69
     TELNETOPTIONS = 10000 + 70
     MAXCONNECTS = 0 + 71
-    OBSOLETE72 = 0 + 72
     FRESH_CONNECT = 0 + 74
     FORBID_REUSE = 0 + 75
     RANDOM_FILE = 10000 + 76
@@ -313,6 +311,9 @@ class CurlOpt(IntEnum):
     QUICK_EXIT = 0 + 322
     HAPROXY_CLIENT_IP = 10000 + 323
     SERVER_RESPONSE_TIMEOUT_MS = 0 + 324
+    ECH = 10000 + 325
+    TCP_KEEPCNT = 0 + 326
+    UPLOAD_FLAGS = 0 + 327
     HTTPBASEHEADER = 10000 + 1000
     SSL_SIG_HASH_ALGS = 10000 + 1001
     SSL_ENABLE_ALPS = 0 + 1002
@@ -322,7 +323,6 @@ class CurlOpt(IntEnum):
     HTTP2_SETTINGS = 10000 + 1006
     SSL_PERMUTE_EXTENSIONS = 0 + 1007
     HTTP2_WINDOW_UPDATE = 0 + 1008
-    ECH = 10000 + 1009
     HTTP2_STREAMS = 10000 + 1010
     TLS_GREASE = 0 + 1011
     TLS_EXTENSION_ORDER = 10000 + 1012
@@ -334,6 +334,7 @@ class CurlOpt(IntEnum):
     TLS_RECORD_SIZE_LIMIT = 0 + 1018
     TLS_KEY_SHARES_LIMIT = 0 + 1019
     TLS_USE_NEW_ALPS_CODEPOINT = 0 + 1020
+    TLS_USE_FIREFOX_TLS13_CIPHERS = 0 + 1021
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -412,7 +413,11 @@ class CurlInfo(IntEnum):
     CONN_ID = 0x600000 + 64
     QUEUE_TIME_T = 0x600000 + 65
     USED_PROXY = 0x200000 + 66
-    LASTONE = 66
+    POSTTRANSFER_TIME_T = 0x600000 + 67
+    EARLYDATA_SENT_T = 0x600000 + 68
+    HTTPAUTH_USED = 0x200000 + 69
+    PROXYAUTH_USED = 0x200000 + 70
+    LASTONE = 70
 
     if locals().get("RESPONSE_CODE"):
         HTTP_CODE = locals().get("RESPONSE_CODE")
@@ -478,14 +483,14 @@ class CurlECode(IntEnum):
     FTP_COULDNT_USE_REST = 31
     OBSOLETE32 = 32
     RANGE_ERROR = 33
-    HTTP_POST_ERROR = 34
+    OBSOLETE34 = 34
     SSL_CONNECT_ERROR = 35
     BAD_DOWNLOAD_RESUME = 36
     FILE_COULDNT_READ_FILE = 37
     LDAP_CANNOT_BIND = 38
     LDAP_SEARCH_FAILED = 39
     OBSOLETE40 = 40
-    FUNCTION_NOT_FOUND = 41
+    OBSOLETE41 = 41
     ABORTED_BY_CALLBACK = 42
     BAD_FUNCTION_ARGUMENT = 43
     OBSOLETE44 = 44
@@ -546,6 +551,18 @@ class CurlECode(IntEnum):
     UNRECOVERABLE_POLL = 99
     TOO_LARGE = 100
     ECH_REQUIRED = 101
+    RESERVED115115 = 102
+    RESERVED116116 = 103
+    RESERVED117117 = 104
+    RESERVED118118 = 105
+    RESERVED119119 = 106
+    RESERVED120120 = 107
+    RESERVED121121 = 108
+    RESERVED122122 = 109
+    RESERVED123123 = 110
+    RESERVED124124 = 111
+    RESERVED125125 = 112
+    RESERVED126126 = 113
 
 
 class CurlHttpVersion(IntEnum):
@@ -557,7 +574,8 @@ class CurlHttpVersion(IntEnum):
     V2_0 = 3  # please use HTTP 2 in the request */
     V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */
     V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */
-    V3 = 30  # Makes use of explicit HTTP/3 without fallback.
+    V3 = 30  # Makes use of explicit HTTP/3 with fallback.
+    V3ONLY = 31  # No fallback
 
 
 class CurlWsFlag(IntEnum):

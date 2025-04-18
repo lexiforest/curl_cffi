@@ -1,4 +1,5 @@
 import platform
+import re
 import subprocess
 import sys
 
@@ -19,7 +20,8 @@ with open(CONST_FILE, "w") as f:
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLOPT_.\+ =" | sed "s/  CURLOPT_/    /g" | sed "s/,//g"
     """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
-    f.write(output.decode())
+    clean_output = re.sub(r"__attribute__\(.*\) ", "", output.decode(), flags=re.MULTILINE)
+    f.write(clean_output)
     f.write(
         """
     if locals().get("WRITEDATA"):
@@ -78,7 +80,8 @@ class CurlHttpVersion(IntEnum):
     V2_0 = 3  # please use HTTP 2 in the request */
     V2TLS = 4  # use version 2 for HTTPS, version 1.1 for HTTP */
     V2_PRIOR_KNOWLEDGE = 5  # please use HTTP 2 without HTTP/1.1 Upgrade */
-    V3 = 30  # Makes use of explicit HTTP/3 without fallback.
+    V3 = 30  # Makes use of explicit HTTP/3 with fallback.
+    V3ONLY = 31  # No fallback
 
 
 class CurlWsFlag(IntEnum):

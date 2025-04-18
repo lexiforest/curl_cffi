@@ -11,7 +11,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "0.9.5"
+__version__ = "1.0.0rc2"
 
 
 def detect_arch():
@@ -66,7 +66,7 @@ def download_libcurl():
         f".{arch['so_arch']}-{sysname}.tar.gz"
     )
 
-    print(f"Downloading libcurl-impersonate-chrome from {url}...")
+    print(f"Downloading libcurl-impersonate from {url}...")
     urlretrieve(url, file)
 
     print("Unpacking downloaded files...")
@@ -90,12 +90,15 @@ def get_curl_archives():
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
         return [
-            f"{arch['libdir']}/libcurl-impersonate-chrome.a",
+            f"{arch['libdir']}/libcurl-impersonate.a",
             f"{arch['libdir']}/libssl.a",
             f"{arch['libdir']}/libcrypto.a",
             f"{arch['libdir']}/libz.a",
             f"{arch['libdir']}/libzstd.a",
             f"{arch['libdir']}/libnghttp2.a",
+            f"{arch['libdir']}/libngtcp2.a",
+            f"{arch['libdir']}/libngtcp2_crypto_boringssl.a",
+            f"{arch['libdir']}/libnghttp3.a",
             f"{arch['libdir']}/libbrotlidec.a",
             f"{arch['libdir']}/libbrotlienc.a",
             f"{arch['libdir']}/libbrotlicommon.a",
@@ -124,7 +127,7 @@ def get_curl_libraries():
     elif arch["system"] == "Darwin" or (
         arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
     ):
-        return ["curl-impersonate-chrome"]
+        return ["curl-impersonate"]
     else:
         return []
 
