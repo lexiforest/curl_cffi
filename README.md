@@ -181,12 +181,12 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119 <sup>[1]</sup>, chrome120 <sup>[1]</sup>, chrome123 <sup>[3]</sup>, chrome124 <sup>[3]</sup>, chrome131 <sup>[4]</sup>, chrome133a <sup>[5][6]</sup>|chrome132, chrome134, chrome135|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>|chrome132, chrome134, chrome135|
 |Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
-|Safari|safari15_3 <sup>[2]</sup>, safari15_5 <sup>[2]</sup>, safari17_0 <sup>[1]</sup>,|coming soon|
-|Safari iOS| safari17_2_ios <sup>[1]</sup>, safari18_0 <sup>[4]</sup>, safari18_0_ios <sup>[4]</sup>|coming soon|
-|Firefox|firefox133 <sup>[5]</sup>, firefox135 <sup>[7]</sup>|coming soon|
+|Safari|safari15_3 <sup>[2]</sup>, safari15_5 <sup>[2]</sup>, safari17_0 <sup>[1]</sup>, safari18_0 <sup>[4]</sup>,|coming soon|
+|Safari iOS| safari17_2_ios<sup>[1]</sup>, safari18_0_ios<sup>[4]</sup>|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>|coming soon|
 |Firefox Android|N/A|firefox135_android|
 |Edge|edge99, edge101|edge133, edge135|
 |Opera|N/A|coming soon|
