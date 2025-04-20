@@ -1,3 +1,4 @@
+from contextlib import suppress
 import queue
 import re
 import warnings
@@ -16,6 +17,10 @@ try:
     from orjson import loads
 except ImportError:
     from json import loads
+
+with suppress(ImportError):
+    from markdownify import markdownify as md
+    import readability as rd
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
 STREAM_END = object()
@@ -142,6 +147,13 @@ class Response:
             else:
                 self._text = self._decode(self.content)
         return self._text
+
+    def markdown(self) -> str:
+        doc = rd.Document(self.content)
+        title = doc.title()
+        summary = doc.summary(html_partial=True)
+        body_as_md = md(f"<h1>{title}</h1><main>{summary}</main>")
+        return body_as_md
 
     def _decode(self, content: bytes) -> str:
         try:

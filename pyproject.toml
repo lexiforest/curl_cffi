@@ -25,6 +25,11 @@ classifiers = [
 
 
 [project.optional-dependencies]
+extra = [
+    "readability-lxml>=0.8.1",
+    "markdownify>=1.1.0",
+    "lxml_html_clean",
+]
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
