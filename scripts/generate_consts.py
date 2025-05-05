@@ -109,9 +109,9 @@ class CurlSslVersion(IntEnum):
 class CurlIpResolve(IntEnum):
     """``CURL_IPRESOLVE`` constants from libcurl, see comments for details."""
 
-    WHATEVER = 0 # default, uses addresses to all IP versions that your system allows
-    V4 = 1 # uses only IPv4 addresses/connections
-    V6 = 2 # uses only IPv6 addresses/connections
+    WHATEVER = 0  # default, uses addresses to all IP versions that your system allows
+    V4 = 1  # uses only IPv4 addresses/connections
+    V6 = 2  # uses only IPv6 addresses/connections
 
 '''
     )
