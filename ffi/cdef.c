@@ -40,6 +40,11 @@ int curl_multi_socket_action(void *curlm, int sockfd, int ev_bitmask, int *runni
 int curl_multi_setopt(void *curlm, int option, void* param);
 int curl_multi_assign(void *curlm, int sockfd, void *sockptr);
 int curl_multi_perform(void *curlm, int *running_handle);
+int curl_multi_timeout(void *curlm, long *timeout_ms);
+int curl_multi_wait(void *curlm, void *extra_fds, unsigned int extra_nfds, int timeout_ms, int *numfds);
+int curl_multi_poll(void *curlm, void *extra_fds, unsigned int extra_nfds, int timeout_ms, int *numfds);
+int curl_multi_wakeup(void *curlm);
+const char *curl_multi_strerror(int code);
 struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 
 // multi callbacks
