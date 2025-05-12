@@ -23,7 +23,7 @@
         "pointer_size": 64,
         "libdir": "/Users/runner/work/_temp/install/lib",
         "sysname": "macos",
-        "so_name": "libcurl-impersonate-chrome.4.dylib",
+        "so_name": "libcurl-impersonate.4.dylib",
         "so_arch": "x86_64"
     },
     {
@@ -32,7 +32,7 @@
         "pointer_size": 64,
         "libdir": "/Users/runner/work/_temp/install/lib",
         "sysname": "macos",
-        "so_name": "libcurl-impersonate-chrome.4.dylib",
+        "so_name": "libcurl-impersonate.4.dylib",
         "so_arch": "arm64"
     },
     {
@@ -43,7 +43,7 @@
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "x86_64"
     },
     {
@@ -54,7 +54,7 @@
         "sysname": "linux",
         "link_type": "static",
         "libc": "musl",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "x86_64"
     },
     {
@@ -65,7 +65,7 @@
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "i386"
     },
     {
@@ -76,7 +76,7 @@
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "aarch64"
     },
     {
@@ -87,7 +87,7 @@
         "sysname": "linux",
         "link_type": "dynamic",
         "libc": "musl",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "aarch64"
     },
     {
@@ -98,7 +98,7 @@
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnueabihf",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "arm"
     },
     {
@@ -109,7 +109,7 @@
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnueabihf",
-        "so_name": "libcurl-impersonate-chrome.so",
+        "so_name": "libcurl-impersonate.so",
         "so_arch": "arm"
     }
 ]
