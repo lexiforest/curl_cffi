@@ -331,6 +331,9 @@ class Curl:
             # cleaning
             self.clean_after_perform(clear_headers)
 
+    def upkeep(self) -> int:
+        return lib.curl_easy_upkeep(self._curl)
+
     def clean_after_perform(self, clear_headers: bool = True) -> None:
         """Clean up handles and buffers after ``perform``, called at the end of
         ``perform``."""
