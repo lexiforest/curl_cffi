@@ -454,6 +454,9 @@ class Session(BaseSession[R]):
         ws.connect(url, **kwargs)
         return ws
 
+    def upkeep(self) -> int:
+        return self.curl.upkeep()
+
     def request(
         self,
         method: HttpMethod,
