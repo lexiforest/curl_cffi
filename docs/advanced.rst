@@ -85,3 +85,19 @@ With this, you get the full functionality of httpx.
        # required for parallel requests, see curl_cffi issues below
        curl_options={CurlOpt.FRESH_CONNECT: True}
    ))
+
+
+Keeping session alive in http/2
+------
+
+With http/2, you can optionally send a ping frame to keep the connection alive when not actively using it.
+
+
+.. code-block:: python
+
+   import curl_cffi
+
+   s = Session()
+   s.get("https://example.com")
+   s.upkeep()
+

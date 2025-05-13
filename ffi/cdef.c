@@ -7,6 +7,7 @@ void curl_easy_cleanup(void *curl);
 void curl_easy_reset(void *curl);
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
 void *curl_easy_duphandle(void *curl);
+int curl_easy_upkeep(void *curl);
 
 char *curl_version();
 
