@@ -233,7 +233,9 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     cipher_names = []
     for cipher in ciphers.split("-"):
         cipher_id = int(cipher)
-        cipher_name = TLS_CIPHER_NAME_MAP[cipher_id]
+        cipher_name = TLS_CIPHER_NAME_MAP.get(cipher_id)
+        if not cipher_name:
+            raise ImpersonateError(f"Cipher {hex(cipher_id)} is not found")
         cipher_names.append(cipher_name)
 
     curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
