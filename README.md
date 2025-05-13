@@ -53,18 +53,18 @@ users can use the code **"CURL"** to get an extra 6% balance! and register [here
 
 ## Features
 
-- Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custome fingerprints.
+- Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custom fingerprints.
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/lexiforest/curl_cffi/tree/main/benchmark).
-- Mimics requests API, no need to learn another one.
+- Mimics the requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
-- Supports http 2.0, which requests does not.
+- Supports http 2.0 & 3.0, which requests does not.
 - Supports websocket.
 
 ||requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
 |http/2|❌|❌|✅|✅|✅|
-|http/3|❌|❌|❌|☑️<sup>1</sup>|✅<sup>2</sup>|
+|http/3|❌|❌|❌|☑️<sup>1</sup>|☑️<sup>2</sup>|
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
 |websocket|❌|✅|❌|❌|✅|
@@ -73,7 +73,7 @@ users can use the code **"CURL"** to get an extra 6% balance! and register [here
 
 Notes:
 1. For pycurl, you need a http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
-2. Since v0.11.0b1.
+2. Since v0.11.0. However, only Linux and macOS are supported, Windows is not supported due to failed building of ngtcp2.
 
 ## Install
 
@@ -93,6 +93,10 @@ To install unstable version from GitHub:
     cd curl_cffi
     make preprocess
     pip install .
+
+On macOS, you may need to install the following dependencies:
+
+    brew install zstd nghttp2
 
 ## Usage
 
@@ -186,13 +190,14 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>|chrome132, chrome134, chrome135|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>|chrome132, chrome134, chrome135|
 |Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
-|Safari|safari15_3 <sup>[2]</sup>, safari15_5 <sup>[2]</sup>, safari17_0 <sup>[1]</sup>, safari18_0 <sup>[4]</sup>,|coming soon|
-|Safari iOS| safari17_2_ios<sup>[1]</sup>, safari18_0_ios<sup>[4]</sup>|coming soon|
+|Safari <sup>[7]</sup>|safari15_3 <sup>[2]</sup>, safari15_5 <sup>[2]</sup>, safari17_0 <sup>[1]</sup>, safari18_0 <sup>[4]</sup>, safari18_4 <sup>[6]</sup>|coming soon|
+|Safari iOS <sup>[7]</sup>| safari17_2_ios<sup>[1]</sup>, safari18_0_ios<sup>[4]</sup>, safari18_4_ios <sup>[6]</sup>|coming soon|
 |Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>|coming soon|
 |Firefox Android|N/A|firefox135_android|
+|Tor|tor145 <sup>[7]</sup>|coming soon|
 |Edge|edge99, edge101|edge133, edge135|
 |Opera|N/A|coming soon|
 |Brave|N/A|coming soon|
@@ -206,6 +211,8 @@ Notes:
 5. Added in version `0.9.0`.
 6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 5. Added in version `0.10.0`.
+6. Added in version `0.11.0`.
+7. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
 
 ### Asyncio
 
@@ -263,6 +270,12 @@ async with AsyncSession() as s:
     async for message in ws:
         print(message)
 ```
+
+## Ecosystem
+
+- Integrating with Scrapy: [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate) and [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint).
+- Integrating with [requests](https://github.com/el1s7/curl-adapter), [httpx](https://github.com/vgavro/httpx-curl-cffi) as adapter.
+- Integrating with captcha resolvers: [CapSolver](https://docs.capsolver.com/en/api/), [YesCaptcha](https://yescaptcha.atlassian.net/wiki/spaces/YESCAPTCHA/overview). Please see the head area for promo code and link.
 
 ## Acknowledgement
 
