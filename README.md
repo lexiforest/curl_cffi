@@ -243,6 +243,10 @@ async with AsyncSession() as s:
     results = await asyncio.gather(*tasks)
 ```
 
+For low-level APIs, Scrapy integration and other advanced topics, see the
+[docs](https://curl-cffi.readthedocs.io) for more details.
+
+
 ### WebSockets
 
 ```python
@@ -254,9 +258,6 @@ def on_message(ws: WebSocket, message: str | bytes):
 ws = WebSocket(on_message=on_message)
 ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 ```
-
-For low-level APIs, Scrapy integration and other advanced topics, see the
-[docs](https://curl-cffi.readthedocs.io) for more details.
 
 ### Asyncio WebSockets
 

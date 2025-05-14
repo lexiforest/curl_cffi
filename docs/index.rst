@@ -83,12 +83,12 @@ You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
 Features
 ------
 
-- Supports JA3/TLS and http2 fingerprints impersonation.
+- Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custom fingerprints.
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see `benchmarks <https://github.com/lexiforest/curl_cffi/tree/main/benchmark>`_.
 - Mimics requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports ``asyncio`` with proxy rotation on each request.
-- Supports http 2.0, which requests does not.
+- Supports http 2.0 & 3.0, which requests does not.
 - Supports websocket.
 
 .. list-table:: Feature matrix
@@ -107,6 +107,12 @@ Features
      - ✅
      - ✅
      - ✅
+   * - http3
+     - ❌
+     - ❌
+     - ❌
+     - ☑️
+     - ☑️
    * - sync
      - ✅
      - ❌
@@ -138,6 +144,11 @@ Features
      - 🐇🐇
      - 🐇🐇
 
+Notes:
+
+1. For pycurl, you need a http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
+2. Since v0.11.0. However, only Linux and macOS are supported, Windows is not supported due to failed building of ngtcp2.
+
 Install
 -----
 
@@ -157,10 +168,10 @@ requests-like
 
     import curl_cffi
 
-    url = "https://tools.scrapfly.io/api/fp/ja3"
+    url = "https://tls.browserleaks.com/json"
 
     # Notice the impersonate parameter
-    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110")
+    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110")
 
     print(r.json())
     # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -169,21 +180,21 @@ requests-like
     # To keep using the latest browser version as `curl_cffi` updates,
     # simply set impersonate="chrome" without specifying a version.
     # Other similar values are: "safari" and "safari_ios"
-    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
 
     # http/socks proxies are supported
     proxies = {"https": "http://localhost:3128"}
-    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
+    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
 
     proxies = {"https": "socks://localhost:3128"}
-    r = curl_cffi.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome110", proxies=proxies)
+    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
 
 Sessions
 ~~~~~~
 
 .. code-block:: python
 
-    s = requests.Session()
+    s = curl_cffi.Session()
 
     # httpbin is a http test website
     s.get("https://httpbin.org/cookies/set/foo/bar")
@@ -200,9 +211,7 @@ asyncio
 
 .. code-block:: python
 
-    from curl_cffi import AsyncSession
-
-    async with AsyncSession() as s:
+    async with curl_cffi.AsyncSession() as s:
         r = await s.get("https://example.com")
 
 More concurrency:
@@ -241,6 +250,16 @@ WebSockets
             on_message=on_message,
         )
         ws.run_forever()
+
+    # asyncio
+    import asyncio
+    from curl_cffi import AsyncSession
+
+    async with AsyncSession() as s:
+        ws = await s.ws_connect("wss://echo.websocket.org")
+        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+        async for message in ws:
+            print(message)
 
 
 Indices and tables
