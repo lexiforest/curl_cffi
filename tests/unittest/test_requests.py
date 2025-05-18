@@ -932,3 +932,8 @@ def test_response_ip_and_port(server):
     assert r.primary_port == 8000
     assert r.local_ip == "127.0.0.1"
     assert r.local_port != 0
+
+
+def test_http_version(server):
+    r = requests.get(server.url, http_version="v1")
+    assert r.status_code == 200
