@@ -935,5 +935,5 @@ def test_response_ip_and_port(server):
 
 
 def test_http_version(server):
-    r = requests.get(server.url, http_version="v1")
+    r = requests.get(str(server.url), http_version="v1")
     assert r.status_code == 200
