@@ -55,6 +55,7 @@ def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     callback(type_, text)
     return 0
 
+
 def debug_function_default(type_: int, text: bytes) -> None:
     if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
@@ -209,10 +210,13 @@ class Curl:
         elif option == CurlOpt.HEADERFUNCTION:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
+            )
             option = CurlOpt.HEADERDATA
         elif option == CurlOpt.DEBUGFUNCTION:
-            if value is True: value = debug_function_default
+            if value is True:
+                value = debug_function_default
             c_value = ffi.new_handle(value)
             self._debug_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)

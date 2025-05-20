@@ -348,4 +348,3 @@ def test_duphandle(server):
 
 def test_is_pro():
     assert curl_cffi.is_pro() is False
-

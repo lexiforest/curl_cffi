@@ -48,7 +48,9 @@ SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 not_set: Final[Any] = object()
 
 
-def normalize_http_version(version: Union[CurlHttpVersion, HttpVersionLiteral]) -> CurlHttpVersion:
+def normalize_http_version(
+    version: Union[CurlHttpVersion, HttpVersionLiteral],
+) -> CurlHttpVersion:
     if version == "v1":
         return CurlHttpVersion.V1_1
     elif version == "v3":
@@ -62,7 +64,7 @@ def normalize_http_version(version: Union[CurlHttpVersion, HttpVersionLiteral]) 
     elif version == "v2_prior_knowledge":
         return CurlHttpVersion.V2_PRIOR_KNOWLEDGE
 
-    return version
+    return version  # type: ignore
 
 
 def is_absolute_url(url: str) -> bool:
