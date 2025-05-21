@@ -20,7 +20,9 @@ with open(CONST_FILE, "w") as f:
         echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLOPT_.\+ =" | sed "s/  CURLOPT_/    /g" | sed "s/,//g"
     """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
-    clean_output = re.sub(r"__attribute__\(.*\) ", "", output.decode(), flags=re.MULTILINE)
+    clean_output = re.sub(
+        r"__attribute__\(.*\) ", "", output.decode(), flags=re.MULTILINE
+    )
     f.write(clean_output)
     f.write(
         """

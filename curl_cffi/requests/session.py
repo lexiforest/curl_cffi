@@ -30,7 +30,7 @@ from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
-from .utils import not_set, set_curl_options
+from .utils import not_set, set_curl_options, HttpVersionLiteral
 from .websockets import AsyncWebSocket, WebSocket
 
 with suppress(ImportError):
@@ -77,7 +77,7 @@ if TYPE_CHECKING:
         default_encoding: Union[str, Callable[[bytes], str]]
         curl_options: Optional[dict]
         curl_infos: Optional[list]
-        http_version: Optional[CurlHttpVersion]
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
@@ -108,7 +108,7 @@ if TYPE_CHECKING:
         default_headers: Optional[bool]
         default_encoding: Union[str, Callable[[bytes], str]]
         quote: Union[str, Literal[False]]
-        http_version: Optional[CurlHttpVersion]
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         interface: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
@@ -183,7 +183,7 @@ class BaseSession(Generic[R]):
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         curl_options: Optional[dict] = None,
         curl_infos: Optional[list] = None,
-        http_version: Optional[CurlHttpVersion] = None,
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
@@ -485,7 +485,7 @@ class Session(BaseSession[R]):
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         quote: Union[str, Literal[False]] = "",
-        http_version: Optional[CurlHttpVersion] = None,
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
@@ -804,7 +804,7 @@ class AsyncSession(BaseSession[R]):
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         quote: Union[str, Literal[False]] = "",
-        http_version: Optional[CurlHttpVersion] = None,
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
@@ -924,7 +924,7 @@ class AsyncSession(BaseSession[R]):
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         quote: Union[str, Literal[False]] = "",
-        http_version: Optional[CurlHttpVersion] = None,
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
