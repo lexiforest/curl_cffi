@@ -86,6 +86,33 @@ jobs:
         name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
         path: ./wheelhouse/*.whl
 
+  build_latest:
+    name: Build bdist on latest OSes
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - if: runner.os == 'Linux'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
+
+    # macOS make is too old
+    - if: runner.os == 'macOS'
+      run: |
+        brew install make automake libtool
+
+    - name: Build and test wheels
+      uses: pypa/cibuildwheel@v2.17.0
+
+
   upload_all:
     needs: [bdist, sdist]
     runs-on: ubuntu-latest
