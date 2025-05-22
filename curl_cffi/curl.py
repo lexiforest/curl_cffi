@@ -437,7 +437,7 @@ class Curl:
             CurlError: if failed.
         """
         buffer = ffi.new("char[]", n)
-        n_recv = ffi.new("int *")
+        n_recv = ffi.new("size_t *")
         p_frame = ffi.new("struct curl_ws_frame **")
 
         ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
@@ -461,7 +461,7 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        n_sent = ffi.new("int *")
+        n_sent = ffi.new("size_t *")
         buffer = ffi.from_buffer(payload)
         ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
