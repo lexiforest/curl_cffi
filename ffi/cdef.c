@@ -62,8 +62,8 @@ struct curl_ws_frame {
   ...;
 };
 
-int curl_ws_recv(void *curl, void *buffer, int buflen, int *recv, struct curl_ws_frame **meta);
-int curl_ws_send(void *curl, void *buffer, int buflen, int *sent, int fragsize, unsigned int sendflags);
+int curl_ws_recv(void *curl, void *buffer, size_t buflen, size_t *recv, const struct curl_ws_frame **meta);
+int curl_ws_send(void *curl, const void *buffer, size_t buflen, size_t *sent, int fragsize, unsigned int sendflags);
 
 // mime
 void *curl_mime_init(void* curl);  // -> form
