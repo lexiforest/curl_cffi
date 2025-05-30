@@ -470,7 +470,9 @@ class Curl:
             current_buffer = payload[offset:]
             buffer = ffi.from_buffer(current_buffer)
 
-            ret = lib.curl_ws_send(self._curl, buffer, len(current_buffer), n_sent, 0, flags)
+            ret = lib.curl_ws_send(
+                self._curl, buffer, len(current_buffer), n_sent, 0, flags
+            )
 
             if ret == 81:
                 socket_fd = self.getinfo(CurlInfo.ACTIVESOCKET)
@@ -478,11 +480,10 @@ class Curl:
                     _, ready, error = select.select([], [socket_fd], [], 5.0)
                     if not ready:
                         raise CurlError(
-                            f"Socket {socket_fd} write timeout"
-                            f", error {error}"
+                            f"Socket {socket_fd} write timeout, error {error}"
                         )
                 else:
-                    time.sleep(0.01) # Fallback to sleep
+                    time.sleep(0.01)  # Fallback to sleep
                 continue
 
             self._check_error(ret, "WS_SEND")
