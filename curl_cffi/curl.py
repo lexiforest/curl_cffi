@@ -479,9 +479,7 @@ class Curl:
                 if socket_fd and socket_fd != -1:
                     _, ready, error = select.select([], [socket_fd], [], 5.0)
                     if not ready:
-                        raise CurlError(
-                            f"Socket {socket_fd} write timeout, error {error}"
-                        )
+                        raise CurlError("Socket write timeout")
                 else:
                     time.sleep(0.01)  # Fallback to sleep
                 continue
