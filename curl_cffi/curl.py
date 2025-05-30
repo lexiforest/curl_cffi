@@ -466,7 +466,7 @@ class Curl:
         offset = 0
 
         while offset < len(payload):
-            n_sent = ffi.new("int *")
+            n_sent = ffi.new("size_t *")
             current_buffer = payload[offset:]
             buffer = ffi.from_buffer(current_buffer)
 
