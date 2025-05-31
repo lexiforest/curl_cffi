@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 
 import certifi
+import time
+import select
 
 from ._wrapper import ffi, lib
 from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
@@ -461,11 +463,31 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        n_sent = ffi.new("size_t *")
-        buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
-        self._check_error(ret, "WS_SEND")
-        return n_sent[0]
+        offset = 0
+
+        while offset < len(payload):
+            n_sent = ffi.new("size_t *")
+            current_buffer = payload[offset:]
+            buffer = ffi.from_buffer(current_buffer)
+
+            ret = lib.curl_ws_send(
+                self._curl, buffer, len(current_buffer), n_sent, 0, flags
+            )
+
+            if ret == 81:
+                socket_fd = self.getinfo(CurlInfo.ACTIVESOCKET)
+                if socket_fd and socket_fd != -1:
+                    _, writeable, error = select.select([], [socket_fd], [], 5.0)
+                    if not writeable:
+                        raise RuntimeError("Socket write timeout")
+                else:
+                    time.sleep(0.01) # could not get socket
+                continue
+
+            self._check_error(ret, "WS_SEND")
+            offset += n_sent[0]
+
+        return offset
 
     def ws_close(self, code: int = 1000, message: bytes = b"") -> int:
         """Close a websocket connection. Shorthand for :meth:`ws_send`
