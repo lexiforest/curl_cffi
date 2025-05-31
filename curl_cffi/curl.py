@@ -477,11 +477,11 @@ class Curl:
             if ret == 81:
                 socket_fd = self.getinfo(CurlInfo.ACTIVESOCKET)
                 if socket_fd and socket_fd != -1:
-                    _, ready, error = select.select([], [socket_fd], [], 5.0)
-                    if not ready:
-                        raise CurlError("Socket write timeout")
+                    _, writeable, error = select.select([], [socket_fd], [], 5.0)
+                    if not writeable:
+                        raise RuntimeError("Socket write timeout")
                 else:
-                    time.sleep(0.01)  # Fallback to sleep
+                    time.sleep(0.01) # could not get socket
                 continue
 
             self._check_error(ret, "WS_SEND")
