@@ -447,9 +447,18 @@ def test_response_headers(server):
 
 
 def test_response_cookies(server):
-    r = requests.get(str(server.url.copy_with(path="/set_cookies")))
-    print(r.cookies)
+    s = requests.Session(cookies={"old": "bar"})
+    r = s.get(str(server.url.copy_with(path="/set_cookies")))
+
+    # set-cookies from response
     assert r.cookies["foo"] == "bar"
+    assert s.cookies["foo"] == "bar"
+
+    # session cookies not in response object
+    assert r.cookies.get("old") is None
+
+    # non-exist cookies
+    assert r.cookies.get("xxx") is None
 
 
 def test_elapsed(server):
@@ -538,10 +547,13 @@ def test_session_preset_cookies(server):
         str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
     )
     cookies = r.json()
+
     # old cookies should be persisted
     assert cookies["foo"] == "bar"
+
     # new cookies should be added
     assert cookies["hello"] == "world"
+
     # XXX: request cookies will always be added to the entire session
     # request cookies should not be added to session cookiejar
     # assert s.cookies.get("hello") is None
