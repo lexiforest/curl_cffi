@@ -341,10 +341,10 @@ class Curl:
     def clean_after_perform(self, clear_headers: bool = True) -> None:
         """Clean up handles and buffers after ``perform``, called at the end of
         ``perform``."""
-        self._write_handle = None
-        self._header_handle = None
-        self._debug_handle = None
-        self._body_handle = None
+        self._write_handle: Any = None
+        self._header_handle: Any = None
+        self._debug_handle: Any = None
+        self._body_handle: Any = None
         if clear_headers:
             if self._headers != ffi.NULL:
                 lib.curl_slist_free_all(self._headers)
