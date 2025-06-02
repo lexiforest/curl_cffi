@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import http.cookies
 import queue
 import sys
 import threading
@@ -260,15 +261,29 @@ class BaseSession(Generic[R]):
             header_list.append(header_line)
         rsp.headers = Headers(header_list)
 
-        # cookies
+        # Response cookies - only from Set-Cookie headers
+        rsp.cookies = Cookies()
+        set_cookie_headers = rsp.headers.get_list("set-cookie")
+        for set_cookie in set_cookie_headers:
+            try:
+                cookie = http.cookies.SimpleCookie()
+                cookie.load(set_cookie)  # type: ignore
+                for name, morsel in cookie.items():
+                    rsp.cookies.set(
+                        name,
+                        morsel.value,
+                        domain=morsel.get("domain", ""),
+                        path=morsel.get("path", "/"),
+                        secure=bool(morsel.get("secure")),
+                    )
+            except Exception:
+                continue
+
+        # Session cookies - from full cookie store
         morsels = [
             CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)
         ]
-        # for l in c.getinfo(CurlInfo.COOKIELIST):
-        #     print("Curl Cookies", l.decode())
         self._cookies.update_cookies_from_curl(morsels)
-        rsp.cookies = self._cookies
-        # print("Cookies after extraction", self._cookies)
 
         rsp.primary_ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
         rsp.primary_port = cast(int, c.getinfo(CurlInfo.PRIMARY_PORT))
