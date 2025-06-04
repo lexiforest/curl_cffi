@@ -292,7 +292,11 @@ class BaseSession(Generic[R]):
         rsp.default_encoding = default_encoding
         rsp.elapsed = cast(float, c.getinfo(CurlInfo.TOTAL_TIME))
         rsp.redirect_count = cast(int, c.getinfo(CurlInfo.REDIRECT_COUNT))
-        rsp.redirect_url = cast(bytes, c.getinfo(CurlInfo.REDIRECT_URL)).decode()
+        redirect_url_bytes = cast(bytes, c.getinfo(CurlInfo.REDIRECT_URL))
+        try:
+            rsp.redirect_url = redirect_url_bytes.decode()
+        except UnicodeDecodeError:
+            rsp.redirect_url = redirect_url_bytes.decode("latin-1")
 
         # custom info options
         for info in self.curl_infos:
