@@ -474,7 +474,7 @@ class Curl:
                 self._curl, buffer, len(current_buffer), n_sent, 0, flags
             )
 
-            if ret == 81:
+            if ret == CurlECode.AGAIN:
                 socket_fd = self.getinfo(CurlInfo.ACTIVESOCKET)
                 if socket_fd and socket_fd != -1:
                     _, writeable, error = select.select([], [socket_fd], [], 5.0)
