@@ -348,6 +348,33 @@ def test_cookies(server):
     assert cookies["foo"] == "bar"
 
 
+def test_cookies_update_disabled(server):
+    s = requests.Session()
+
+    set_url = str(server.url.copy_with(path="/unique_cookie"))
+
+    r = s.get(set_url)
+    assert r.cookies["foo"] == s.cookies["foo"]
+    old_cookie = r.cookies["foo"]
+
+    # Let's start discarding cookies
+    s.discard_cookies = True
+    r = s.get(set_url)
+    assert r.cookies["foo"] != s.cookies["foo"]
+    assert old_cookie == s.cookies["foo"]
+
+    # The behavior can be reverted
+    s.discard_cookies = False
+    r = s.get(set_url)
+    assert r.cookies["foo"] == s.cookies["foo"]
+    old_cookie = r.cookies["foo"]
+
+    # Also works as request parameter
+    r = s.get(set_url, discard_cookies=True)
+    assert r.cookies["foo"] != s.cookies["foo"]
+    assert old_cookie == s.cookies["foo"]
+
+
 def test_secure_cookies(server):
     with pytest.warns(CurlCffiWarning, match="changed"):
         r = requests.get(
@@ -944,42 +971,6 @@ def test_response_ip_and_port(server):
     assert r.primary_port == 8000
     assert r.local_ip == "127.0.0.1"
     assert r.local_port != 0
-
-
-def test_cookies_update_disabled(server):
-    s = requests.Session()
-    url = str(server.url.copy_with(path="/unique_cookie"))
-    delete_url = str(server.url.copy_with(path="/delete_cookies"))
-
-    # First we make a request with default params (session says update True). Checking
-    # if `r1.cookies is s.cookies` is to check if it points to the same `Cookies` object.
-    # We also make sure we have our cookie and that it is stored.
-    r1 = s.get(url)
-    assert r1.cookies is s.cookies
-    assert (first_foo := r1.cookies.get("foo")) is not None
-    assert s.cookies["foo"] == first_foo
-
-    # Second, we make a request saying we don't want any update. Now the pointer of
-    # `r2.cookies` should be different than `s.cookies` since we generate a new `Cookies`
-    # object. We also make sure we have our cookie in the response, and that it is
-    # different from the session one previously set.
-    r2 = s.get(url, discard_cookies=True)
-    assert r2.cookies is not s.cookies
-    assert r2.cookies is not r1.cookies # r1.cookies is s.cookies but check anyways
-    assert r2.cookies.get("foo") is not None
-    assert r2.cookies["foo"] != first_foo
-    
-    # Third, we test the session's default value (it will be the one set if the request
-    # doesn't precise what it wants). So we disable it, and then try to delete our
-    # cookie. But since update is false, we make sure it is still there.
-    s.discard_cookies = True
-    r3 = s.get(delete_url)
-    assert "foo" in s.cookies
-
-    # Fourth, we re enable it, and the deletion should be applied.
-    s.discard_cookies = False
-    r4 = s.get(delete_url)
-    assert "foo" not in s.cookies
 
 
 def test_http_version(server):

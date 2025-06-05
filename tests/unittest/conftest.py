@@ -424,7 +424,7 @@ async def delete_cookies(scope, receive, send):
 
 
 async def set_cookies_unique(scope, receive, send):
-    t = "foo={}".format(str(uuid4()))
+    t = f"foo={str(uuid4())}"
     print("Sending unique cookie:", t)
     await send(
         {

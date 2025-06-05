@@ -82,8 +82,8 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
-        response_class: Optional[Type[R]]
-        discard_cookies: Optional[bool]
+        response_class: Optional[type[R]]
+        discard_cookies: bool
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -115,7 +115,7 @@ if TYPE_CHECKING:
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
         multipart: Optional[CurlMime]
-        discard_cookies: Optional[bool]
+        discard_cookies: bool
 
     class RequestParams(StreamRequestParams, total=False):
         stream: Optional[bool]
@@ -190,8 +190,8 @@ class BaseSession(Generic[R]):
         debug: bool = False,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
-        response_class: Optional[Type[R]] = None,
-        discard_cookies: Optional[bool] = None,
+        response_class: Optional[type[R]] = None,
+        discard_cookies: bool = False,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -223,7 +223,7 @@ class BaseSession(Generic[R]):
                 f"not of type `{response_class}`"
             )
         self.response_class = response_class or Response
-        self.discard_cookies = False if discard_cookies is None else discard_cookies
+        self.discard_cookies = discard_cookies
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -237,7 +237,9 @@ class BaseSession(Generic[R]):
 
         self._closed = False
 
-    def _parse_response(self, curl, buffer, header_buffer, default_encoding, discard_cookies) -> R:
+    def _parse_response(
+        self, curl, buffer, header_buffer, default_encoding, discard_cookies
+    ) -> R:
         c = curl
         rsp = cast(R, self.response_class(c))
         rsp.url = cast(bytes, c.getinfo(CurlInfo.EFFECTIVE_URL)).decode()
@@ -284,7 +286,7 @@ class BaseSession(Generic[R]):
                 continue
 
         # Session cookies - from full cookie store
-        discard_cookies = discard_cookies if discard_cookies is not None else self.discard_cookies
+        discard_cookies = discard_cookies or self.discard_cookies
         if not discard_cookies:
             morsels = [
                 CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)
@@ -516,7 +518,7 @@ class Session(BaseSession[R]):
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
-        discard_cookies: Optional[bool] = None,
+        discard_cookies: bool = False,
     ):
         """Send the request, see ``requests.request`` for details on parameters."""
 
@@ -600,7 +602,9 @@ class Session(BaseSession[R]):
 
             # Wait for the first chunk
             header_recved.wait()  # type: ignore
-            rsp = self._parse_response(c, buffer, header_buffer, default_encoding, discard_cookies)
+            rsp = self._parse_response(
+                c, buffer, header_buffer, default_encoding, discard_cookies
+            )
 
             header_parsed.set()
 
@@ -626,12 +630,16 @@ class Session(BaseSession[R]):
                 else:
                     c.perform()
             except CurlError as e:
-                rsp = self._parse_response(c, buffer, header_buffer, default_encoding, discard_cookies)
+                rsp = self._parse_response(
+                    c, buffer, header_buffer, default_encoding, discard_cookies
+                )
                 rsp.request = req
                 error = code2error(e.code, str(e))
                 raise error(str(e), e.code, rsp) from e
             else:
-                rsp = self._parse_response(c, buffer, header_buffer, default_encoding, discard_cookies)
+                rsp = self._parse_response(
+                    c, buffer, header_buffer, default_encoding, discard_cookies
+                )
                 rsp.request = req
                 return rsp
             finally:
@@ -957,7 +965,7 @@ class AsyncSession(BaseSession[R]):
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
-        discard_cookies: Optional[bool] = None,
+        discard_cookies: bool = False,
     ):
         """Send the request, see ``curl_cffi.requests.request`` for details on args."""
 
@@ -1034,10 +1042,12 @@ class AsyncSession(BaseSession[R]):
             await cast(asyncio.Event, header_recved).wait()
 
             # Unlike threads, coroutines does not use preemptive scheduling.
-            # For asyncio, there is no need for a header_parsed event, the 
+            # For asyncio, there is no need for a header_parsed event, the
             # _parse_response will execute in the foreground, no background tasks
             # running.
-            rsp = self._parse_response(curl, buffer, header_buffer, default_encoding, discard_cookies)
+            rsp = self._parse_response(
+                curl, buffer, header_buffer, default_encoding, discard_cookies
+            )
 
             first_element = _peek_aio_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
