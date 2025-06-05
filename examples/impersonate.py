@@ -54,7 +54,7 @@ print(r.json())
 
 extra_fp = {
    "tls_delegated_credential": "ecdsa_secp256r1_sha256:ecdsa_secp384r1_sha384:ecdsa_secp521r1_sha512:ecdsa_sha1",
-   "tls_record_size_limit": 3
+   "tls_record_size_limit": 4001
 }
 
 # Note that the ja3 string also includes extensiion: 28 and 34
