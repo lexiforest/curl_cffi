@@ -8,6 +8,7 @@ import typing
 from asyncio import sleep
 from collections import defaultdict
 from urllib.parse import parse_qs
+from uuid import uuid4
 
 import proxy
 import pytest
@@ -126,6 +127,8 @@ async def app(scope, receive, send):
         await hello_world_gbk(scope, receive, send)
     elif scope["path"].startswith("/windows1251"):
         await hello_world_windows1251(scope, receive, send)
+    elif scope["path"].startswith("/unique_cookie"):
+        await set_cookies_unique(scope, receive, send)
     elif scope["path"].startswith("http://"):
         await http_proxy(scope, receive, send)
     elif scope["method"] == "CONNECT":
@@ -414,6 +417,22 @@ async def delete_cookies(scope, receive, send):
             "headers": [
                 [b"content-type", b"text/plain"],
                 [b"set-cookie", b"foo=; Max-Age=0"],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Hello, world!"})
+
+
+async def set_cookies_unique(scope, receive, send):
+    t = f"foo={str(uuid4())}"
+    print("Sending unique cookie:", t)
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/plain"],
+                [b"set-cookie", t.encode()],
             ],
         }
     )

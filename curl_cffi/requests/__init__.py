@@ -125,6 +125,7 @@ def request(
         stream: streaming the response, default False.
         max_recv_speed: maximum receive speed, bytes per second.
         multipart: upload files using the multipart format, see examples for details.
+        discard_cookies: discard cookies from server. Default to False.
 
     Returns:
         A ``Response`` object.

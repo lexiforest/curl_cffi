@@ -398,7 +398,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 0)
     # padding, should be ignored
     elif extension_id == 21:
-        pass
+        pass  # type: ignore
     # firefox extension, toggled by extra_fp
     elif extension_id in [34, 28]:
         pass
