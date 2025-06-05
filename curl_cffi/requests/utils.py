@@ -226,7 +226,7 @@ def peek_aio_queue(q: asyncio.Queue, default=None):
 
 def toggle_extensions_by_ids(curl: Curl, extension_ids):
     # TODO: find a better representation, rather than magic numbers
-    default_enabled = {0, 51, 13, 43, 65281, 23, 10, 45, 35, 11, 16}
+    default_enabled = {0, 10, 11, 13, 16, 23, 35, 43, 45, 51, 65281}
 
     to_enable_ids = extension_ids - default_enabled
     for ext_id in to_enable_ids:
@@ -319,6 +319,10 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
     curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
     curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
     curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
+    if fp.tls_delegated_credential:
+        curl.setopt(CurlOpt.TLS_DELEGATED_CREDENTIALS, fp.tls_delegated_credential)
+    if fp.tls_record_size_limit:
+        curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fp.tls_record_size_limit)
 
 
 def set_curl_options(
@@ -601,11 +605,23 @@ def set_curl_options(
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
+    # extra_fp options
+    if extra_fp:
+        if isinstance(extra_fp, dict):
+            extra_fp = ExtraFingerprints(**extra_fp)
+        if impersonate:
+            warnings.warn(
+                "Extra fingerprints was altered after impersonated browser version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
+        set_extra_fp(c, extra_fp)
+
     # ja3 string
     if ja3:
         if impersonate:
             warnings.warn(
-                "JA3 was altered after browser version was set.",
+                "JA3 fingerprint was altered after impersonated browser version was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
@@ -620,23 +636,11 @@ def set_curl_options(
     if akamai:
         if impersonate:
             warnings.warn(
-                "Akamai was altered after browser version was set.",
+                "Akamai fingerprint was altered after impersonated browser version was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
         set_akamai_options(c, akamai)
-
-    # extra_fp options
-    if extra_fp:
-        if isinstance(extra_fp, dict):
-            extra_fp = ExtraFingerprints(**extra_fp)
-        if impersonate:
-            warnings.warn(
-                "Extra fingerprints was altered after browser version was set.",
-                CurlCffiWarning,
-                stacklevel=1,
-            )
-        set_extra_fp(c, extra_fp)
 
     # http_version, after impersonate, which will change this to http2
     if http_version:
