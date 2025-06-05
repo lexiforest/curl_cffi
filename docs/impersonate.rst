@@ -147,7 +147,7 @@ Extension 28: record size limit
 .. code-block:: python
 
    extra_fp = {
-       "tls_record_size_limit": 3
+       "tls_record_size_limit": 4001
    }
 
    # Note that the ja3 string also includes extensiion: 28

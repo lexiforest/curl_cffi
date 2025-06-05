@@ -261,7 +261,11 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
 
     curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
 
-    if cipher_names[:3] == ['TLS_AES_128_GCM_SHA256', 'TLS_CHACHA20_POLY1305_SHA256', 'TLS_AES_256_GCM_SHA384']:
+    if cipher_names[:3] == [
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "TLS_AES_256_GCM_SHA384",
+    ]:
         curl.setopt(CurlOpt.TLS_USE_FIREFOX_TLS13_CIPHERS, 1)
 
     if extensions.endswith("-21"):
