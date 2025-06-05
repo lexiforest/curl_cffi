@@ -34,7 +34,7 @@ def test_impersonate_non_exist(server):
         requests.get(str(server.url), impersonate="chrome2952")
 
 
-# TODO implement local ja3/akamai verification server with th1.
+# TODO: implement local ja3/akamai verification server with th1.
 
 
 @pytest.mark.skip(reason="warning is used")
@@ -45,6 +45,7 @@ def test_costomized_no_impersonate_coexist(server):
         requests.get(str(server.url), impersonate="chrome", akamai="|||")
 
 
+@pytest.mark.skip(reason="website is down")
 def test_customized_ja3_chrome126():
     url = "https://tls.browserleaks.com/json"
     ja3 = (
@@ -67,6 +68,7 @@ def test_customized_ja3_tls_version():
     assert tls_version == "770"
 
 
+@pytest.mark.skip(reason="website is down")
 def test_customized_ja3_ciphers():
     url = "https://tls.browserleaks.com/json"
     ja3 = (
@@ -78,7 +80,8 @@ def test_customized_ja3_ciphers():
     assert ciphers == "4865-4866-4867-49195-49199-49196-49200-52393-52392-49171"
 
 
-# TODO change to parameterized test
+# TODO: change to parameterized test
+@pytest.mark.skip(reason="website is down")
 def test_customized_ja3_extensions():
     url = "https://tls.browserleaks.com/json"
     ja3 = (
@@ -114,7 +117,17 @@ def test_customized_ja3_extensions():
     _, _, extensions, _, _ = r["ja3_text"].split(",")
     assert extensions == "65281-0-11-23-5-18-27-16-17513-10-43-45-13-51"
 
+    # new alps code point
+    ja3 = (
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-5-10-11-13-16-18-23-27-35-43-45-51-17613-65037-65281,4588-29-23-24,0"
+    )
+    r = requests.get(url, ja3=ja3).json()
+    _, _, extensions, _, _ = r["ja3_text"].split(",")
+    assert extensions == "0-5-10-11-13-16-18-23-27-35-43-45-51-17613-65037-65281"
 
+
+@pytest.mark.skip(reason="website is down")
 def test_customized_ja3_curves():
     url = "https://tls.browserleaks.com/json"
     ja3 = (
@@ -126,6 +139,7 @@ def test_customized_ja3_curves():
     assert curves == "25497-24-23-29"
 
 
+@pytest.mark.skip(reason="website is down")
 def test_customized_akamai_chrome126():
     url = "https://tls.browserleaks.com/json"
     akamai = "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p"
@@ -133,6 +147,7 @@ def test_customized_akamai_chrome126():
     assert r["akamai_text"] == akamai
 
 
+@pytest.mark.skip(reason="website is down")
 def test_customized_akamai_safari():
     url = "https://tls.browserleaks.com/json"
     akamai = "2:0;4:4194304;3:100|10485760|0|m,s,p,a"
@@ -189,6 +204,7 @@ def test_customized_extra_fp_grease():
     assert "TLS_GREASE" in r["tls"]["ciphers"][0]
 
 
+@pytest.mark.skip(reason="website is down")
 def test_customized_extra_fp_permute():
     url = "https://tls.browserleaks.com/json"
     ja3 = (

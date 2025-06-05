@@ -1,7 +1,7 @@
 [project]
 name = "curl_cffi"
-version = "0.10.0b1"
-authors = [{ name = "Lyonnet", email = "infinitesheldon@gmail.com" }]
+version = "0.11.1"
+authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { text = "MIT License" }
 dependencies = [
@@ -14,7 +14,6 @@ urls = { "repository" = "https://github.com/lexiforest/curl_cffi" }
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -25,6 +24,11 @@ classifiers = [
 
 
 [project.optional-dependencies]
+extra = [
+    "readability-lxml>=0.8.1",
+    "markdownify>=1.1.0",
+    "lxml_html_clean",
+]
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
@@ -79,7 +83,7 @@ build = [
     "cp39-macosx_x86_64",
     "cp39-macosx_arm64",
     "cp39-win_amd64",
-    "cp39-win32",
+    # "cp39-win32",
     "cp39-manylinux_x86_64",
     "cp39-manylinux_aarch64",
     "cp39-manylinux_i686",
@@ -124,6 +128,9 @@ select = [
     "UP",  # pyupgrade
     "B",  # flake8-bugbear
     "SIM",  # flake8-simplify
+]
+ignore = [
+    "UP007"
 ]
 
 [tool.isort]

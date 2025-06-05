@@ -165,7 +165,8 @@ class Cookies(MutableMapping[str, str]):
         return host
 
     def get_cookies_for_curl(self, request) -> list[CurlMorsel]:
-        """the process is similar to `cookiejar.add_cookie_header`, but load all cookies"""
+        """the process is similar to ``cookiejar.add_cookie_header``, but load all
+        cookies"""
         self.jar._cookies_lock.acquire()  # type: ignore
         morsels = []
         try:

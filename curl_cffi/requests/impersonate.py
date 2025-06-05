@@ -24,18 +24,22 @@ BrowserTypeLiteral = Literal[
     "chrome124",
     "chrome131",
     "chrome133a",
+    "chrome136",
     "chrome99_android",
     "chrome131_android",
     # Safari
-    "safari15_3",
-    "safari15_5",
-    "safari17_0",
-    "safari17_2_ios",
-    "safari18_0",
-    "safari18_0_ios",
+    "safari153",
+    "safari155",
+    "safari170",
+    "safari172_ios",
+    "safari180",
+    "safari180_ios",
+    "safari184",
+    "safari184_ios",
     # Firefox
     "firefox133",
     "firefox135",
+    "tor145",
     # alias
     "chrome",
     "edge",
@@ -43,6 +47,15 @@ BrowserTypeLiteral = Literal[
     "safari_ios",
     "chrome_android",
     "firefox",
+    # deprecated aliases
+    "safari15_3",
+    "safari15_5",
+    "safari17_0",
+    "safari17_2_ios",
+    "safari18_0",
+    "safari18_0_ios",
+    "safari18_4",
+    "safari18_4_ios",
     # Canonical names
     # "edge_99",
     # "edge_101",
@@ -55,21 +68,23 @@ BrowserTypeLiteral = Literal[
 ]
 
 
-DEFAULT_CHROME = "chrome131"
+DEFAULT_CHROME = "chrome136"
 DEFAULT_EDGE = "edge101"
-DEFAULT_SAFARI = "safari18_0"
-DEFAULT_SAFARI_IOS = "safari18_0_ios"
+DEFAULT_SAFARI = "safari184"
+DEFAULT_SAFARI_IOS = "safari184_ios"
 DEFAULT_CHROME_ANDROID = "chrome131_android"
 DEFAULT_FIREFOX = "firefox135"
+DEFAULT_TOR = "tor145"
 
 
 REAL_TARGET_MAP = {
-    "chrome": "chrome131",
+    "chrome": "chrome136",
     "edge": "edge101",
-    "safari": "safari17_0",
-    "safari_ios": "safari17_2_ios",
+    "safari": "safari184",
+    "safari_ios": "safari184_ios",
     "chrome_android": "chrome131_android",
     "firefox": "firefox135",
+    "tor": "tor145",
 }
 
 
@@ -86,11 +101,13 @@ def normalize_browser_type(item):
         return DEFAULT_CHROME_ANDROID
     elif item == "firefox":
         return DEFAULT_FIREFOX
+    elif item == "tor":
+        return DEFAULT_TOR
     else:
         return item
 
 
-class BrowserType(str, Enum):  # todo: remove in version 1.x
+class BrowserType(str, Enum):  # TODO: remove in version 1.x
     edge99 = "edge99"
     edge101 = "edge101"
     chrome99 = "chrome99"
@@ -106,6 +123,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     chrome124 = "chrome124"
     chrome131 = "chrome131"
     chrome133a = "chrome133a"
+    chrome136 = "chrome136"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari15_3 = "safari15_3"
@@ -116,6 +134,7 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     safari18_0_ios = "safari18_0_ios"
     firefox133 = "firefox133"
     firefox135 = "firefox135"
+    tor145 = "tor145"
 
 
 @dataclass
@@ -154,13 +173,22 @@ TLS_VERSION_MAP = {
 TLS_CIPHER_NAME_MAP = {
     0x000A: "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
     0x002F: "TLS_RSA_WITH_AES_128_CBC_SHA",
+    0x0033: "TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
     0x0035: "TLS_RSA_WITH_AES_256_CBC_SHA",
+    0x0039: "TLS_DHE_RSA_WITH_AES_256_CBC_SHA",
     0x003C: "TLS_RSA_WITH_AES_128_CBC_SHA256",
     0x003D: "TLS_RSA_WITH_AES_256_CBC_SHA256",
+    0x0067: "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256",
+    0x006B: "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256",
     0x008C: "TLS_PSK_WITH_AES_128_CBC_SHA",
     0x008D: "TLS_PSK_WITH_AES_256_CBC_SHA",
     0x009C: "TLS_RSA_WITH_AES_128_GCM_SHA256",
     0x009D: "TLS_RSA_WITH_AES_256_GCM_SHA384",
+    0x009E: "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
+    0x009F: "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+    0x1301: "TLS_AES_128_GCM_SHA256",
+    0x1302: "TLS_AES_256_GCM_SHA384",
+    0x1303: "TLS_CHACHA20_POLY1305_SHA256",
     0xC008: "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
     0xC009: "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
     0xC00A: "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
@@ -180,9 +208,6 @@ TLS_CIPHER_NAME_MAP = {
     0xCCA8: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
     0xCCA9: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
     0xCCAC: "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256",
-    0x1301: "TLS_AES_128_GCM_SHA256",
-    0x1302: "TLS_AES_256_GCM_SHA384",
-    0x1303: "TLS_CHACHA20_POLY1305_SHA256",
 }
 
 
@@ -252,6 +277,7 @@ TLS_EXTENSION_NAME_MAP = {
     60: "sequence_number_encryption_algorithms",
     61: "rrc",
     17513: "application_settings",  # BoringSSL private usage
+    17613: "application_settings new",  # BoringSSL private usage
     # 62-2569:"Unassigned
     # 2570:"Reserved
     # 2571-6681:"Unassigned
@@ -311,7 +337,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     # ECH
     if extension_id == 65037:
         if enable:
-            curl.setopt(CurlOpt.ECH, "GREASE")
+            curl.setopt(CurlOpt.ECH, "grease")
         else:
             curl.setopt(CurlOpt.ECH, "")
     # compress certificate
@@ -332,6 +358,13 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
         else:
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+    elif extension_id == 17613:
+        if enable:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
+            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 1)
+        else:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 0)
     # server_name
     elif extension_id == 0:
         raise NotImplementedError(
@@ -362,5 +395,6 @@ def toggle_extension(curl, extension_id: int, enable: bool):
         pass
     else:
         raise NotImplementedError(
-            f"This extension({extension_id}) can not be toggled for now, it may be updated later."
+            f"This extension({extension_id}) can not be toggled for now, it may be "
+            "updated later."
         )

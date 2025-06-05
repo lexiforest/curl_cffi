@@ -3,6 +3,19 @@ Change Log
 
 Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
 
+v0.11
+-----
+
+- v0.11
+    - Added support for http3
+    - Added tor145, new safari and chrome targets
+
+v0.10
+-----
+
+- v0.10.0
+    - Added support for using curl_cffi directly
+
 v0.9
 ----
 

@@ -5,6 +5,7 @@ from contextlib import suppress
 
 import pytest
 
+from curl_cffi import Headers
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
 
@@ -131,6 +132,14 @@ async def test_headers(server):
         )
         headers = r.json()
         assert headers["Foo"][0] == "bar"
+
+
+async def test_headers_encoding_is_preserved(server):
+    async with AsyncSession() as s:
+        r = await s.get(str(server.url), headers=Headers(encoding="utf-8"))
+        assert r.status_code == 200
+        assert r.request is not None
+        assert r.request.headers.encoding == "utf-8"
 
 
 async def test_cookies(server):

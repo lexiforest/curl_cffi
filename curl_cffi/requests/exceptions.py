@@ -165,7 +165,8 @@ class RequestsWarning(Warning):
 
 # not used
 class FileModeWarning(RequestsWarning, DeprecationWarning):
-    """A file was opened in text mode, but Requests determined its binary length. not used"""
+    """A file was opened in text mode, but Requests determined its binary length.
+    not used"""
 
 
 # not used

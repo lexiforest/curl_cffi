@@ -48,16 +48,21 @@ CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
 
 
 @ffi.def_extern()
-def debug_function(curl, type: int, data, size, clientp) -> int:
+def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     """ffi callback for curl debug info"""
+    callback = ffi.from_handle(clientp)
     text = ffi.buffer(data, size)[:]
-    if type in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
+    callback(type_, text)
+    return 0
+
+
+def debug_function_default(type_: int, text: bytes) -> None:
+    if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
-    elif type in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
+    elif type_ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
         print(text.decode("utf-8", "replace"))
     else:
         print(text.decode(), end="")
-    return 0
 
 
 @ffi.def_extern()
@@ -110,7 +115,7 @@ class Curl:
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
         Parameters:
-            cacert: CA cert path to use, by default, curl_cffi uses certs from ``certifi``.
+            cacert: CA cert path to use, by default, certs from ``certifi`` are used.
             debug: whether to show curl debug messages.
             handle: a curl handle instance from ``curl_easy_init``.
         """
@@ -120,9 +125,10 @@ class Curl:
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
-        self._write_handle = None
-        self._header_handle = None
-        self._body_handle = None
+        self._write_handle: Any = None
+        self._header_handle: Any = None
+        self._debug_handle: Any = None
+        self._body_handle: Any = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
@@ -133,13 +139,12 @@ class Curl:
         if ret != 0:
             warnings.warn("Failed to set error buffer", CurlCffiWarning, stacklevel=2)
         if self._debug:
-            self.setopt(CurlOpt.VERBOSE, 1)
-            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+            self.debug()
 
     def debug(self) -> None:
         """Set debug to True"""
         self.setopt(CurlOpt.VERBOSE, 1)
-        lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+        self.setopt(CurlOpt.DEBUGFUNCTION, True)
 
     def __del__(self) -> None:
         self.close()
@@ -155,7 +160,8 @@ class Curl:
             action = " ".join([str(a) for a in args])
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
-                "See https://curl.se/libcurl/c/libcurl-errors.html first for more details.",
+                "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
+                "details.",
                 code=cast(CurlECode, errcode),
             )
 
@@ -204,8 +210,17 @@ class Curl:
         elif option == CurlOpt.HEADERFUNCTION:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
+            )
             option = CurlOpt.HEADERDATA
+        elif option == CurlOpt.DEBUGFUNCTION:
+            if value is True:
+                value = debug_function_default
+            c_value = ffi.new_handle(value)
+            self._debug_handle = c_value
+            lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
+            option = CurlOpt.DEBUGDATA
         elif value_type == "char*":
             c_value = value.encode() if isinstance(value, str) else value
             # Must keep a reference, otherwise may be GCed.
@@ -240,7 +255,8 @@ class Curl:
         return ret
 
     def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list]:
-        """Wrapper for ``curl_easy_getinfo``. Gets information in response after curl perform.
+        """Wrapper for ``curl_easy_getinfo``. Gets information in response after
+        curl.perform.
 
         Parameters:
             option: option to get info of, using constants from ``CurlInfo`` enum
@@ -319,10 +335,15 @@ class Curl:
             # cleaning
             self.clean_after_perform(clear_headers)
 
+    def upkeep(self) -> int:
+        return lib.curl_easy_upkeep(self._curl)
+
     def clean_after_perform(self, clear_headers: bool = True) -> None:
-        """Clean up handles and buffers after perform, called at the end of `perform`."""
+        """Clean up handles and buffers after ``perform``, called at the end of
+        ``perform``."""
         self._write_handle = None
         self._header_handle = None
+        self._debug_handle = None
         self._body_handle = None
         if clear_headers:
             if self._headers != ffi.NULL:
@@ -367,7 +388,8 @@ class Curl:
 
     @staticmethod
     def get_reason_phrase(status_line: bytes) -> bytes:
-        """Extract reason phrase, like ``OK``, ``Not Found`` from response status line."""
+        """Extract reason phrase, like ``OK``, ``Not Found`` from response status
+        line."""
         m = REASON_PHRASE_RE.match(status_line)
         return m.group(1) if m else b""
 
@@ -415,7 +437,7 @@ class Curl:
             CurlError: if failed.
         """
         buffer = ffi.new("char[]", n)
-        n_recv = ffi.new("int *")
+        n_recv = ffi.new("size_t *")
         p_frame = ffi.new("struct curl_ws_frame **")
 
         ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
@@ -439,7 +461,7 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        n_sent = ffi.new("int *")
+        n_sent = ffi.new("size_t *")
         buffer = ffi.from_buffer(payload)
         ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
@@ -549,8 +571,8 @@ class CurlMime:
         c.setopt(CurlOpt.MIMEPOST, self._form)
 
     def close(self) -> None:
-        """Close the mime instance and underlying files. This method must be called after
-        ``perform`` or ``request``."""
+        """Close the mime instance and underlying files. This method must be called
+        after ``perform`` or ``request``."""
         lib.curl_mime_free(self._form)
         self._form = ffi.NULL
 

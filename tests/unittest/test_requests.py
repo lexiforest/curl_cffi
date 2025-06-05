@@ -6,6 +6,7 @@ from io import BytesIO
 import pytest
 from charset_normalizer import detect
 
+import curl_cffi
 from curl_cffi import CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
@@ -21,6 +22,11 @@ def test_head(server):
 
 def test_get(server):
     r = requests.get(str(server.url))
+    assert r.status_code == 200
+
+
+def test_direct_import(server):
+    r = curl_cffi.get(str(server.url))
     assert r.status_code == 200
 
 
@@ -241,7 +247,7 @@ def test_url_encode(server):
     assert r.url == url
 
     # path should not be unquoted when params supplied
-    url = f"http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
+    url = "http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
     r = requests.get(url)
     assert r.url == url
     params = {"foo": "bar"}
@@ -441,9 +447,18 @@ def test_response_headers(server):
 
 
 def test_response_cookies(server):
-    r = requests.get(str(server.url.copy_with(path="/set_cookies")))
-    print(r.cookies)
+    s = requests.Session(cookies={"old": "bar"})
+    r = s.get(str(server.url.copy_with(path="/set_cookies")))
+
+    # set-cookies from response
     assert r.cookies["foo"] == "bar"
+    assert s.cookies["foo"] == "bar"
+
+    # session cookies not in response object
+    assert r.cookies.get("old") is None
+
+    # non-exist cookies
+    assert r.cookies.get("xxx") is None
 
 
 def test_elapsed(server):
@@ -532,11 +547,14 @@ def test_session_preset_cookies(server):
         str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
     )
     cookies = r.json()
+
     # old cookies should be persisted
     assert cookies["foo"] == "bar"
+
     # new cookies should be added
     assert cookies["hello"] == "world"
-    # XXX request cookies will always be added to the entire session
+
+    # XXX: request cookies will always be added to the entire session
     # request cookies should not be added to session cookiejar
     # assert s.cookies.get("hello") is None
 
@@ -611,7 +629,7 @@ def test_cookies_mislead_by_host(server):
     s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
     s.cookies.set("foo", "bar")
     print("URL is: ", str(server.url))
-    # TODO replace hard-coded url with server.url.replace(host="example.com")
+    # TODO: replace hard-coded url with server.url.replace(host="example.com")
     r = s.get("http://example.com:8000", headers={"Host": "example.com"})
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar"
@@ -648,7 +666,8 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
         params={"to": "http://google.com:8000/echo_cookies"},
     )
     cookies = r.json()
-    # cookies without domains are bound to the first domain, which is example.com in this case.
+    # cookies without domains are bound to the first domain, which is example.com in
+    # this case.
     assert len(cookies) == 1
     assert cookies["hello"] == "world"
 
@@ -961,3 +980,8 @@ def test_cookies_update_disabled(server):
     s.discard_cookies = False
     r4 = s.get(delete_url)
     assert "foo" not in s.cookies
+
+
+def test_http_version(server):
+    r = requests.get(str(server.url), http_version="v1")
+    assert r.status_code == 200

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["set_curl_options", "not_set"]
+__all__ = ["HttpVersionLiteral", "set_curl_options", "not_set"]
 
 
 import asyncio
@@ -41,9 +41,30 @@ HttpMethod = Literal[
     "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
 ]
 
+HttpVersionLiteral = Literal["v1", "v2", "v2tls", "v2_prior_knowledge", "v3", "v3only"]
+
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
 not_set: Final[Any] = object()
+
+
+def normalize_http_version(
+    version: Union[CurlHttpVersion, HttpVersionLiteral],
+) -> CurlHttpVersion:
+    if version == "v1":
+        return CurlHttpVersion.V1_1
+    elif version == "v3":
+        return CurlHttpVersion.V3
+    elif version == "v3only":
+        return CurlHttpVersion.V3ONLY
+    elif version == "v2":
+        return CurlHttpVersion.V2_0
+    elif version == "v2tls":
+        return CurlHttpVersion.V2TLS
+    elif version == "v2_prior_knowledge":
+        return CurlHttpVersion.V2_PRIOR_KNOWLEDGE
+
+    return version  # type: ignore
 
 
 def is_absolute_url(url: str) -> bool:
@@ -141,8 +162,8 @@ def unquote_unreserved(uri: str) -> str:
         if len(h) == 2 and h.isalnum():
             try:
                 c = chr(int(h, 16))
-            except ValueError:
-                raise InvalidURL(f"Invalid percent-escape sequence: '{h}'")
+            except ValueError as e:
+                raise InvalidURL(f"Invalid percent-escape sequence: '{h}'") from e
 
             if c in UNRESERVED_SET:
                 parts[i] = c + parts[i][2:]
@@ -233,7 +254,9 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     cipher_names = []
     for cipher in ciphers.split("-"):
         cipher_id = int(cipher)
-        cipher_name = TLS_CIPHER_NAME_MAP[cipher_id]
+        cipher_name = TLS_CIPHER_NAME_MAP.get(cipher_id)
+        if not cipher_name:
+            raise ImpersonateError(f"Cipher {hex(cipher_id)} is not found")
         cipher_names.append(cipher_name)
 
     curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
@@ -303,21 +326,21 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: list[Union[dict, list, tuple, None]] = [],
+    params_list: list[Union[dict, list, tuple, None]] = [],  # noqa: B006
     base_url: Optional[str] = None,
     data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
     json: Optional[dict | list] = None,
-    headers_list: list[Optional[HeaderTypes]] = [],
-    cookies_list: list[Optional[CookieTypes]] = [],
+    headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
+    cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
     files: Optional[dict] = None,
     auth: Optional[tuple[str, str]] = None,
     timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
     allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
-    proxies_list: list[Optional[ProxySpec]] = [],
+    proxies_list: list[Optional[ProxySpec]] = [],  # noqa: B006
     proxy: Optional[str] = None,
     proxy_auth: Optional[tuple[str, str]] = None,
-    verify_list: list[Union[bool, str, None]] = [],
+    verify_list: list[Union[bool, str, None]] = [],  # noqa: B006
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable] = None,
@@ -327,7 +350,7 @@ def set_curl_options(
     extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
     default_headers: bool = True,
     quote: Union[str, Literal[False]] = "",
-    http_version: Optional[CurlHttpVersion] = None,
+    http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
     interface: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
@@ -380,7 +403,7 @@ def set_curl_options(
         body = dumps(json, separators=(",", ":")).encode()
 
     # Tell libcurl to be aware of bodies and related headers when,
-    # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do;
+    # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do
     # 2. GET/DELETE with body, although it's against the RFC, some applications.
     #   e.g. Elasticsearch, use this.
     if body or method in ("POST", "PUT", "PATCH"):
@@ -392,7 +415,9 @@ def set_curl_options(
 
     # headers
     base_headers, headers = headers_list
-    h = Headers(base_headers)
+    # let headers encoding take precedence over base headers encoding
+    encoding = headers.encoding if isinstance(headers, Headers) else None
+    h = Headers(base_headers, encoding=encoding)
     h.update(headers)
 
     # remove Host header if it's unnecessary, otherwise curl may get confused.
@@ -509,7 +534,7 @@ def set_curl_options(
         proxy = cast(Optional[str], proxies.get(parts.scheme, proxies.get("all")))
         if parts.hostname:
             proxy = (
-                proxies.get(
+                proxies.get(  # type: ignore
                     f"{parts.scheme}://{parts.hostname}",
                     proxies.get(f"all://{parts.hostname}"),
                 )
@@ -615,9 +640,11 @@ def set_curl_options(
 
     # http_version, after impersonate, which will change this to http2
     if http_version:
+        http_version = normalize_http_version(http_version)
         c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
-    # set extra curl options, must come after impersonate, because it will alter some options
+    # set extra curl options, must come after impersonate, because it will alter some
+    # options
     if curl_options:
         for option, setting in curl_options.items():
             c.setopt(option, setting)

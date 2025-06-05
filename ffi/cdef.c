@@ -7,6 +7,7 @@ void curl_easy_cleanup(void *curl);
 void curl_easy_reset(void *curl);
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
 void *curl_easy_duphandle(void *curl);
+int curl_easy_upkeep(void *curl);
 
 char *curl_version();
 
@@ -40,6 +41,11 @@ int curl_multi_socket_action(void *curlm, int sockfd, int ev_bitmask, int *runni
 int curl_multi_setopt(void *curlm, int option, void* param);
 int curl_multi_assign(void *curlm, int sockfd, void *sockptr);
 int curl_multi_perform(void *curlm, int *running_handle);
+int curl_multi_timeout(void *curlm, long *timeout_ms);
+int curl_multi_wait(void *curlm, void *extra_fds, unsigned int extra_nfds, int timeout_ms, int *numfds);
+int curl_multi_poll(void *curlm, void *extra_fds, unsigned int extra_nfds, int timeout_ms, int *numfds);
+int curl_multi_wakeup(void *curlm);
+const char *curl_multi_strerror(int code);
 struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 
 // multi callbacks
@@ -56,8 +62,8 @@ struct curl_ws_frame {
   ...;
 };
 
-int curl_ws_recv(void *curl, void *buffer, int buflen, int *recv, struct curl_ws_frame **meta);
-int curl_ws_send(void *curl, void *buffer, int buflen, int *sent, int fragsize, unsigned int sendflags);
+int curl_ws_recv(void *curl, void *buffer, size_t buflen, size_t *recv, const struct curl_ws_frame **meta);
+int curl_ws_send(void *curl, const void *buffer, size_t buflen, size_t *sent, int fragsize, unsigned int sendflags);
 
 // mime
 void *curl_mime_init(void* curl);  // -> form

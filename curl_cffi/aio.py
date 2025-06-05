@@ -133,7 +133,7 @@ class AsyncCurl:
     def __init__(self, cacert: str = "", loop=None):
         """
         Parameters:
-            cacert: CA cert path to use, by default, curl_cffi uses certs from ``certifi``.
+            cacert: CA cert path to use, by default, certs from ``certifi`` are used.
             loop: EventLoop to use.
         """
         self._curlm = lib.curl_multi_init()

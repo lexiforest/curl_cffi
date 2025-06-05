@@ -27,6 +27,7 @@ to specify your own customized fingerprints. See below for details.
 - chrome124 :sup:`3`
 - chrome131 :sup:`4`
 - chrome133a :sup:`5` :sup:`6`
+- chrome136 :sup:`7`
 - chrome99_android
 - chrome131_android :sup:`4`
 - edge99
@@ -37,7 +38,10 @@ to specify your own customized fingerprints. See below for details.
 - safari17_2_ios :sup:`1`
 - safari18_0 :sup:`4`
 - safari18_0_ios :sup:`4`
+- safari18_4 :sup:`7`
+- safari18_4_ios :sup:`7`
 - firefox133 :sup:`5`
+- tor145 :sup:`7`
 
 Notes:
 
@@ -47,6 +51,7 @@ Notes:
 4. Added in version `0.8.0`.
 5. Added in version `0.9.0`.
 6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
+7. Added in version `0.11.0`
 
 Which version to use?
 ---------------------
@@ -57,9 +62,9 @@ browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
 
 .. code-block:: python
 
-    from curl_cffi import requests
+    import curl_cffi
 
-    requests.get(url, impersonate="chrome")
+    curl_cffi.get(url, impersonate="chrome")
 
 iOS has restrictions on WebView and TLS libs, so ``safari_x_ios`` should work for most apps.
 If you encountered an android app with custom fingerprints, you can try the ``safari_ios``
@@ -116,10 +121,65 @@ You can retrieve the JA3 and Akamai strings using tools like WireShark or from T
    }
 
 
-   r = requests.get(
+   r = curl_cffi.get(
        url, ja3=okhttp4_android10_ja3, akamai=okhttp4_android10_akamai, extra_fp=extra_fp
    )
    print(r.json())
+
+JA3 and Akamai String Format
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A JA3 string is a simple, comma-separated representation of the key fields in a TLS ClientHello. It consists of five parts:
+
+- SSL/TLS Version, The numeric version the client requests (e.g. 771 for TLS 1.2).
+- Cipher Suites, A hyphen-separated list of all cipher suite IDs offered by the client (e.g. 4865-4866-4867-49195-49196).
+- Extension IDs, A hyphen-separated list of all TLS extension numbers the client includes (e.g. 0-11-10-35-16-5).
+- Supported Groups (aka “Elliptic Curves”), A hyphen-separated list of curve IDs the client supports for ECDHE (e.g. 29-23-24).
+- EC Point Formats, A hyphen-separated list of the point‐format IDs (almost always just 0 for “uncompressed”) (e.g. 0).
+
+They’re concatenated in that exact order, with commas between fields. For example:
+
+.. code-block::
+
+    771,4865-4866-4867-49195-49196,0-11-10-35-16-5,29-23-24,0
+
+Note that Chrome permutes the extension order on each request, so there is a new format called JA3N, which uses sorted extension_id list.
+
+The Akamai HTTP/2 fingerprint string encodes four client‐controlled protocol parameters, joined by the pipe character (|):
+
+- SETTINGS, A semicolon‐separated list of ID:value pairs from the client’s initial SETTINGS frame. Each ID is a standard HTTP/2 setting identifier (e.g. 1 for HEADER_TABLE_SIZE, 4 for INITIAL_WINDOW_SIZE), and value is the client’s chosen value for that setting 
+- WINDOW_UPDATE, A single integer: the value the client sends in its first WINDOW_UPDATE frame (or 0 if none was sent) 
+- PRIORITY, Zero or more priority‐frame tuples, each formatted as ``StreamID:ExclusiveBit:DependentStreamID:Weight``. Multiple tuples are comma-separated. This captures any PRIORITY frames the client issues before sending headers 
+- Pseudo-Header Order, The sequence in which the client sends HTTP/2 pseudo-headers in its request HEADERS frame, encoded as comma-separated single-letter codes:
+
+
+.. code-block::
+    m = :method
+    s = :scheme
+    p = :path
+    a = :authority
+
+Putting it all together, an example fingerprint might look like:
+
+.. code-block::
+
+    1:65536;4:131072;5:16384|12517377|3:0:0:201|m,p,a,s
+
+    where:
+
+    SETTINGS = 1:65536;4:131072;5:16384
+    WINDOW_UPDATE = 12517377
+    PRIORITY = 3:0:0:201
+    Pseudo-Header Order = m,p,a,s 
+
+Although JA3 and Akamai fingerprint string already captures many of the aspects of a Hello Packet, there are still some fields are not covered and can be used to detect you.
+This is when the ``extra_fp`` option comes in, each field of this dict is pretty easy to understand. You should first set the ja3 and akamai string, then check if you have the
+identical fingerprint like your target. If not, use the ``extra_fp`` to further refine your impersonation.
+
+
+
+Using CURLOPTs
+~~~~~~~~~~~~~~
 
 The other way is to use the ``curlopt`` s to specify exactly which options you want to change.
 
@@ -127,13 +187,14 @@ To modify them, use ``curl.setopt(CurlOpt, value)``, for example:
 
 .. code-block:: python
 
-   from curl_cffi import Curl, CurlOpt, requests
+   import curl_cffi
+   from curl_cffi import Curl, CurlOpt
 
    c = Curl()
    c.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, "masp")
 
    # or
-   requests.get(url, curl_options={CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, "masp"})
+   curl_cffi.get(url, curl_options={CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, "masp"})
 
 Here are a list of options:
 
@@ -151,9 +212,9 @@ and non-standard TLS options created for this project:
 
 For Akamai http2 fingerprints, you can fully customize the 3 parts:
 
-* ``CURLOPT_HTTP2_PSEUDO_HEADERS_ORDER``, sets http2 pseudo header order, for example: `masp` (non-standard HTTP/2 options created for this project).
-* ``CURLOPT_HTTP2_SETTINGS`` sets the settings frame values, for example `1:65536;3:1000;4:6291456;6:262144` (non-standard HTTP/2 options created for this project).
-* ``CURLOPT_HTTP2_WINDOW_UPDATE`` sets intial window update value for http2, for example `15663105` (non-standard HTTP/2 options created for this project).
+* ``CURLOPT_HTTP2_PSEUDO_HEADERS_ORDER``, sets http2 pseudo header order, for example: ``masp`` (non-standard HTTP/2 options created for this project).
+* ``CURLOPT_HTTP2_SETTINGS`` sets the settings frame values, for example ``1:65536;3:1000;4:6291456;6:262144`` (non-standard HTTP/2 options created for this project).
+* ``CURLOPT_HTTP2_WINDOW_UPDATE`` sets initial window update value for http2, for example ``15663105`` (non-standard HTTP/2 options created for this project).
 
 For a complete list of options and explanation, see the `curl-impersoante README`_.
 

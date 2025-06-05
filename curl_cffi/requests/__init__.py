@@ -80,17 +80,20 @@ def request(
         url: url for the requests.
         params: query string for the requests.
         data: form values(dict/list/tuple) or binary data to use in body,
-            ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict is given.
+            ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict
+            is given.
         json: json values to use in body, `Content-Type: application/json` will be added
             automatically.
         headers: headers to send.
         cookies: cookies to use.
         files: not supported, use ``multipart`` instead.
-        auth: HTTP basic auth, a tuple of (username, password), only basic auth is supported.
+        auth: HTTP basic auth, a tuple of (username, password), only basic auth is
+            supported.
         timeout: how many seconds to wait before giving up.
         allow_redirects: whether to allow redirection.
         max_redirects: max redirect counts, default 30, use -1 for unlimited.
-        proxies: dict of proxies to use, format: ``{"http": proxy_url, "https": proxy_url}``.
+        proxies: dict of proxies to use, prefer to use ``proxy`` if they are the same.
+            format: ``{"http": proxy_url, "https": proxy_url}``.
         proxy: proxy to use, format: "http://user@pass:proxy_url".
             Can't be used with `proxies` parameter.
         proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
@@ -106,12 +109,14 @@ def request(
         thread: thread engine to use for working with other thread implementations.
             choices: eventlet, gevent.
         default_headers: whether to set default browser headers when impersonating.
-        default_encoding: encoding for decoding response content if charset is not found in headers.
-            Defaults to "utf-8". Can be set to a callable for automatic detection.
+        default_encoding: encoding for decoding response content if charset is not found
+            in headers. Defaults to "utf-8". Can be set to a callable for automatic
+            detection.
         quote: Set characters to be quoted, i.e. percent-encoded. Default safe string
-            is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character will be removed
-            from the safe string, thus quoted. If set to False, the url will be kept as is,
-            without any automatic percent-encoding, you must encode the URL yourself.
+            is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character will be
+            removed from the safe string, thus quoted. If set to False, the url will be
+            kept as is, without any automatic percent-encoding, you must encode the URL
+            yourself.
         curl_options: extra curl options to use.
         http_version: limiting http version, defaults to http2.
         debug: print extra curl debug info.

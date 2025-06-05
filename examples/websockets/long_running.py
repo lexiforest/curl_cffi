@@ -1,4 +1,4 @@
-from curl_cffi.requests import WebSocket
+from curl_cffi import WebSocket
 
 msg_count = 0
 
@@ -29,7 +29,8 @@ def on_open(ws: WebSocket):
 
 def on_close(ws: WebSocket, code: int, reason: str):
     print(
-        f"<<< Websocket closed! code: {code}, reason: {reason}, clean: {code in (1000, 1001)}"
+        f"<<< Websocket closed! code: {code}, reason: {reason}, clean: "
+        f"{code in (1000, 1001)}"
     )
 
 
