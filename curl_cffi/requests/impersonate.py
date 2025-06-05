@@ -144,6 +144,8 @@ class ExtraFingerprints:
     tls_permute_extensions: bool = False
     tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
     tls_signature_algorithms: Optional[list[str]] = None
+    tls_delegated_credential: str = ""
+    tls_record_size_limit: int = 0
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
 
@@ -154,6 +156,8 @@ class ExtraFpDict(TypedDict, total=False):
     tls_permute_extensions: bool
     tls_cert_compression: Literal["zlib", "brotli"]
     tls_signature_algorithms: Optional[list[str]]
+    tls_delegated_credential: str
+    tls_record_size_limit: int
     http2_stream_weight: int
     http2_stream_exclusive: int
 
@@ -328,6 +332,8 @@ TLS_EC_CURVES_MAP = {
     24: "P-384",
     25: "P-521",
     29: "X25519",
+    256: "ffdhe2048",
+    257: "ffdhe3072",
     4588: "X25519MLKEM768",
     25497: "X25519Kyber768Draft00",
 }
@@ -390,8 +396,11 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 1)
         else:
             curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 0)
-    # padding
+    # padding, should be ignored
     elif extension_id == 21:
+        pass
+    # firefox extension, toggled by extra_fp
+    elif extension_id in [34, 28]:
         pass
     else:
         raise NotImplementedError(
