@@ -1,17 +1,64 @@
-Impersonate guide
-======
+Impersonate Guide
+=================
 
-Supported browser versions
---------------------------
+You probably come across ``curl_cffi`` for it's ability to impersonate browsers. Here is
+a tutorial on how to better impersonate using ``curl_cffi``.
 
-``curl_cffi`` supports the same browser versions as supported by our `fork <https://github.com/lexiforest/curl-impersonate>`_ of `curl-impersonate <https://github.com/lwthiker/curl-impersonate>`_:
+What is TLS and http/2, http/3 fingerprinting?
+----------------------------------------------
 
-However, only Chrome-like browsers are supported. Firefox support is tracked in `#59 <https://github.com/lexiforest/curl_cffi/issues/59>`_.
+TLS and http/2
+~~~~~~~~~~~~~~
+
+TLS is the ``s`` in ``https``. ``https`` has been uniformly deployed across the world.
+There are many extension and cipher suites a implementation can choose to use. According to
+the RFC, there are many valid combinations. But in reality, browser vendors tend to use
+fixed combinations, and these combinations can be used identify if the request is from a
+certain browser or an automated script. The digest of this combination is called a TLS
+fingerprints. The most common digesting method is called `JA3`.
+
+Similar to TLS, there are a few settings in http/2 connection can be used to identify the
+source of a request. The most commonly used digesting method is proposed by Akamai, and called
+the Akamai http2 fingerprint.
+
+To learn the details of TLS and http2 fingerprinting, you can read these great articles from lwthiker:
+
+1. https://lwthiker.com/networks/2022/06/17/tls-fingerprinting.html
+2. https://lwthiker.com/networks/2022/06/17/http2-fingerprinting.html
+
+The format of JA3 and Akamai digest is briefly discussed below.
+
+http/3
+~~~~~~
+
+As of http/3, the newest version of http. Basically, it's http/2 reimplemented over QUIC,
+thus it can be fingerprinted in a similar way with http/2.
+
+Http3 fingerprints has not yet been publicly exploited and reported. But given the rapidly increasing
+marketshare of http/3(35% of internet traffic), it is expected that some strict WAF vendors have begun
+to utilize http/3 fingerprinting.
+
+It has also been noticed by many users, that, for a lot of sites, there is less or even none
+detection when using http/3.
+
+``curl_cffi`` provides TLS and http/2 impersonation in the open source version.
+
+For http/3 impersonation and http/3 proxy support, please head over to `impersonate.pro <https://impersonate.pro>`_
+for the commercial version of ``curl_cffi``.
+
+
+Supported browser impersonate targets
+-------------------------------------
+
+``curl_cffi`` supports the same browser versions as supported by our `fork of curl-impersonate <https://github.com/lexiforest/curl-impersonate>`_.
 
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
-chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
+``chrome122``, was skipped, you can simply impersonate it with your own headers and the previous version.
 
-If you are trying to impersonate a target other than a browser, use ``ja3=...`` and ``akamai=...``
+If you are too busy to look up those details, you can try our commercial version at `impersonate.pro <https://impersonate.pro>`_,
+which has a weekly updated list of browser profiles and even more browser types.
+
+If you are trying to impersonate a target other than a browser, use ``ja3=...``, ``akamai=...`` and ``extra_fp=...``
 to specify your own customized fingerprints. See below for details.
 
 - chrome99
@@ -45,20 +92,20 @@ to specify your own customized fingerprints. See below for details.
 
 Notes:
 
-1. Added in version `0.6.0`.
-2. Fixed in version `0.6.0`, previous http2 fingerprints were `not correct <https://github.com/lwthiker/curl-impersonate/issues/215>`_.
-3. Added in version `0.7.0`.
-4. Added in version `0.8.0`.
-5. Added in version `0.9.0`.
-6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
-7. Added in version `0.11.0`
+1. Added in version ``0.6.0``.
+2. Fixed in version ``0.6.0``, previous http2 fingerprints were `not correct <https://github.com/lwthiker/curl-impersonate/issues/215>`_.
+3. Added in version ``0.7.0``.
+4. Added in version ``0.8.0``.
+5. Added in version ``0.9.0``.
+6. The version postfix ``-a``(e.g. ``chrome133a``) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
+7. Added in version ``0.11.0``
 
-Which version to use?
----------------------
+Which target version to use?
+----------------------------
 
-Generally speaking, you should use the latest Chrome or Safari versions. As of 0.7, they're
-``chrome124``, ``safari17_0`` and ``safari17_2_ios``. To always impersonate the latest avaiable
-browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
+Generally speaking, you should use the latest Chrome or Safari versions. As of v0.11, they're
+``chrome136``, ``safari184`` and ``safari184_ios``. To always impersonate the latest available
+browser versions, you can simply use ``chrome``, ``firefox``, ``safari`` and ``chrome_android``, ``safari_ios``.
 
 .. code-block:: python
 
@@ -66,11 +113,14 @@ browser versions, you can simply use ``chrome``, ``safari`` and ``safari_ios``.
 
     curl_cffi.get(url, impersonate="chrome")
 
-iOS has restrictions on WebView and TLS libs, so ``safari_x_ios`` should work for most apps.
-If you encountered an android app with custom fingerprints, you can try the ``safari_ios``
-fingerprints given that this app should have an iOS version.
 
-How to use my own fingerprints other than the builtin ones? e.g. okhttp
+Tips:
+
+iOS has restrictions on WebView and TLS libs, so ``safari_*_ios`` should work for a lot of apps.
+If you encountered an android app with custom fingerprints, you can try the ``safari_ios``
+fingerprints, given that this app should have an iOS version.
+
+How to use my own fingerprints? e.g. okhttp
 ------
 
 Use ``ja3=...``, ``akamai=...`` and ``extra_fp=...``.
@@ -127,35 +177,6 @@ You can retrieve the JA3 and Akamai strings using tools like WireShark or from T
    print(r.json())
 
 
-There are a few special extensions from firefox that you add extra options by ``extra_fp``:
-
-Extension 34: delegated credentials
-
-.. code-block:: python
-
-   extra_fp = {
-       "tls_delegated_credential": "ecdsa_secp256r1_sha256:ecdsa_secp384r1_sha384:ecdsa_secp521r1_sha512:ecdsa_sha1"
-   }
-
-   # Note that the ja3 string also includes extensiion: 34
-   ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
-
-   r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
-
-Extension 28: record size limit
-
-.. code-block:: python
-
-   extra_fp = {
-       "tls_record_size_limit": 4001
-   }
-
-   # Note that the ja3 string also includes extensiion: 28
-   ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
-
-   r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
-
-
 JA3 and Akamai String Format
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -207,7 +228,6 @@ This is when the ``extra_fp`` option comes in, each field of this dict is pretty
 identical fingerprint like your target. If not, use the ``extra_fp`` to further refine your impersonation.
 
 
-
 Using CURLOPTs
 ~~~~~~~~~~~~~~
 
@@ -251,8 +271,73 @@ For a complete list of options and explanation, see the `curl-impersoante README
 .. _curl-impersonate README: https://github.com/lexiforest/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
 
 
+How to toggle firefox-specific extensions?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are a few special extensions from firefox that you should add extra options by ``extra_fp``:
+
+Extension 34: delegated credentials
+
+.. code-block:: python
+
+   extra_fp = {
+       "tls_delegated_credential": "ecdsa_secp256r1_sha256:ecdsa_secp384r1_sha384:ecdsa_secp521r1_sha512:ecdsa_sha1"
+   }
+
+   # Note that the ja3 string also includes extensiion: 34
+   ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
+
+   r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
+
+Extension 28: record size limit
+
+.. code-block:: python
+
+   extra_fp = {
+       "tls_record_size_limit": 4001
+   }
+
+   # Note that the ja3 string also includes extensiion: 28
+   ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
+
+   r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
+
+
+How to check if my impersonation is working?
+--------------------------------------------
+
+The most reliable way is to use WireShark, and compare packets from ``curl_cffi`` and your
+targets.
+
+If it's challenging for you to use WireShark, you can use the following sites for JA3 and Akamai fingerprints:
+
+1. https://tls.browserleaks.com/json
+2. https://tls.peet.ws/api/all
+3. https://scrapfly.io/web-scraping-tools/browser-fingerprint
+
+For http/3 fingerprints, use our service:
+
+1. https://fp.impersonate.pro/api/http3
+
+
+I'm still being detected even if I impersonated correctly
+---------------------------------------------------------
+
+First, JA3 and akamai fingerprints are not comprehensive, there are other fields that can
+be detected, we have a few more options listed in ``extra_fp``. Be sure to also check them.
+
+.. note::
+
+    Since ``curl-impersonate`` was posted on `Hacker News <https://news.ycombinator.com/item?id=42547820>`_,
+    some features and behaviors of ``curl_cffi`` is being detected by professional players.
+    If we continue to fix these niche behavior in public, it would soon be noticed by those providers.
+
+    In short, if you are using curl_cffi in production and you are sure about being blocked by TLS or http
+    detection, try the pro version.
+
+
 Should I randomize my fingerprints for each request?
-------
+----------------------------------------------------
 
 You can choose a random version from the list above, like:
 
@@ -283,7 +368,7 @@ You should copy ja3 strings from sniffing tools, not generate them, unless you c
 sure all the requirements are met.
 
 Can I change JavaScript fingerprints with this library?
-------
+-------------------------------------------------------
 
 No, you can not. As the name suggests, JavaScript fingerprints are generated using JavaScript
 APIs provided by real browsers. ``curl_cffi`` is a python binding to a C library, with no

@@ -3,37 +3,27 @@ Change Log
 
 Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
 
-v0.11
------
 
 - v0.11
     - Added support for http3
     - Added tor145, new safari and chrome targets
 
-v0.10
------
 
 - v0.10.0
     - Added support for using curl_cffi directly
 
-v0.9
-----
 
 - v0.9.0
     - Brought back Windows support
     - Added support for Firefox
     - Added support for Chrome 133a
 
-v0.8
-----
 
 - v0.8.0
     - Added more recent impersonate versions, Safari 18.0 for iOS and macOS, Chrome 131.
     - Added ``quote`` parameter for setting which letter should be quoted in URL.
     - Added ``response_class`` parameter for using a customized ``Response`` class.
 
-v0.7
-----
 
 - v0.7.3
     - Bugfixes.
@@ -57,8 +47,6 @@ v0.7
     - Fix Windows build.
     - Fix Safari Stream priority.
 
-v0.6
-----
 
 The minimum Python version is now 3.8. Windows fingerprints are wrong in 0.6.x.
 
@@ -81,8 +69,6 @@ The minimum Python version is now 3.8. Windows fingerprints are wrong in 0.6.x.
     - Incorporated build time files for sdist
     - Bugfix: async curl timer leak
 
-v0.5
-----
 
 - v0.5.10
     - Add stream support
@@ -124,14 +110,10 @@ v0.5
 - 0.5.0
     - Added asyncio support
 
-v0.4
-----
 
 - 0.4.0
     - Removed c shim callback function, use cffi native callback function
 
-v0.3
-----
 
 - 0.3.6
     - Updated to curl-impersonate v0.5.4, supported chrome107 and chrome110

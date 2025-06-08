@@ -1,10 +1,52 @@
-Advanced Usage
-==============
+Advanced Topics
+**************
+
+Proxies
+=======
+
+You can use the ``proxy`` parameter:
+
+.. code-block:: python
+
+    import curl_cffi
+
+    curl_cffi.get(url, proxy="http://user:pass@example.com:3128")
+
+You can also use the ``http_proxy``, ``https_proxy``, and ``ws_proxy``, ``wss_proxy``
+environment variables, respectively.
+
+.. warning::
+
+   For beginners, a very common mistake is to add ``https://`` prefix to the ``https`` proxy.
+
+   For explanation of differences between ``http_proxy`` and ``https_proxy``, please see
+   `#6 <https://github.com/lexiforest/curl_cffi/issues/6>`_.
+
+For compatibility with ``requests``, we also support using dicts.
+
+.. code-block:: python
+
+    import curl_cffi
+
+    proxies = {
+        "http": "http://localhost:3128",
+        "https": "http://localhost:3128"
+    }
+    curl_cffi.get(url, proxies=proxies)
+
+
+.. note::
+
+   Use the proxies dict, only when you do have different proxies for http and https
+
 
 Low-level curl API
----------
+=========
 
-Alternatively, you can use the low-level curl-like API:
+Although we provide an easy to use ``requests``-like API, sometimes, you may prefer to use the ``curl``-like API.
+
+The curl API is very much like what you may have used -- ``pycurl``, with extra impersonation support.
+
 
 .. code-block:: python
 
@@ -23,72 +65,57 @@ Alternatively, you can use the low-level curl-like API:
     body = buffer.getvalue()
     print(body.decode())
 
-
-Scrapy integrations
-------
-
-If you are using scrapy, check out these middlewares:
-
-- [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
-- [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
+For a complete list of options, see :doc:`api`
 
 
-Using with eventlet/gevent
-------
+Using ``CURLOPT_*`` in requests API
+===================================
 
-Just set ``thread`` to eventlet or gevent.
+Sometimes, you know an option from libcurl, but we haven't exposed it in the requests API.
+You can simply add the ``curl_options`` dict to apply the option.
 
 .. code-block:: python
 
-   from curl_cffi import requests
 
-   s = requests.Session(thread="eventlet")
-   s.get(url)
+.. note::
 
-
-As a urllib3/requests adapter
-------
-
-You can also use curl-cffi as a requests adapter via `curl-adapter <https://github.com/el1s7/curl-adapter>`_.
-In this way, you get the full functionality of requests.
-
-.. code-block:: python
-
-   import requests
-   from curl_adapter import CurlCffiAdapter
-
-   session = requests.Session()
-   session.mount("http://", CurlCffiAdapter())
-   session.mount("https://", CurlCffiAdapter())
-
-   # just use requests session like you normally would
-   session.get("https://example.com")
+   Using curl_options is preferred over using ``session.curl.setopt``, the latter may get
+   overriden internally, while the former is executed after all options have been set.
 
 
-As a httpx transport
-------
+Selecting http version
+======================
 
-You can also use curl-cffi as a httpx transport via `httpx-curl-cffi <https://github.com/vgavro/httpx-curl-cffi>`_.
-With this, you get the full functionality of httpx.
+The recommended and default http version is http/2, the present and most widely used http version
+as of 2025.
+
+According to `Wikipedia <https://en.wikipedia.org/wiki/HTTP>`_, the marketshare is:
+
+- HTTP/1.1, 33.8%
+- HTTP/2, 35.3%
+- HTTP/3, 30.9%
+
+To change http versions, use the ``http_version`` parameter.
 
 .. code-block:: python
 
-   from httpx import Client, AsyncClient
-   from httpx_curl_cffi import CurlTransport, AsyncCurlTransport, CurlOpt
+   import curl_cffi
+   curl_cffi.get("https://cloudflare-quic.com", http_version="v3")
 
-   client = Client(transport=CurlTransport(impersonate="chrome", default_headers=True))
-   client.get("https://tools.scrapfly.io/api/fp/ja3")
+Common values are: ``v1``, ``v2``, ``v3`` and ``v3only``.
 
-   async_client = AsyncClient(transport=AsyncCurlTransport(
-       impersonate="chrome",
-       default_headers=True,
-       # required for parallel requests, see curl_cffi issues below
-       curl_options={CurlOpt.FRESH_CONNECT: True}
-   ))
+To get the actual used http version, you need to compare the response field with const from libcurl:
+
+.. code-block:: python
+
+    >>> from curl_cffi import CurlHttpVersion
+    >>> r = curl_cffi.get("https://example.com", http_version="v2")
+    >>> r.http_version == CurlHttpVersion.V2_0
+    True
 
 
 Keeping session alive in http/2
-------
+======
 
 With http/2, you can optionally send a ping frame to keep the connection alive when not actively using it.
 

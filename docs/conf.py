@@ -11,8 +11,8 @@ import sys
 sys.path.insert(0, os.path.abspath("../"))
 
 project = "curl_cffi"
-copyright = "2024, perker"
-author = "perker"
+copyright = "2023-2025, lexiforest"
+author = "lexiforest"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,5 +33,5 @@ root_doc = "index"
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "alabaster"
+html_theme = "bizstyle"
 html_static_path = ["_static"]

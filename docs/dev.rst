@@ -1,4 +1,4 @@
-Setup development environment
+Development and contributing
 ==============
 
 This page documents how to compile curl-impersonate and curl-cffi from source. If binary
@@ -13,7 +13,6 @@ right way is to download curl and curl-impersonate sources on our side and compi
 them all together.
 
 macOS
-------
 
 To install the local editable build:
 
@@ -25,8 +24,16 @@ To install the local editable build:
     sudo chmod 777 /Users/runner
 
     # Dependencies
+
     brew install libidn2 zstd
 
     # Then install
+
     pip install -e .[test]
     pip install -e .[dev]
+
+Contributing
+------------
+
+When opening PR, please do not use the ``main`` branch in your fork, otherwise I cannot add my modification,
+such as unittests.

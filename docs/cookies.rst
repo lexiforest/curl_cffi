@@ -1,7 +1,7 @@
 Cookies
 =======
 
-How to save and load cookies
+Save and load cookies
 ------
 
 Do not use ``get_dict`` to dump and load cookies. Cookies are more than just plain
@@ -41,3 +41,39 @@ Using mozilla cookie jar:
 See: https://github.com/lexiforest/curl_cffi/issues/381
 
 TODO: expose libcurl's native cookies.txt support.
+
+
+Discard cookies when using Session
+----------------------------------
+
+You may need to discard cookies when using sessions, especially when using ``AsyncSession``.
+
+Use the ``discard_cookies`` option.
+
+
+.. code-block:: python
+
+    s = requests.Session()
+
+    set_url = "https://httpbin.org/cookies"
+
+    r = s.get(set_url)
+    assert r.cookies["foo"] == s.cookies["foo"]
+    old_cookie = r.cookies["foo"]
+
+    # Let's start discarding cookies
+    s.discard_cookies = True
+    r = s.get(set_url)
+    assert r.cookies["foo"] != s.cookies["foo"]
+    assert old_cookie == s.cookies["foo"]
+
+    # The behavior can be reverted
+    s.discard_cookies = False
+    r = s.get(set_url)
+    assert r.cookies["foo"] == s.cookies["foo"]
+    old_cookie = r.cookies["foo"]
+
+    # Also works as request parameter
+    r = s.get(set_url, discard_cookies=True)
+    assert r.cookies["foo"] != s.cookies["foo"]
+    assert old_cookie == s.cookies["foo"]

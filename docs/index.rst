@@ -3,22 +3,24 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to curl_cffi's documentation!
-=====================================
+curl_cffi's documentation
+=========================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    install
+   quick_start
    impersonate
-   cookies
    advanced
-   exceptions
    vs-requests
-   faq
+   cookies
+   community
    api
+   faq
    changelog
+   dev
 
 `Discuss on Telegram`_
 
@@ -27,18 +29,20 @@ Welcome to curl_cffi's documentation!
 curl_cffi is a Python binding for `curl-impersonate fork`_ via `cffi`_. For commercial
 support, visit `impersonate.pro <https://impersonate.pro>`_.
 
-.. _curl-impersonate: https://github.com/lexiforest/curl-impersonate
+.. _curl-impersonate fork: https://github.com/lexiforest/curl-impersonate
 .. _cffi: https://cffi.readthedocs.io/en/latest/
 
 Unlike other pure Python http clients like ``httpx`` or ``requests``, ``curl_cffi`` can
 impersonate browsers' TLS signatures or JA3 fingerprints. If you are blocked by some
 website for no obvious reason, you can give this package a try.
 
+If you are looking for Python http3 clients, curl_cffi added http3 support since ``v0.11``.
+
 Sponsors
-------
+--------
 
 SerpAPI
-~~~~~~
+~~~~~~~
 
 .. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/serpapi.png
    :width: 100
@@ -50,7 +54,7 @@ and complete API. 0.66s average response time (≤ 0.5s for Ludicrous Speed Max 
 99.95% SLAs, pay for successful responses only.
 
 Bypass Cloudflare with API
-~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png
    :width: 149
@@ -62,7 +66,7 @@ obtain verified cookies (e.g. ``cf_clearance``). Click `here <https://yescaptcha
 to register.
 
 Easy Captcha Bypass for Scraping
-~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg
    :width: 170
@@ -78,10 +82,9 @@ users can use the code **"CURL"** to get an extra 6% balance! and register `here
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
 
-------
 
 Features
-------
+--------
 
 - Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custom fingerprints.
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see `benchmarks <https://github.com/lexiforest/curl_cffi/tree/main/benchmark>`_.
@@ -150,7 +153,7 @@ Notes:
 2. Since v0.11.0. However, only Linux and macOS are supported, Windows is not supported due to failed building of ngtcp2.
 
 Install
------
+-------
 
 .. code-block:: sh
 
@@ -158,108 +161,18 @@ Install
 
 For more details, see :doc:`install`.
 
-Basic Usage
-------
+Documentation
+-------------
 
-requests-like
-~~~~~~
+You can first check out :doc:`quick_start`. Then the :doc:`impersonate`.
 
-.. code-block:: python
+For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websockets`.
 
-    import curl_cffi
+You can also find common use cases in the `examples <https://github.com/lexiforest/curl_cffi/tree/main/examples>`_ directory.
 
-    url = "https://tls.browserleaks.com/json"
+Finally, if something is missing from the tutorial, you can always find them in the :doc:`api`.
 
-    # Notice the impersonate parameter
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110")
-
-    print(r.json())
-    # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
-    # the js3n fingerprint should be the same as target browser
-
-    # To keep using the latest browser version as `curl_cffi` updates,
-    # simply set impersonate="chrome" without specifying a version.
-    # Other similar values are: "safari" and "safari_ios"
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
-
-    # http/socks proxies are supported
-    proxies = {"https": "http://localhost:3128"}
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
-
-    proxies = {"https": "socks://localhost:3128"}
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
-
-Sessions
-~~~~~~
-
-.. code-block:: python
-
-    s = curl_cffi.Session()
-
-    # httpbin is a http test website
-    s.get("https://httpbin.org/cookies/set/foo/bar")
-
-    print(s.cookies)
-    # <Cookies[<Cookie foo=bar for httpbin.org />]>
-
-    r = s.get("https://httpbin.org/cookies")
-    print(r.json())
-    # {'cookies': {'foo': 'bar'}}
-
-asyncio
-~~~~~~
-
-.. code-block:: python
-
-    async with curl_cffi.AsyncSession() as s:
-        r = await s.get("https://example.com")
-
-More concurrency:
-
-.. code-block:: python
-
-    import asyncio
-    from curl_cffi import AsyncSession
-
-    urls = [
-        "https://google.com/",
-        "https://facebook.com/",
-        "https://twitter.com/",
-    ]
-
-    async with AsyncSession() as s:
-        tasks = []
-        for url in urls:
-            task = s.get(url)
-            tasks.append(task)
-        results = await asyncio.gather(*tasks)
-
-WebSockets
-~~~~~~
-
-.. code-block:: python
-
-    from curl_cffi import Session, WebSocket
-
-    def on_message(ws: WebSocket, message):
-        print(message)
-
-    with Session() as s:
-        ws = s.ws_connect(
-            "wss://api.gemini.com/v1/marketdata/BTCUSD",
-            on_message=on_message,
-        )
-        ws.run_forever()
-
-    # asyncio
-    import asyncio
-    from curl_cffi import AsyncSession
-
-    async with AsyncSession() as s:
-        ws = await s.ws_connect("wss://echo.websocket.org")
-        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-        async for message in ws:
-            print(message)
+If you have any questions, be sure to check out the :doc:`faq` section before opening an issue.
 
 
 Indices and tables
