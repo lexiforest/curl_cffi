@@ -465,6 +465,10 @@ class Curl:
         """
         offset = 0
 
+        sock_fd = self.getinfo(CurlInfo.ACTIVESOCKET)
+        if sock_fd == -1:
+            raise CurlError("Invalid active socket")
+
         while offset < len(payload):
             n_sent = ffi.new("size_t *")
             current_buffer = payload[offset:]
@@ -475,13 +479,9 @@ class Curl:
             )
 
             if ret == CurlECode.AGAIN:
-                socket_fd = self.getinfo(CurlInfo.ACTIVESOCKET)
-                if socket_fd and socket_fd != -1:
-                    _, writeable, error = select.select([], [socket_fd], [], 5.0)
-                    if not writeable:
-                        raise RuntimeError("Socket write timeout")
-                else:
-                    time.sleep(0.01) # could not get socket
+                _, writeable, _ = select.select([], [sock_fd], [], 0.5)
+                if not writeable:
+                    raise CurlError("Socket write timeout")
                 continue
 
             self._check_error(ret, "WS_SEND")
