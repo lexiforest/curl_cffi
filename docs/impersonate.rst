@@ -333,7 +333,7 @@ be detected, we have a few more options listed in ``extra_fp``. Be sure to also 
     If we continue to fix these niche behavior in public, it would soon be noticed by those providers.
 
     In short, if you are using curl_cffi in production and you are sure about being blocked by TLS or http
-    detection, try the pro version.
+    detection, try the `curl_cffi pro version <https://impersonate.pro>`_.
 
 
 Should I randomize my fingerprints for each request?
@@ -377,3 +377,11 @@ browser or JavaScript runtime under the hood.
 If you need to impersonate browsers on the JavaScript perspective, you can search for
 "Anti-detect Browser", "Playwright stealth" and similar keywords. Or simply use a
 commercial plan from our sponsors.
+
+
+Why are all the User-Agents macOS?
+----------------------------------
+
+Simple, because I primarily use macOS and I copied the headers from my own browser. Fingerprints
+are generally the same across desktop OSes, if you want it look like Windows, just update the
+user-agent related headers to Windows.

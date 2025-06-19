@@ -64,7 +64,7 @@ users can use the code **"CURL"** to get an extra 6% balance! and register [here
 ||requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
 |http/2|❌|❌|✅|✅|✅|
-|http/3|❌|❌|❌|☑️<sup>1</sup>|☑️<sup>2</sup>|
+|http/3|❌|❌|❌|☑️<sup>1</sup>|✅<sup>2</sup>|
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
 |websocket|❌|✅|❌|❌|✅|
@@ -72,8 +72,8 @@ users can use the code **"CURL"** to get an extra 6% balance! and register [here
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
 Notes:
-1. For pycurl, you need a http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
-2. Since v0.11.0. However, only Linux and macOS are supported, Windows is not supported due to failed building of ngtcp2.
+1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
+2. Since v0.11.4.
 
 ## Install
 
