@@ -1,4 +1,5 @@
 from curl_cffi.requests import AsyncSession, WebSocket, Session
+from curl_cffi.requests.websockets import CurlWsFlag
 
 
 def test_websocket(ws_server):
@@ -53,6 +54,34 @@ def test_receive_large_messages(ws_server):
         buffer, _ = ws.recv()
         assert len(buffer) == 10000
     ws.close()
+
+
+def test_receive_large_messages_run_forever(ws_server):
+    def on_open(ws: WebSocket):
+        ws.send("*" * 10000)
+    
+    chunk_counter = 0
+    def on_data(ws: WebSocket, data, frame):
+        nonlocal chunk_counter
+        if frame.flags & CurlWsFlag.CLOSE:
+            return
+        chunk_counter += 1
+
+    message = ""
+    def on_message(ws: WebSocket, msg):
+        nonlocal message
+        message = msg
+        ws.send("", CurlWsFlag.CLOSE)  # Gracefully close the connection to exit the run_forever loop
+
+    ws = WebSocket(
+        on_open=on_open,
+        on_data=on_data,
+        on_message=on_message,
+    )
+    ws.run_forever(ws_server.url)
+
+    assert chunk_counter == 10000 // 1024 + 1
+    assert len(message) == 10000
 
 
 async def test_hello_twice_async(ws_server):

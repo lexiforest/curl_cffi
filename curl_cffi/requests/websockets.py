@@ -364,6 +364,7 @@ class WebSocket(BaseWebSocket):
             try:
                 # Try to receive the first fragment first
                 chunk, frame = self.recv_fragment()
+                self._emit("data", chunk, frame)
                 flags = frame.flags
                 chunks.append(chunk)
                 if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
@@ -467,17 +468,10 @@ class WebSocket(BaseWebSocket):
 
         # Keep reading the messages and invoke callbacks
         # TODO: Reconnect logic
-        chunks = []
         keep_running = True
         while keep_running:
             try:
-                msg, frame = self.recv_fragment()
-                flags = frame.flags
-                self._emit("data", msg, frame)
-
-                if not (frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0):
-                    chunks.append(msg)
-                    continue
+                msg, flags = self.recv()
 
                 # Avoid unnecessary computation
                 if "message" in self._emitters:
