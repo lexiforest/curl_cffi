@@ -84,6 +84,21 @@ def test_receive_large_messages_run_forever(ws_server):
     assert len(message) == 10000
 
 
+def test_on_data_callback(ws_server):
+    on_data_called = False
+    def on_data(ws: WebSocket, data, frame):
+        nonlocal on_data_called
+        on_data_called = True
+
+    ws = WebSocket(on_data=on_data)
+    ws.connect(ws_server.url)
+
+    ws.send("Hello")
+    ws.recv()
+    assert on_data_called == False
+    ws.close()
+
+
 async def test_hello_twice_async(ws_server):
     async with AsyncSession() as s:
         ws = await s.ws_connect(ws_server.url)
