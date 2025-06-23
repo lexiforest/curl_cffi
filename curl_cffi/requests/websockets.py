@@ -567,12 +567,13 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             timeout: how many seconds to wait before giving up.
         """
-        if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
         if self._recv_lock.locked():
             raise TypeError("Concurrent call to recv_fragment() is not allowed")
 
         async with self._recv_lock:
+            if self.closed:
+                raise WebSocketClosed("WebSocket is closed")
+
             try:
                 chunk, frame = await asyncio.wait_for(
                     self.loop.run_in_executor(None, self.curl.ws_recv), timeout
@@ -581,9 +582,10 @@ class AsyncWebSocket(BaseWebSocket):
                 raise WebSocketTimeout("WebSocket recv_fragment() timed out") from e
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
-                    code, message = self._close_code, self._close_reason = (
-                        self._unpack_close_frame(chunk)
-                    )
+                    code, message = (
+                        self._close_code,
+                        self._close_reason,
+                    ) = self._unpack_close_frame(chunk)
                 except WebSocketError as e:
                     # Follow the spec to close the connection
                     # Errors do not respect autoclose
@@ -606,30 +608,43 @@ class AsyncWebSocket(BaseWebSocket):
             timeout: how many seconds to wait before giving up.
         """
         loop = self.loop
-        chunks = []
-        flags = 0
 
-        sock_fd = await loop.run_in_executor(
-            None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
-        )
-        if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+        if self.closed:
+            raise WebSocketClosed("WebSocket is closed")
+
+        async def _inner_recv() -> tuple[bytes, int]:
+            chunks = []
+            flags = 0
+
+            sock_fd = await loop.run_in_executor(
+                None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
             )
-        while True:
-            try:
-                chunk, frame = await self.recv_fragment(timeout=timeout)
-                flags = frame.flags
-                chunks.append(chunk)
-                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                    break
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    await aselect(sock_fd, loop=loop, timeout=timeout)
-                else:
-                    raise
+            if sock_fd == CURL_SOCKET_BAD:
+                raise WebSocketError(
+                    "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+                )
 
-        return b"".join(chunks), flags
+            while True:
+                try:
+                    chunk, frame = await self.recv_fragment(timeout=timeout)
+                    flags = frame.flags
+                    chunks.append(chunk)
+                    if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                        break
+                except CurlError as e:
+                    if e.code == CurlECode.AGAIN:
+                        # We don't use the timeout here because it deadlocks if
+                        # the socket is closed while recv() is waiting
+                        await aselect(sock_fd, loop=loop, timeout=0.5)
+                    else:
+                        raise
+
+            return b"".join(chunks), flags
+
+        if timeout:
+            return await asyncio.wait_for(_inner_recv(), timeout=timeout)
+        else:
+            return await _inner_recv()
 
     async def recv_str(self, *, timeout: Optional[float] = None) -> str:
         """Receive a text frame.
@@ -663,15 +678,15 @@ class AsyncWebSocket(BaseWebSocket):
             payload: data to send.
             flags: flags for the frame.
         """
-        if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
-
         # curl expects bytes
         if isinstance(payload, str):
             payload = payload.encode()
 
-        # TODO: Why does concurrently sending fail
         async with self._send_lock:
+            # We must check the closed state after the last asyncio tick (i.e. the above async with call)
+            # as a race condition arises where the websocket is not yet closed until we're inside here
+            if self.closed:
+                raise WebSocketClosed("WebSocket is closed")
             return await self.loop.run_in_executor(
                 None, self.curl.ws_send, payload, flags
             )

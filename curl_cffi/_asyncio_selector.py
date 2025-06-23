@@ -209,8 +209,8 @@ class SelectorThread:
                     rs, _, _ = select.select([self._waker_r.fileno()], [], [], 0)
                     if rs:
                         ws = []
-                    else:
-                        raise
+                    # If we're here, the socket was probably closed
+                    # Do not re-raise
                 else:
                     raise
 
