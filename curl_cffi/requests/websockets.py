@@ -216,6 +216,35 @@ class WebSocket(BaseWebSocket):
                 if error_callback:
                     error_callback(self, e)
 
+    def _recv(self, fire_data_callback: bool = False) -> tuple[bytes, int]:
+        chunks = []
+        flags = 0
+
+        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        if sock_fd == CURL_SOCKET_BAD:
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            )
+        while True:
+            try:
+                # Try to receive the first fragment first
+                chunk, frame = self.recv_fragment()
+                if fire_data_callback:
+                    self._emit("data", chunk, frame)
+                flags = frame.flags
+                chunks.append(chunk)
+                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
+                    break
+            except CurlError as e:
+                if e.code == CurlECode.AGAIN:
+                    # According to https://curl.se/libcurl/c/curl_ws_recv.html
+                    # in real application: wait for socket here, e.g. using select()
+                    _, _, _ = select([sock_fd], [], [], 0.5)
+                else:
+                    raise
+
+        return b"".join(chunks), flags
+
     def connect(
         self,
         url: str,
@@ -352,32 +381,7 @@ class WebSocket(BaseWebSocket):
         libcurl splits frames into fragments, so we have to collect all the chunks for
         a frame.
         """
-        chunks = []
-        flags = 0
-
-        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
-        if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
-        while True:
-            try:
-                # Try to receive the first fragment first
-                chunk, frame = self.recv_fragment()
-                self._emit("data", chunk, frame)
-                flags = frame.flags
-                chunks.append(chunk)
-                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                    break
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    # According to https://curl.se/libcurl/c/curl_ws_recv.html
-                    # in real application: wait for socket here, e.g. using select()
-                    _, _, _ = select([sock_fd], [], [], 0.5)
-                else:
-                    raise
-
-        return b"".join(chunks), flags
+        return self._recv()
 
     def recv_str(self) -> str:
         """Receive a text frame."""
@@ -471,7 +475,7 @@ class WebSocket(BaseWebSocket):
         keep_running = True
         while keep_running:
             try:
-                msg, flags = self.recv()
+                msg, flags = self._recv(fire_data_callback=True)
 
                 # Avoid unnecessary computation
                 if "message" in self._emitters:
