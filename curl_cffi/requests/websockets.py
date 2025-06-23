@@ -139,9 +139,7 @@ class BaseWebSocket:
                     "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
                 ) from e
             else:
-                if code < 3000 and (
-                    code not in WsCloseCode._value2member_map_ or code == 1005
-                ):
+                if code < 3000 and (code not in WsCloseCode._value2member_map_ or code == 1005):
                     raise WebSocketError(
                         "Invalid close code", WsCloseCode.PROTOCOL_ERROR
                     )
@@ -586,10 +584,9 @@ class AsyncWebSocket(BaseWebSocket):
                 raise WebSocketTimeout("WebSocket recv_fragment() timed out") from e
             if frame.flags & CurlWsFlag.CLOSE:
                 try:
-                    code, message = (
-                        self._close_code,
-                        self._close_reason,
-                    ) = self._unpack_close_frame(chunk)
+                    code, message = self._close_code, self._close_reason = (
+                        self._unpack_close_frame(chunk)
+                    )
                 except WebSocketError as e:
                     # Follow the spec to close the connection
                     # Errors do not respect autoclose
