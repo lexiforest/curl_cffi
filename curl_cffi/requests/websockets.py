@@ -139,7 +139,9 @@ class BaseWebSocket:
                     "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
                 ) from e
             else:
-                if code < 3000 and (code not in WsCloseCode._value2member_map_ or code == 1005):
+                if code < 3000 and (
+                    code not in WsCloseCode._value2member_map_ or code == 1005
+                ):
                     raise WebSocketError(
                         "Invalid close code", WsCloseCode.PROTOCOL_ERROR
                     )
@@ -571,6 +573,8 @@ class AsyncWebSocket(BaseWebSocket):
             raise TypeError("Concurrent call to recv_fragment() is not allowed")
 
         async with self._recv_lock:
+            # We must check the closed state after the last asyncio tick (i.e. the above async with call)
+            # as a race condition arises where the websocket is not yet closed until we're inside here
             if self.closed:
                 raise WebSocketClosed("WebSocket is closed")
 
@@ -609,12 +613,14 @@ class AsyncWebSocket(BaseWebSocket):
         """
         loop = self.loop
 
-        if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
-
         async def _inner_recv() -> tuple[bytes, int]:
             chunks = []
             flags = 0
+
+            # We must check the closed state after the last asyncio tick (i.e. the above async with call)
+            # as a race condition arises where the websocket is not yet closed until we're inside here
+            if self.closed:
+                raise WebSocketClosed("WebSocket is closed")
 
             sock_fd = await loop.run_in_executor(
                 None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
