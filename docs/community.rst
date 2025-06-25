@@ -4,8 +4,9 @@ Community
 Scrapy integrations
 ------
 
-If you are using scrapy, check out these middlewares:
+If you are using scrapy, check out these download handlers:
 
+- [divtiply/scrapy-curl-cffi](https://github.com/divtiply/scrapy-curl-cffi)
 - [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint)
 - [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate)
 
