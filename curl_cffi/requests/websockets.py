@@ -80,11 +80,23 @@ class WebSocketTimeout(WebSocketError, Timeout):
 
 
 async def aselect(
-    fd, *, loop: asyncio.AbstractEventLoop, timeout: Optional[float] = None
+    fd,
+    mode: Literal["read", "write"] = "read",
+    *,
+    loop: asyncio.AbstractEventLoop,
+    timeout: Optional[float] = None,
 ) -> bool:
     future = loop.create_future()
-    loop.add_reader(fd, future.set_result, None)
-    future.add_done_callback(lambda _: loop.remove_reader(fd))
+
+    if mode == "read":
+        loop.add_reader(fd, future.set_result, None)
+        future.add_done_callback(lambda _: loop.remove_reader(fd))
+    elif mode == "write":
+        loop.add_writer(fd, future.set_result, None)
+        future.add_done_callback(lambda _: loop.remove_writer(fd))
+    else:
+        raise ValueError(f"Invalid mode: {mode}. Must be 'read' or 'write'")
+
     try:
         await asyncio.wait_for(future, timeout)
     except asyncio.TimeoutError:
@@ -407,7 +419,32 @@ class WebSocket(BaseWebSocket):
         # curl expects bytes
         if isinstance(payload, str):
             payload = payload.encode()
-        return self.curl.ws_send(payload, flags)
+
+        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        if sock_fd == CURL_SOCKET_BAD:
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            )
+
+        # Loop checks for CurlECode.Again
+        # https://curl.se/libcurl/c/curl_ws_send.html
+        offset = 0
+        while offset < len(payload):
+            current_buffer = payload[offset:]
+
+            try:
+                n_sent = self.curl.ws_send(current_buffer, flags)
+            except CurlError as e:
+                if e.code == CurlECode.AGAIN:
+                    _, writeable, _ = select([], [sock_fd], [], 0.5)
+                    if not writeable:
+                        raise WebSocketError("Socket write timeout") from e
+                    continue
+                raise
+
+            offset += n_sent
+
+        return offset
 
     def send_binary(self, payload: bytes):
         """Send a binary frame.
@@ -670,11 +707,39 @@ class AsyncWebSocket(BaseWebSocket):
         if isinstance(payload, str):
             payload = payload.encode()
 
-        # TODO: Why does concurrently sending fail
-        async with self._send_lock:
-            return await self.loop.run_in_executor(
-                None, self.curl.ws_send, payload, flags
+        sock_fd = await self.loop.run_in_executor(
+            None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
+        )
+        if sock_fd == CURL_SOCKET_BAD:
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
             )
+
+        # Loop checks for CurlECode.Again
+        # https://curl.se/libcurl/c/curl_ws_send.html
+        offset = 0
+        while offset < len(payload):
+            current_buffer = payload[offset:]
+
+            try:
+                # TODO: Why does concurrently sending fail
+                async with self._send_lock:
+                    n_sent = await self.loop.run_in_executor(
+                        None, self.curl.ws_send, current_buffer, flags
+                    )
+            except CurlError as e:
+                if e.code == CurlECode.AGAIN:
+                    writeable = await aselect(
+                        sock_fd, mode="write", loop=self.loop, timeout=0.5
+                    )
+                    if not writeable:
+                        raise WebSocketError("Socket write timeout") from e
+                    continue
+                raise
+
+            offset += n_sent
+
+        return offset
 
     async def send_binary(self, payload: bytes):
         """Send a binary frame.
