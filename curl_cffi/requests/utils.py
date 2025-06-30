@@ -330,6 +330,8 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.TLS_DELEGATED_CREDENTIALS, fp.tls_delegated_credential)
     if fp.tls_record_size_limit:
         curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fp.tls_record_size_limit)
+    if fp.http2_no_priority:
+        curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, fp.http2_no_priority)
 
 
 def set_curl_options(

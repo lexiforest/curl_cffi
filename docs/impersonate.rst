@@ -87,6 +87,8 @@ to specify your own customized fingerprints. See below for details.
 - safari180_ios :sup:`4`
 - safari184 :sup:`7`
 - safari184_ios :sup:`7`
+- safari260 :sup:`8`
+- safari260_ios :sup:`8`
 - firefox133 :sup:`5`
 - tor145 :sup:`7`
 
@@ -99,6 +101,7 @@ Notes:
 5. Added in version ``0.9.0``.
 6. The version postfix ``-a``(e.g. ``chrome133a``) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 7. Added in version ``0.11.0``
+8. Added in version ``0.12.0``
 
 Which target version to use?
 ----------------------------

@@ -314,6 +314,7 @@ class CurlOpt(IntEnum):
     ECH = 10000 + 325
     TCP_KEEPCNT = 0 + 326
     UPLOAD_FLAGS = 0 + 327
+    SSL_SIGNATURE_ALGORITHMS = 10000 + 328
     HTTPBASEHEADER = 10000 + 1000
     SSL_SIG_HASH_ALGS = 10000 + 1001
     SSL_ENABLE_ALPS = 0 + 1002
@@ -334,7 +335,7 @@ class CurlOpt(IntEnum):
     TLS_RECORD_SIZE_LIMIT = 0 + 1018
     TLS_KEY_SHARES_LIMIT = 0 + 1019
     TLS_USE_NEW_ALPS_CODEPOINT = 0 + 1020
-    TLS_USE_FIREFOX_TLS13_CIPHERS = 0 + 1021
+    HTTP2_NO_PRIORITY = 0 + 1021
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -609,3 +610,4 @@ class CurlIpResolve(IntEnum):
     WHATEVER = 0  # default, uses addresses to all IP versions that your system allows
     V4 = 1  # uses only IPv4 addresses/connections
     V6 = 2  # uses only IPv6 addresses/connections
+

@@ -36,6 +36,8 @@ BrowserTypeLiteral = Literal[
     "safari180_ios",
     "safari184",
     "safari184_ios",
+    "safari260",
+    "safari260_ios",
     # Firefox
     "firefox133",
     "firefox135",
@@ -45,6 +47,8 @@ BrowserTypeLiteral = Literal[
     "edge",
     "safari",
     "safari_ios",
+    "safari_beta",
+    "safari_ios_beta",
     "chrome_android",
     "firefox",
     # deprecated aliases
@@ -72,6 +76,8 @@ DEFAULT_CHROME = "chrome136"
 DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari184"
 DEFAULT_SAFARI_IOS = "safari184_ios"
+DEFAULT_SAFARI_BETA = "safari260"
+DEFAULT_SAFARI_IOS_BETA = "safari260_ios"
 DEFAULT_CHROME_ANDROID = "chrome131_android"
 DEFAULT_FIREFOX = "firefox135"
 DEFAULT_TOR = "tor145"
@@ -82,6 +88,8 @@ REAL_TARGET_MAP = {
     "edge": "edge101",
     "safari": "safari184",
     "safari_ios": "safari184_ios",
+    "safari_beta": "safari260",
+    "safari_ios_beta": "safari260_ios",
     "chrome_android": "chrome131_android",
     "firefox": "firefox135",
     "tor": "tor145",
@@ -97,6 +105,10 @@ def normalize_browser_type(item):
         return DEFAULT_SAFARI
     elif item == "safari_ios":
         return DEFAULT_SAFARI_IOS
+    elif item == "safari_beta":
+        return DEFAULT_SAFARI_BETA
+    elif item == "safari_ios_beta":
+        return DEFAULT_SAFARI_IOS_BETA
     elif item == "chrome_android":
         return DEFAULT_CHROME_ANDROID
     elif item == "firefox":
@@ -126,15 +138,27 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     chrome136 = "chrome136"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
+    safari153 = "safari153"
+    safari155 = "safari155"
+    safari170 = "safari170"
+    safari172_ios = "safari172_ios"
+    safari180 = "safari180"
+    safari180_ios = "safari180_ios"
+    safari184 = "safari184"
+    safari184_ios = "safari184_ios"
+    safari260 = "safari260"
+    safari260_ios = "safari260_ios"
+    firefox133 = "firefox133"
+    firefox135 = "firefox135"
+    tor145 = "tor145"
+
+    # deprecated aliases
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
     safari17_0 = "safari17_0"
     safari17_2_ios = "safari17_2_ios"
     safari18_0 = "safari18_0"
     safari18_0_ios = "safari18_0_ios"
-    firefox133 = "firefox133"
-    firefox135 = "firefox135"
-    tor145 = "tor145"
 
 
 @dataclass
@@ -148,6 +172,7 @@ class ExtraFingerprints:
     tls_record_size_limit: int = 0
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
+    http2_no_priority: bool = False
 
 
 class ExtraFpDict(TypedDict, total=False):
@@ -160,6 +185,7 @@ class ExtraFpDict(TypedDict, total=False):
     tls_record_size_limit: int
     http2_stream_weight: int
     http2_stream_exclusive: int
+    http2_no_priority: bool
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
