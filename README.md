@@ -42,13 +42,14 @@ to register: https://yescaptcha.com/i/stfnIO
 
 ### Easy Captcha Bypass for Scraping
 
-<a href="https://www.capsolver.com/?utm_source=github&utm_medium=banner_repo&utm_campaign=scraping&utm_term=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg" alt="CapSolver" height="50" width="178"></a>
+<a href="https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg" alt="CapSolver" height="50" width="178"></a>
 
-[CapSolver](https://www.capsolver.com/?utm_source=github&utm_medium=banner_repo&utm_campaign=scraping&utm_term=curl_cffi)
+[CapSolver](https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC)
 is an AI-powered tool that easily bypasses Captchas, allowing uninterrupted access to
 public data. It supports a variety of Captchas and works seamlessly with `curl_cffi`,
 Puppeteer, Playwright, and more. Fast, reliable, and cost-effective. Plus, `curl_cffi`
-users can use the code **"CURL"** to get an extra 6% balance! and register [here](https://dashboard.capsolver.com/passport/?utm_source=github&utm_medium=banner_repo&utm_campaign=scraping&utm_term=curl_cffi).
+users can use the code **"CURL"** to get an extra 6% balance! and register
+[here](https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC).
 
 ------
 

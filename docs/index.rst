@@ -9,10 +9,10 @@ curl_cffi's documentation
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   :glob:
 
-   install
    quick_start
-   impersonate
+   impersonate/_index
    advanced
    vs-requests
    cookies
@@ -71,13 +71,14 @@ Easy Captcha Bypass for Scraping
 .. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg
    :width: 170
    :alt: Capsolver
-   :target: https://www.capsolver.com/?utm_source=github&utm_medium=banner_repo&utm_campaign=scraping&utm_term=curl_cffi
+   :target: https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC
 
-`CapSolver <https://www.capsolver.com/?utm_source=github&utm_medium=banner_repo&utm_campaign=scraping&utm_term=curl_cffi>`_
+`CapSolver <https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC>`_
 is an AI-powered tool that easily bypasses Captchas, allowing uninterrupted access to
 public data. It supports a variety of Captchas and works seamlessly with ``curl_cffi``,
 Puppeteer, Playwright, and more. Fast, reliable, and cost-effective. Plus, ``curl_cffi``
-users can use the code **"CURL"** to get an extra 6% balance! and register `here <https://dashboard.capsolver.com/passport/?utm_source=github&utm_medium=banner_repo&utm_campaign=scraping&utm_term=curl_cffi>`_
+users can use the code **"CURL"** to get an extra 6% balance! and register 
+`here <https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC>`_
 
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
@@ -159,7 +160,7 @@ Install
 
     pip install curl_cffi --upgrade
 
-For more details, see :doc:`install`.
+For more details, see :doc:`quick_start`.
 
 Documentation
 -------------
