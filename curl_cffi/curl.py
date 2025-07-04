@@ -463,7 +463,7 @@ class Curl:
         """
         n_sent = ffi.new("size_t *")
         buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(buffer), n_sent, 0, flags)
+        ret = lib.curl_ws_send(self._curl, buffer, len(payload), n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
         return n_sent[0]
 
