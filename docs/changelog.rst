@@ -3,6 +3,9 @@ Change Log
 
 Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
 
+- v0.12
+    - Added support for safari 26
+    - Improved support for websockets
 
 - v0.11
     - Added support for http3
