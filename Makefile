@@ -2,7 +2,7 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 1.1.0
+VERSION := 1.1.1
 CURL_VERSION := curl-8_14_1
 
 $(CURL_VERSION):

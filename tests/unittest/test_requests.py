@@ -296,6 +296,12 @@ def test_expect_header_omitted(server):
     assert "Expect" not in headers
 
 
+def test_accept_header_not_added(server):
+    r = requests.get(str(server.url.copy_with(path="/echo_headers")))
+    headers = r.json()
+    assert "Accept" not in headers
+
+
 def test_charset_parse(server):
     r = requests.get(str(server.url.copy_with(path="/gbk")))
     assert r.encoding == "gbk"
