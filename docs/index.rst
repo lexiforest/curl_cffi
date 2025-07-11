@@ -151,7 +151,7 @@ Features
 Notes:
 
 1. For pycurl, you need a http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
-2. Since v0.11.0. However, only Linux and macOS are supported, Windows is not supported due to failed building of ngtcp2.
+2. Since v0.11.4.
 
 Install
 -------
