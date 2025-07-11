@@ -13,6 +13,7 @@ __all__ = [
     "config_warnings",
     "ffi",
     "is_pro",
+    "enable_pro",
     "lib",
     "Session",
     "AsyncSession",
@@ -91,6 +92,6 @@ from .requests import (
     request,
 )
 
-from .utils import config_warnings, is_pro
+from .utils import config_warnings, is_pro, enable_pro
 
 config_warnings(on=False)

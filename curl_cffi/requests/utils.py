@@ -20,8 +20,8 @@ from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
+from .cipher import cipher_name
 from .impersonate import (
-    TLS_CIPHER_NAME_MAP,
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
     ExtraFingerprints,
@@ -256,7 +256,7 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     cipher_names = []
     for cipher in ciphers.split("-"):
         cipher_id = int(cipher)
-        cipher_name = TLS_CIPHER_NAME_MAP.get(cipher_id)
+        cipher_name = cipher_name.get(cipher_id)
         if not cipher_name:
             raise ImpersonateError(f"Cipher {hex(cipher_id)} is not found")
         cipher_names.append(cipher_name)

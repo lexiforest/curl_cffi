@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Optional, TypedDict
 
+from pydantic import BaseModel
+
 from ..const import CurlOpt, CurlSslVersion
 from ..utils import CurlCffiWarning
 
@@ -203,7 +205,7 @@ TLS_VERSION_MAP = {
     0x0304: CurlSslVersion.TLSv1_3,  # 772
 }
 
-# A list of the possible cipher suite ids. Taken from
+
 # http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 # via BoringSSL
 TLS_CIPHER_NAME_MAP = {
@@ -245,7 +247,6 @@ TLS_CIPHER_NAME_MAP = {
     0xCCA9: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
     0xCCAC: "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256",
 }
-
 
 # RFC tls extensions: https://datatracker.ietf.org/doc/html/rfc6066
 # IANA list: https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
@@ -357,6 +358,8 @@ TLS_EXTENSION_NAME_MAP = {
 }
 
 
+
+
 TLS_EC_CURVES_MAP = {
     19: "P-192",
     21: "P-224",
@@ -432,10 +435,47 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     elif extension_id == 21:
         pass  # type: ignore
     # firefox extension, toggled by extra_fp
-    elif extension_id in [34, 28]:
+    elif extension_id in (34, 28):
         pass
     else:
         raise NotImplementedError(
             f"This extension({extension_id}) can not be toggled for now, it may be "
             "updated later."
         )
+
+
+class ProfileVersion(Enum):
+    v1 = 1
+    v2 = 2
+
+
+class Profile(BaseModel):
+    version: ProfileVersion
+    target: str
+    http_version: int
+    ssl_version: int
+    ciphers: list[str]
+    curves: list[str]
+    signature_hashes: list[str]
+    npn: bool
+    alpn: bool
+    alps: bool
+    cert_compression: list[str]
+    tls_session_ticket: bool
+    tls_extension_order: list[int]
+    tls_delegated_credentials: list[str]
+    tls_record_size_limit: int
+    tls_grease: bool
+    tls_use_new_alps_codepoint: bool
+    tls_signed_cert_timestamps: bool
+    ech: Optional[str]
+
+    http2_settings: str
+    http2_window_update: int
+    http2_pseudo_headers_order: str
+    http2_stream_weight: int
+    http2_stream_exclusive: int
+    http2_no_priority: bool
+
+    http3_settings: str
+
