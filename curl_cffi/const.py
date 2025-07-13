@@ -611,4 +611,3 @@ class CurlIpResolve(IntEnum):
     WHATEVER = 0  # default, uses addresses to all IP versions that your system allows
     V4 = 1  # uses only IPv4 addresses/connections
     V6 = 2  # uses only IPv6 addresses/connections
-

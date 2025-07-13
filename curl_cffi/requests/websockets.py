@@ -152,7 +152,9 @@ class BaseWebSocket:
                 ) from e
             else:
                 # TODO use constants instead of magic numbers
-                if code < 3000 and (code not in WsCloseCode._value2member_map_ or code == 1005):
+                if code < 3000 and (
+                    code not in WsCloseCode._value2member_map_ or code == 1005
+                ):
                     raise WebSocketError(
                         "Invalid close code", WsCloseCode.PROTOCOL_ERROR
                     )
