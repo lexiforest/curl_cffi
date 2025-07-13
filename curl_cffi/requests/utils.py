@@ -536,6 +536,12 @@ def set_curl_options(
         proxies = base_proxies
 
     if proxies:
+        # Turn on proxy_credential_no_reuse, which has the following benefits:
+        # 1. New connection will be made when proxy username changed
+        # 2. New TLS session will be created based on proxy address, i.e. when accessing
+        #    the same site with different proxies, the TLS session won't leak previous IP.
+        c.setopt(CurlOpt.PROXY_CREDETIAL_NO_REUSE, 1)
+
         parts = urlparse(url)
         proxy = cast(Optional[str], proxies.get(parts.scheme, proxies.get("all")))
         if parts.hostname:
@@ -568,6 +574,7 @@ def set_curl_options(
                 username, password = proxy_auth
                 c.setopt(CurlOpt.PROXYUSERNAME, username.encode())
                 c.setopt(CurlOpt.PROXYPASSWORD, password.encode())
+
 
     # verify
     base_verify, verify = verify_list
