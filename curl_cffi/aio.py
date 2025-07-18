@@ -3,7 +3,7 @@ import sys
 import warnings
 from contextlib import suppress
 from typing import Any, Optional
-from weakref import WeakKeyDictionary, WeakSet
+from weakref import WeakKeyDictionary
 
 from ._wrapper import ffi, lib
 from .const import CurlMOpt
@@ -94,17 +94,26 @@ libcurl provides an event-based system for multiple handles with:
 
 There are 2 callbacks:
 
-- socket_callback, set by CURLMOPT_SOCKETFUNCTION, will be called when socket events happen.
-- timer_callback, set by CURLMOPT_TIMERFUNCTION, will be called when timeouts happen.
+- socket_function, set by CURLMOPT_SOCKETFUNCTION, will be called when socket events happen.
+- timer_function, set by CURLMOPT_TIMERFUNCTION, will be called when timeouts happen.
 
-If there are data in/out, libcurl calls the socket_callback, and it sets up `process_data`
-as asyncio loop reader/writer function.
+And it works like the following:
 
+Set up handles, callbacks first.
+
+When started, curl_multi_socket_action should be called to start everything.
+
+If there are data in/out, libcurl calls the socket_function callback, and it sets up
+`process_data` as asyncio loop reader/writer function. `process_data` will call
+curl_multi_info_read to determine whether a certain `await perform` has finished.
+
+When idle, libcurl will call the timer_function callback, which sets up a later call
+for socket_action to detect events.
 """
 
 
 @ffi.def_extern()
-def timer_callback(curlm, timeout_ms: int, clientp: Any) -> int:
+def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
     """
     see: https://curl.se/libcurl/c/CURLMOPT_TIMERFUNCTION.html
     """
@@ -128,7 +137,7 @@ def timer_callback(curlm, timeout_ms: int, clientp: Any) -> int:
 
 
 @ffi.def_extern()
-def socket_callback(curl, sockfd: int, what: int, clientp: Any, data: Any) -> int:
+def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any) -> int:
     """This callback is called when libcurl decides it's time to interact with certain
     sockets"""
 
@@ -180,8 +189,8 @@ class AsyncCurl:
         self._setup()
 
     def _setup(self):
-        self.setopt(CurlMOpt.TIMERFUNCTION, lib.timer_callback)
-        self.setopt(CurlMOpt.SOCKETFUNCTION, lib.socket_callback)
+        self.setopt(CurlMOpt.TIMERFUNCTION, lib.timer_function)
+        self.setopt(CurlMOpt.SOCKETFUNCTION, lib.socket_function)
         self._self_handle = ffi.new_handle(self)
         self.setopt(CurlMOpt.SOCKETDATA, self._self_handle)
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
