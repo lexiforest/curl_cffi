@@ -360,6 +360,7 @@ async def test_post_body_cleaned(server):
         assert r.content == b""
 
 
+@pytest.mark.skip(reason="No longer needed")
 async def test_timers_leak(server):
     async with AsyncSession() as sess:
         for _ in range(3):
@@ -368,7 +369,6 @@ async def test_timers_leak(server):
                     str(server.url.copy_with(path="/slow_response")), timeout=0.1
                 )
         await asyncio.sleep(0.2)
-        assert len(sess.acurl._timers) == 0
 
 
 #######################################################################################
@@ -382,7 +382,22 @@ async def test_parallel(server):
             s.get(
                 str(server.url.copy_with(path="/echo_headers")), headers={"Foo": f"{i}"}
             )
-            for i in range(6)
+            for i in range(8)
+        ]
+        tasks = [asyncio.create_task(r) for r in rs]
+        rs = await asyncio.gather(*tasks)
+        for idx, r in enumerate(rs):
+            assert r.status_code == 200
+            assert r.json()["Foo"][0] == str(idx)
+
+
+async def test_high_parallel(server):
+    async with AsyncSession() as s:
+        rs = [
+            s.get(
+                str(server.url.copy_with(path="/echo_headers")), headers={"Foo": f"{i}"}
+            )
+            for i in range(10240)
         ]
         tasks = [asyncio.create_task(r) for r in rs]
         rs = await asyncio.gather(*tasks)

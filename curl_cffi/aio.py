@@ -85,12 +85,10 @@ CURLMSG_DONE = 1
 
 
 """
-General notes on the implementation
+libcurl provides an event-based system for multiple handles with the following API:
 
-libcurl provides an event-based system for multiple handles with:
-
-- curl_multi_socket_action
-- curl_multi_info_read
+- curl_multi_socket_action, 
+- curl_multi_info_read, for reading the transfer status
 
 There are 2 callbacks:
 
@@ -122,13 +120,13 @@ def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
     # Cancel the timer anyway, if it's -1, yes, libcurl says it should be cancelled.
     # If not, to add a new timer, we need to cancel the old timer.
     if async_curl._timer:
-        async_curl._timer.cancel()
+        async_curl._timer.cancel()  # If already called, cancel does nothing.
         async_curl._timer = None
 
     # libcurl says to install a timer which calls socket_action on fire.
     async_curl._timer = async_curl.loop.call_later(
         timeout_ms / 1000,
-        async_curl.socket_action,
+        async_curl.process_data,
         CURL_SOCKET_TIMEOUT,  # -1
         CURL_POLL_NONE,  # 0
     )
@@ -228,7 +226,7 @@ class AsyncCurl:
             if not self._curlm:
                 break
             self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.1)
 
     def add_handle(self, curl: Curl):
         """Add a curl handle to be managed by curl_multi. This is the equivalent of
@@ -257,6 +255,8 @@ class AsyncCurl:
                 stacklevel=2,
             )
             return
+
+        self.socket_action(sockfd, ev_bitmask)
 
         msg_in_queue = ffi.new("int *")
         while True:
