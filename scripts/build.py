@@ -154,6 +154,7 @@ ffibuilder.set_source(
     include_dirs=[
         str(root_dir / "include"),
         str(root_dir / "ffi"),
+        str(Path(arch["libdir"]) / "include"),
     ],
     sources=[
         str(root_dir / "ffi/shim.c"),
