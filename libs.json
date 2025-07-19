@@ -18,13 +18,13 @@
         "so_arch": "i686"
     },
     {
-    "system": "Windows",
-    "machine": "ARM64",
-    "pointer_size": 64,
-    "libdir": "./libarm64",
-    "sysname": "win32",
-    "so_name": "libcurl.dll",
-    "so_arch": "arm64"
+        "system": "Windows",
+        "machine": "ARM64",
+        "pointer_size": 64,
+        "libdir": "./libarm64",
+        "sysname": "win32",
+        "so_name": "libcurl.dll",
+        "so_arch": "arm64"
     },
     {
         "system": "Darwin",
