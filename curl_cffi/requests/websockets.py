@@ -718,29 +718,30 @@ class AsyncWebSocket(BaseWebSocket):
                 "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
             )
 
-        # Loop checks for CurlECode.Again
-        # https://curl.se/libcurl/c/curl_ws_send.html
-        offset = 0
-        while offset < len(payload):
-            current_buffer = payload[offset:]
+        # TODO: Why does concurrently sending fail
+        async with self._send_lock:
+            offset = 0
 
-            try:
-                # TODO: Why does concurrently sending fail
-                async with self._send_lock:
+            # Loop checks for CurlECode.Again
+            # https://curl.se/libcurl/c/curl_ws_send.html
+            while offset < len(payload):
+                current_buffer = payload[offset:]
+
+                try:
                     n_sent = await self.loop.run_in_executor(
                         None, self.curl.ws_send, current_buffer, flags
                     )
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    writeable = await aselect(
-                        sock_fd, mode="write", loop=self.loop, timeout=0.5
-                    )
-                    if not writeable:
-                        raise WebSocketError("Socket write timeout") from e
-                    continue
-                raise
+                except CurlError as e:
+                    if e.code == CurlECode.AGAIN:
+                        writeable = await aselect(
+                            sock_fd, mode="write", loop=self.loop, timeout=0.5
+                        )
+                        if not writeable:
+                            raise WebSocketError("Socket write timeout") from e
+                        continue
+                    raise
 
-            offset += n_sent
+                offset += n_sent
 
         return offset
 
