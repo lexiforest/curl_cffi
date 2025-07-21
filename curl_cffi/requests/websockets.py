@@ -521,9 +521,16 @@ class WebSocket(BaseWebSocket):
 
                 # Avoid unnecessary computation
                 if "message" in self._emitters:
+                    # Concatenate collected chunks with the final message
+                    if chunks:
+                        full_message = b"".join(chunks) + msg
+                        chunks.clear()  # Reset chunks for next message
+                    else:
+                        full_message = msg
+                    
                     if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                         try:
-                            msg = msg.decode()  # type: ignore
+                            full_message = full_message.decode()  # type: ignore
                         except UnicodeDecodeError as e:
                             self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)
@@ -531,7 +538,7 @@ class WebSocket(BaseWebSocket):
                                 "Invalid UTF-8", WsCloseCode.INVALID_DATA
                             ) from e
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
-                        self._emit("message", msg)
+                        self._emit("message", full_message)
                 if flags & CurlWsFlag.CLOSE:
                     keep_running = False
                     self._emit("close", self._close_code or 0, self._close_reason or "")
