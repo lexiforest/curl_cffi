@@ -137,7 +137,3 @@ jobs:
         files: |
           ./dist/*.whl
           ./dist/*.tar.gz
-      with:
-        files: |
-          ./dist/*.whl
-          ./dist/*.tar.gz
