@@ -6,7 +6,7 @@ from typing import Any, Optional
 from weakref import WeakKeyDictionary
 
 from ._wrapper import ffi, lib
-from .const import CurlMOpt
+from .const import CurlMOpt, CurlOpt
 from .curl import DEFAULT_CACERT, Curl
 from .utils import CurlCffiWarning
 
@@ -83,11 +83,15 @@ CURL_CSELECT_ERR = 0x04
 
 CURLMSG_DONE = 1
 
+CURLPIPE_NOTHING = 0
+CURLPIPE_HTTP1 = 1  # deprecated
+CURLPIPE_MULTIPLEX = 2
+
 
 """
 libcurl provides an event-based system for multiple handles with the following API:
 
-- curl_multi_socket_action, 
+- curl_multi_socket_action, for detecting events
 - curl_multi_info_read, for reading the transfer status
 
 There are 2 callbacks:
@@ -192,7 +196,7 @@ class AsyncCurl:
         self._self_handle = ffi.new_handle(self)
         self.setopt(CurlMOpt.SOCKETDATA, self._self_handle)
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
-        # self.setopt(CurlMOpt.PIPELINING, 0)
+        # self.setopt(CurlMOpt.PIPELINING, CURLPIPE_NOTHING)
 
     async def close(self):
         """Close and cleanup running timers, readers, writers and handles."""
@@ -222,6 +226,8 @@ class AsyncCurl:
             self._timer.cancel()
 
     async def _force_timeout(self):
+        """This coroutine is used to safeguard from any missing signals from curl, and
+        put everything back on track"""
         while True:
             if not self._curlm:
                 break
@@ -233,6 +239,7 @@ class AsyncCurl:
         `perform` in the async world."""
 
         curl._ensure_cacert()
+        # curl.setopt(CurlOpt.PIPEWAIT, 1)
         lib.curl_multi_add_handle(self._curlm, curl._curl)
         future = self.loop.create_future()
         self._curl2future[curl] = future
@@ -299,4 +306,15 @@ class AsyncCurl:
 
     def setopt(self, option, value):
         """Wrapper around curl_multi_setopt."""
-        return lib.curl_multi_setopt(self._curlm, option, value)
+        if option in (
+                CurlMOpt.PIPELINING,
+                CurlMOpt.MAXCONNECTS,
+                CurlMOpt.MAX_HOST_CONNECTIONS,
+                CurlMOpt.MAX_PIPELINE_LENGTH,
+                CurlMOpt.MAX_TOTAL_CONNECTIONS,
+                CurlMOpt.MAX_CONCURRENT_STREAMS,
+                ):
+            c_value = ffi.new("long*", value)
+        else:
+            c_value = value
+        return lib.curl_multi_setopt(self._curlm, option, c_value)

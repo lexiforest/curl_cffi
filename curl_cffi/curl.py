@@ -60,7 +60,8 @@ def debug_function_default(type_: int, text: bytes) -> None:
     if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
         print("SSL OUT", text)
     elif type_ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
-        print(text.decode("utf-8", "replace"))
+        # print(text.decode("utf-8", "replace"))
+        pass
     else:
         print(text.decode(), end="")
 
@@ -168,7 +169,7 @@ class Curl:
     def setopt(self, option: CurlOpt, value: Any) -> int:
         """Wrapper for ``curl_easy_setopt``.
 
-        Parameters:
+        Args:
             option: option to set, using constants from CurlOpt enum
             value: value to set, strings will be handled automatically
 
