@@ -49,8 +49,8 @@ const char *curl_multi_strerror(int code);
 struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 
 // multi callbacks
-extern "Python" void socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
-extern "Python" void timer_function(void *curlm, int timeout_ms, void *clientp);
+extern "Python" int socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
+extern "Python" int timer_function(void *curlm, int timeout_ms, void *clientp);
 
 // websocket
 struct curl_ws_frame {
