@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import struct
+import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -56,14 +57,33 @@ def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     return 0
 
 
-def debug_function_default(type_: int, text: bytes) -> None:
+def debug_function_default(type_: int, data: bytes) -> None:
+    PREFIXES = {
+        CURLINFO_TEXT:          "== Info",
+        CURLINFO_HEADER_IN:     "<< Recv header",
+        CURLINFO_HEADER_OUT:    ">> Send header",
+        CURLINFO_DATA_IN:       "<< Recv data",
+        CURLINFO_DATA_OUT:      ">> Send data",
+        CURLINFO_SSL_DATA_IN:   "<< Recv SSL",
+        CURLINFO_SSL_DATA_OUT:  ">> Send SSL",
+    }
+    prefix = PREFIXES.get(type_, "== Unknown")
     if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
-        print("SSL OUT", text)
-    elif type_ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
-        # print(text.decode("utf-8", "replace"))
-        pass
+        hex_str = data[:80].hex()
+        sys.stderr.write(f"{prefix} [{len(data)} bytes] (non-text, first 80 bytes hex): {hex_str}...\n")
     else:
-        print(text.decode(), end="")
+        try:
+            text = data.decode('utf-8')
+            if type_ in (CURLINFO_HEADER_OUT,):
+                sys.stderr.write(f"{prefix} [{len(data)} bytes]\n{text}")
+            else:
+                sys.stderr.write(f"{prefix} [{len(data)} bytes] | {text}")
+            if type_ not in (CURLINFO_TEXT, CURLINFO_HEADER_IN, CURLINFO_HEADER_OUT):
+                sys.stderr.write("\n")
+        except UnicodeDecodeError:
+            # Fallback to hex representation of first 80 bytes
+            hex_str = data[:80].hex()
+            # sys.stderr.write(f"{prefix} [{len(data)} bytes] (non-text, first 80 bytes hex):\n{hex_str}...\n")
 
 
 @ffi.def_extern()

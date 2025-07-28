@@ -237,6 +237,7 @@ class AsyncCurl:
     def add_handle(self, curl: Curl):
         """Add a curl handle to be managed by curl_multi. This is the equivalent of
         `perform` in the async world."""
+        # print(f"Using handle {curl}")
 
         curl._ensure_cacert()
         # curl.setopt(CurlOpt.PIPEWAIT, 1)
@@ -288,6 +289,7 @@ class AsyncCurl:
 
     def remove_handle(self, curl: Curl):
         """Cancel a future for given curl handle."""
+        # curl.reset()
         future = self._pop_future(curl)
         if future and not future.done() and not future.cancelled():
             future.cancel()
