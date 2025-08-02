@@ -57,33 +57,44 @@ def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     return 0
 
 
+def bytes_to_hex(b: bytes, uppercase: bool = False) -> str:
+    """
+    Convert a bytes object to a space-separated hex string, e.g. "0a ff 3c".
+    If uppercase=True, letters will be A–F instead of a–f.
+    """
+    fmt = "{:02X}" if uppercase else "{:02x}"
+    return " ".join(fmt.format(byte) for byte in b)
+
+
 def debug_function_default(type_: int, data: bytes) -> None:
     PREFIXES = {
-        CURLINFO_TEXT:          "== Info",
-        CURLINFO_HEADER_IN:     "<< Recv header",
-        CURLINFO_HEADER_OUT:    ">> Send header",
-        CURLINFO_DATA_IN:       "<< Recv data",
-        CURLINFO_DATA_OUT:      ">> Send data",
-        CURLINFO_SSL_DATA_IN:   "<< Recv SSL",
-        CURLINFO_SSL_DATA_OUT:  ">> Send SSL",
+        CURLINFO_TEXT:          "*",
+        CURLINFO_HEADER_IN:     "<",
+        CURLINFO_HEADER_OUT:    ">",
+        CURLINFO_DATA_IN:       "< DATA",
+        CURLINFO_DATA_OUT:      "> DATA",
+        CURLINFO_SSL_DATA_IN:   "< SSL",
+        CURLINFO_SSL_DATA_OUT:  "> SSL",
     }
-    prefix = PREFIXES.get(type_, "== Unknown")
+    MAX_SHOW_BYTES = 40
+    prefix = PREFIXES.get(type_, "*")
+
+    # always show ssl data in binary format
     if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
-        hex_str = data[:80].hex()
-        sys.stderr.write(f"{prefix} [{len(data)} bytes] (non-text, first 80 bytes hex): {hex_str}...\n")
+        hex_str = bytes_to_hex(data[:MAX_SHOW_BYTES])
+        postfix = "" if len(data) <= MAX_SHOW_BYTES else "..."
+        sys.stderr.write(f"{prefix} [{len(data)} bytes]: {hex_str}{postfix}\n")
     else:
         try:
-            text = data.decode('utf-8')
-            if type_ in (CURLINFO_HEADER_OUT,):
-                sys.stderr.write(f"{prefix} [{len(data)} bytes]\n{text}")
-            else:
-                sys.stderr.write(f"{prefix} [{len(data)} bytes] | {text}")
+            text = data.decode("utf-8")
+            sys.stderr.write(f"{prefix} {text}")
             if type_ not in (CURLINFO_TEXT, CURLINFO_HEADER_IN, CURLINFO_HEADER_OUT):
                 sys.stderr.write("\n")
         except UnicodeDecodeError:
-            # Fallback to hex representation of first 80 bytes
-            hex_str = data[:80].hex()
-            # sys.stderr.write(f"{prefix} [{len(data)} bytes] (non-text, first 80 bytes hex):\n{hex_str}...\n")
+            # Fallback to hex representation of first MAX_SHOW_BYTES bytes
+            hex_str = bytes_to_hex(data[:MAX_SHOW_BYTES])
+            postfix = "" if len(data) <= MAX_SHOW_BYTES else "..."
+            sys.stderr.write(f"{prefix} [{len(data)} bytes]: {hex_str}{postfix}\n")
 
 
 @ffi.def_extern()
