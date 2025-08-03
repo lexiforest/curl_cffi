@@ -527,7 +527,7 @@ class WebSocket(BaseWebSocket):
                         chunks.clear()  # Reset chunks for next message
                     else:
                         full_message = msg
-                    
+
                     if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                         try:
                             full_message = full_message.decode()  # type: ignore

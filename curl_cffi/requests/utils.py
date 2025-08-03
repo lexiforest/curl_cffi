@@ -48,6 +48,7 @@ SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 not_set: Final[Any] = object()
 
 
+# ruff: noqa: SIM116
 def normalize_http_version(
     version: Union[CurlHttpVersion, HttpVersionLiteral],
 ) -> CurlHttpVersion:
@@ -536,11 +537,10 @@ def set_curl_options(
         proxies = base_proxies
 
     if proxies:
-
         # Turn on proxy_credential_no_reuse, which has the following benefits:
         # 1. New connection will be made when proxy username changed
         # 2. New TLS session will be created based on proxy address, i.e. when accessing
-        #    the same site with different proxies, the TLS session won't leak previous IP.
+        #    the same site with different proxies, TLS session won't leak previous IP.
         c.setopt(CurlOpt.PROXY_CREDENTIAL_NO_REUSE, 1)
 
         parts = urlparse(url)
@@ -620,7 +620,7 @@ def set_curl_options(
             extra_fp = ExtraFingerprints(**extra_fp)
         if impersonate:
             warnings.warn(
-                "Extra fingerprints was altered after impersonated browser version was set.",
+                "Extra fingerprints was altered after impersonated version was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
@@ -630,7 +630,7 @@ def set_curl_options(
     if ja3:
         if impersonate:
             warnings.warn(
-                "JA3 fingerprint was altered after impersonated browser version was set.",
+                "JA3 fingerprint was altered after impersonated version was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
@@ -645,7 +645,7 @@ def set_curl_options(
     if akamai:
         if impersonate:
             warnings.warn(
-                "Akamai fingerprint was altered after impersonated browser version was set.",
+                "Akamai fingerprint was altered after impersonated version was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
