@@ -96,7 +96,7 @@ libcurl provides an event-based system for multiple handles with the following A
 
 There are 2 callbacks:
 
-- socket_function, set by CURLMOPT_SOCKETFUNCTION, will be called when socket events happen.
+- socket_function, set by CURLMOPT_SOCKETFUNCTION, will be called for socket events.
 - timer_function, set by CURLMOPT_TIMERFUNCTION, will be called when timeouts happen.
 
 And it works like the following:
@@ -272,7 +272,7 @@ class AsyncCurl:
         while True:
             try:
                 curl_msg = lib.curl_multi_info_read(self._curlm, msg_in_queue)
-                # NULL is returned as a signal that there is no more to get at this point
+                # NULL is returned as a signal that no more to be get at this point
                 if curl_msg == ffi.NULL:
                     break
                 if curl_msg.msg == CURLMSG_DONE:
@@ -283,7 +283,7 @@ class AsyncCurl:
                     else:
                         self.set_exception(curl, curl._get_error(retcode, "perform"))
                 else:
-                    print("NOT DONE")  # Will not reach, for no other code being defined.
+                    print("NOT DONE")  # Will not reach, for nothing else being defined.
             except Exception:
                 warnings.warn(
                     "Unexpected curl multi state in process_data, "

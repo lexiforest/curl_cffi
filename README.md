@@ -24,12 +24,6 @@ Maintenance of this project is made possible by all the <a href="https://github.
 
 ------
 
-<a href="https://serpapi.com/" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/serpapi.png" alt="SerpAPI" height="67" width="63"></a>
-
-Scrape Google and other search engines from [SerpApi](https://serpapi.com/)'s fast, easy, and complete API. 0.66s average response time (≤ 0.5s for Ludicrous Speed Max accounts), 99.95% SLAs, pay for successful responses only.
-
-------
-
 ### Bypass Cloudflare with API
 
 <a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
@@ -37,19 +31,6 @@ Scrape Google and other search engines from [SerpApi](https://serpapi.com/)'s fa
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
 to register: https://yescaptcha.com/i/stfnIO
-
-------
-
-### Easy Captcha Bypass for Scraping
-
-<a href="https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg" alt="CapSolver" height="50" width="178"></a>
-
-[CapSolver](https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC)
-is an AI-powered tool that easily bypasses Captchas, allowing uninterrupted access to
-public data. It supports a variety of Captchas and works seamlessly with `curl_cffi`,
-Puppeteer, Playwright, and more. Fast, reliable, and cost-effective. Plus, `curl_cffi`
-users can use the code **"CURL"** to get an extra 6% balance! and register
-[here](https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC).
 
 ------
 

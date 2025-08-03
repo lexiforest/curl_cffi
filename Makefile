@@ -2,8 +2,8 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 1.1.2
-CURL_VERSION := curl-8_14_1
+VERSION := 1.2.0
+CURL_VERSION := curl-8_15_0
 
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
