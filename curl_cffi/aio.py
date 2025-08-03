@@ -237,11 +237,10 @@ class AsyncCurl:
     def add_handle(self, curl: Curl):
         """Add a curl handle to be managed by curl_multi. This is the equivalent of
         `perform` in the async world."""
-        # print(f"Using handle {curl}")
 
         curl._ensure_cacert()
-        # curl.setopt(CurlOpt.PIPEWAIT, 1)
-        lib.curl_multi_add_handle(self._curlm, curl._curl)
+        errcode = lib.curl_multi_add_handle(self._curlm, curl._curl)
+        self._check_error(errcode)
         future = self.loop.create_future()
         self._curl2future[curl] = future
         self._curl2curl[curl._curl] = curl
@@ -254,13 +253,7 @@ class AsyncCurl:
         errcode = lib.curl_multi_socket_action(
             self._curlm, sockfd, ev_bitmask, running_handle
         )
-        if errcode != CurlECode.OK:
-            errmsg = lib.curl_multi_strerror(errcode)
-            raise CurlError(
-                f"Failed calling curl_multi_socket_action, multi: ({errcode}) {errmsg}. "
-                "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
-                "details. Please open an issue on GitHub to help debug this error.",
-            )
+        self._check_error(errcode)
         return running_handle[0]
 
     def process_data(self, sockfd: int, ev_bitmask: int):
@@ -300,13 +293,13 @@ class AsyncCurl:
                 )
 
     def _pop_future(self, curl: Curl):
-        lib.curl_multi_remove_handle(self._curlm, curl._curl)
+        errcode = lib.curl_multi_remove_handle(self._curlm, curl._curl)
+        self._check_error(errcode)
         self._curl2curl.pop(curl._curl, None)
         return self._curl2future.pop(curl, None)
 
     def remove_handle(self, curl: Curl):
         """Cancel a future for given curl handle."""
-        # curl.reset()
         future = self._pop_future(curl)
         if future and not future.done() and not future.cancelled():
             future.cancel()
@@ -322,6 +315,17 @@ class AsyncCurl:
         future = self._pop_future(curl)
         if future and not future.done() and not future.cancelled():
             future.set_exception(exception)
+
+    def _check_error(self, errcode: int, *args: Any):
+        if errcode == CurlECode.OK:
+            return
+        errmsg = lib.curl_multi_strerror(errcode)
+        action = " ".join([str(a) for a in args])
+        raise CurlError(
+            f"Failed in {action}, multi: ({errcode}) {errmsg}. "
+            "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
+            "details. Please open an issue on GitHub to help debug this error.",
+        )
 
     def setopt(self, option, value):
         """Wrapper around curl_multi_setopt."""
