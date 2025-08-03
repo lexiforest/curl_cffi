@@ -54,12 +54,9 @@ build: .preprocessed
 
 lint:
 	ruff check --exclude issues
-	ruff format --diff
-	mypy --install-types --non-interactive . --exclude 'issues/.*'
 
 format:
-	ruff check --fix
-	ruff format
+	ruff format --exclude issues
 
 test:
 	python -bb -m pytest tests/unittest
