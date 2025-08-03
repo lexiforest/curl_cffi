@@ -536,7 +536,6 @@ def set_curl_options(
         proxies = base_proxies
 
     if proxies:
-
         # Turn on proxy_credential_no_reuse, which has the following benefits:
         # 1. New connection will be made when proxy username changed
         # 2. New TLS session will be created based on proxy address, i.e. when accessing
