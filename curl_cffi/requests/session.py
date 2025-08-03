@@ -764,9 +764,6 @@ class AsyncSession(BaseSession[R]):
         curl = await self.pool.get()
         if curl is None:
             curl = Curl(debug=self.debug)
-        # XXX: This may be related to proxy rotation
-        # curl.setopt(CurlOpt.FRESH_CONNECT, 1)
-        # curl.setopt(CurlOpt.FORBID_REUSE, 1)
         return curl
 
     def push_curl(self, curl):
@@ -797,7 +794,6 @@ class AsyncSession(BaseSession[R]):
         if not self._closed:
             self.acurl.remove_handle(curl)
             curl.reset()
-            # curl.setopt(CurlOpt.PIPEWAIT, 1)
             self.push_curl(curl)
         else:
             curl.close()
