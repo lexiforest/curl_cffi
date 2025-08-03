@@ -6,8 +6,8 @@ from typing import Any, Optional
 from weakref import WeakKeyDictionary
 
 from ._wrapper import ffi, lib
-from .const import CurlMOpt, CurlOpt
-from .curl import DEFAULT_CACERT, Curl
+from .const import CurlECode, CurlMOpt
+from .curl import DEFAULT_CACERT, Curl, CurlError
 from .utils import CurlCffiWarning
 
 __all__ = ["AsyncCurl"]
@@ -251,7 +251,16 @@ class AsyncCurl:
         """wrapper for curl_multi_socket_action, 
         returns the number of running curl handles."""
         running_handle = ffi.new("int *")
-        lib.curl_multi_socket_action(self._curlm, sockfd, ev_bitmask, running_handle)
+        errcode = lib.curl_multi_socket_action(
+            self._curlm, sockfd, ev_bitmask, running_handle
+        )
+        if errcode != CurlECode.OK:
+            errmsg = lib.curl_multi_strerror(errcode)
+            raise CurlError(
+                f"Failed calling curl_multi_socket_action, multi: ({errcode}) {errmsg}. "
+                "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
+                "details. Please open an issue on GitHub to help debug this error.",
+            )
         return running_handle[0]
 
     def process_data(self, sockfd: int, ev_bitmask: int):
@@ -268,19 +277,27 @@ class AsyncCurl:
 
         msg_in_queue = ffi.new("int *")
         while True:
-            curl_msg = lib.curl_multi_info_read(self._curlm, msg_in_queue)
-            # NULL is returned as a signal that there is no more to get at this point
-            if curl_msg == ffi.NULL:
-                break
-            if curl_msg.msg == CURLMSG_DONE:
-                curl = self._curl2curl[curl_msg.easy_handle]
-                retcode = curl_msg.data.result
-                if retcode == 0:
-                    self.set_result(curl)
+            try:
+                curl_msg = lib.curl_multi_info_read(self._curlm, msg_in_queue)
+                # NULL is returned as a signal that there is no more to get at this point
+                if curl_msg == ffi.NULL:
+                    break
+                if curl_msg.msg == CURLMSG_DONE:
+                    curl = self._curl2curl[curl_msg.easy_handle]
+                    retcode = curl_msg.data.result
+                    if retcode == 0:
+                        self.set_result(curl)
+                    else:
+                        self.set_exception(curl, curl._get_error(retcode, "perform"))
                 else:
-                    self.set_exception(curl, curl._get_error(retcode, "perform"))
-            else:
-                print("NOT DONE")  # Will not reach, for no other code being defined.
+                    print("NOT DONE")  # Will not reach, for no other code being defined.
+            except Exception:
+                warnings.warn(
+                    "Unexpected curl multi state in process_data, "
+                    "please open an issue on GitHub\n",
+                    CurlCffiWarning,
+                    stacklevel=2,
+                )
 
     def _pop_future(self, curl: Curl):
         lib.curl_multi_remove_handle(self._curlm, curl._curl)
