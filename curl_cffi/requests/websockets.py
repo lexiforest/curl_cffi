@@ -380,7 +380,7 @@ class WebSocket(BaseWebSocket):
 
         return chunk, frame
 
-    def _recv(self, fire_data_callback: bool = False) -> tuple[bytes, int]:
+    def recv(self) -> tuple[bytes, int]:
         """
         Receive a frame as bytes. libcurl splits frames into fragments, so we have to
         collect all the chunks for a frame.
@@ -398,8 +398,6 @@ class WebSocket(BaseWebSocket):
             try:
                 # Try to receive the first fragment first
                 chunk, frame = self.recv_fragment()
-                if fire_data_callback:
-                    self._emit("data", chunk, frame)
                 flags = frame.flags
                 chunks.append(chunk)
                 if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
@@ -413,9 +411,6 @@ class WebSocket(BaseWebSocket):
                     raise
 
         return b"".join(chunks), flags
-
-    def recv(self) -> tuple[bytes, int]:
-        return self._recv(fire_data_callback=False)
 
     def recv_str(self) -> str:
         """Receive a text frame."""
@@ -440,6 +435,9 @@ class WebSocket(BaseWebSocket):
             payload: data to send.
             flags: flags for the frame.
         """
+        if flags & CurlWsFlag.CLOSE:
+            self.keep_running = False
+
         if self.closed:
             raise WebSocketClosed("WebSocket is already closed")
 
@@ -534,13 +532,23 @@ class WebSocket(BaseWebSocket):
 
         # Keep reading the messages and invoke callbacks
         # TODO: Reconnect logic
-        keep_running = True
-        while keep_running:
+        chunks = []
+        self.keep_running = True
+        while self.keep_running:
             try:
-                msg, flags = self._recv(fire_data_callback=True)
+                chunk, frame = self.recv_fragment()
+                flags = frame.flags
+                self._emit("data", chunk, frame)
+
+                chunks.append(chunk)
+                if not (frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0):
+                    continue
 
                 # Avoid unnecessary computation
                 if "message" in self._emitters:
+                    # Concatenate collected chunks with the final message
+                    msg = b"".join(chunks)
+
                     if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                         try:
                             msg = msg.decode()  # type: ignore
@@ -550,11 +558,14 @@ class WebSocket(BaseWebSocket):
                             raise WebSocketError(
                                 "Invalid UTF-8", WsCloseCode.INVALID_DATA
                             ) from e
+
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
                         self._emit("message", msg)
 
+                chunks = []  # Reset chunks for next message
+
                 if flags & CurlWsFlag.CLOSE:
-                    keep_running = False
+                    self.keep_running = False
                     self._emit("close", self._close_code or 0, self._close_reason or "")
 
             except CurlError as e:
