@@ -88,15 +88,6 @@ On macOS, you may need to install the following dependencies:
 
 ### requests-like
 
-v0.9:
-
-```py
-from curl_cffi import requests
-
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome")
-```
-
-v0.10:
 
 ```python
 import curl_cffi
@@ -134,16 +125,6 @@ r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", pro
 ```
 
 ### Sessions
-
-v0.9:
-
-```py
-from curl_cffi import requests
-
-s = requests.Session()
-```
-
-v0.10:
 
 ```python
 s = curl_cffi.Session()

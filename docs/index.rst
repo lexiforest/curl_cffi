@@ -41,17 +41,6 @@ If you are looking for Python http3 clients, curl_cffi added http3 support since
 Sponsors
 --------
 
-SerpAPI
-~~~~~~~
-
-.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/serpapi.png
-   :width: 100
-   :alt: SerpAPI
-   :target: https://serpapi.com
-
-Scrape Google and other search engines from `SerpApi <https://serpapi.com/>`_'s fast, easy,
-and complete API. 0.66s average response time (≤ 0.5s for Ludicrous Speed Max accounts),
-99.95% SLAs, pay for successful responses only.
 
 Bypass Cloudflare with API
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,21 +53,6 @@ Bypass Cloudflare with API
 `Yescaptcha <https://yescaptcha.com/i/stfnIO>`_ is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. ``cf_clearance``). Click `here <https://yescaptcha.com/i/stfnIO>`_
 to register.
-
-Easy Captcha Bypass for Scraping
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg
-   :width: 170
-   :alt: Capsolver
-   :target: https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC
-
-`CapSolver <https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC>`_
-is an AI-powered tool that easily bypasses Captchas, allowing uninterrupted access to
-public data. It supports a variety of Captchas and works seamlessly with ``curl_cffi``,
-Puppeteer, Playwright, and more. Fast, reliable, and cost-effective. Plus, ``curl_cffi``
-users can use the code **"CURL"** to get an extra 6% balance! and register 
-`here <https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC>`_
 
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.

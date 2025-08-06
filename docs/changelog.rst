@@ -3,6 +3,10 @@ Change Log
 
 Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
 
+- v0.13
+    - Added support for Windows on Arm
+    - Improved support for websockets
+
 - v0.12
     - Added support for safari 26
     - Improved support for websockets
@@ -30,15 +34,12 @@ Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/release
 
 - v0.7.3
     - Bugfixes.
-
 - v0.7.2
     - Added requests-like exception hierarchy.
-
 - v0.7.1
     - Added ``Cookies.get_dict()``, for compatibility with ``requests``.
     - Fixed type conversion in C shim, by @qishipai.
     - Fixed cookie ``subdomains`` attribute.
-
 - v0.7.0
     - Added more recent impersonate versions, up to Chrome 124.
     - Upgraded ``libcurl`` to 8.7.1.
@@ -56,7 +57,6 @@ The minimum Python version is now 3.8. Windows fingerprints are wrong in 0.6.x.
 - v0.6.1
     - ``AsyncSession.close`` is now a coroutine.
     - This is a bugfix release.
-
 - v0.6.0
     - Added more recent impersonate versions, up to Chrome 120 and Safari 17.0
     - Upgraded libcurl to 8.1.1

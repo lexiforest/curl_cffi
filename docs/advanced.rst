@@ -37,7 +37,7 @@ For compatibility with ``requests``, we also support using dicts.
 
 .. note::
 
-   Use the proxies dict, only when you do have different proxies for http and https
+   Prefer the single `proxy` parameter, unless you do have different proxies for http and https
 
 
 Low-level curl API

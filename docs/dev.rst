@@ -35,5 +35,5 @@ To install the local editable build:
 Contributing
 ------------
 
-When opening PR, please do not use the ``main`` branch in your fork, otherwise I cannot add my modification,
-such as unittests.
+When opening PR, please do not use the ``main`` branch in your fork, otherwise I cannot
+add my modification, such as unittests.
