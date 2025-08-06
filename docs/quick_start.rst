@@ -544,8 +544,6 @@ WebSockets
         ws = await s.ws_connect("wss://echo.websocket.org")
         await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
         async for message in ws:
-
-
             print(message)
 
 For detailed websocket guide, see :doc:`websockets`.

@@ -68,13 +68,13 @@ def bytes_to_hex(b: bytes, uppercase: bool = False) -> str:
 
 def debug_function_default(type_: int, data: bytes) -> None:
     PREFIXES = {
-        CURLINFO_TEXT:          "*",
-        CURLINFO_HEADER_IN:     "<",
-        CURLINFO_HEADER_OUT:    ">",
-        CURLINFO_DATA_IN:       "< DATA",
-        CURLINFO_DATA_OUT:      "> DATA",
-        CURLINFO_SSL_DATA_IN:   "< SSL",
-        CURLINFO_SSL_DATA_OUT:  "> SSL",
+        CURLINFO_TEXT: "*",
+        CURLINFO_HEADER_IN: "<",
+        CURLINFO_HEADER_OUT: ">",
+        CURLINFO_DATA_IN: "< DATA",
+        CURLINFO_DATA_OUT: "> DATA",
+        CURLINFO_SSL_DATA_IN: "< SSL",
+        CURLINFO_SSL_DATA_OUT: "> SSL",
     }
     MAX_SHOW_BYTES = 40
     prefix = PREFIXES.get(type_, "*")

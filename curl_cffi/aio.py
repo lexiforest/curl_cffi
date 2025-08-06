@@ -247,7 +247,7 @@ class AsyncCurl:
         return future
 
     def socket_action(self, sockfd: int, ev_bitmask: int) -> int:
-        """wrapper for curl_multi_socket_action, 
+        """wrapper for curl_multi_socket_action,
         returns the number of running curl handles."""
         running_handle = ffi.new("int *")
         errcode = lib.curl_multi_socket_action(
@@ -330,13 +330,13 @@ class AsyncCurl:
     def setopt(self, option, value):
         """Wrapper around curl_multi_setopt."""
         if option in (
-                CurlMOpt.PIPELINING,
-                CurlMOpt.MAXCONNECTS,
-                CurlMOpt.MAX_HOST_CONNECTIONS,
-                CurlMOpt.MAX_PIPELINE_LENGTH,
-                CurlMOpt.MAX_TOTAL_CONNECTIONS,
-                CurlMOpt.MAX_CONCURRENT_STREAMS,
-                ):
+            CurlMOpt.PIPELINING,
+            CurlMOpt.MAXCONNECTS,
+            CurlMOpt.MAX_HOST_CONNECTIONS,
+            CurlMOpt.MAX_PIPELINE_LENGTH,
+            CurlMOpt.MAX_TOTAL_CONNECTIONS,
+            CurlMOpt.MAX_CONCURRENT_STREAMS,
+        ):
             c_value = ffi.new("long*", value)
         else:
             c_value = value
