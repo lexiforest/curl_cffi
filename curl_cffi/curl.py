@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import struct
+import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -56,13 +57,44 @@ def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     return 0
 
 
-def debug_function_default(type_: int, text: bytes) -> None:
+def bytes_to_hex(b: bytes, uppercase: bool = False) -> str:
+    """
+    Convert a bytes object to a space-separated hex string, e.g. "0a ff 3c".
+    If uppercase=True, letters will be A–F instead of a–f.
+    """
+    fmt = "{:02X}" if uppercase else "{:02x}"
+    return " ".join(fmt.format(byte) for byte in b)
+
+
+def debug_function_default(type_: int, data: bytes) -> None:
+    PREFIXES = {
+        CURLINFO_TEXT: "*",
+        CURLINFO_HEADER_IN: "<",
+        CURLINFO_HEADER_OUT: ">",
+        CURLINFO_DATA_IN: "< DATA",
+        CURLINFO_DATA_OUT: "> DATA",
+        CURLINFO_SSL_DATA_IN: "< SSL",
+        CURLINFO_SSL_DATA_OUT: "> SSL",
+    }
+    MAX_SHOW_BYTES = 40
+    prefix = PREFIXES.get(type_, "*")
+
+    # always show ssl data in binary format
     if type_ in (CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT):
-        print("SSL OUT", text)
-    elif type_ in (CURLINFO_DATA_IN, CURLINFO_DATA_OUT):
-        print(text.decode("utf-8", "replace"))
+        hex_str = bytes_to_hex(data[:MAX_SHOW_BYTES])
+        postfix = "" if len(data) <= MAX_SHOW_BYTES else "..."
+        sys.stderr.write(f"{prefix} [{len(data)} bytes]: {hex_str}{postfix}\n")
     else:
-        print(text.decode(), end="")
+        try:
+            text = data.decode("utf-8")
+            sys.stderr.write(f"{prefix} {text}")
+            if type_ not in (CURLINFO_TEXT, CURLINFO_HEADER_IN, CURLINFO_HEADER_OUT):
+                sys.stderr.write("\n")
+        except UnicodeDecodeError:
+            # Fallback to hex representation of first MAX_SHOW_BYTES bytes
+            hex_str = bytes_to_hex(data[:MAX_SHOW_BYTES])
+            postfix = "" if len(data) <= MAX_SHOW_BYTES else "..."
+            sys.stderr.write(f"{prefix} [{len(data)} bytes]: {hex_str}{postfix}\n")
 
 
 @ffi.def_extern()
@@ -168,7 +200,7 @@ class Curl:
     def setopt(self, option: CurlOpt, value: Any) -> int:
         """Wrapper for ``curl_easy_setopt``.
 
-        Parameters:
+        Args:
             option: option to set, using constants from CurlOpt enum
             value: value to set, strings will be handled automatically
 

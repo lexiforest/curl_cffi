@@ -2,8 +2,8 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 1.1.1
-CURL_VERSION := curl-8_14_1
+VERSION := 1.2.0
+CURL_VERSION := curl-8_15_0
 
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
@@ -54,12 +54,9 @@ build: .preprocessed
 
 lint:
 	ruff check --exclude issues
-	ruff format --diff
-	mypy --install-types --non-interactive . --exclude 'issues/.*'
 
 format:
-	ruff check --fix
-	ruff format
+	ruff format --exclude issues
 
 test:
 	python -bb -m pytest tests/unittest

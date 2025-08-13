@@ -24,12 +24,6 @@ Maintenance of this project is made possible by all the <a href="https://github.
 
 ------
 
-<a href="https://serpapi.com/" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/serpapi.png" alt="SerpAPI" height="67" width="63"></a>
-
-Scrape Google and other search engines from [SerpApi](https://serpapi.com/)'s fast, easy, and complete API. 0.66s average response time (≤ 0.5s for Ludicrous Speed Max accounts), 99.95% SLAs, pay for successful responses only.
-
-------
-
 ### Bypass Cloudflare with API
 
 <a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
@@ -37,19 +31,6 @@ Scrape Google and other search engines from [SerpApi](https://serpapi.com/)'s fa
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
 to register: https://yescaptcha.com/i/stfnIO
-
-------
-
-### Easy Captcha Bypass for Scraping
-
-<a href="https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/capsolver.jpg" alt="CapSolver" height="50" width="178"></a>
-
-[CapSolver](https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC)
-is an AI-powered tool that easily bypasses Captchas, allowing uninterrupted access to
-public data. It supports a variety of Captchas and works seamlessly with `curl_cffi`,
-Puppeteer, Playwright, and more. Fast, reliable, and cost-effective. Plus, `curl_cffi`
-users can use the code **"CURL"** to get an extra 6% balance! and register
-[here](https://dashboard.capsolver.com/passport/register?inviteCode=0FLEay4iroNC).
 
 ------
 
@@ -107,15 +88,6 @@ On macOS, you may need to install the following dependencies:
 
 ### requests-like
 
-v0.9:
-
-```py
-from curl_cffi import requests
-
-r = requests.get("https://tls.browserleaks.com/json", impersonate="chrome")
-```
-
-v0.10:
 
 ```python
 import curl_cffi
@@ -153,16 +125,6 @@ r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", pro
 ```
 
 ### Sessions
-
-v0.9:
-
-```py
-from curl_cffi import requests
-
-s = requests.Session()
-```
-
-v0.10:
 
 ```python
 s = curl_cffi.Session()
@@ -290,3 +252,7 @@ async with AsyncSession() as s:
 - The synchronous WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
 - The asynchronous WebSocket API is inspired by [aiohttp](https://github.com/aio-libs/aiohttp).
 
+## Contributing
+
+When submitting an PR, please use a different branch other than `main` and check the
+"Allow edits by maintainers" box, so I can update your PR with lint or style fixes. Thanks!

@@ -11,7 +11,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 
 def detect_arch():
@@ -126,6 +126,7 @@ def get_curl_libraries():
             "brotlienc",
             "brotlidec",
             "brotlicommon",
+            "iphlpapi",
         ]
     elif arch["system"] == "Darwin" or (
         arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
@@ -154,6 +155,7 @@ ffibuilder.set_source(
     include_dirs=[
         str(root_dir / "include"),
         str(root_dir / "ffi"),
+        str(Path(arch["libdir"]) / "include"),
     ],
     sources=[
         str(root_dir / "ffi/shim.c"),

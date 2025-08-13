@@ -615,13 +615,14 @@ class TestServer(Server):
 
 async def echo(websocket):
     while True:
-        name = await websocket.recv()
-        if isinstance(name, bytes):
-            name = name.decode()
-        # print(f"<<< {name}")
+        try:
+            # Echo every text or binary message
+            async for message in websocket:
+                await websocket.send(message)
 
-        await websocket.send(name)
-        # print(f">>> {name}")
+        except websockets.exceptions.ConnectionClosed as e:
+            # Client sent us a close frame: echo it back exactly
+            await websocket.close(code=e.code, reason=e.reason)
 
 
 class TestWebsocketServer:
