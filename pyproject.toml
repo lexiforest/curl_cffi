@@ -66,6 +66,8 @@ test = [
     "typing_extensions",
 ]
 
+[project.scripts]
+curl-cffi = "curl_cffi.cli:main"
 
 [build-system]
 requires = ["wheel", "setuptools", "cffi>=1.12.0"]
