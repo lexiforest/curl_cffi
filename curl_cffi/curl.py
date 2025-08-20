@@ -374,8 +374,8 @@ class Curl:
     def clean_handles_and_buffers(
         self, clear_headers: bool = True, clear_resolve: bool = True
     ) -> None:
-        """Clean up handles and buffers after ``perform``, called at the end of
-        ``perform``."""
+        """Clean up handles and buffers after ``perform`` and ``close``, called at the end of
+        ``perform`` and ``close``."""
         self._write_handle = None
         self._header_handle = None
         self._debug_handle = None
