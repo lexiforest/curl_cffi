@@ -553,12 +553,12 @@ class Session(BaseSession[R]):
             files=files,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects
-            if allow_redirects is None
-            else allow_redirects,
-            max_redirects=self.max_redirects
-            if max_redirects is None
-            else max_redirects,
+            allow_redirects=(
+                self.allow_redirects if allow_redirects is None else allow_redirects
+            ),
+            max_redirects=(
+                self.max_redirects if max_redirects is None else max_redirects
+            ),
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -570,9 +570,9 @@ class Session(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers
-            if default_headers is None
-            else default_headers,
+            default_headers=(
+                self.default_headers if default_headers is None else default_headers
+            ),
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -799,7 +799,7 @@ class AsyncSession(BaseSession[R]):
                 break
 
     def release_curl(self, curl):
-        curl.clean_after_perform()
+        curl.clean_handles_and_buffers()
         if not self._closed:
             self.acurl.remove_handle(curl)
             curl.reset()
@@ -900,12 +900,12 @@ class AsyncSession(BaseSession[R]):
             cookies_list=[self.cookies, cookies],
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects
-            if allow_redirects is None
-            else allow_redirects,
-            max_redirects=self.max_redirects
-            if max_redirects is None
-            else max_redirects,
+            allow_redirects=(
+                self.allow_redirects if allow_redirects is None else allow_redirects
+            ),
+            max_redirects=(
+                self.max_redirects if max_redirects is None else max_redirects
+            ),
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -916,9 +916,9 @@ class AsyncSession(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers
-            if default_headers is None
-            else default_headers,
+            default_headers=(
+                self.default_headers if default_headers is None else default_headers
+            ),
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
@@ -990,12 +990,12 @@ class AsyncSession(BaseSession[R]):
             files=files,
             auth=auth or self.auth,
             timeout=self.timeout if timeout is not_set else timeout,
-            allow_redirects=self.allow_redirects
-            if allow_redirects is None
-            else allow_redirects,
-            max_redirects=self.max_redirects
-            if max_redirects is None
-            else max_redirects,
+            allow_redirects=(
+                self.allow_redirects if allow_redirects is None else allow_redirects
+            ),
+            max_redirects=(
+                self.max_redirects if max_redirects is None else max_redirects
+            ),
             proxies_list=[self.proxies, proxies],
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
@@ -1007,9 +1007,9 @@ class AsyncSession(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             extra_fp=extra_fp or self.extra_fp,
-            default_headers=self.default_headers
-            if default_headers is None
-            else default_headers,
+            default_headers=(
+                self.default_headers if default_headers is None else default_headers
+            ),
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
