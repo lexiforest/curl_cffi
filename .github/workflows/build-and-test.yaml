@@ -9,11 +9,15 @@ on:
       - bugfix/*
       - feature/*
       - release/*
+      - chore/*
     tags:
       - v*
 
 permissions:
   contents: write
+
+env:
+  MACOSX_DEPLOYMENT_TARGET: 11.0
 
 jobs:
   lint:
