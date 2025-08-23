@@ -127,6 +127,7 @@ def get_curl_libraries():
             "brotlidec",
             "brotlicommon",
             "iphlpapi",
+            "cares",
         ]
     elif arch["system"] == "Darwin" or (
         arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
