@@ -971,7 +971,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
-    ):
+    ) -> R:
         """Send the request, see ``curl_cffi.requests.request`` for details on args."""
 
         self._check_session_closed()
@@ -1084,29 +1084,29 @@ class AsyncSession(BaseSession[R]):
             finally:
                 self.release_curl(curl)
 
-    def head(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="HEAD", url=url, **kwargs)
+    async def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="HEAD", url=url, **kwargs)
 
-    def get(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="GET", url=url, **kwargs)
+    async def get(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="GET", url=url, **kwargs)
 
-    def post(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="POST", url=url, **kwargs)
+    async def post(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="POST", url=url, **kwargs)
 
-    def put(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="PUT", url=url, **kwargs)
+    async def put(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="PUT", url=url, **kwargs)
 
-    def patch(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="PATCH", url=url, **kwargs)
+    async def patch(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="PATCH", url=url, **kwargs)
 
-    def delete(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="DELETE", url=url, **kwargs)
+    async def delete(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="DELETE", url=url, **kwargs)
 
-    def options(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="OPTIONS", url=url, **kwargs)
+    async def options(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="OPTIONS", url=url, **kwargs)
 
-    def trace(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="TRACE", url=url, **kwargs)
+    async def trace(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="TRACE", url=url, **kwargs)
 
-    def query(self, url: str, **kwargs: Unpack[RequestParams]):
-        return self.request(method="QUERY", url=url, **kwargs)
+    async def query(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
+        return await self.request(method="QUERY", url=url, **kwargs)
