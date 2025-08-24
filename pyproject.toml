@@ -99,13 +99,6 @@ test-extras = ["test"]
 test-skip = ["cp39-manylinux_i686", "cp39-win_arm64"]  # trustme not available for manylinux_i686 and cryptography not available for win_arm64
 build-verbosity = 1
 
-# explicitly setting manylinux images to use, it seems that cibuildwheel is using
-# older images, although the docs says using newer version.
-manylinux-x86_64-image = "manylinux_2_28"
-manylinux-aarch64-image = "manylinux_2_28"
-manylinux-i686-image = "manylinux_2_28"
-manylinux-riscv64-image = "manylinux_2_39"
-
 
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]

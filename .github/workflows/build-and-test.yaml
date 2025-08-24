@@ -76,6 +76,7 @@ jobs:
       run: |
         brew install make automake libtool
 
+    # When we build all dependencies with the 11.0 target, we can downgrade this back.
     - if: ${{ matrix.os == 'macos-14' }}
       run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> "$GITHUB_ENV"
 
