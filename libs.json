@@ -90,6 +90,17 @@
     },
     {
         "system": "Linux",
+        "machine": "riscv64",
+        "pointer_size": 64,
+        "libdir": "",
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnu",
+        "so_name": "libcurl-impersonate.so",
+        "so_arch": "riscv64"
+    },
+    {
+        "system": "Linux",
         "machine": "aarch64",
         "pointer_size": 64,
         "libdir": "~/.local/lib",
