@@ -58,7 +58,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-13, macos-14, windows-2022, windows-11-arm]
+        os: [ubuntu-24.04, macos-13, macos-14, windows-2022, windows-11-arm]
     steps:
     - uses: actions/checkout@v4
 
@@ -78,6 +78,9 @@ jobs:
 
     - if: ${{ matrix.os == 'macos-14' }}
       run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> "$GITHUB_ENV"
+
+    - if: ${{ matrix.os == 'macos-13' }}
+      run: echo "MACOSX_DEPLOYMENT_TARGET=13.0" >> "$GITHUB_ENV"
 
     - name: Build and test wheels
       uses: pypa/cibuildwheel@v3.1.3

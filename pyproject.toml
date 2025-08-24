@@ -103,7 +103,7 @@ build-verbosity = 1
 # older images, although the docs says using newer version.
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
-manylinux-i386-image = "manylinux_2_28"
+manylinux-i686-image = "manylinux_2_28"
 manylinux-riscv64-image = "manylinux_2_39"
 
 
