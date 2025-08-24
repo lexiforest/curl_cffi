@@ -11,7 +11,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.2.0"
+__version__ = "1.2.2"
 
 
 def detect_arch():
@@ -102,6 +102,7 @@ def get_curl_archives():
             f"{arch['libdir']}/libbrotlidec.a",
             f"{arch['libdir']}/libbrotlienc.a",
             f"{arch['libdir']}/libbrotlicommon.a",
+            f"{arch['libdir']}/libcares.a",
         ]
     else:
         return []
@@ -127,6 +128,7 @@ def get_curl_libraries():
             "brotlidec",
             "brotlicommon",
             "iphlpapi",
+            "cares",
         ]
     elif arch["system"] == "Darwin" or (
         arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
