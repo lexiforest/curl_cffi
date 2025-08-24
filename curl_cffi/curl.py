@@ -346,11 +346,12 @@ class Curl:
             ret = self.setopt(CurlOpt.PROXY_CAINFO, self._cacert)
             self._check_error(ret, "set proxy cacert")
 
-    def perform(self, clear_headers: bool = True) -> None:
+    def perform(self, clear_headers: bool = True, clear_resolve: bool = True) -> None:
         """Wrapper for ``curl_easy_perform``, performs a curl request.
 
         Parameters:
             clear_headers: clear header slist used in this perform
+            clear_resolve: clear resolve slist used in this perform
 
         Raises:
             CurlError: if the perform was not successful.
@@ -365,18 +366,26 @@ class Curl:
             self._check_error(ret, "perform")
         finally:
             # cleaning
-            self.clean_after_perform(clear_headers)
+            self.clean_handles_and_buffers(clear_headers, clear_resolve)
 
     def upkeep(self) -> int:
         return lib.curl_easy_upkeep(self._curl)
 
-    def clean_after_perform(self, clear_headers: bool = True) -> None:
-        """Clean up handles and buffers after ``perform``, called at the end of
-        ``perform``."""
+    def clean_handles_and_buffers(
+        self, clear_headers: bool = True, clear_resolve: bool = True
+    ) -> None:
+        """Clean up handles and buffers after ``perform`` and ``close``, 
+        called at the end of ``perform`` and ``close``."""
         self._write_handle = None
         self._header_handle = None
         self._debug_handle = None
         self._body_handle = None
+
+        if clear_resolve:
+            if self._resolve != ffi.NULL:
+                lib.curl_slist_free_all(self._resolve)
+            self._resolve = ffi.NULL
+
         if clear_headers:
             if self._headers != ffi.NULL:
                 lib.curl_slist_free_all(self._headers)
@@ -450,11 +459,12 @@ class Curl:
 
     def close(self) -> None:
         """Close and cleanup curl handle, wrapper for ``curl_easy_cleanup``."""
+        self.clean_handles_and_buffers()
+
         if self._curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None
         ffi.release(self._error_buffer)
-        self._resolve = ffi.NULL
 
     def ws_recv(self, n: int = 1024) -> tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
