@@ -99,7 +99,13 @@ before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
-test-skip = ["cp39-manylinux_i686", "cp39-win_arm64"]  # trustme not available for manylinux_i686 and cryptography not available for win_arm64
+# trustme not available for these images
+test-skip = [
+    "cp39-manylinux_i686",
+    "cp39-win_arm64",
+    "cp39-manylinux_armv7l",
+    "cp39-manylinux_riscv64",
+]
 build-verbosity = 1
 
 
