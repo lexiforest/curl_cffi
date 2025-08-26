@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.13.0"
+version = "0.14.0b2"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { text = "MIT License" }
@@ -67,6 +67,8 @@ test = [
     "typing_extensions",
 ]
 
+[project.scripts]
+curl-cffi = "curl_cffi.cli:main"
 
 [build-system]
 requires = ["wheel", "setuptools", "cffi>=1.12.0"]
@@ -88,7 +90,9 @@ build = [
     # "cp39-win32",
     "cp39-manylinux_x86_64",
     "cp39-manylinux_aarch64",
+    "cp39-manylinux_riscv64",
     "cp39-manylinux_i686",
+    "cp39-manylinux_armv7l",
     "cp39-musllinux_x86_64",
     "cp39-musllinux_aarch64",
 ]
@@ -96,13 +100,19 @@ before-all = "make preprocess"
 test-requires = "pytest"
 test-command = "python -bb -m pytest {project}/tests/unittest"
 test-extras = ["test"]
-test-skip = ["cp39-manylinux_i686", "cp39-win_arm64"]  # trustme not available for manylinux_i686 and cryptography not available for win_arm64
+# trustme not available for these images
+test-skip = [
+    "cp39-manylinux_i686",
+    "cp39-win_arm64",
+    "cp39-manylinux_armv7l",
+    "cp39-manylinux_riscv64",
+]
 build-verbosity = 1
 
 
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
-archs = ["auto", "aarch64"]
+archs = ["auto", "aarch64", "riscv64", "i686", "armv7l"]
 environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
 environment-pass = ["LD_LIBRARY_PATH"]
 
