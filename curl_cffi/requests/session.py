@@ -627,21 +627,11 @@ class Session(BaseSession[R]):
             try:
                 if self._thread == "eventlet":
                     # see: https://eventlet.net/doc/threading.html
-                    try:
-                        import eventlet.tpool
-                    except ImportError as cause:
-                        raise ImportError(
-                            "eventlet is required for eventlet thread mode"
-                        ) from cause
+                    import eventlet.tpool
                     eventlet.tpool.execute(c.perform)  # type: ignore
                 elif self._thread == "gevent":
                     # see: https://www.gevent.org/api/gevent.threadpool.html
-                    try:
-                        import gevent
-                    except ImportError as cause:
-                        raise ImportError(
-                            "gevent is required for gevent thread mode"
-                        ) from cause
+                    import gevent
                     gevent.get_hub().threadpool.spawn(c.perform).get()  # type: ignore
                 else:
                     c.perform()
