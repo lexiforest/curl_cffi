@@ -35,11 +35,6 @@ from .models import STREAM_END, Response
 from .utils import HttpVersionLiteral, not_set, set_curl_options
 from .websockets import AsyncWebSocket, WebSocket
 
-with suppress(ImportError):
-    import gevent
-
-with suppress(ImportError):
-    import eventlet.tpool
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
@@ -632,9 +627,21 @@ class Session(BaseSession[R]):
             try:
                 if self._thread == "eventlet":
                     # see: https://eventlet.net/doc/threading.html
+                    try:
+                        import eventlet.tpool
+                    except ImportError as cause:
+                        raise ImportError(
+                            "eventlet is required for eventlet thread mode"
+                        ) from cause
                     eventlet.tpool.execute(c.perform)  # type: ignore
                 elif self._thread == "gevent":
                     # see: https://www.gevent.org/api/gevent.threadpool.html
+                    try:
+                        import gevent
+                    except ImportError as cause:
+                        raise ImportError(
+                            "gevent is required for gevent thread mode"
+                        ) from cause
                     gevent.get_hub().threadpool.spawn(c.perform).get()  # type: ignore
                 else:
                     c.perform()
