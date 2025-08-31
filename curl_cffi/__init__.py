@@ -92,6 +92,7 @@ from .requests import (
     request,
 )
 
-from .utils import config_warnings, is_pro, enable_pro
+from .utils import config_warnings
+from .pro import is_pro, enable_pro
 
 config_warnings(on=False)

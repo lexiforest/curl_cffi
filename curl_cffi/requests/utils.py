@@ -16,7 +16,8 @@ from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlp
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
-from ..utils import CurlCffiWarning
+from ..utils import CurlCffiWarning, HttpVersionLiteral
+from ..pro import is_pro
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
@@ -42,7 +43,6 @@ HttpMethod = Literal[
     "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
 ]
 
-HttpVersionLiteral = Literal["v1", "v2", "v2tls", "v2_prior_knowledge", "v3", "v3only"]
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
@@ -329,6 +329,11 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, fp.http2_no_priority)
 
 
+def set_impersonate_target(curl: Curl, target: str):
+    ...
+
+
+
 def set_curl_options(
     curl: Curl,
     method: HttpMethod,
@@ -610,10 +615,13 @@ def set_curl_options(
 
     # impersonate
     if impersonate:
-        impersonate = normalize_browser_type(impersonate)
-        ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
-        if ret != 0:
-            raise ImpersonateError(f"Impersonating {impersonate} is not supported")
+        if is_pro():
+            set_impersonate_target(c, target=impersonate)
+        else:
+            impersonate = normalize_browser_type(impersonate)
+            ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
+            if ret != 0:
+                raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
     # extra_fp options
     if extra_fp:

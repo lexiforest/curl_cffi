@@ -8,6 +8,7 @@ import pytest
 import curl_cffi
 from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt
 
+
 #######################################################################################
 # testing setopt
 #######################################################################################

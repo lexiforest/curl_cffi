@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Optional, TypedDict
 
-from pydantic import BaseModel
 
 from ..const import CurlOpt, CurlSslVersion
 from ..utils import CurlCffiWarning
@@ -374,6 +373,10 @@ TLS_EC_CURVES_MAP = {
 }
 
 
+def list_profiles():
+    """List supported profiles, from both open source and pro version"""
+
+
 def toggle_extension(curl, extension_id: int, enable: bool):
     # ECH
     if extension_id == 65037:
@@ -442,40 +445,4 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             f"This extension({extension_id}) can not be toggled for now, it may be "
             "updated later."
         )
-
-
-class ProfileVersion(Enum):
-    v1 = 1
-    v2 = 2
-
-
-class Profile(BaseModel):
-    version: ProfileVersion
-    target: str
-    http_version: int
-    ssl_version: int
-    ciphers: list[str]
-    curves: list[str]
-    signature_hashes: list[str]
-    npn: bool
-    alpn: bool
-    alps: bool
-    cert_compression: list[str]
-    tls_session_ticket: bool
-    tls_extension_order: list[int]
-    tls_delegated_credentials: list[str]
-    tls_record_size_limit: int
-    tls_grease: bool
-    tls_use_new_alps_codepoint: bool
-    tls_signed_cert_timestamps: bool
-    ech: Optional[str]
-
-    http2_settings: str
-    http2_window_update: int
-    http2_pseudo_headers_order: str
-    http2_stream_weight: int
-    http2_stream_exclusive: int
-    http2_no_priority: bool
-
-    http3_settings: str
 
