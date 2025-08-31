@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 env:
-  CIBW_TEST_COMMAND = "pytest {project}/tests/pro"
+  CIBW_TEST_COMMAND: "pytest {project}/tests/pro"
 
 jobs:
   bdist:
