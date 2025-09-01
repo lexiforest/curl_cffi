@@ -40,7 +40,7 @@ from .websockets import AsyncWebSocket, WebSocket
 if sys.version_info >= (3, 13):
     R = TypeVar("R", bound=Response, default=Response)
 else:
-    R = TypeVar("R", bound=Response)
+    R = Response
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
