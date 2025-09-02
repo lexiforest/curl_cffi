@@ -310,23 +310,17 @@ class Curl:
             0x100000: ffi.string,
             0x200000: int,
             0x300000: float,
+            0x400000: list,
             0x500000: int,
             0x600000: int,
-        }
-
-        ret_default_option = {
-            0x100000: b"",
-            0x200000: 0,
-            0x300000: 0.0,
-            0x400000: [],
-            0x500000: 0,
-            0x600000: 0,
         }
 
         option_type = option & 0xF00000
 
         if self._curl is None:
-            return ret_default_option.get(option_type, b"")
+            if option_type == 0x100000:
+                return b""
+            return ret_cast_option[option_type]()
 
         c_value = ffi.new(ret_option[option_type])
         ret = lib.curl_easy_getinfo(self._curl, option, c_value)
@@ -336,6 +330,7 @@ class Curl:
             return slist_to_list(c_value[0])
         if c_value[0] == ffi.NULL:
             return b""
+
         return ret_cast_option[option_type](c_value[0])
 
     def version(self) -> bytes:
