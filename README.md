@@ -34,6 +34,18 @@ to register: https://yescaptcha.com/i/stfnIO
 
 ------
 
+<a href="https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/hypersolutions.png" height="47" width="149"></a>
+
+TLS fingerprinting alone isn't enough for modern bot protection. [Hyper Solutions](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi) provides the missing piece - API endpoints that generate valid antibot tokens for:
+
+Akamai • DataDome • Kasada • Incapsula
+
+No browser automation. Just simple API calls that return the exact cookies and headers these systems require.
+
+🚀 [Get Your API Key](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi) | 📖 [Docs](https://docs.justhyped.dev) | 💬 [Discord](https://discord.gg/akamai)
+
+------
+
 ## Features
 
 - Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custom fingerprints.
@@ -242,7 +254,7 @@ async with AsyncSession() as s:
 
 - Integrating with Scrapy: [divtiply/scrapy-curl-cffi](https://github.com/divtiply/scrapy-curl-cffi), [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate) and [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint).
 - Integrating with [requests](https://github.com/el1s7/curl-adapter), [httpx](https://github.com/vgavro/httpx-curl-cffi) as adapter.
-- Integrating with captcha resolvers: [CapSolver](https://docs.capsolver.com/en/api/), [YesCaptcha](https://yescaptcha.atlassian.net/wiki/spaces/YESCAPTCHA/overview). Please see the head area for promo code and link.
+- Integrating with captcha resolvers: [YesCaptcha](https://yescaptcha.atlassian.net/wiki/spaces/YESCAPTCHA/overview). Please see the head area for promo code and link.
 
 ## Acknowledgement
 
