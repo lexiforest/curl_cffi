@@ -70,9 +70,11 @@ The simplest way is to turn off cert verification by ``verify=False``:
 ErrCode: 77, Reason: error setting certificate verify locations
 ------
 
-Install ``curl_cffi`` and its dependencies in a pure-ASCII path, i.e. no Chinese or any
-other characters out of the ASCII table in the path.
-
+On Windows, if your Python environment or CA bundle path contains non-ASCII characters
+(e.g. accents), libcurl may fail to open the CA file when passed as a narrow ``char*``.
+``curl_cffi`` now encodes file-path options (e.g. ``CAINFO``, ``PROXY_CAINFO``,
+``SSLCERT``) using the system's preferred ANSI code page on Windows to ensure correct
+file access. This fixes most occurrences of error 77.
 
 How to use with fiddler/charles to intercept content
 ------
