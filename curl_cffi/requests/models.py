@@ -69,6 +69,11 @@ class Response:
         redirect_url: the final redirected url.
         http_version: http version used.
         history: history redirections, only headers are available.
+        download_size: total downloaded bytes (body).
+        upload_size: total uploaded bytes (body).
+        header_size: total header size.
+        request_size: request size.
+        response_size: download_size + header_size
     """
 
     def __init__(self, curl: Optional[Curl] = None, request: Optional[Request] = None):
@@ -96,6 +101,11 @@ class Response:
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
+        self.download_size: int = 0
+        self.upload_size: int = 0
+        self.header_size: int = 0
+        self.request_size: int = 0
+        self.response_size: int = 0
 
     @property
     def charset(self) -> str:
