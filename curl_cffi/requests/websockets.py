@@ -9,7 +9,6 @@ from json import dumps, loads
 from select import select
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Union
 
-from curl_cffi import AsyncSession, Response
 from curl_cffi.utils import CurlCffiWarning
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -584,7 +583,7 @@ class AsyncWebSocket(BaseWebSocket):
         debug: bool = False,
     ):
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
-        self.session: AsyncSession[Response] = session
+        self.session: AsyncSession = session
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._receive_queue: asyncio.Queue = asyncio.Queue(maxsize=4096)
         self._send_lock = asyncio.Lock()
@@ -639,10 +638,19 @@ class AsyncWebSocket(BaseWebSocket):
         busy-waiting.
         """
         buffer: bytearray = bytearray()
+
+        # This is a tunable parameter. It represents the maximum duration the loop
+        # can run without yielding. 1ms is a reasonable default.
+        YIELD_INTERVAL_S = 0.001
+
         try:
             while not self.closed:
                 # Try to read and process as much data as is available in the
-                # socket buffer without waiting.
+                # socket buffer without waiting. This is the "greedy" part.
+
+                # Record the start time before entering the greedy loop
+                start_time = self.loop.time()
+
                 while not self.closed:
                     try:
                         chunk, frame = self._curl.ws_recv()
@@ -656,17 +664,23 @@ class AsyncWebSocket(BaseWebSocket):
                             if flags & CurlWsFlag.CLOSE:
                                 self._handle_close_frame(message)
                                 return
+
+                            # THE FIX IS HERE: Check if the timeslice is exhausted
+                            if self.loop.time() - start_time > YIELD_INTERVAL_S:
+                                await asyncio.sleep(0)  # Yield control
+                                start_time = self.loop.time()  # Reset the timer
+
                     except CurlError as e:
-                        # The OS socket buffer is empty. Break the loop.
+                        # The OS socket buffer is empty. Break the inner loop.
                         if e.code == CurlECode.AGAIN:
                             break
 
-                        # Error occurred.
+                        # An actual error occurred.
                         await self._receive_queue.put((e, 0))
                         return
 
-                # The buffer was drained (EAGAIN).
-                # We must now wait for more data to arrive.
+                # The buffer was drained (EAGAIN was hit).
+                # We must now wait cooperatively for more data to arrive.
                 read_ready_future = self.loop.create_future()
                 self.loop.add_reader(self._sock_fd, read_ready_future.set_result, None)
                 try:
@@ -721,25 +735,34 @@ class AsyncWebSocket(BaseWebSocket):
         except UnicodeDecodeError as e:
             raise WebSocketError("Invalid UTF-8 in text frame", WsCloseCode.INVALID_DATA) from e
 
-    async def recv_json(self, *, loads: Callable[[Union[str, bytes]], T] = loads, timeout: Optional[float] = None) -> T:
+    async def recv_json(
+        self, *, loads: Callable[[Union[str, bytes]], T] = loads, timeout: Optional[float] = None
+    ) -> T:
         data, flags = await self.recv(timeout=timeout)
         if data is None:
-            raise WebSocketError("Received empty frame, cannot decode JSON", WsCloseCode.INVALID_DATA)
+            raise WebSocketError(
+                "Received empty frame, cannot decode JSON", WsCloseCode.INVALID_DATA
+            )
         if flags & CurlWsFlag.TEXT:
             try:
                 return loads(data.decode("utf-8"))
             except UnicodeDecodeError as e:
-                raise WebSocketError("Invalid UTF-8 in JSON text frame", WsCloseCode.INVALID_DATA) from e
+                raise WebSocketError(
+                    "Invalid UTF-8 in JSON text frame", WsCloseCode.INVALID_DATA
+                ) from e
             except Exception:
                 return loads(data)
         elif flags & CurlWsFlag.BINARY:
             return loads(data)
         else:
-            raise WebSocketError("Not a valid text or binary frame for JSON", WsCloseCode.INVALID_DATA)
+            raise WebSocketError(
+                "Not a valid text or binary frame for JSON", WsCloseCode.INVALID_DATA
+            )
 
     async def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
         """
-        Sends data asynchronously, correctly handling backpressure without busy-waiting.
+        Sends data asynchronously, correctly handling backpressure and cooperatively
+        yielding to the event loop when sending large payloads.
         """
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
@@ -751,25 +774,36 @@ class AsyncWebSocket(BaseWebSocket):
             payload = payload.encode("utf-8")
 
         view = memoryview(payload)
+        # This is a tunable parameter, representing the maximum duration the loop
+        # can run without yielding. 1ms is a reasonable default.
+        YIELD_INTERVAL_S = 0.001
 
         async with self._send_lock:
             offset = 0
             payload_len = len(payload)
+            start_time = self.loop.time()
             while offset < payload_len:
                 try:
                     n_sent = self._curl.ws_send(view[offset:], flags)
                     offset += n_sent
+
+                    # THE FIX IS HERE: Check if the timeslice is exhausted and yield control
+                    if self.loop.time() - start_time > YIELD_INTERVAL_S:
+                        await asyncio.sleep(0)
+                        start_time = self.loop.time()  # Reset the timer for the new timeslice
+
                 except CurlError as e:
                     if e.code == CurlECode.AGAIN:
+                        # The OS socket buffer is full. We must wait cooperatively.
                         future = self.loop.create_future()
-                        # Register the writer callback
                         self.loop.add_writer(self._sock_fd, future.set_result, None)
                         try:
-                            # Wait for the callback to fire
                             await future
                         finally:
-                            # Unregister the writer afterwards
                             self.loop.remove_writer(self._sock_fd)
+
+                        # After waiting for the socket to be ready, reset the timeslice timer
+                        start_time = self.loop.time()
                         continue
 
                     raise WebSocketError(f"Failed to send data: {e.message}", e.code) from e
