@@ -7,7 +7,16 @@ from enum import IntEnum
 from functools import partial
 from json import dumps, loads
 from select import select
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from curl_cffi.utils import CurlCffiWarning
 
@@ -572,7 +581,17 @@ class WebSocket(BaseWebSocket):
 
 
 class AsyncWebSocket(BaseWebSocket):
-    """An async WebSocket implementation using libcurl."""
+    """
+    An async WebSocket implementation using libcurl.
+
+    This implementation uses a dedicated background task for reading from the
+    socket and an asyncio.Queue to buffer incoming messages, allowing for
+    high-throughput, concurrent sending and receiving.
+
+    Both the reader and writer loops implement cooperative yielding to prevent
+    blocking the asyncio event loop during high-load scenarios.
+    """
+    _YIELD_INTERVAL_S: ClassVar[float] = 0.001
 
     def __init__(
         self,
@@ -581,17 +600,18 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
+        receive_queue_size: int = 4096,
     ):
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession = session
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._receive_queue: asyncio.Queue = asyncio.Queue(maxsize=4096)
+        self._receive_queue: asyncio.Queue = asyncio.Queue(maxsize=receive_queue_size)
         self._send_lock = asyncio.Lock()
         self._io_task: Optional[asyncio.Task[None]] = None
         self._sock_fd: int = -1
 
     @property
-    def loop(self):
+    def loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
@@ -633,24 +653,14 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _read_loop(self) -> None:
         """
-        The core I/O task. It actively drains the read buffer and waits for
-        read-readiness on-demand, correctly handling backpressure without
-        busy-waiting.
+        The core I/O task. It greedily drains the read buffer and waits
+        cooperatively for more data, yielding periodically to ensure fairness.
         """
         buffer: bytearray = bytearray()
-
-        # This is a tunable parameter. It represents the maximum duration the loop
-        # can run without yielding. 1ms is a reasonable default.
-        YIELD_INTERVAL_S = 0.001
-
         try:
             while not self.closed:
-                # Try to read and process as much data as is available in the
-                # socket buffer without waiting. This is the "greedy" part.
-
-                # Record the start time before entering the greedy loop
+                # Greedy Read Phase: process all data currently in the OS buffer.
                 start_time = self.loop.time()
-
                 while not self.closed:
                     try:
                         chunk, frame = self._curl.ws_recv()
@@ -665,29 +675,25 @@ class AsyncWebSocket(BaseWebSocket):
                                 self._handle_close_frame(message)
                                 return
 
-                            # THE FIX IS HERE: Check if the timeslice is exhausted
-                            if self.loop.time() - start_time > YIELD_INTERVAL_S:
-                                await asyncio.sleep(0)  # Yield control
-                                start_time = self.loop.time()  # Reset the timer
+                            # Cooperatively yield if we've been busy for too long.
+                            if self.loop.time() - start_time > self._YIELD_INTERVAL_S:
+                                await asyncio.sleep(0)
+                                start_time = self.loop.time()
 
                     except CurlError as e:
-                        # The OS socket buffer is empty. Break the inner loop.
                         if e.code == CurlECode.AGAIN:
+                            # OS buffer is empty, break to the waiting phase.
                             break
-
-                        # An actual error occurred.
+                        # A real error occurred.
                         await self._receive_queue.put((e, 0))
                         return
 
-                # The buffer was drained (EAGAIN was hit).
-                # We must now wait cooperatively for more data to arrive.
+                # Cooperative Wait Phase: wait for the socket to become readable.
                 read_ready_future = self.loop.create_future()
                 self.loop.add_reader(self._sock_fd, read_ready_future.set_result, None)
                 try:
-                    # Wait until the event loop signals the socket is readable again.
                     await read_ready_future
                 finally:
-                    # Remove the temporary reader registration
                     self.loop.remove_reader(self._sock_fd)
 
         except asyncio.CancelledError:
@@ -761,7 +767,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
         """
-        Sends data asynchronously, correctly handling backpressure and cooperatively
+        Sends data asynchronously, handling backpressure and cooperatively
         yielding to the event loop when sending large payloads.
         """
         if self.closed:
@@ -774,9 +780,6 @@ class AsyncWebSocket(BaseWebSocket):
             payload = payload.encode("utf-8")
 
         view = memoryview(payload)
-        # This is a tunable parameter, representing the maximum duration the loop
-        # can run without yielding. 1ms is a reasonable default.
-        YIELD_INTERVAL_S = 0.001
 
         async with self._send_lock:
             offset = 0
@@ -787,23 +790,21 @@ class AsyncWebSocket(BaseWebSocket):
                     n_sent = self._curl.ws_send(view[offset:], flags)
                     offset += n_sent
 
-                    # THE FIX IS HERE: Check if the timeslice is exhausted and yield control
-                    if self.loop.time() - start_time > YIELD_INTERVAL_S:
+                    # Cooperatively yield if we've been busy for too long.
+                    if self.loop.time() - start_time > self._YIELD_INTERVAL_S:
                         await asyncio.sleep(0)
-                        start_time = self.loop.time()  # Reset the timer for the new timeslice
+                        start_time = self.loop.time()
 
                 except CurlError as e:
                     if e.code == CurlECode.AGAIN:
-                        # The OS socket buffer is full. We must wait cooperatively.
+                        # The OS socket buffer is full. Wait for it to be ready.
                         future = self.loop.create_future()
                         self.loop.add_writer(self._sock_fd, future.set_result, None)
                         try:
                             await future
                         finally:
                             self.loop.remove_writer(self._sock_fd)
-
-                        # After waiting for the socket to be ready, reset the timeslice timer
-                        start_time = self.loop.time()
+                        start_time = self.loop.time()  # Reset timer after waiting.
                         continue
 
                     raise WebSocketError(f"Failed to send data: {e.message}", e.code) from e
@@ -849,45 +850,55 @@ class AsyncWebSocket(BaseWebSocket):
         """
         return await self.send(payload, CurlWsFlag.PING)
 
-    async def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
+    async def close(
+        self,
+        code: int = WsCloseCode.OK,
+        message: bytes = b"",
+        timeout: float = 5.0,
+    ) -> None:
+        """
+        Gracefully closes the WebSocket connection.
+
+        Sends a CLOSE frame and waits for the underlying connection to terminate.
+        """
         if self.closed:
             return
 
         self.closed = True
         try:
             close_frame = self._pack_close_frame(code, message)
-            # Use a short timeout to prevent close from blocking forever on a dead socket
-            await asyncio.wait_for(self.send(close_frame, CurlWsFlag.CLOSE), timeout=5.0)
-        except (WebSocketError, WebSocketClosed, asyncio.TimeoutError):
-            pass
+            await asyncio.wait_for(self.send(close_frame, CurlWsFlag.CLOSE), timeout=timeout)
+        except (WebSocketError, WebSocketClosed, asyncio.TimeoutError) as e:
+            log.debug(
+                "Ignored exception during WebSocket close handshake: %s", e, exc_info=self.debug
+            )
         finally:
+            # `terminate` ensures all resources are cleaned up regardless of handshake success.
             self.terminate()
             if self._io_task:
-                await asyncio.sleep(0)
+                await asyncio.sleep(0)  # Allow the cancelled task to finish.
                 self._io_task = None
 
-    def terminate(self):
-        """Forcibly terminates the connection and cleans up all resources."""
+    def terminate(self) -> None:
+        """
+        Forcibly terminates the connection and cleans up all resources immediately.
+        """
         if self._io_task and not self._io_task.done():
             self._io_task.cancel()
 
         if self._sock_fd != -1:
-            # Use try/except in case the writer was already removed or never added
             try:
                 self.loop.remove_reader(self._sock_fd)
-            except (ValueError, OSError):
-                pass
-            try:
-                # --- MODIFIED --- This is just for safety, but we shouldn't have a permanent writer.
                 self.loop.remove_writer(self._sock_fd)
-            except (ValueError, OSError):
+            except (ValueError, OSError, KeyError):
+                # Ignore errors if the fd was already removed or is invalid.
                 pass
             self._sock_fd = -1
 
-        # Terminate the underlying connection.
         super().terminate()
         if not self.session._closed:
-            # WebSocket curls CANNOT be reused
+            # WebSocket curls CANNOT be reused, so we discard it instead of
+            # returning it to the session's connection pool.
             self.session.push_curl(None)
 
     @staticmethod
