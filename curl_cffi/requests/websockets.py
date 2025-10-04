@@ -2,21 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import struct
+import warnings
 from enum import IntEnum
 from functools import partial
 from json import dumps, loads
 from select import select
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Literal,
-    Optional,
-    TypeVar,
-    Union,
-)
-import warnings
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Union
 
+from curl_cffi import AsyncSession, Response
 from curl_cffi.utils import CurlCffiWarning
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -74,9 +67,7 @@ class WsCloseCode(IntEnum):
 class WebSocketError(CurlError):
     """WebSocket-specific error."""
 
-    def __init__(
-        self, message: str, code: Union[WsCloseCode, CurlECode, Literal[0]] = 0
-    ):
+    def __init__(self, message: str, code: Union[WsCloseCode, CurlECode, Literal[0]] = 0):
         super().__init__(message, code)  # type: ignore
 
 
@@ -152,21 +143,12 @@ class BaseWebSocket:
                 code = struct.unpack_from("!H", frame)[0]
                 reason = frame[2:].decode()
             except UnicodeDecodeError as e:
-                raise WebSocketError(
-                    "Invalid close message", WsCloseCode.INVALID_DATA
-                ) from e
+                raise WebSocketError("Invalid close message", WsCloseCode.INVALID_DATA) from e
             except Exception as e:
-                raise WebSocketError(
-                    "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
-                ) from e
+                raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR) from e
             else:
-                if (
-                    code not in WsCloseCode._value2member_map_
-                    or code == WsCloseCode.UNKNOWN
-                ):
-                    raise WebSocketError(
-                        f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
-                    )
+                if code not in WsCloseCode._value2member_map_ or code == WsCloseCode.UNKNOWN:
+                    raise WebSocketError(f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR)
         return code, reason
 
     def terminate(self):
@@ -390,9 +372,7 @@ class WebSocket(BaseWebSocket):
 
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
+            raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
 
         while True:
             try:
@@ -447,9 +427,7 @@ class WebSocket(BaseWebSocket):
 
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
+            raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
 
         # Loop checks for CurlECode.Again
         # https://curl.se/libcurl/c/curl_ws_send.html
@@ -524,9 +502,7 @@ class WebSocket(BaseWebSocket):
 
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
+            raise WebSocketError("Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE)
 
         self._emit("open")
 
@@ -555,9 +531,7 @@ class WebSocket(BaseWebSocket):
                         except UnicodeDecodeError as e:
                             self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)
-                            raise WebSocketError(
-                                "Invalid UTF-8", WsCloseCode.INVALID_DATA
-                            ) from e
+                            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA) from e
 
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
                         self._emit("message", msg)
@@ -610,10 +584,12 @@ class AsyncWebSocket(BaseWebSocket):
         debug: bool = False,
     ):
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
-        self.session = session
+        self.session: AsyncSession[Response] = session
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._recv_lock = asyncio.Lock()
+        self._receive_queue: asyncio.Queue = asyncio.Queue(maxsize=4096)
         self._send_lock = asyncio.Lock()
+        self._io_task: Optional[asyncio.Task[None]] = None
+        self._sock_fd: int = -1
 
     @property
     def loop(self):
@@ -621,160 +597,182 @@ class AsyncWebSocket(BaseWebSocket):
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
 
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> None:
+        await self.close()
+
     def __aiter__(self) -> Self:
         if self.closed:
             raise WebSocketClosed("WebSocket has been closed")
+        if self._io_task is None:
+            self._start_io()
         return self
 
     async def __anext__(self) -> bytes:
-        msg, flags = await self.recv()
+        message, flags = await self.recv()
         if flags & CurlWsFlag.CLOSE:
             raise StopAsyncIteration
-        return msg
+        if message is None:
+            raise StopAsyncIteration
+        return message
 
-    async def recv_fragment(
-        self, *, timeout: Optional[float] = None
-    ) -> tuple[bytes, CurlWsFrame]:
-        """Receive a single frame as bytes.
+    def _start_io(self):
+        """Initializes the socket and starts the persistent I/O tasks."""
+        if self._io_task is not None:
+            return
 
-        Args:
-            timeout: how many seconds to wait before giving up.
-        """
-        if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
-        if self._recv_lock.locked():
-            raise TypeError("Concurrent call to recv_fragment() is not allowed")
-
-        async with self._recv_lock:
-            try:
-                chunk, frame = await asyncio.wait_for(
-                    self.loop.run_in_executor(None, self.curl.ws_recv), timeout
-                )
-            except asyncio.TimeoutError as e:
-                raise WebSocketTimeout("WebSocket recv_fragment() timed out") from e
-            if frame.flags & CurlWsFlag.CLOSE:
-                try:
-                    code, message = self._close_code, self._close_reason = (
-                        self._unpack_close_frame(chunk)
-                    )
-                except WebSocketError as e:
-                    # Follow the spec to close the connection
-                    # Errors do not respect autoclose
-                    self._close_code = e.code
-                    await self.close(e.code)
-                    raise
-                if self.autoclose:
-                    await self.close(code, message.encode())
-
-        return chunk, frame
-
-    async def recv(self, *, timeout: Optional[float] = None) -> tuple[bytes, int]:
-        """
-        Receive a frame as bytes. libcurl splits frames into fragments, so we have to
-        collect all the chunks for a frame.
-
-        Args:
-            timeout: how many seconds to wait before giving up.
-        """
-        loop = self.loop
-        chunks = []
-        flags = 0
-
-        sock_fd = await loop.run_in_executor(
-            None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
-        )
-        if sock_fd == CURL_SOCKET_BAD:
+        self._sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        if self._sock_fd == CURL_SOCKET_BAD:
             raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+                "Invalid active socket. Connection may have failed.",
+                code=CurlECode.NO_CONNECTION_AVAILABLE,
             )
-        while True:
-            try:
-                chunk, frame = await self.recv_fragment(timeout=timeout)
-                flags = frame.flags
-                chunks.append(chunk)
-                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                    break
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    await aselect(sock_fd, loop=loop, timeout=timeout)
-                else:
-                    raise
 
-        return b"".join(chunks), flags
+        self._io_task = self.loop.create_task(self._read_loop())
+
+    async def _read_loop(self) -> None:
+        """
+        The core I/O task. It actively drains the read buffer and waits for
+        read-readiness on-demand, correctly handling backpressure without
+        busy-waiting.
+        """
+        buffer: bytearray = bytearray()
+        try:
+            while not self.closed:
+                # Try to read and process as much data as is available in the
+                # socket buffer without waiting.
+                while not self.closed:
+                    try:
+                        chunk, frame = self._curl.ws_recv()
+                        buffer.extend(chunk)
+
+                        if frame.bytesleft == 0 and not (frame.flags & CurlWsFlag.CONT):
+                            message, flags = bytes(buffer), frame.flags
+                            buffer.clear()
+                            await self._receive_queue.put((message, flags))
+
+                            if flags & CurlWsFlag.CLOSE:
+                                self._handle_close_frame(message)
+                                return
+                    except CurlError as e:
+                        # The OS socket buffer is empty. Break the loop.
+                        if e.code == CurlECode.AGAIN:
+                            break
+
+                        # Error occurred.
+                        await self._receive_queue.put((e, 0))
+                        return
+
+                # The buffer was drained (EAGAIN).
+                # We must now wait for more data to arrive.
+                read_ready_future = self.loop.create_future()
+                self.loop.add_reader(self._sock_fd, read_ready_future.set_result, None)
+                try:
+                    # Wait until the event loop signals the socket is readable again.
+                    await read_ready_future
+                finally:
+                    # Remove the temporary reader registration
+                    self.loop.remove_reader(self._sock_fd)
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            if not self.closed:
+                await self._receive_queue.put((e, 0))
+        finally:
+            if not self.closed:
+                await self.close(WsCloseCode.ABNORMAL_CLOSURE)
+
+    def _handle_close_frame(self, message: bytes):
+        """Processes a received CLOSE frame."""
+        try:
+            self._close_code, self._close_reason = self._unpack_close_frame(message)
+        except WebSocketError as e:
+            self._close_code = e.code
+        finally:
+            if self.autoclose and not self.closed:
+                self.loop.create_task(self.close(self._close_code or WsCloseCode.OK))
+
+    async def recv(self, *, timeout: Optional[float] = None) -> tuple[Optional[bytes], int]:
+        """Receives a single message from the WebSocket."""
+        if self.closed and self._receive_queue.empty():
+            raise WebSocketClosed("WebSocket is closed")
+
+        if self._io_task is None:
+            self._start_io()
+
+        try:
+            future = self._receive_queue.get()
+            result, flags = await asyncio.wait_for(future, timeout)
+            if isinstance(result, Exception):
+                raise result
+            return result, flags
+        except asyncio.TimeoutError as e:
+            raise WebSocketTimeout("WebSocket recv() timed out") from e
 
     async def recv_str(self, *, timeout: Optional[float] = None) -> str:
-        """Receive a text frame.
-
-        Args:
-            timeout: how many seconds to wait before giving up.
-        """
         data, flags = await self.recv(timeout=timeout)
-        if not (flags & CurlWsFlag.TEXT):
-            raise WebSocketError("Invalid UTF-8", WsCloseCode.INVALID_DATA)
-        return data.decode()
+        if data is None or not (flags & CurlWsFlag.TEXT):
+            raise WebSocketError("Not a valid text frame", WsCloseCode.INVALID_DATA)
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise WebSocketError("Invalid UTF-8 in text frame", WsCloseCode.INVALID_DATA) from e
 
-    async def recv_json(
-        self, *, loads: Callable[[str], T] = loads, timeout: Optional[float] = None
-    ) -> T:
-        """Receive a JSON frame.
+    async def recv_json(self, *, loads: Callable[[Union[str, bytes]], T] = loads, timeout: Optional[float] = None) -> T:
+        data, flags = await self.recv(timeout=timeout)
+        if data is None:
+            raise WebSocketError("Received empty frame, cannot decode JSON", WsCloseCode.INVALID_DATA)
+        if flags & CurlWsFlag.TEXT:
+            try:
+                return loads(data.decode("utf-8"))
+            except UnicodeDecodeError as e:
+                raise WebSocketError("Invalid UTF-8 in JSON text frame", WsCloseCode.INVALID_DATA) from e
+            except Exception:
+                return loads(data)
+        elif flags & CurlWsFlag.BINARY:
+            return loads(data)
+        else:
+            raise WebSocketError("Not a valid text or binary frame for JSON", WsCloseCode.INVALID_DATA)
 
-        Args:
-            loads: JSON decoder, default is json.loads.
-            timeout: how many seconds to wait before giving up.
+    async def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
         """
-        data = await self.recv_str(timeout=timeout)
-        return loads(data)
-
-    async def send(
-        self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY
-    ):
-        """Send a data frame.
-
-        Args:
-            payload: data to send.
-            flags: flags for the frame.
+        Sends data asynchronously, correctly handling backpressure without busy-waiting.
         """
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
 
-        # curl expects bytes
+        if self._io_task is None:
+            self._start_io()
+
         if isinstance(payload, str):
-            payload = payload.encode()
+            payload = payload.encode("utf-8")
 
-        sock_fd = await self.loop.run_in_executor(
-            None, self.curl.getinfo, CurlInfo.ACTIVESOCKET
-        )
-        if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
+        view = memoryview(payload)
 
-        # TODO: Why does concurrently sending fail
         async with self._send_lock:
             offset = 0
-
-            # Loop checks for CurlECode.Again
-            # https://curl.se/libcurl/c/curl_ws_send.html
-            while offset < len(payload):
-                current_buffer = payload[offset:]
-
+            payload_len = len(payload)
+            while offset < payload_len:
                 try:
-                    n_sent = await self.loop.run_in_executor(
-                        None, self.curl.ws_send, current_buffer, flags
-                    )
+                    n_sent = self._curl.ws_send(view[offset:], flags)
+                    offset += n_sent
                 except CurlError as e:
                     if e.code == CurlECode.AGAIN:
-                        writeable = await aselect(
-                            sock_fd, mode="write", loop=self.loop, timeout=0.5
-                        )
-                        if not writeable:
-                            raise WebSocketError("Socket write timeout") from e
+                        future = self.loop.create_future()
+                        # Register the writer callback
+                        self.loop.add_writer(self._sock_fd, future.set_result, None)
+                        try:
+                            # Wait for the callback to fire
+                            await future
+                        finally:
+                            # Unregister the writer afterwards
+                            self.loop.remove_writer(self._sock_fd)
                         continue
-                    raise
 
-                offset += n_sent
-
-        return offset
+                    raise WebSocketError(f"Failed to send data: {e.message}", e.code) from e
 
     async def send_binary(self, payload: bytes):
         """Send a binary frame.
@@ -818,22 +816,60 @@ class AsyncWebSocket(BaseWebSocket):
         return await self.send(payload, CurlWsFlag.PING)
 
     async def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
-        """Close the connection.
+        if self.closed:
+            return
 
-        Args:
-            code: close code.
-            message: close reason.
-        """
-        # TODO: As per spec, we should wait for the server to close the connection
-        # But this is not a requirement
-        msg = self._pack_close_frame(code, message)
-        await self.send(msg, CurlWsFlag.CLOSE)
-        # The only way to close the connection appears to be curl_easy_cleanup
-        self.terminate()
+        self.closed = True
+        try:
+            close_frame = self._pack_close_frame(code, message)
+            # Use a short timeout to prevent close from blocking forever on a dead socket
+            await asyncio.wait_for(self.send(close_frame, CurlWsFlag.CLOSE), timeout=5.0)
+        except (WebSocketError, WebSocketClosed, asyncio.TimeoutError):
+            pass
+        finally:
+            self.terminate()
+            if self._io_task:
+                await asyncio.sleep(0)
+                self._io_task = None
 
     def terminate(self):
-        """Terminate the underlying connection."""
+        """Forcibly terminates the connection and cleans up all resources."""
+        if self._io_task and not self._io_task.done():
+            self._io_task.cancel()
+
+        if self._sock_fd != -1:
+            # Use try/except in case the writer was already removed or never added
+            try:
+                self.loop.remove_reader(self._sock_fd)
+            except (ValueError, OSError):
+                pass
+            try:
+                # --- MODIFIED --- This is just for safety, but we shouldn't have a permanent writer.
+                self.loop.remove_writer(self._sock_fd)
+            except (ValueError, OSError):
+                pass
+            self._sock_fd = -1
+
+        # Terminate the underlying connection.
         super().terminate()
         if not self.session._closed:
             # WebSocket curls CANNOT be reused
             self.session.push_curl(None)
+
+    @staticmethod
+    def _pack_close_frame(code: int, reason: bytes) -> bytes:
+        return struct.pack("!H", code) + reason
+
+    @staticmethod
+    def _unpack_close_frame(frame: bytes) -> tuple[int, str]:
+        if len(frame) < 2:
+            return WsCloseCode.ABNORMAL_CLOSURE, ""
+        try:
+            code = struct.unpack_from("!H", frame)[0]
+            reason = frame[2:].decode("utf-8")
+        except (struct.error, UnicodeDecodeError):
+            raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR)
+
+        if not (1000 <= code <= 1015 or 3000 <= code <= 4999):
+            raise WebSocketError(f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR)
+        return code, reason
