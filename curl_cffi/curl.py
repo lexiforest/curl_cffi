@@ -485,7 +485,7 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
 
-    def ws_recv(self) -> tuple[bytes, "CurlWsFrame"]:
+    def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
 
         This method uses a pre-allocated buffer for efficiency.
