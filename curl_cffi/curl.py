@@ -144,6 +144,8 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
+    _WS_RECV_BUFFER_SIZE = 65536
+
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
         Parameters:
@@ -165,6 +167,12 @@ class Curl:
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
         self._set_error_buffer()
+
+        # Pre-allocated CFFI objects for performance
+        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
+        self._ws_recv_n_recv = ffi.new("size_t *")
+        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent = ffi.new("size_t *")
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
@@ -227,15 +235,11 @@ class Curl:
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback)
         elif option == CurlOpt.HEADERDATA:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback)
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -244,9 +248,7 @@ class Curl:
         elif option == CurlOpt.HEADERFUNCTION:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(
-                self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
-            )
+            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback)
             option = CurlOpt.HEADERDATA
         elif option == CurlOpt.DEBUGFUNCTION:
             if value is True:
@@ -269,9 +271,7 @@ class Curl:
             ret = lib._curl_easy_setopt(self._curl, option, self._headers)
         elif option == CurlOpt.PROXYHEADER:
             for proxy_header in value:
-                self._proxy_headers = lib.curl_slist_append(
-                    self._proxy_headers, proxy_header
-                )
+                self._proxy_headers = lib.curl_slist_append(self._proxy_headers, proxy_header)
             ret = lib._curl_easy_setopt(self._curl, option, self._proxy_headers)
         elif option == CurlOpt.RESOLVE:
             for resolve in value:
@@ -349,9 +349,7 @@ class Curl:
         """
         if self._curl is None:
             return 0  # silently ignore if curl handle is None
-        return lib.curl_easy_impersonate(
-            self._curl, target.encode(), int(default_headers)
-        )
+        return lib.curl_easy_impersonate(self._curl, target.encode(), int(default_headers))
 
     def _ensure_cacert(self) -> None:
         if not self._is_cert_set:
@@ -487,11 +485,10 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
 
-    def ws_recv(self, n: int = 1024) -> tuple[bytes, CurlWsFrame]:
+    def ws_recv(self) -> tuple[bytes, "CurlWsFrame"]:
         """Receive a frame from a websocket connection.
 
-        Args:
-            n: maximum data to receive.
+        This method uses a pre-allocated buffer for efficiency.
 
         Returns:
             a tuple of frame content and curl frame meta struct.
@@ -501,18 +498,16 @@ class Curl:
         """
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
-
-        buffer = ffi.new("char[]", n)
-        n_recv = ffi.new("size_t *")
-        p_frame = ffi.new("struct curl_ws_frame **")
-
-        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
+        ret = lib.curl_ws_recv(
+            self._curl,
+            self._ws_recv_buffer,
+            self._WS_RECV_BUFFER_SIZE,
+            self._ws_recv_n_recv,
+            self._ws_recv_p_frame,
+        )
         self._check_error(ret, "WS_RECV")
-
-        # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
-        frame = p_frame[0]
-
-        return ffi.buffer(buffer)[: n_recv[0]], frame
+        frame = self._ws_recv_p_frame[0]
+        return ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]], frame
 
     def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
         """Send data to a websocket connection.
@@ -530,11 +525,10 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
-        n_sent = ffi.new("size_t *")
         buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(payload), n_sent, 0, flags)
+        ret = lib.curl_ws_send(self._curl, buffer, len(payload), self._ws_send_n_sent, 0, flags)
         self._check_error(ret, "WS_SEND")
-        return n_sent[0]
+        return self._ws_send_n_sent[0]
 
     def ws_close(self, code: int = 1000, message: bytes = b"") -> int:
         """Close a websocket connection. Shorthand for :meth:`ws_send`
@@ -551,7 +545,8 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        return self.ws_send(struct.pack("!H", code) + message)
+        payload = struct.pack("!H", code) + message
+        return self.ws_send(payload, flags=CurlWsFlag.CLOSE)
 
 
 class CurlMime:
