@@ -409,7 +409,11 @@ class WebSocket(BaseWebSocket):
         data = self.recv_str()
         return loads(data)
 
-    def send(self, payload: Union[str, bytes, memoryview], flags: CurlWsFlag = CurlWsFlag.BINARY):
+    def send(
+        self,
+        payload: Union[str, bytes, memoryview],
+        flags: CurlWsFlag = CurlWsFlag.BINARY,
+    ):
         """Send a data frame.
 
         Args:
@@ -603,6 +607,7 @@ class AsyncWebSocket(BaseWebSocket):
         queue_size: int = 4096,
         max_send_batch_size: int = 256,
         max_batching_delay: float = 0.005,
+        coalesce_frames: bool = False,
     ) -> None:
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -619,19 +624,14 @@ class AsyncWebSocket(BaseWebSocket):
             maxsize=queue_size
         )
         self._max_send_batch_size: int = max_send_batch_size
+        self._max_batching_delay: float = max_batching_delay
+        self._coalesce_frames: bool = coalesce_frames
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> None:
-        if not self.closed:
-            await self.close()
 
     def __aiter__(self) -> Self:
         if self.closed:
@@ -953,7 +953,9 @@ class AsyncWebSocket(BaseWebSocket):
         it implements an adaptive batching strategy. It greedily gathers
         multiple pending messages from the queue and then coalesces the
         payloads of messages that share the same flags (e.g., all text frames)
-        into a single, larger payload.
+        into a single, larger payload, ONLY if the attribute to coalesce frames
+        is enabled. Otherwise, it will batch as many as possible, then iterate
+        over the batch and send the frames, one at a time.
 
         This batching and coalescing significantly improves throughput for
         high volumes of small messages. The final, consolidated payloads are
@@ -962,8 +964,12 @@ class AsyncWebSocket(BaseWebSocket):
         try:
             while not self.closed:
                 try:
-                    # Get the first message to start a batch
-                    payload, flags = await self._send_queue.get()
+                    # Get the first message to start a batch, but with a timeout
+                    payload, flags = await asyncio.wait_for(
+                        self._send_queue.get(), timeout=self._max_batching_delay
+                    )
+                except asyncio.TimeoutError:
+                    continue
                 except asyncio.CancelledError:
                     break
 
@@ -981,16 +987,29 @@ class AsyncWebSocket(BaseWebSocket):
                     except asyncio.QueueEmpty:
                         break
 
-                # Coalesce payloads with the same flags for efficiency
-                coalesced_payloads = {}
-                for p, f in batch:
-                    if f not in coalesced_payloads:
-                        coalesced_payloads[f] = bytearray()
-                    coalesced_payloads[f].extend(p)
+                # Conditionally process the batch based on the coalescing strategy.
+                if self._coalesce_frames:
+                    coalesced_payloads: dict[int, list[bytes]] = {}
 
-                for msg_flags, full_payload in coalesced_payloads.items():
-                    if full_payload:
-                        await self._send_coalesced(bytes(full_payload), msg_flags)
+                    for payload_chunk, frame_flags in batch:
+                        # If we haven't seen this flag type yet, create a new list for it.
+                        if frame_flags not in coalesced_payloads:
+                            coalesced_payloads[frame_flags] = []
+
+                        # Append the current chunk to the list for its flag type.
+                        coalesced_payloads[frame_flags].append(payload_chunk)
+
+                    # Now, iterate through the dictionary.
+                    for msg_flags, list_of_payloads in coalesced_payloads.items():
+                        if list_of_payloads:
+                            # Join the list of chunks into a single bytes object.
+                            full_payload = b"".join(list_of_payloads)
+                            await self._send_coalesced(full_payload, msg_flags)
+                else:
+                    # Safe and preserves frame boundaries, the default.
+                    for msg_payload, msg_flags in batch:
+                        if msg_payload:
+                            await self._send_coalesced(msg_payload, msg_flags)
 
                 # Mark all tasks in the processed batch as done
                 for _ in range(len(batch)):
@@ -1143,7 +1162,7 @@ class AsyncWebSocket(BaseWebSocket):
         Waits until the send queue is empty.
 
         This ensures that all messages passed to `send()` have been picked up
-        by the internal writer task. It does *not* guarantee that the data has
+        by the internal writer task. It does not guarantee that the data has
         been written to the OS socket buffer or sent over the network.
         """
         await self._send_queue.join()
