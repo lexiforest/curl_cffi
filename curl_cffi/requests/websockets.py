@@ -409,7 +409,7 @@ class WebSocket(BaseWebSocket):
         data = self.recv_str()
         return loads(data)
 
-    def send(self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY):
+    def send(self, payload: Union[str, bytes, memoryview], flags: CurlWsFlag = CurlWsFlag.BINARY):
         """Send a data frame.
 
         Args:
@@ -591,7 +591,7 @@ class AsyncWebSocket(BaseWebSocket):
     _BATCHING_YIELD_INTERVAL: ClassVar[int] = 127
     _YIELD_INTERVAL_S: ClassVar[float] = 0.001
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 1024 * 1024
-    _CURL_BUFSIZE: ClassVar[int] = 512 * 1024
+    _CURL_BUFSIZE: ClassVar[int] = 2 * 1024 * 1024
 
     def __init__(
         self,
@@ -609,6 +609,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._sock_fd: int = -1
         self._send_lock: asyncio.Lock = asyncio.Lock()
+        self._close_lock: asyncio.Lock = asyncio.Lock()
         self._read_task: Optional[asyncio.Task[None]] = None
         self._write_task: Optional[asyncio.Task[None]] = None
         self._receive_queue: asyncio.Queue[WS_QUEUE_ITEM] = asyncio.Queue(
@@ -618,7 +619,6 @@ class AsyncWebSocket(BaseWebSocket):
             maxsize=queue_size
         )
         self._max_send_batch_size: int = max_send_batch_size
-        self._max_batching_delay: float = max_batching_delay
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -820,33 +820,34 @@ class AsyncWebSocket(BaseWebSocket):
             message (bytes, optional): Close reason. Defaults to b"".
             timeout (float, optional): How long in seconds to wait closed.
         """
-        if self.closed:
-            return
+        async with self._close_lock:
+            if self.closed:
+                return
 
-        self.closed = True
+            self.closed = True
 
-        # Gracefully send the close frame if the writer is still alive
-        try:
-            if self._write_task and not self._write_task.done():
-                close_frame = self._pack_close_frame(code, message)
-                await asyncio.wait_for(
-                    self.send(close_frame, CurlWsFlag.CLOSE), timeout=timeout
-                )
-                await asyncio.wait_for(self.flush(), timeout=timeout)
-        except (
-            WebSocketError,
-            WebSocketClosed,
-            asyncio.TimeoutError,
-            asyncio.CancelledError,
-        ) as e:
-            if self.debug:
-                warnings.warn(
-                    f"Ignored exception during WebSocket close handshake: {e!r}",
-                    CurlCffiWarning,
-                    stacklevel=2,
-                )
-        finally:
-            self.terminate()
+            # Gracefully send the close frame if the writer is still alive
+            try:
+                if self._write_task and not self._write_task.done():
+                    close_frame = self._pack_close_frame(code, message)
+                    await asyncio.wait_for(
+                        self.send(close_frame, CurlWsFlag.CLOSE), timeout=timeout
+                    )
+                    await asyncio.wait_for(self.flush(), timeout=timeout)
+            except (
+                WebSocketError,
+                WebSocketClosed,
+                asyncio.TimeoutError,
+                asyncio.CancelledError,
+            ) as e:
+                if self.debug:
+                    warnings.warn(
+                        f"Ignored exception during WebSocket close handshake: {e!r}",
+                        CurlCffiWarning,
+                        stacklevel=2,
+                    )
+            finally:
+                self.terminate()
 
     @override
     def terminate(self) -> None:
@@ -879,9 +880,9 @@ class AsyncWebSocket(BaseWebSocket):
         """The main asynchronous task for reading incoming WebSocket frames.
 
         This method runs a continuous loop that is responsible for all read
-        operations from the underlying socket. It reconstructs complete messages
-        from one or more fragments delivered by libcurl, then places the final
-        message (or any encountered exception) onto the `_receive_queue`.
+        operations from the underlying socket. It collects message fragments
+        delivered by libcurl into a list and joins them to reconstruct the
+        complete message, which is then placed onto the `_receive_queue`.
 
         The loop handles non-blocking I/O by listening for readability events
         on the socket file descriptor when a read operation would otherwise
@@ -891,7 +892,7 @@ class AsyncWebSocket(BaseWebSocket):
         asyncio event loop periodically, preventing it from starving other
         concurrent tasks during high message volumes.
         """
-        buffer = bytearray()
+        chunks = []
         msg_counter = 0
         try:
             while not self.closed:
@@ -899,11 +900,11 @@ class AsyncWebSocket(BaseWebSocket):
                 while True:
                     try:
                         chunk, frame = self._curl.ws_recv()
-                        buffer.extend(chunk)
+                        chunks.append(chunk)
                         if frame.bytesleft > 0 or (frame.flags & CurlWsFlag.CONT):
                             continue
-                        message, flags = bytes(buffer), frame.flags
-                        buffer.clear()
+                        message, flags = b"".join(chunks), frame.flags
+                        chunks.clear()
                         msg_counter += 1
                         await self._receive_queue.put((message, flags))
                         if flags & CurlWsFlag.CLOSE:
@@ -929,9 +930,17 @@ class AsyncWebSocket(BaseWebSocket):
             pass
         except Exception as e:
             if not self.closed:
-                await self._receive_queue.put((e, 0))
+                try:
+                    self._receive_queue.put_nowait((e, 0))
+                except asyncio.QueueFull:
+                    pass
         finally:
-            await self._receive_queue.put((WebSocketClosed("Connection closed."), 0))
+            try:
+                self._receive_queue.put_nowait(
+                    (WebSocketClosed("Connection closed."), 0)
+                )
+            except asyncio.QueueFull:
+                pass
 
             if not self.closed:
                 self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
@@ -940,20 +949,15 @@ class AsyncWebSocket(BaseWebSocket):
         """The main asynchronous task for writing outgoing WebSocket frames.
 
         This method runs a continuous loop that consumes messages from the
-        `_send_queue`, which are placed there by public methods like `send()`
-        or `send_json()`.
+        `_send_queue`. To improve performance and reduce system call overhead,
+        it implements an adaptive batching strategy. It greedily gathers
+        multiple pending messages from the queue and then coalesces the
+        payloads of messages that share the same flags (e.g., all text frames)
+        into a single, larger payload.
 
-        To improve performance and reduce the overhead of system calls, this
-        loop implements an adaptive batching strategy. It attempts to gather
-        multiple pending messages from the queue. If consecutive messages share
-        the same flags (e.g., they are all binary frames), their payloads are
-        coalesced into a single, larger payload before being sent. If flags
-        differ, messages in the batch are sent individually.
-
-        The actual socket write operation, including handling fragmentation and
-        non-blocking I/O, is delegated to the `_send_coalesced` method.
-        Any exceptions encountered during the write process are placed on the
-        `_receive_queue` to be propagated to the consumer.
+        This batching and coalescing significantly improves throughput for
+        high volumes of small messages. The final, consolidated payloads are
+        then passed to the `_send_coalesced` method for transmission.
         """
         try:
             while not self.closed:
@@ -977,9 +981,16 @@ class AsyncWebSocket(BaseWebSocket):
                     except asyncio.QueueEmpty:
                         break
 
-                # This preserves the message boundaries
-                for msg_payload, msg_flags in batch:
-                    await self._send_coalesced(msg_payload, msg_flags)
+                # Coalesce payloads with the same flags for efficiency
+                coalesced_payloads = {}
+                for p, f in batch:
+                    if f not in coalesced_payloads:
+                        coalesced_payloads[f] = bytearray()
+                    coalesced_payloads[f].extend(p)
+
+                for msg_flags, full_payload in coalesced_payloads.items():
+                    if full_payload:
+                        await self._send_coalesced(bytes(full_payload), msg_flags)
 
                 # Mark all tasks in the processed batch as done
                 for _ in range(len(batch)):
@@ -995,10 +1006,18 @@ class AsyncWebSocket(BaseWebSocket):
                 self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
 
     async def _send_chunk(self, chunk_view: memoryview, flags: CurlWsFlag) -> int:
-        """Sends a chunk, handling EAGAIN. Must hold _send_lock before calling."""
+        """Sends a single chunk of data, handling EAGAIN and write locks.
+
+        This is the lowest-level write operation. It acquires the asyncio Lock
+        to ensure that calls to the underlying `curl_ws_send` are serialized,
+        making it safe from concurrent access. The lock is held for the
+        shortest possible duration. It will wait for the socket to become
+        writable if libcurl returns an EAGAIN error.
+        """
         while True:
             try:
-                return self._curl.ws_send(chunk_view, flags)
+                async with self._send_lock:
+                    return self._curl.ws_send(chunk_view, flags)
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     write_future = self.loop.create_future()
@@ -1011,19 +1030,13 @@ class AsyncWebSocket(BaseWebSocket):
                 raise
 
     async def _send_coalesced(self, payload: bytes, flags: CurlWsFlag) -> None:
-        """Performs the low-level, locked operation of sending a payload.
+        """Breaks a payload into chunks and sends them sequentially.
 
-        This coroutine is responsible for the actual transmission of a byte
-        payload over the socket. It acquires an asyncio Lock (`_send_lock`)
-        to ensure that all write operations are serialized, preventing potential
-        race conditions or corruption from concurrent calls to the underlying
-        libcurl `ws_send` function.
-
-        It handles payloads that may be larger than libcurl's internal buffer
-        by breaking them into chunks of `_MAX_CURL_FRAME_SIZE` and sending them
-        sequentially. It also manages non-blocking I/O by calling
-        `_send_chunk`, which waits for the socket to become writable if a send
-        attempt returns `EAGAIN`.
+        This coroutine is responsible for the fragmentation of a potentially
+        large payload into chunks that are suitable for libcurl. It then
+        delegates the actual transmission of each chunk, including lock
+        acquisition and non-blocking I/O management, to the `_send_chunk`
+        method.
 
         Args:
             payload: The complete byte payload to be sent.
@@ -1033,24 +1046,21 @@ class AsyncWebSocket(BaseWebSocket):
         offset = 0
         write_ops_since_yield = 0
 
-        # NOTE: libcurl's curl_ws_send is not safe to be called concurrently
-        # on the same handle from different threads/tasks
-        async with self._send_lock:
-            while offset < len(view):
-                chunk_size = min(len(view) - offset, self._MAX_CURL_FRAME_SIZE)
-                chunk_view = view[offset : offset + chunk_size]
-                if (write_ops_since_yield & self._BATCHING_YIELD_INTERVAL) == 0:
-                    await asyncio.sleep(0)
-                    write_ops_since_yield = 0
+        while offset < len(view):
+            chunk_size = min(len(view) - offset, self._MAX_CURL_FRAME_SIZE)
+            chunk_view = view[offset : offset + chunk_size]
+            if (write_ops_since_yield & self._BATCHING_YIELD_INTERVAL) == 0:
+                await asyncio.sleep(0)
+                write_ops_since_yield = 0
 
-                try:
-                    n_sent = await self._send_chunk(chunk_view, flags)
-                except CurlError as e:
-                    await self._receive_queue.put((e, 0))
-                    return
+            try:
+                n_sent = await self._send_chunk(chunk_view, flags)
+            except CurlError as e:
+                await self._receive_queue.put((e, 0))
+                return
 
-                offset += n_sent
-                write_ops_since_yield += 1
+            offset += n_sent
+            write_ops_since_yield += 1
 
     async def send_from_iterator(
         self, data_iterator: Union[Iterable[bytes], AsyncIterable[bytes]]
@@ -1105,8 +1115,22 @@ class AsyncWebSocket(BaseWebSocket):
                     write_ops_since_yield = 0
 
                 try:
-                    n_sent = await self._send_chunk(chunk_view, CurlWsFlag.BINARY)
-
+                    while True:
+                        try:
+                            n_sent = self._curl.ws_send(chunk_view, CurlWsFlag.BINARY)
+                            break
+                        except CurlError as e:
+                            if e.code == CurlECode.AGAIN:
+                                write_future = self.loop.create_future()
+                                self.loop.add_writer(
+                                    self._sock_fd, write_future.set_result, None
+                                )
+                                try:
+                                    await write_future
+                                finally:
+                                    self.loop.remove_writer(self._sock_fd)
+                                continue
+                            raise
                 except CurlError as e:
                     await self._receive_queue.put((e, 0))
                     return
@@ -1115,8 +1139,12 @@ class AsyncWebSocket(BaseWebSocket):
                 write_ops_since_yield += 1
 
     async def flush(self) -> None:
-        """Flush the send queue manually. It doesn't guarantee that the data has
-        been written to the socket, only that the `_write_loop` has processed it.
+        """
+        Waits until the send queue is empty.
+
+        This ensures that all messages passed to `send()` have been picked up
+        by the internal writer task. It does *not* guarantee that the data has
+        been written to the OS socket buffer or sent over the network.
         """
         await self._send_queue.join()
 
