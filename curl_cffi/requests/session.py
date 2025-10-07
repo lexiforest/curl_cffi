@@ -940,7 +940,7 @@ class AsyncSession(BaseSession[R]):
         curl.setopt(CurlOpt.BUFFERSIZE, 2 * 1024 * 1024)  # 2MB buffer size
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(
+        ws: AsyncWebSocket = AsyncWebSocket(
             cast(AsyncSession[Response], self),
             curl,
             autoclose=autoclose,
@@ -949,6 +949,8 @@ class AsyncSession(BaseSession[R]):
             max_batching_delay=max_batching_delay,
             coalesce_frames=coalesce_frames,
         )
+        ws._start_io_tasks()
+        return ws
 
     async def request(
         self,

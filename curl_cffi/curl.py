@@ -168,7 +168,7 @@ class Curl:
         self._debug = debug
         self._set_error_buffer()
 
-        # Pre-allocated CFFI objects for performance
+        # Pre-allocated CFFI objects for WebSocket performance
         self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
         self._ws_recv_n_recv = ffi.new("size_t *")
         self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")

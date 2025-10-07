@@ -5,6 +5,7 @@ import struct
 import warnings
 from collections.abc import AsyncIterable, Iterable
 from enum import IntEnum
+from contextlib import suppress
 from functools import partial
 from json import dumps, loads
 from select import select
@@ -607,6 +608,7 @@ class AsyncWebSocket(BaseWebSocket):
         max_send_batch_size: int = 256,
         max_batching_delay: float = 0.005,
         coalesce_frames: bool = False,
+        retry_on_recv_error: bool = True,
     ) -> None:
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -625,6 +627,8 @@ class AsyncWebSocket(BaseWebSocket):
         self._max_send_batch_size: int = max_send_batch_size
         self._max_batching_delay: float = max_batching_delay
         self._coalesce_frames: bool = coalesce_frames
+        self.retry_on_recv_error: bool = retry_on_recv_error
+        self._recv_retry_count: int = 0
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -635,7 +639,6 @@ class AsyncWebSocket(BaseWebSocket):
     def __aiter__(self) -> Self:
         if self.closed:
             raise WebSocketClosed("WebSocket has been closed")
-        self._start_io_tasks()
         return self
 
     async def __anext__(self) -> bytes:
@@ -644,8 +647,26 @@ class AsyncWebSocket(BaseWebSocket):
             raise StopAsyncIteration
         return msg
 
+    def __del__(self) -> None:
+        """Warn if the WebSocket was not explicitly closed."""
+        if not self.closed:
+            warnings.warn(
+                (
+                    f"Unclosed WebSocket {self!r}. Please await ws.close() to ensure "
+                    "proper resource cleanup."
+                ),
+                category=CurlCffiWarning,
+                source=self,
+                stacklevel=2,
+            )
+
+            # Attempt resource cleanup as a last ditch attempt
+            if not self.loop.is_closed():
+                self.loop.call_soon_threadsafe(self.terminate)
+
     def _start_io_tasks(self) -> None:
-        """Start the read/write loop async tasks and set buffer size.
+        """Start the read/write I/O loop tasks.
+        This should be called only once after object creation by the factory.
 
         Raises:
             WebSocketError: The WebSocket FD was invalid.
@@ -686,7 +707,6 @@ class AsyncWebSocket(BaseWebSocket):
         """
         if self.closed and self._receive_queue.empty():
             raise WebSocketClosed("WebSocket is closed")
-        self._start_io_tasks()
         try:
             result, flags = await asyncio.wait_for(self._receive_queue.get(), timeout)
             if isinstance(result, Exception):
@@ -758,7 +778,6 @@ class AsyncWebSocket(BaseWebSocket):
         """
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
-        self._start_io_tasks()
 
         # curl expects bytes
         if isinstance(payload, str):
@@ -850,12 +869,15 @@ class AsyncWebSocket(BaseWebSocket):
     @override
     def terminate(self) -> None:
         """Terminate the underlying connection."""
+        if self.closed:
+            return
+        self.closed = True
+
+        # Cancel the tasks started in the I/O loop.
         stop_tasks: set[Union[asyncio.Task[None], None]] = {
             self._read_task,
             self._write_task,
         }
-
-        # Cancel the tasks started in the I/O loop.
         for io_task in stop_tasks:
             if io_task and not io_task.done():
                 io_task.cancel()
@@ -890,7 +912,7 @@ class AsyncWebSocket(BaseWebSocket):
         asyncio event loop periodically, preventing it from starving other
         concurrent tasks during high message volumes.
         """
-        chunks = []
+        chunks: list[bytes] = []
         msg_counter = 0
         try:
             while not self.closed:
@@ -924,21 +946,22 @@ class AsyncWebSocket(BaseWebSocket):
                     await read_future
                 finally:
                     self.loop.remove_reader(self._sock_fd)
+
         except asyncio.CancelledError:
             pass
+
         except Exception as e:
             if not self.closed:
-                try:
+                with suppress(asyncio.QueueFull):
                     self._receive_queue.put_nowait((e, 0))
-                except asyncio.QueueFull:
-                    pass
         finally:
-            try:
+            with suppress(asyncio.QueueFull):
                 self._receive_queue.put_nowait(
                     (WebSocketClosed("Connection closed."), 0)
                 )
-            except asyncio.QueueFull:
-                pass
+
+            if self._write_task and not self._write_task.done():
+                self._write_task.cancel()
 
             if not self.closed:
                 self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
@@ -990,7 +1013,7 @@ class AsyncWebSocket(BaseWebSocket):
                     coalesced_payloads: dict[int, list[bytes]] = {}
 
                     for payload_chunk, frame_flags in batch:
-                        # If we haven't seen this flag type yet, create a new list for it.
+                        # If we haven't seen this flag type yet, create a new list.
                         if frame_flags not in coalesced_payloads:
                             coalesced_payloads[frame_flags] = []
 
@@ -1018,6 +1041,9 @@ class AsyncWebSocket(BaseWebSocket):
             if not self.closed:
                 await self._receive_queue.put((e, 0))
         finally:
+            if self._read_task and not self._read_task.done():
+                self._read_task.cancel()
+
             # If the write loop dies, the whole connection is closed.
             if not self.closed:
                 self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
@@ -1098,10 +1124,15 @@ class AsyncWebSocket(BaseWebSocket):
 
         Raises:
             WebSocketClosed: The WebSocket is closed.
+            Exception: Any exception raised by the provided `data_iterator` will
+            be propagated to the caller. If this occurs, the send operation is
+            aborted, but the WebSocket connection itself remains open. The caller
+            is responsible for handling the iterator's error and deciding whether
+            to close the connection.
         """
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
-        self._start_io_tasks()
+
         if hasattr(data_iterator, "__aiter__"):
             iterator = data_iterator.__aiter__()
             get_next = iterator.__anext__
@@ -1110,6 +1141,7 @@ class AsyncWebSocket(BaseWebSocket):
             iterator = iter(data_iterator)
             get_next = iterator.__next__
             is_async = False
+
         view = None
         offset = 0
         write_ops_since_yield = 0
