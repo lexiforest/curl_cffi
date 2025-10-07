@@ -33,7 +33,7 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
 from .utils import HttpVersionLiteral, not_set, set_curl_options
-from .websockets import AsyncWebSocket, WebSocket
+from .websockets import AsyncWebSocket, WebSocket, WebSocketError
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
@@ -850,6 +850,7 @@ class AsyncSession(BaseSession[R]):
         max_send_batch_size: int = 256,
         max_batching_delay: float = 0.005,
         coalesce_frames: bool = False,
+        retry_on_recv_error: bool = False,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -890,10 +891,13 @@ class AsyncSession(BaseSession[R]):
             queue_size: The size of the send/receive queues.
             max_send_batch_size: The max batch size for sent frames.
             max_batching_delay: How long to wait to send off a single batch.
-            coalesce_frames: Enable coalescing of batched frames.
-                This breaks the "one frame per send" contract, but significantly
-                cuts down on the number of ws_send() calls. This is suitable
-                for continuous data streams where the boundaries do not matter.
+            coalesce_frames: If `True`, multiple pending messages in the send queue
+                may be merged into a single WebSocket frame for improved throughput.
+                Warning: This breaks the one-to-one mapping of send() calls to frames
+                and should only be used when the application protocol is designed to
+                handle concatenated data streams. Defaults to `False`.
+            retry_on_recv_error: Retries `ws_recv()` if a recv error is raised.
+                Retries up to a limited number of times with a delay in between.
         """
 
         self._check_session_closed()
@@ -948,8 +952,15 @@ class AsyncSession(BaseSession[R]):
             max_send_batch_size=max_send_batch_size,
             max_batching_delay=max_batching_delay,
             coalesce_frames=coalesce_frames,
+            retry_on_recv_error=retry_on_recv_error,
         )
-        ws._start_io_tasks()
+
+        try:
+            ws._start_io_tasks()
+        except WebSocketError:
+            ws.terminate()
+            raise
+
         return ws
 
     async def request(

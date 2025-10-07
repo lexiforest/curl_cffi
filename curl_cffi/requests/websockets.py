@@ -4,8 +4,8 @@ import asyncio
 import struct
 import warnings
 from collections.abc import AsyncIterable, Iterable
-from enum import IntEnum
 from contextlib import suppress
+from enum import IntEnum
 from functools import partial
 from json import dumps, loads
 from select import select
@@ -593,9 +593,11 @@ class AsyncWebSocket(BaseWebSocket):
     """
 
     _YIELD_CHECK_INTERVAL: ClassVar[int] = 63
-    _BATCHING_YIELD_INTERVAL: ClassVar[int] = 127
+    _BATCHING_YIELD_INTERVAL: ClassVar[int] = 63
     _YIELD_INTERVAL_S: ClassVar[float] = 0.001
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 1024 * 1024
+    _MAX_RECV_RETRIES: ClassVar[int] = 3
+    _RECV_RETRY_DELAY: ClassVar[float] = 0.3
 
     def __init__(
         self,
@@ -608,7 +610,7 @@ class AsyncWebSocket(BaseWebSocket):
         max_send_batch_size: int = 256,
         max_batching_delay: float = 0.005,
         coalesce_frames: bool = False,
-        retry_on_recv_error: bool = True,
+        retry_on_recv_error: bool = False,
     ) -> None:
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -628,7 +630,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._max_batching_delay: float = max_batching_delay
         self._coalesce_frames: bool = coalesce_frames
         self.retry_on_recv_error: bool = retry_on_recv_error
-        self._recv_retry_count: int = 0
+        self._recv_error_retries: int = 0
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -646,23 +648,6 @@ class AsyncWebSocket(BaseWebSocket):
         if (msg is None) or (flags & CurlWsFlag.CLOSE):
             raise StopAsyncIteration
         return msg
-
-    def __del__(self) -> None:
-        """Warn if the WebSocket was not explicitly closed."""
-        if not self.closed:
-            warnings.warn(
-                (
-                    f"Unclosed WebSocket {self!r}. Please await ws.close() to ensure "
-                    "proper resource cleanup."
-                ),
-                category=CurlCffiWarning,
-                source=self,
-                stacklevel=2,
-            )
-
-            # Attempt resource cleanup as a last ditch attempt
-            if not self.loop.is_closed():
-                self.loop.call_soon_threadsafe(self.terminate)
 
     def _start_io_tasks(self) -> None:
         """Start the read/write I/O loop tasks.
@@ -763,11 +748,16 @@ class AsyncWebSocket(BaseWebSocket):
         self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY
     ):
         """Send a data frame.
-        Best for discrete messages and high volumes of small messages.
+        Ideal for discrete messages and high volumes of small messages.
+
         It uses an adaptive batching writer for low latency and efficiency.
         This is a lightweight call which places the payload into the send queue.
         The message gets picked up by the `_write_loop` task and written into
         the WebSocket as soon as it is possible to do so.
+
+        NOTE: Network-related errors that occur during the send operation
+        are reported asynchronously. The exception will be raised by a
+        concurrent or subsequent call to `recv()`, not by this method.
 
         Args:
             payload: data to send.
@@ -920,6 +910,8 @@ class AsyncWebSocket(BaseWebSocket):
                 while True:
                     try:
                         chunk, frame = self._curl.ws_recv()
+                        if self._recv_error_retries > 0:
+                            self._recv_error_retries = 0
                         chunks.append(chunk)
                         if frame.bytesleft > 0 or (frame.flags & CurlWsFlag.CONT):
                             continue
@@ -938,6 +930,18 @@ class AsyncWebSocket(BaseWebSocket):
                     except CurlError as e:
                         if e.code == CurlECode.AGAIN:
                             break
+
+                        if (
+                            e.code == CurlECode.RECV_ERROR
+                            and self.retry_on_recv_error
+                            and self._recv_error_retries < self._MAX_RECV_RETRIES
+                        ):
+                            self._recv_error_retries += 1
+                            await asyncio.sleep(
+                                self._RECV_RETRY_DELAY * self._recv_error_retries
+                            )
+                            continue
+
                         await self._receive_queue.put((e, 0))
                         return
                 read_future = self.loop.create_future()
@@ -960,10 +964,7 @@ class AsyncWebSocket(BaseWebSocket):
                     (WebSocketClosed("Connection closed."), 0)
                 )
 
-            if self._write_task and not self._write_task.done():
-                self._write_task.cancel()
-
-            if not self.closed:
+            if not (asyncio.current_task().cancelled() and self.closed):
                 self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
 
     async def _write_loop(self) -> None:
@@ -1008,29 +1009,30 @@ class AsyncWebSocket(BaseWebSocket):
                     except asyncio.QueueEmpty:
                         break
 
-                # Conditionally process the batch based on the coalescing strategy.
-                if self._coalesce_frames:
-                    coalesced_payloads: dict[int, list[bytes]] = {}
+                async with self._send_lock:
+                    # Conditionally process the batch based on the coalescing strategy.
+                    if self._coalesce_frames:
+                        coalesced_payloads: dict[int, list[bytes]] = {}
 
-                    for payload_chunk, frame_flags in batch:
-                        # If we haven't seen this flag type yet, create a new list.
-                        if frame_flags not in coalesced_payloads:
-                            coalesced_payloads[frame_flags] = []
+                        for payload_chunk, frame_flags in batch:
+                            # If we haven't seen this flag type yet, create a new list.
+                            if frame_flags not in coalesced_payloads:
+                                coalesced_payloads[frame_flags] = []
 
-                        # Append the current chunk to the list for its flag type.
-                        coalesced_payloads[frame_flags].append(payload_chunk)
+                            # Append the current chunk to the list for its flag type.
+                            coalesced_payloads[frame_flags].append(payload_chunk)
 
-                    # Now, iterate through the dictionary.
-                    for msg_flags, list_of_payloads in coalesced_payloads.items():
-                        if list_of_payloads:
-                            # Join the list of chunks into a single bytes object.
-                            full_payload = b"".join(list_of_payloads)
-                            await self._send_coalesced(full_payload, msg_flags)
-                else:
-                    # Safe and preserves frame boundaries, the default.
-                    for msg_payload, msg_flags in batch:
-                        if msg_payload:
-                            await self._send_coalesced(msg_payload, msg_flags)
+                        # Now, iterate through the dictionary.
+                        for msg_flags, list_of_payloads in coalesced_payloads.items():
+                            if list_of_payloads:
+                                # Join the list of chunks into a single bytes object.
+                                full_payload = b"".join(list_of_payloads)
+                                await self._send_coalesced(full_payload, msg_flags)
+                    else:
+                        # Safe and preserves frame boundaries, the default.
+                        for msg_payload, msg_flags in batch:
+                            if msg_payload:
+                                await self._send_coalesced(msg_payload, msg_flags)
 
                 # Mark all tasks in the processed batch as done
                 for _ in range(len(batch)):
@@ -1041,15 +1043,12 @@ class AsyncWebSocket(BaseWebSocket):
             if not self.closed:
                 await self._receive_queue.put((e, 0))
         finally:
-            if self._read_task and not self._read_task.done():
-                self._read_task.cancel()
-
-            # If the write loop dies, the whole connection is closed.
-            if not self.closed:
+            if not (asyncio.current_task().cancelled() and self.closed):
                 self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
 
     async def _send_chunk(self, chunk_view: memoryview, flags: CurlWsFlag) -> int:
         """Sends a single chunk of data, handling EAGAIN and write locks.
+        The _send_lock must be held while calling this method.
 
         This is the lowest-level write operation. It acquires the asyncio Lock
         to ensure that calls to the underlying `curl_ws_send` are serialized,
@@ -1059,8 +1058,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
         while True:
             try:
-                async with self._send_lock:
-                    return self._curl.ws_send(chunk_view, flags)
+                return self._curl.ws_send(chunk_view, flags)
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
                     write_future = self.loop.create_future()
@@ -1115,8 +1113,9 @@ class AsyncWebSocket(BaseWebSocket):
         overhead. This should not be called at the same time as a regular `send()`,
         concurrent sending is not supported, locking means only one sender runs.
 
-        Warning: The lock is held until the iterator is exhausted. If the iterator
-        is slow, this will block the `send()` functionality until it finishes.
+        Warning: This method holds the send lock until the iterator is fully consumed.
+        A slow or blocking iterator will prevent any other send() operations from
+        proceeding. It is intended for high-speed, non-blocking data sources.
 
         Args:
             data_iterator (Union[Iterable[bytes], AsyncIterable[bytes]]):
