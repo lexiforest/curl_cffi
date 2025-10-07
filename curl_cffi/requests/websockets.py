@@ -595,7 +595,6 @@ class AsyncWebSocket(BaseWebSocket):
     _BATCHING_YIELD_INTERVAL: ClassVar[int] = 127
     _YIELD_INTERVAL_S: ClassVar[float] = 0.001
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 1024 * 1024
-    _CURL_BUFSIZE: ClassVar[int] = 2 * 1024 * 1024
 
     def __init__(
         self,
@@ -663,7 +662,6 @@ class AsyncWebSocket(BaseWebSocket):
                 "Invalid active socket.", code=CurlECode.NO_CONNECTION_AVAILABLE
             )
 
-        self.curl.setopt(CurlOpt.BUFFERSIZE, self._CURL_BUFSIZE)
         self._read_task = self.loop.create_task(self._read_loop())
         self._write_task = self.loop.create_task(self._write_loop())
 

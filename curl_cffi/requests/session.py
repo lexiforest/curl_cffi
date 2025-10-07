@@ -937,6 +937,7 @@ class AsyncSession(BaseSession[R]):
             event_class=asyncio.Event,
         )
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
+        curl.setopt(CurlOpt.BUFFERSIZE, 2 * 1024 * 1024)  # 2MB buffer size
 
         await self.loop.run_in_executor(None, curl.perform)
         return AsyncWebSocket(
