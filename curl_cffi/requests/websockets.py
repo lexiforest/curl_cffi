@@ -347,6 +347,7 @@ class WebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket is already closed")
 
         chunk, frame = self.curl.ws_recv()
+        chunk = bytes(chunk)
 
         if frame.flags & CurlWsFlag.CLOSE:
             try:
@@ -745,7 +746,9 @@ class AsyncWebSocket(BaseWebSocket):
         return loads(data)
 
     async def send(
-        self, payload: Union[str, bytes], flags: CurlWsFlag = CurlWsFlag.BINARY
+        self,
+        payload: Union[str, bytes, bytearray, memoryview],
+        flags: CurlWsFlag = CurlWsFlag.BINARY,
     ):
         """Send a data frame.
         Ideal for discrete messages and high volumes of small messages.
@@ -902,7 +905,7 @@ class AsyncWebSocket(BaseWebSocket):
         asyncio event loop periodically, preventing it from starving other
         concurrent tasks during high message volumes.
         """
-        chunks: list[bytes] = []
+        chunks: list[memoryview] = []
         msg_counter = 0
         try:
             while not self.closed:
@@ -1102,7 +1105,9 @@ class AsyncWebSocket(BaseWebSocket):
             write_ops_since_yield += 1
 
     async def send_from_iterator(
-        self, data_iterator: Union[Iterable[bytes], AsyncIterable[bytes]]
+        self,
+        data_iterator: Union[Iterable[bytes], AsyncIterable[bytes]],
+        flags: CurlWsFlag = CurlWsFlag.BINARY,
     ) -> None:
         """
         Specialized send method to provide the highest possible transfer rate,
@@ -1163,22 +1168,7 @@ class AsyncWebSocket(BaseWebSocket):
                     write_ops_since_yield = 0
 
                 try:
-                    while True:
-                        try:
-                            n_sent = self._curl.ws_send(chunk_view, CurlWsFlag.BINARY)
-                            break
-                        except CurlError as e:
-                            if e.code == CurlECode.AGAIN:
-                                write_future = self.loop.create_future()
-                                self.loop.add_writer(
-                                    self._sock_fd, write_future.set_result, None
-                                )
-                                try:
-                                    await write_future
-                                finally:
-                                    self.loop.remove_writer(self._sock_fd)
-                                continue
-                            raise
+                    n_sent = await self._send_chunk(chunk_view, flags)
                 except CurlError as e:
                     await self._receive_queue.put((e, 0))
                     return
