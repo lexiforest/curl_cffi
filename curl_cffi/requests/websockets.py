@@ -954,7 +954,7 @@ class AsyncWebSocket(BaseWebSocket):
         except asyncio.CancelledError:
             pass
 
-        except Exception as e:
+        except CurlError as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
                     self._receive_queue.put_nowait((e, 0))
@@ -963,9 +963,6 @@ class AsyncWebSocket(BaseWebSocket):
                 self._receive_queue.put_nowait(
                     (WebSocketClosed("Connection closed."), 0)
                 )
-
-            if not (asyncio.current_task().cancelled() and self.closed):
-                self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
 
     async def _write_loop(self) -> None:
         """The main asynchronous task for writing outgoing WebSocket frames.
@@ -1039,12 +1036,9 @@ class AsyncWebSocket(BaseWebSocket):
                     self._send_queue.task_done()
         except asyncio.CancelledError:
             pass
-        except Exception as e:
+        except CurlError as e:
             if not self.closed:
                 await self._receive_queue.put((e, 0))
-        finally:
-            if not (asyncio.current_task().cancelled() and self.closed):
-                self.loop.create_task(self.close(WsCloseCode.ABNORMAL_CLOSURE))
 
     async def _send_chunk(self, chunk_view: memoryview, flags: CurlWsFlag) -> int:
         """Sends a single chunk of data, handling EAGAIN and write locks.
@@ -1086,12 +1080,16 @@ class AsyncWebSocket(BaseWebSocket):
         view = memoryview(payload)
         offset = 0
         write_ops_since_yield = 0
+        start_time: float = self.loop.time()
 
         while offset < len(view):
             chunk_size = min(len(view) - offset, self._MAX_CURL_FRAME_SIZE)
             chunk_view = view[offset : offset + chunk_size]
-            if (write_ops_since_yield & self._BATCHING_YIELD_INTERVAL) == 0:
+            if (write_ops_since_yield & self._BATCHING_YIELD_INTERVAL) == 0 or (
+                self.loop.time() - start_time
+            ) > self._YIELD_INTERVAL_S:
                 await asyncio.sleep(0)
+                start_time = self.loop.time()
                 write_ops_since_yield = 0
 
             try:
@@ -1113,9 +1111,11 @@ class AsyncWebSocket(BaseWebSocket):
         overhead. This should not be called at the same time as a regular `send()`,
         concurrent sending is not supported, locking means only one sender runs.
 
-        Warning: This method holds the send lock until the iterator is fully consumed.
-        A slow or blocking iterator will prevent any other send() operations from
-        proceeding. It is intended for high-speed, non-blocking data sources.
+        Warning: This method acquires and holds the send lock for the entire duration
+        of the iteration. If the provided iterator is slow, blocking, or
+        infinite, it will permanently block any other concurrent calls to
+        `send()`, `send_str()`, etc., potentially leading to application-level
+        deadlocks. It is designed for high-speed, non-blocking data sources only.
 
         Args:
             data_iterator (Union[Iterable[bytes], AsyncIterable[bytes]]):
