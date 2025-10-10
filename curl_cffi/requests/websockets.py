@@ -672,7 +672,6 @@ class AsyncWebSocket(BaseWebSocket):
 
         self._read_task = self.loop.create_task(self._read_loop())
         self._write_task = self.loop.create_task(self._write_loop())
-        self.loop.add_reader(self._sock_fd, self._read_event.set)
 
     async def recv(
         self, *, timeout: Optional[float] = None
@@ -948,8 +947,11 @@ class AsyncWebSocket(BaseWebSocket):
                         await self._receive_queue.put((e, 0))
                         return
 
-                await self._read_event.wait()
-                self._read_event.clear()
+                self.loop.add_reader(self._sock_fd, self._read_event.set)
+                try:
+                    await self._read_event.wait()
+                finally:
+                    self.loop.remove_reader(self._sock_fd)
 
         except asyncio.CancelledError:
             pass
