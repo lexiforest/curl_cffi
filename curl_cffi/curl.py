@@ -235,11 +235,15 @@ class Curl:
         elif option == CurlOpt.WRITEDATA:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
+            )
         elif option == CurlOpt.HEADERDATA:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
+            )
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -248,7 +252,9 @@ class Curl:
         elif option == CurlOpt.HEADERFUNCTION:
             c_value = ffi.new_handle(value)
             self._header_handle = c_value
-            lib._curl_easy_setopt(self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback)
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
+            )
             option = CurlOpt.HEADERDATA
         elif option == CurlOpt.DEBUGFUNCTION:
             if value is True:
@@ -271,7 +277,9 @@ class Curl:
             ret = lib._curl_easy_setopt(self._curl, option, self._headers)
         elif option == CurlOpt.PROXYHEADER:
             for proxy_header in value:
-                self._proxy_headers = lib.curl_slist_append(self._proxy_headers, proxy_header)
+                self._proxy_headers = lib.curl_slist_append(
+                    self._proxy_headers, proxy_header
+                )
             ret = lib._curl_easy_setopt(self._curl, option, self._proxy_headers)
         elif option == CurlOpt.RESOLVE:
             for resolve in value:
@@ -349,7 +357,9 @@ class Curl:
         """
         if self._curl is None:
             return 0  # silently ignore if curl handle is None
-        return lib.curl_easy_impersonate(self._curl, target.encode(), int(default_headers))
+        return lib.curl_easy_impersonate(
+            self._curl, target.encode(), int(default_headers)
+        )
 
     def _ensure_cacert(self) -> None:
         if not self._is_cert_set:
@@ -485,7 +495,7 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
 
-    def ws_recv(self) -> tuple[memoryview, CurlWsFrame]:
+    def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
 
         This method uses a pre-allocated buffer for efficiency.
@@ -507,7 +517,7 @@ class Curl:
         )
         self._check_error(ret, "WS_RECV")
         frame = self._ws_recv_p_frame[0]
-        return memoryview(ffi.buffer(self._ws_recv_buffer))[: self._ws_recv_n_recv[0]], frame
+        return ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]], frame
 
     def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
         """Send data to a websocket connection.
@@ -526,7 +536,9 @@ class Curl:
             raise CurlError("Cannot send websocket data on closed handle.")
 
         buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(payload), self._ws_send_n_sent, 0, flags)
+        ret = lib.curl_ws_send(
+            self._curl, buffer, len(payload), self._ws_send_n_sent, 0, flags
+        )
         self._check_error(ret, "WS_SEND")
         return self._ws_send_n_sent[0]
 

@@ -347,7 +347,6 @@ class WebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket is already closed")
 
         chunk, frame = self.curl.ws_recv()
-        chunk = bytes(chunk)
 
         if frame.flags & CurlWsFlag.CLOSE:
             try:
@@ -903,7 +902,7 @@ class AsyncWebSocket(BaseWebSocket):
         asyncio event loop periodically, preventing it from starving other
         concurrent tasks during high message volumes.
         """
-        chunks: list[memoryview] = []
+        chunks: list[bytes] = []
         msg_counter = 0
         try:
             while not self.closed:
