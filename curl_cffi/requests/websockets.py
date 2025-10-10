@@ -649,8 +649,6 @@ class AsyncWebSocket(BaseWebSocket):
         self._coalesce_frames: bool = coalesce_frames
         self.retry_on_recv_error: bool = retry_on_recv_error
         self._recv_error_retries: int = 0
-        self._read_event: asyncio.Event = asyncio.Event()
-        self._write_event: asyncio.Event = asyncio.Event()
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -969,14 +967,13 @@ class AsyncWebSocket(BaseWebSocket):
                         await self._receive_queue.put((e, 0))
                         return
 
-                self.loop.add_reader(self._sock_fd, self._read_event.set)
+                read_future = self.loop.create_future()
+                self.loop.add_reader(self._sock_fd, read_future.set_result, None)
                 try:
-                    await self._read_event.wait()
+                    await read_future
                 finally:
-                    # Check if the FD is still valid before removing the reader.
                     if self._sock_fd != -1:
                         self.loop.remove_reader(self._sock_fd)
-                    self._read_event.clear()
 
         except asyncio.CancelledError:
             pass
@@ -1078,15 +1075,13 @@ class AsyncWebSocket(BaseWebSocket):
                 return self._curl.ws_send(chunk_view, flags)
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    self.loop.add_writer(self._sock_fd, self._write_event.set)
+                    write_future = self.loop.create_future()
+                    self.loop.add_writer(self._sock_fd, write_future.set_result, None)
                     try:
-                        await self._write_event.wait()
+                        await write_future
                     finally:
-                        # Check if the FD is still valid before removing the writer.
-                        # It might have been closed and invalidated by terminate().
                         if self._sock_fd != -1:
                             self.loop.remove_writer(self._sock_fd)
-                        self._write_event.clear()
                     continue
                 raise
 
