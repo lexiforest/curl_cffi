@@ -862,8 +862,6 @@ class AsyncWebSocket(BaseWebSocket):
     @override
     def terminate(self) -> None:
         """Terminate the underlying connection."""
-        if self.closed:
-            return
         self.closed = True
 
         # Cancel the tasks started in the I/O loop.
