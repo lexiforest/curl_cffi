@@ -631,6 +631,8 @@ class AsyncWebSocket(BaseWebSocket):
         self._coalesce_frames: bool = coalesce_frames
         self.retry_on_recv_error: bool = retry_on_recv_error
         self._recv_error_retries: int = 0
+        self._read_event: asyncio.Event = asyncio.Event()
+        self._write_event: asyncio.Event = asyncio.Event()
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -670,6 +672,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         self._read_task = self.loop.create_task(self._read_loop())
         self._write_task = self.loop.create_task(self._write_loop())
+        self.loop.add_reader(self._sock_fd, self._read_event.set)
 
     async def recv(
         self, *, timeout: Optional[float] = None
@@ -944,12 +947,9 @@ class AsyncWebSocket(BaseWebSocket):
 
                         await self._receive_queue.put((e, 0))
                         return
-                read_future = self.loop.create_future()
-                self.loop.add_reader(self._sock_fd, read_future.set_result, None)
-                try:
-                    await read_future
-                finally:
-                    self.loop.remove_reader(self._sock_fd)
+
+                await self._read_event.wait()
+                self._read_event.clear()
 
         except asyncio.CancelledError:
             pass
@@ -1055,12 +1055,12 @@ class AsyncWebSocket(BaseWebSocket):
                 return self._curl.ws_send(chunk_view, flags)
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    write_future = self.loop.create_future()
-                    self.loop.add_writer(self._sock_fd, write_future.set_result, None)
+                    self.loop.add_writer(self._sock_fd, self._write_event.set)
                     try:
-                        await write_future
+                        await self._write_event.wait()
                     finally:
                         self.loop.remove_writer(self._sock_fd)
+                        self._write_event.clear()
                     continue
                 raise
 
