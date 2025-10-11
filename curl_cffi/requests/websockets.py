@@ -609,7 +609,6 @@ class AsyncWebSocket(BaseWebSocket):
         debug: bool = False,
         queue_size: int = 8192,
         max_send_batch_size: int = 256,
-        max_batching_delay: float = 0.005,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
     ) -> None:
@@ -627,7 +626,6 @@ class AsyncWebSocket(BaseWebSocket):
             debug (bool, optional): Enable debug messages. Defaults to False.
             queue_size (int, optional): The recv/send queue max size. Defaults to 8192.
             max_send_batch_size (int, optional): The max number of messages per batch.
-            max_batching_delay (float, optional): The max delay before sending a batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             retry_on_recv_error (bool, optional): Retry recv on some transient errors.
         """
@@ -645,7 +643,6 @@ class AsyncWebSocket(BaseWebSocket):
             maxsize=queue_size
         )
         self._max_send_batch_size: int = max_send_batch_size
-        self._max_batching_delay: float = max_batching_delay
         self._coalesce_frames: bool = coalesce_frames
         self.retry_on_recv_error: bool = retry_on_recv_error
         self._recv_error_retries: int = 0
@@ -867,11 +864,10 @@ class AsyncWebSocket(BaseWebSocket):
                         await asyncio.wait_for(self.flush(), timeout=timeout)
             except (
                 WebSocketError,
-                WebSocketClosed,
                 asyncio.TimeoutError,
                 asyncio.CancelledError,
             ) as e:
-                if self.debug:
+                if self.debug and not isinstance(e, WebSocketClosed):
                     warnings.warn(
                         f"Ignored exception during WebSocket close handshake: {e!r}",
                         CurlCffiWarning,
@@ -882,7 +878,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     @override
     def terminate(self) -> None:
-        """Terminate the underlying connection."""
+        """Terminates the underlying connection and its I/O tasks."""
         self.closed = True
 
         # Cancel the tasks started in the I/O loop.
@@ -895,11 +891,11 @@ class AsyncWebSocket(BaseWebSocket):
                 io_task.cancel()
 
         # As a safety measure, deregister the reader/writers from the FD
-        if self._sock_fd != -1:
+        if self._sock_fd != -1 and self._loop and not self.loop.is_closed():
             try:
                 self.loop.remove_reader(self._sock_fd)
                 self.loop.remove_writer(self._sock_fd)
-            except (ValueError, OSError, KeyError):
+            except (ValueError, OSError, KeyError, RuntimeError):
                 pass
             self._sock_fd = -1
 
@@ -1007,12 +1003,8 @@ class AsyncWebSocket(BaseWebSocket):
         try:
             while not self.closed:
                 try:
-                    # Get the first message to start a batch, but with a timeout
-                    payload, flags = await asyncio.wait_for(
-                        self._send_queue.get(), timeout=self._max_batching_delay
-                    )
-                except asyncio.TimeoutError:
-                    continue
+                    # Block efficiently until the first message arrives.
+                    payload, flags = await self._send_queue.get()
                 except asyncio.CancelledError:
                     break
 
@@ -1047,12 +1039,12 @@ class AsyncWebSocket(BaseWebSocket):
                         if list_of_payloads:
                             # Join the list of chunks into a single bytes object.
                             full_payload = b"".join(list_of_payloads)
-                            await self._send_coalesced(full_payload, msg_flags)
+                            await self._send_payload(full_payload, msg_flags)
                 else:
                     # Safe and preserves frame boundaries, the default.
                     for msg_payload, msg_flags in batch:
                         if msg_payload:
-                            await self._send_coalesced(msg_payload, msg_flags)
+                            await self._send_payload(msg_payload, msg_flags)
 
                 # Mark all tasks in the processed batch as done
                 for _ in range(len(batch)):
@@ -1085,7 +1077,7 @@ class AsyncWebSocket(BaseWebSocket):
                     continue
                 raise
 
-    async def _send_coalesced(self, payload: bytes, flags: CurlWsFlag) -> None:
+    async def _send_payload(self, payload: bytes, flags: CurlWsFlag) -> None:
         """Breaks a payload into chunks and sends them sequentially.
 
         This coroutine is responsible for the fragmentation of a potentially
@@ -1124,14 +1116,11 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def flush(self) -> None:
         """
-        Waits until the send queue is empty.
+        Waits until all items in the send queue have been processed by the writer task.
 
-        This ensures that all messages passed to `send()` have been picked up
-        by the internal writer task. It does not guarantee that the data has
-        been written to the OS socket buffer or sent over the network.
-
-        If the writer task has already terminated due to an error, this
-        method will return immediately to prevent a deadlock.
+        This ensures that all messages passed to `send()` have been handed off to the
+        underlying socket for transmission. It does not guarantee that the data has
+        been received by the remote peer.
         """
         if (
             self._write_task

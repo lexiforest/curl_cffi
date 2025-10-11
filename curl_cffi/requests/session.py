@@ -854,7 +854,6 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         queue_size: int = 4096,
         max_send_batch_size: int = 256,
-        max_batching_delay: float = 0.005,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
     ) -> AsyncWebSocket:
@@ -896,7 +895,6 @@ class AsyncSession(BaseSession[R]):
             max_recv_speed: maximum receive speed, bytes per second.
             queue_size: The size of the send/receive queues.
             max_send_batch_size: The max batch size for sent frames.
-            max_batching_delay: How long to wait to send off a single batch.
             coalesce_frames: If `True`, multiple pending messages in the send queue
                 may be merged into a single WebSocket frame for improved throughput.
                 Warning: This breaks the one-to-one mapping of send() calls to frames
@@ -956,7 +954,6 @@ class AsyncSession(BaseSession[R]):
             autoclose=autoclose,
             queue_size=queue_size,
             max_send_batch_size=max_send_batch_size,
-            max_batching_delay=max_batching_delay,
             coalesce_frames=coalesce_frames,
             retry_on_recv_error=retry_on_recv_error,
         )

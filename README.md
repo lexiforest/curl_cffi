@@ -254,6 +254,7 @@ async with AsyncSession() as s:
     await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
     async for message in ws:
         print(message)
+    await ws.close()
 ```
 
 ## Ecosystem
