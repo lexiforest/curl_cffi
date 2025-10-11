@@ -772,9 +772,10 @@ class AsyncWebSocket(BaseWebSocket):
         The message gets picked up by the `_write_loop` task and written into
         the WebSocket as soon as it is possible to do so.
 
-        NOTE: Network-related errors that occur during the send operation
-        are reported asynchronously. The exception will be raised by a
-        concurrent or subsequent call to `recv()`, not by this method.
+        NOTE: This method will raise a `WebSocketClosed` exception immediately if the
+        connection is already closed. Other network-related errors that occur during
+        the background send operation are reported asynchronously and will be raised
+        by a subsequent call to `recv()`.
 
         Args:
             payload: data to send.
@@ -848,7 +849,8 @@ class AsyncWebSocket(BaseWebSocket):
             if self.closed:
                 return
 
-            # Gracefully send the close frame if the writer is still alive
+            self.closed = True
+
             try:
                 if self._write_task and not self._write_task.done():
                     close_frame = self._pack_close_frame(code, message)
@@ -872,7 +874,6 @@ class AsyncWebSocket(BaseWebSocket):
                         stacklevel=2,
                     )
             finally:
-                self.closed = True
                 self.terminate()
 
     @override
