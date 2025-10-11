@@ -907,44 +907,61 @@ class AsyncWebSocket(BaseWebSocket):
     async def _read_loop(self) -> None:
         """The main asynchronous task for reading incoming WebSocket frames.
 
-        This method runs a continuous loop that is responsible for all read
-        operations from the underlying socket. It collects message fragments
-        delivered by libcurl into a list and joins them to reconstruct the
-        complete message, which is then placed onto the `_receive_queue`.
+        This method is fully event-driven. It waits for the underlying socket
+        to become readable, and upon being woken by the event loop, it drains
+        all buffered data from libcurl until it receives an EAGAIN error. This
+        error signals that the buffer is empty, and the loop returns to an
+        idle state, waiting for the next readability event.
 
-        The loop handles non-blocking I/O by listening for readability events
-        on the socket file descriptor when a read operation would otherwise
-        block (indicated by a `CurlError` with code `EAGAIN`).
-
-        To ensure cooperative multitasking, the loop yields control to the
-        asyncio event loop periodically, preventing it from starving other
-        concurrent tasks during high message volumes.
+        To ensure cooperative multitasking during high-volume message streams,
+        the loop yields control to the asyncio event loop periodically.
         """
         chunks: list[bytes] = []
         msg_counter = 0
         try:
+            # The outer loop waits for readability events.
             while not self.closed:
+                # Wait for the socket to be readable.
+                read_future = self.loop.create_future()
+                self.loop.add_reader(self._sock_fd, read_future.set_result, None)
+                try:
+                    await read_future
+                finally:
+                    # Remove the reader immediately after waking.
+                    if self._sock_fd != -1:
+                        self.loop.remove_reader(self._sock_fd)
+
+                # There is data, so we now read until it's empty.
                 start_time = self.loop.time()
                 while True:
                     try:
                         chunk, frame = self._curl.ws_recv()
                         if self._recv_error_retries > 0:
                             self._recv_error_retries = 0
+
                         chunks.append(chunk)
+
+                        # Continue reading if the message is fragmented.
                         if frame.bytesleft > 0 or (frame.flags & CurlWsFlag.CONT):
                             continue
+
+                        # A full message has been received.
                         message, flags = b"".join(chunks), frame.flags
                         chunks.clear()
                         msg_counter += 1
                         await self._receive_queue.put((message, flags))
+
+                        # If a CLOSE frame is received, the reader is finished.
                         if flags & CurlWsFlag.CLOSE:
                             self._handle_close_frame(message)
                             return
+
                         if (msg_counter & self._YIELD_CHECK_INTERVAL) == 0 and (
                             self.loop.time() - start_time > self._YIELD_INTERVAL_S
                         ):
                             await asyncio.sleep(0)
                             start_time = self.loop.time()
+
                     except CurlError as e:
                         if e.code == CurlECode.AGAIN:
                             break
@@ -963,17 +980,8 @@ class AsyncWebSocket(BaseWebSocket):
                         await self._receive_queue.put((e, 0))
                         return
 
-                read_future = self.loop.create_future()
-                self.loop.add_reader(self._sock_fd, read_future.set_result, None)
-                try:
-                    await read_future
-                finally:
-                    if self._sock_fd != -1:
-                        self.loop.remove_reader(self._sock_fd)
-
         except asyncio.CancelledError:
             pass
-
         except CurlError as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
