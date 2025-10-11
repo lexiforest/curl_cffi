@@ -591,10 +591,9 @@ class AsyncWebSocket(BaseWebSocket):
     it cannot be reopened. A new instance must be created to reconnect.
     """
 
-    # Yield control every 63 operations (a mask for 64) for cooperative multitasking.
+    # Yield control every 64 operations for cooperative multitasking.
     # This is a (2^N)-1 value, allowing for efficient bitwise AND checks.
-    _YIELD_CHECK_INTERVAL: ClassVar[int] = 63
-    _BATCHING_YIELD_INTERVAL: ClassVar[int] = 63
+    _YIELD_MASK: ClassVar[int] = 63
     _YIELD_INTERVAL_S: ClassVar[float] = 0.001
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 1024 * 1024
     _MAX_RECV_RETRIES: ClassVar[int] = 3
@@ -652,6 +651,29 @@ class AsyncWebSocket(BaseWebSocket):
         if self._loop is None:
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
+
+    @property
+    def receive_queue_size(self) -> int:
+        """Returns the current number of messages in the receive queue."""
+        return self._receive_queue.qsize()
+
+    @property
+    def send_queue_size(self) -> int:
+        """Returns the current number of messages in the send queue."""
+        return self._send_queue.qsize()
+
+    def __del__(self) -> None:
+        """Warn if the user forgets to close the connection."""
+        if not self.closed and self.debug:
+            warnings.warn(
+                (
+                    f"Unclosed WebSocket {self!r} was garbage collected. "
+                    "Always call await ws.close() to ensure clean shutdown."
+                ),
+                ResourceWarning,
+                stacklevel=2,
+                source=self,
+            )
 
     def __aiter__(self) -> Self:
         if self.closed:
@@ -838,7 +860,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def close(
         self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 5.0
     ) -> None:
-        """Close the connection.
+        """Send a graceful close frame, and then terminate the connection.
 
         Args:
             code (int, optional): Close code. Defaults to WsCloseCode.OK.
@@ -956,7 +978,7 @@ class AsyncWebSocket(BaseWebSocket):
                             self._handle_close_frame(message)
                             return
 
-                        if (msg_counter & self._YIELD_CHECK_INTERVAL) == 0 and (
+                        if (msg_counter & self._YIELD_MASK) == 0 and (
                             self.loop.time() - start_time > self._YIELD_INTERVAL_S
                         ):
                             await asyncio.sleep(0)
@@ -1106,7 +1128,7 @@ class AsyncWebSocket(BaseWebSocket):
         while offset < len(view):
             chunk_size = min(len(view) - offset, self._MAX_CURL_FRAME_SIZE)
             chunk_view = view[offset : offset + chunk_size]
-            if (write_ops_since_yield & self._BATCHING_YIELD_INTERVAL) == 0 or (
+            if (write_ops_since_yield & self._YIELD_MASK) == 0 or (
                 self.loop.time() - start_time
             ) > self._YIELD_INTERVAL_S:
                 await asyncio.sleep(0)
