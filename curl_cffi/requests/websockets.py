@@ -848,8 +848,6 @@ class AsyncWebSocket(BaseWebSocket):
             if self.closed:
                 return
 
-            self.closed = True
-
             # Gracefully send the close frame if the writer is still alive
             try:
                 if self._write_task and not self._write_task.done():
@@ -874,6 +872,7 @@ class AsyncWebSocket(BaseWebSocket):
                         stacklevel=2,
                     )
             finally:
+                self.closed = True
                 self.terminate()
 
     @override
