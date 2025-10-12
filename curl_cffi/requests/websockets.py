@@ -896,7 +896,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
 
         with self._terminate_lock:
-            if getattr(self, "_terminated", False):
+            if self._terminated:
                 return
             self._terminated = True
 
@@ -907,9 +907,13 @@ class AsyncWebSocket(BaseWebSocket):
 
                 if self._sock_fd != -1:
                     with suppress(Exception):
-                        self.loop.remove_reader(self._sock_fd)
+                        self.loop.call_soon_threadsafe(
+                            self.loop.remove_reader, self._sock_fd
+                        )
                     with suppress(Exception):
-                        self.loop.remove_writer(self._sock_fd)
+                        self.loop.call_soon_threadsafe(
+                            self.loop.remove_writer, self._sock_fd
+                        )
                     self._sock_fd = -1
 
             super().terminate()
@@ -1125,9 +1129,11 @@ class AsyncWebSocket(BaseWebSocket):
         while offset < len(view):
             chunk_size = min(len(view) - offset, self._MAX_CURL_FRAME_SIZE)
             chunk_view = view[offset : offset + chunk_size]
-            if (write_ops_since_yield & self._YIELD_MASK) == 0 or (
-                self.loop.time() - start_time
-            ) > self._yield_interval:
+            if (
+                write_ops_since_yield
+                and (write_ops_since_yield & self._YIELD_MASK) == 0
+                or (self.loop.time() - start_time) > self._yield_interval
+            ):
                 await asyncio.sleep(0)
                 start_time = self.loop.time()
                 write_ops_since_yield = 0
