@@ -594,7 +594,6 @@ class AsyncWebSocket(BaseWebSocket):
     # Yield control every 64 operations for cooperative multitasking.
     # This is a (2^N)-1 value, allowing for efficient bitwise AND checks.
     _YIELD_MASK: ClassVar[int] = 63
-    _YIELD_INTERVAL_S: ClassVar[float] = 0.001
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 1024 * 1024
     _MAX_RECV_RETRIES: ClassVar[int] = 3
     _RECV_RETRY_DELAY: ClassVar[float] = 0.3
@@ -610,6 +609,7 @@ class AsyncWebSocket(BaseWebSocket):
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
+        yield_interval: float = 0.001,
     ) -> None:
         """Initializes an Async WebSocket session. This class should not be
         instantantiated directly, but rather through the use of the `AsyncSession`.
@@ -627,6 +627,7 @@ class AsyncWebSocket(BaseWebSocket):
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             retry_on_recv_error (bool, optional): Retry recv on some transient errors.
+            yield_interval (float, optional): How often to yield control in seconds.
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -644,6 +645,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
         self.retry_on_recv_error: bool = retry_on_recv_error
+        self._yield_interval: float = yield_interval
         self._recv_error_retries: int = 0
 
     @property
@@ -672,7 +674,6 @@ class AsyncWebSocket(BaseWebSocket):
                 ),
                 ResourceWarning,
                 stacklevel=2,
-                source=self,
             )
 
     def __aiter__(self) -> Self:
@@ -809,10 +810,16 @@ class AsyncWebSocket(BaseWebSocket):
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
 
-        # curl expects bytes
+        # cURL expects bytes
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
-        await self._send_queue.put((payload, flags))
+        elif isinstance(payload, (bytearray, memoryview)):
+            payload = bytes(payload)
+
+        try:
+            self._send_queue.put_nowait((payload, flags))
+        except asyncio.QueueFull:
+            await self._send_queue.put((payload, flags))
 
     async def send_binary(self, payload: bytes) -> None:
         """Send a binary frame.
@@ -937,6 +944,11 @@ class AsyncWebSocket(BaseWebSocket):
 
         To ensure cooperative multitasking during high-volume message streams,
         the loop yields control to the asyncio event loop periodically.
+
+        If the receive queue becomes full, await `self._receive_queue.put(...)`
+        will block the reader loop and stall the socket read task. Thus, appropriate
+        queue sizes should be set by the user, even though the defaults are generous
+        and should be suitable for most use cases.
         """
         chunks: list[bytes] = []
         msg_counter = 0
@@ -973,13 +985,13 @@ class AsyncWebSocket(BaseWebSocket):
                         msg_counter += 1
                         await self._receive_queue.put((message, flags))
 
-                        # If a CLOSE frame is received, the reader is finished.
+                        # If a CLOSE frame is received, the reader is done.
                         if flags & CurlWsFlag.CLOSE:
                             self._handle_close_frame(message)
                             return
 
                         if (msg_counter & self._YIELD_MASK) == 0 and (
-                            self.loop.time() - start_time > self._YIELD_INTERVAL_S
+                            self.loop.time() - start_time > self._yield_interval
                         ):
                             await asyncio.sleep(0)
                             start_time = self.loop.time()
@@ -998,8 +1010,8 @@ class AsyncWebSocket(BaseWebSocket):
                                 self._RECV_RETRY_DELAY * self._recv_error_retries
                             )
                             continue
-
-                        await self._receive_queue.put((e, 0))
+                        with suppress(asyncio.QueueFull):
+                            self._receive_queue.put_nowait((e, 0))
                         return
 
         except asyncio.CancelledError:
@@ -1008,6 +1020,7 @@ class AsyncWebSocket(BaseWebSocket):
             if not self.closed:
                 with suppress(asyncio.QueueFull):
                     self._receive_queue.put_nowait((e, 0))
+            self.terminate()
         finally:
             with suppress(asyncio.QueueFull):
                 self._receive_queue.put_nowait(
@@ -1130,7 +1143,7 @@ class AsyncWebSocket(BaseWebSocket):
             chunk_view = view[offset : offset + chunk_size]
             if (write_ops_since_yield & self._YIELD_MASK) == 0 or (
                 self.loop.time() - start_time
-            ) > self._YIELD_INTERVAL_S:
+            ) > self._yield_interval:
                 await asyncio.sleep(0)
                 start_time = self.loop.time()
                 write_ops_since_yield = 0
@@ -1161,8 +1174,10 @@ class AsyncWebSocket(BaseWebSocket):
             # These items will be lost. Warn the user if debugging is enabled.
             if self.debug:
                 warnings.warn(
-                    f"WebSocket writer task is dead, but {self._send_queue.qsize()} "
-                    "unsent messages remain in the queue.",
+                    (
+                        f"WebSocket writer task is dead, but {self._send_queue.qsize()}"
+                        " unsent messages remain in the queue."
+                    ),
                     CurlCffiWarning,
                     stacklevel=2,
                 )
@@ -1171,7 +1186,7 @@ class AsyncWebSocket(BaseWebSocket):
         await self._send_queue.join()
 
     def _handle_close_frame(self, message: bytes) -> None:
-        """Unpack and handle the closing frame."""
+        """Unpack and handle the closing frame, then initiate shutdown."""
         try:
             self._close_code, self._close_reason = self._unpack_close_frame(message)
         except WebSocketError as e:
@@ -1179,3 +1194,6 @@ class AsyncWebSocket(BaseWebSocket):
 
         if self.autoclose and not self.closed:
             self.loop.create_task(self.close(self._close_code or WsCloseCode.OK))
+        else:
+            # If not sending a reply, we must still terminate the connection.
+            self.terminate()

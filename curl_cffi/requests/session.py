@@ -856,6 +856,7 @@ class AsyncSession(BaseSession[R]):
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
+        yield_interval: float = 0.001,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -902,6 +903,11 @@ class AsyncSession(BaseSession[R]):
                 handle concatenated data streams. Defaults to `False`.
             retry_on_recv_error: Retries `ws_recv()` if a recv error is raised.
                 Retries up to a limited number of times with a delay in between.
+            yield_interval: How often to yield control back to the event loop.
+                This is a trade-off between throughput and responsiveness. Lower values
+                means the loop yields more frequently and enables other tasks to run,
+                while higher values are better for throughput. The balanced default
+                is `1ms` but you can customize this to fit your application/use case.
         """
 
         self._check_session_closed()
@@ -957,6 +963,7 @@ class AsyncSession(BaseSession[R]):
             max_send_batch_size=max_send_batch_size,
             coalesce_frames=coalesce_frames,
             retry_on_recv_error=retry_on_recv_error,
+            yield_interval=yield_interval,
         )
 
         try:
