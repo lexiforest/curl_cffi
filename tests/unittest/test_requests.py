@@ -985,7 +985,8 @@ def test_http_version(server):
 
 
 def test_session_auto_raise_for_status_enabled(server):
-    """Test that Session automatically raises HTTPError for error status codes when raise_for_status=True"""
+    """Test that Session automatically raises HTTPError for error status codes
+    when raise_for_status=True"""
     s = requests.Session(raise_for_status=True)
     try:
         s.get(str(server.url.copy_with(path="/status/404")))
