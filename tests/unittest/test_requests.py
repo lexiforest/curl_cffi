@@ -990,13 +990,14 @@ def test_session_auto_raise_for_status_enabled(server):
     s = requests.Session(raise_for_status=True)
     try:
         s.get(str(server.url.copy_with(path="/status/404")))
-        assert False, "Should have raised HTTPError for 404"
+        raise AssertionError("Should have raised HTTPError for 404")
     except HTTPError as e:
         assert e.response.status_code == 404  # type: ignore
 
 
 def test_session_auto_raise_for_status_disabled(server):
-    """Test that Session does NOT raise HTTPError when raise_for_status=False (default)"""
+    """Test that Session does NOT raise HTTPError when raise_for_status=False
+    (default)"""
     s = requests.Session(raise_for_status=False)
     r = s.get(str(server.url.copy_with(path="/status/404")))
     assert r.status_code == 404

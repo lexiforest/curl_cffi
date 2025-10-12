@@ -386,7 +386,8 @@ class Session(BaseSession[R]):
                 automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
             response_class: A customized subtype of ``Response`` to use.
-            raise_for_status: automatically raise an HTTPError for 4xx and 5xx status codes.
+            raise_for_status: automatically raise an HTTPError for 4xx and 5xx
+                status codes.
 
         Notes:
             This class can be used as a context manager.
@@ -738,7 +739,8 @@ class AsyncSession(BaseSession[R]):
                 automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
             response_class: A customized subtype of ``Response`` to use.
-            raise_for_status: automatically raise an HTTPError for 4xx and 5xx status codes.
+            raise_for_status: automatically raise an HTTPError for 4xx and 5xx
+                status codes.
 
         Notes:
             This class can be used as a context manager, and it's recommended to use via

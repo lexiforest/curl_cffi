@@ -467,13 +467,14 @@ async def test_async_session_auto_raise_for_status_enabled(server):
     async with AsyncSession(raise_for_status=True) as s:
         try:
             await s.get(str(server.url.copy_with(path="/status/404")))
-            assert False, "Should have raised HTTPError for 404"
+            raise AssertionError("Should have raised HTTPError for 404")
         except HTTPError as e:
             assert e.response.status_code == 404  # type: ignore
 
 
 async def test_async_session_auto_raise_for_status_disabled(server):
-    """Test that AsyncSession does NOT raise HTTPError when raise_for_status=False (default)"""
+    """Test that AsyncSession does NOT raise HTTPError when raise_for_status=False
+    (default)"""
     async with AsyncSession(raise_for_status=False) as s:
         r = await s.get(str(server.url.copy_with(path="/status/404")))
         assert r.status_code == 404
