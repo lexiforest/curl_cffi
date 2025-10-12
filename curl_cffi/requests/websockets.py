@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import struct
+import threading
 import warnings
 from contextlib import suppress
 from enum import IntEnum
@@ -634,6 +635,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._sock_fd: int = -1
         self._close_lock: asyncio.Lock = asyncio.Lock()
+        self._terminate_lock: threading.Lock = threading.Lock()
         self._read_task: Optional[asyncio.Task[None]] = None
         self._write_task: Optional[asyncio.Task[None]] = None
         self._receive_queue: asyncio.Queue[WS_QUEUE_ITEM] = asyncio.Queue(
@@ -647,22 +649,13 @@ class AsyncWebSocket(BaseWebSocket):
         self.retry_on_recv_error: bool = retry_on_recv_error
         self._yield_interval: float = yield_interval
         self._recv_error_retries: int = 0
+        self._terminated: bool = False
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
-
-    @property
-    def receive_queue_size(self) -> int:
-        """Returns the current number of messages in the receive queue."""
-        return self._receive_queue.qsize()
-
-    @property
-    def send_queue_size(self) -> int:
-        """Returns the current number of messages in the send queue."""
-        return self._send_queue.qsize()
 
     def __del__(self) -> None:
         """Warn if the user forgets to close the connection."""
@@ -690,6 +683,7 @@ class AsyncWebSocket(BaseWebSocket):
     def _start_io_tasks(self) -> None:
         """Start the read/write I/O loop tasks.
         This should be called only once after object creation by the factory.
+        Once started, the tasks cannot be restarted again, this is a one-shot.
 
         Raises:
             WebSocketError: The WebSocket FD was invalid.
@@ -715,7 +709,6 @@ class AsyncWebSocket(BaseWebSocket):
         """Receive a frame as bytes. libcurl splits frames into fragments, so we have
         to collect all the chunks for a frame. This is a lightweight call that awaits
         the next item from the receive queue, which will contain a full frame.
-        The actual blocking processing is done cooperatively in the `_read_loop` task.
 
         Args:
             timeout: how many seconds to wait before giving up.
@@ -732,9 +725,11 @@ class AsyncWebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket is closed")
         try:
             result, flags = await asyncio.wait_for(self._receive_queue.get(), timeout)
+
             if isinstance(result, Exception):
                 raise result
             return result, flags
+
         except asyncio.TimeoutError as e:
             raise WebSocketTimeout(
                 "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
@@ -883,55 +878,44 @@ class AsyncWebSocket(BaseWebSocket):
             try:
                 if self._write_task and not self._write_task.done():
                     close_frame = self._pack_close_frame(code, message)
-                    # Attempt to send and flush, but don't let it hang forever.
-                    await asyncio.wait_for(
-                        self.send(close_frame, CurlWsFlag.CLOSE), timeout=timeout
-                    )
-                    # If the writer task is dead, flush() will timeout.
-                    # We can catch this and proceed to terminate.
+                    with suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(
+                            self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
+                            timeout=timeout,
+                        )
                     with suppress(asyncio.TimeoutError):
                         await asyncio.wait_for(self.flush(), timeout=timeout)
-            except (
-                WebSocketError,
-                asyncio.TimeoutError,
-                asyncio.CancelledError,
-            ) as e:
-                if self.debug and not isinstance(e, WebSocketClosed):
-                    warnings.warn(
-                        f"Ignored exception during WebSocket close handshake: {e!r}",
-                        CurlCffiWarning,
-                        stacklevel=2,
-                    )
             finally:
                 self.terminate()
 
     @override
     def terminate(self) -> None:
-        """Terminates the underlying connection and its I/O tasks."""
-        self.closed = True
+        """
+        Public method to terminate the connection. This method is thread-safe,
+        task-safe, and idempotent.
+        """
 
-        # Cancel the tasks started in the I/O loop.
-        stop_tasks: set[Union[asyncio.Task[None], None]] = {
-            self._read_task,
-            self._write_task,
-        }
-        for io_task in stop_tasks:
-            if io_task and not io_task.done():
-                io_task.cancel()
+        with self._terminate_lock:
+            if getattr(self, "_terminated", False):
+                return
+            self._terminated = True
 
-        # As a safety measure, deregister the reader/writers from the FD
-        if self._sock_fd != -1 and self._loop and not self.loop.is_closed():
-            try:
-                self.loop.remove_reader(self._sock_fd)
-                self.loop.remove_writer(self._sock_fd)
-            except (ValueError, OSError, KeyError, RuntimeError):
-                pass
-            self._sock_fd = -1
+            if self._loop and self.loop.is_running():
+                for io_task in (self._read_task, self._write_task):
+                    if io_task and not io_task.done():
+                        self.loop.call_soon_threadsafe(io_task.cancel)
 
-        super().terminate()
-        if self.session and not self.session._closed:
-            # WebSocket curls CANNOT be reused
-            self.session.push_curl(None)
+                if self._sock_fd != -1:
+                    with suppress(Exception):
+                        self.loop.remove_reader(self._sock_fd)
+                    with suppress(Exception):
+                        self.loop.remove_writer(self._sock_fd)
+                    self._sock_fd = -1
+
+            super().terminate()
+            if self.session and not self.session._closed:
+                # WebSocket curls CANNOT be reused
+                self.session.push_curl(None)
 
     async def _read_loop(self) -> None:
         """The main asynchronous task for reading incoming WebSocket frames.
