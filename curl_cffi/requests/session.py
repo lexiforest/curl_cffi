@@ -79,6 +79,7 @@ if TYPE_CHECKING:
         cert: Optional[Union[str, tuple[str, str]]]
         response_class: Optional[type[R]]
         discard_cookies: bool
+        raise_for_status: bool
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -187,6 +188,7 @@ class BaseSession(Generic[R]):
         cert: Optional[Union[str, tuple[str, str]]] = None,
         response_class: Optional[type[R]] = None,
         discard_cookies: bool = False,
+        raise_for_status: bool = False,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -219,6 +221,7 @@ class BaseSession(Generic[R]):
             )
         self.response_class = response_class or Response
         self.discard_cookies = discard_cookies
+        self.raise_for_status = raise_for_status
 
         if proxy and proxies:
             raise TypeError("Cannot specify both 'proxy' and 'proxies'")
@@ -382,6 +385,8 @@ class Session(BaseSession[R]):
                 automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
             response_class: A customized subtype of ``Response`` to use.
+            raise_for_status: automatically raise an HTTPError for 4xx and 5xx
+                status codes.
 
         Notes:
             This class can be used as a context manager.
@@ -627,6 +632,8 @@ class Session(BaseSession[R]):
             rsp.stream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
+            if self.raise_for_status:
+                rsp.raise_for_status()
             return rsp
         else:
             try:
@@ -654,6 +661,8 @@ class Session(BaseSession[R]):
                     c, buffer, header_buffer, default_encoding, discard_cookies
                 )
                 rsp.request = req
+                if self.raise_for_status:
+                    rsp.raise_for_status()
                 return rsp
             finally:
                 c.reset()
@@ -731,6 +740,8 @@ class AsyncSession(BaseSession[R]):
                 automatic detection.
             cert: a tuple of (cert, key) filenames for client cert.
             response_class: A customized subtype of ``Response`` to use.
+            raise_for_status: automatically raise an HTTPError for 4xx and 5xx
+                status codes.
 
         Notes:
             This class can be used as a context manager, and it's recommended to use via
@@ -1102,6 +1113,8 @@ class AsyncSession(BaseSession[R]):
             rsp.astream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
+            if self.raise_for_status:
+                rsp.raise_for_status()
             return rsp
         else:
             try:
@@ -1119,6 +1132,8 @@ class AsyncSession(BaseSession[R]):
                     curl, buffer, header_buffer, default_encoding, discard_cookies
                 )
                 rsp.request = req
+                if self.raise_for_status:
+                    rsp.raise_for_status()
                 return rsp
             finally:
                 self.release_curl(curl)
