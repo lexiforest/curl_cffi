@@ -613,12 +613,18 @@ class AsyncWebSocket(BaseWebSocket):
         retry_on_recv_error: bool = False,
         yield_interval: float = 0.001,
     ) -> None:
-        """Initializes an Async WebSocket session. This class should not be
-        instantantiated directly, but rather through the use of the `AsyncSession`.
-        Anything which uses this class must initialize the I/O loops once by calling
-        `_start_io_tasks`. I/O operations are decoupled from the high-level `send()`
-        and `recv()` methods. NOTE: Errors on sending will end up in the receive queue
-        so you must call `recv(...)` after the send to catch the error.
+        """Initializes an Async WebSocket session.
+
+        This class should not be instantiated directly. It is intended to be created
+        via the `AsyncSession.ws_connect()` method, which correctly handles setup and
+        initialization of the underlying I/O tasks.
+
+        Important:
+            This WebSocket implementation uses a decoupled I/O model. Network
+            operations occur in background tasks. As a result, network-related
+            errors that occur during a `send()` operation will not be raised by
+            `send()`. Instead, they are placed into the receive queue and will be
+            raised by the next call to `recv()`.
 
         Args:
             session (AsyncSession): An instantiated AsyncSession object.
@@ -660,7 +666,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     def __del__(self) -> None:
         """Warn if the user forgets to close the connection."""
-        if not self.closed and self.debug:
+        if not self.closed:
             warnings.warn(
                 (
                     f"Unclosed WebSocket {self!r} was garbage collected. "
@@ -707,17 +713,21 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv(
         self, *, timeout: Optional[float] = None
     ) -> tuple[Optional[bytes], int]:
-        """Receive a frame as bytes. libcurl splits frames into fragments, so we have
-        to collect all the chunks for a frame. This is a lightweight call that awaits
-        the next item from the receive queue, which will contain a full frame.
+        """Receive a frame as bytes.
+
+        This method waits for and returns the next complete data frame from the
+        receive queue.
 
         Args:
             timeout: how many seconds to wait before giving up.
 
         Raises:
-            WebSocketClosed: Read called on a closed WebSocket.
-            WebSocketTimeout: Timed out waiting for WebSocket frame.
-            result: A WebSocket exception that was picked up in the receive queue.
+            WebSocketClosed: If `recv()` is called on a closed connection after
+                the receive queue is empty.
+            WebSocketTimeout: If the operation times out.
+            WebSocketError: A protocol or network error that occurred in a
+                background I/O task, including errors from previous `send()`
+                operations.
 
         Returns:
             tuple[bytes, int]: A tuple with the received payload and flags.
@@ -784,17 +794,10 @@ class AsyncWebSocket(BaseWebSocket):
         flags: CurlWsFlag = CurlWsFlag.BINARY,
     ):
         """Send a data frame.
-        Ideal for discrete messages and high volumes of small messages.
 
-        It uses an adaptive batching writer for low latency and efficiency.
-        This is a lightweight call which places the payload into the send queue.
-        The message gets picked up by the `_write_loop` task and written into
-        the WebSocket as soon as it is possible to do so.
-
-        NOTE: This method will raise a `WebSocketClosed` exception immediately if the
-        connection is already closed. Other network-related errors that occur during
-        the background send operation are reported asynchronously and will be raised
-        by a subsequent call to `recv()`.
+        This method is a lightweight, non-blocking call that places the payload
+        into a send queue. The actual network transmission is handled by a
+        background task.
 
         Args:
             payload: data to send.
@@ -802,7 +805,15 @@ class AsyncWebSocket(BaseWebSocket):
 
         Raises:
             WebSocketClosed: The WebSocket is closed.
+
+        NOTE:
+            Due to the asynchronous nature of this client, network errors
+            (e.g., connection dropped) that occur during the actual transmission
+            will NOT be raised by this method. They will be raised by a
+            subsequent call to `recv()`. Always ensure you are actively
+            receiving data to handle potential connection errors.
         """
+
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
 
@@ -1020,7 +1031,22 @@ class AsyncWebSocket(BaseWebSocket):
         """
         The high-level send manager. It efficiently gathers pending messages
         from the send queue and orchestrates their transmission.
+
+        This method runs a continuous loop that consumes messages from the
+        `_send_queue`. To improve performance and reduce system call overhead,
+        it implements an adaptive batching strategy. It greedily gathers
+        multiple pending messages from the queue and then coalesces the
+        payloads of messages that share the same flags (e.g., all text frames)
+        into a single, larger payload, ONLY if `coalesce_frames=True` and the
+        frame is not a CONTROL frame, as the spec requires them to be whole.
+
+        It will batch as many as possible, then iterate over the batch and send
+        the frames, one at a time. This batching and coalescing significantly
+        improves throughput for high volumes of small messages where the message
+        boundaries do not matter. The final, consolidated payloads are then passed
+        to the `_send_payload` method for transmission.
         """
+
         try:
             while True:
                 payload, flags = await self._send_queue.get()
@@ -1088,6 +1114,10 @@ class AsyncWebSocket(BaseWebSocket):
         The low-level I/O Handler. It transmits a single payload, handling
         fragmentation, backpressure (EAGAIN), and cooperative multitasking.
         Returns False on a non-recoverable error.
+
+        Args:
+            payload: The complete byte payload to be sent.
+            flags: The CurlWsFlag indicating the frame type (e.g., TEXT, BINARY).
         """
         view = memoryview(payload)
         offset = 0

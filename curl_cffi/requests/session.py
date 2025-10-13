@@ -909,9 +909,9 @@ class AsyncSession(BaseSession[R]):
             max_send_batch_size: The max batch size for sent frames.
             coalesce_frames: If `True`, multiple pending messages in the send queue
                 may be merged into a single WebSocket frame for improved throughput.
-                Warning: This breaks the one-to-one mapping of send() calls to frames
-                and should only be used when the application protocol is designed to
-                handle concatenated data streams. Defaults to `False`.
+                **Warning:** This breaks the one-to-one mapping of `send()` calls to
+                frames and should only be used when the application protocol is
+                designed to handle concatenated data streams. Defaults to `False`.
             retry_on_recv_error: Retries `ws_recv()` if a recv error is raised.
                 Retries up to a limited number of times with a delay in between.
             yield_interval: How often to yield control back to the event loop.
