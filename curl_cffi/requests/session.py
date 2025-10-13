@@ -963,8 +963,6 @@ class AsyncSession(BaseSession[R]):
         )
         curl.setopt(CurlOpt.TCP_NODELAY, 1)
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
-        curl.setopt(CurlOpt.BUFFERSIZE, 2 * 1024 * 1024)  # 2MB buffer size
-        curl.setopt(CurlOpt.UPLOAD_BUFFERSIZE, 2 * 1024 * 1024)  # 2MB send buffer
 
         await self.loop.run_in_executor(None, curl.perform)
         ws: AsyncWebSocket = AsyncWebSocket(
