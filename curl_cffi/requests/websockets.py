@@ -48,7 +48,8 @@ if TYPE_CHECKING:
     ON_ERROR_T = Callable[["WebSocket", CurlError], None]
     ON_OPEN_T = Callable[["WebSocket"], None]
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
-    WS_QUEUE_ITEM = tuple[Union[bytes, Exception], int]
+    RECV_QUEUE_ITEM = tuple[Union[bytes, Exception], int]
+    SEND_QUEUE_ITEM = tuple[bytes, Union[CurlWsFlag, int]]
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
@@ -638,10 +639,10 @@ class AsyncWebSocket(BaseWebSocket):
         self._terminate_lock: threading.Lock = threading.Lock()
         self._read_task: Optional[asyncio.Task[None]] = None
         self._write_task: Optional[asyncio.Task[None]] = None
-        self._receive_queue: asyncio.Queue[WS_QUEUE_ITEM] = asyncio.Queue(
+        self._receive_queue: asyncio.Queue[RECV_QUEUE_ITEM] = asyncio.Queue(
             maxsize=queue_size
         )
-        self._send_queue: asyncio.Queue[WS_QUEUE_ITEM] = asyncio.Queue(
+        self._send_queue: asyncio.Queue[SEND_QUEUE_ITEM] = asyncio.Queue(
             maxsize=queue_size
         )
         self._max_send_batch_size: int = max_send_batch_size
@@ -1016,134 +1017,113 @@ class AsyncWebSocket(BaseWebSocket):
                 )
 
     async def _write_loop(self) -> None:
-        """The main asynchronous task for writing outgoing WebSocket frames.
-
-        This method runs a continuous loop that consumes messages from the
-        `_send_queue`. To improve performance and reduce system call overhead,
-        it implements an adaptive batching strategy. It greedily gathers
-        multiple pending messages from the queue and then coalesces the
-        payloads of messages that share the same flags (e.g., all text frames)
-        into a single, larger payload, ONLY if the attribute to coalesce frames
-        is enabled. Otherwise, it will batch as many as possible, then iterate
-        over the batch and send the frames, one at a time.
-
-        This batching and coalescing significantly improves throughput for
-        high volumes of small messages. The final, consolidated payloads are
-        then passed to the `_send_coalesced` method for transmission.
+        """
+        The high-level send manager. It efficiently gathers pending messages
+        from the send queue and orchestrates their transmission.
         """
         try:
-            while not self.closed:
-                try:
-                    # Block efficiently until the first message arrives.
-                    payload, flags = await self._send_queue.get()
-                except asyncio.CancelledError:
-                    break
+            while True:
+                payload, flags = await self._send_queue.get()
 
-                # Create a batch, starting with the first message
+                # Build the rest of the batch without awaiting.
                 batch = [(payload, flags)]
+                if not (flags & CurlWsFlag.CLOSE):
+                    while (
+                        len(batch) < self._max_send_batch_size
+                        and not self._send_queue.empty()
+                    ):
+                        payload, frame = self._send_queue.get_nowait()
+                        batch.append((payload, frame))
+                        if frame & CurlWsFlag.CLOSE:
+                            break
 
-                # Greedily pull more messages from the queue without waiting
-                while (
-                    len(batch) < self._max_send_batch_size
-                    and not self._send_queue.empty()
-                ):
-                    try:
-                        next_payload, next_flags = self._send_queue.get_nowait()
-                        batch.append((next_payload, next_flags))
-                    except asyncio.QueueEmpty:
-                        break
-
-                # Conditionally process the batch based on the coalescing strategy.
+                # Process the batch depending on the coalescing strategy
                 if self._coalesce_frames:
-                    coalesced_payloads: dict[int, list[bytes]] = {}
+                    data_to_coalesce: dict[int, list[bytes]] = {}
+                    for payload, frame in batch:
+                        if frame & (CurlWsFlag.CLOSE | CurlWsFlag.PING):
+                            # Flush any pending data before sending the control frame.
+                            for frame_group, payloads in data_to_coalesce.items():
+                                if not await self._send_payload(
+                                    b"".join(payloads), frame_group
+                                ):
+                                    return
+                            data_to_coalesce.clear()
 
-                    for payload_chunk, frame_flags in batch:
-                        # If we haven't seen this flag type yet, create a new list.
-                        if frame_flags not in coalesced_payloads:
-                            coalesced_payloads[frame_flags] = []
+                            if not await self._send_payload(payload, frame):
+                                return
+                        else:
+                            data_to_coalesce.setdefault(frame, []).append(payload)
 
-                        # Append the current chunk to the list for its flag type.
-                        coalesced_payloads[frame_flags].append(payload_chunk)
-
-                    # Now, iterate through the dictionary.
-                    for msg_flags, list_of_payloads in coalesced_payloads.items():
-                        if list_of_payloads:
-                            # Join the list of chunks into a single bytes object.
-                            full_payload = b"".join(list_of_payloads)
-                            await self._send_payload(full_payload, msg_flags)
+                    # Send any remaining data at the end of the batch.
+                    for frame_group, payloads in data_to_coalesce.items():
+                        if not await self._send_payload(
+                            b"".join(payloads), frame_group
+                        ):
+                            return
                 else:
-                    # Safe and preserves frame boundaries, the default.
-                    for msg_payload, msg_flags in batch:
-                        if msg_payload:
-                            await self._send_payload(msg_payload, msg_flags)
+                    # Send each message in the batch, preserving frame boundaries.
+                    for payload, frame in batch:
+                        if not await self._send_payload(payload, frame):
+                            return
 
-                # Mark all tasks in the processed batch as done
+                # Mark all processed items as done.
                 for _ in range(len(batch)):
                     self._send_queue.task_done()
+
+                # Exit cleanly after sending a CLOSE frame.
+                if batch[-1][1] & CurlWsFlag.CLOSE:
+                    break
+
         except asyncio.CancelledError:
             pass
-        except CurlError as e:
+
+        finally:
+            # If the loop exits unexpectedly, ensure we terminate the connection.
             if not self.closed:
-                await self._receive_queue.put((e, 0))
+                self.terminate()
 
-    async def _send_chunk(self, chunk_view: memoryview, flags: CurlWsFlag) -> int:
-        """Sends a single chunk of data, handling EAGAIN and write locks.
-
-        This is the lowest-level write operation. It waits for the socket to become
-        writable if libcurl returns an EAGAIN error. This method must not be called
-        concurrently or more than once at a time to avoid a crash.
+    async def _send_payload(self, payload: bytes, flags: CurlWsFlag) -> bool:
         """
-        while True:
-            try:
-                return self._curl.ws_send(chunk_view, flags)
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    write_future = self.loop.create_future()
-                    self.loop.add_writer(self._sock_fd, write_future.set_result, None)
-                    try:
-                        await write_future
-                    finally:
-                        if self._sock_fd != -1:
-                            self.loop.remove_writer(self._sock_fd)
-                    continue
-                raise
-
-    async def _send_payload(self, payload: bytes, flags: CurlWsFlag) -> None:
-        """Breaks a payload into chunks and sends them sequentially.
-
-        This coroutine is responsible for the fragmentation of a potentially
-        large payload into chunks that are suitable for libcurl. It then
-        delegates the actual transmission of each chunk, including lock
-        acquisition and non-blocking I/O management, to the `_send_chunk`
-        method.
-
-        Args:
-            payload: The complete byte payload to be sent.
-            flags: The CurlWsFlag indicating the frame type (e.g., TEXT, BINARY).
+        The low-level I/O Handler. It transmits a single payload, handling
+        fragmentation, backpressure (EAGAIN), and cooperative multitasking.
+        Returns False on a non-recoverable error.
         """
         view = memoryview(payload)
         offset = 0
-        write_ops_since_yield = 0
+        write_ops = 0
         start_time: float = self.loop.time()
 
         while offset < len(view):
-            chunk_size = min(len(view) - offset, self._MAX_CURL_FRAME_SIZE)
-            chunk_view = view[offset : offset + chunk_size]
-            if (write_ops_since_yield & self._YIELD_MASK) == 0 or (
+            # Cooperatively yield to the event loop to prevent starvation.
+            if (write_ops & self._YIELD_MASK) == 0 or (
                 self.loop.time() - start_time
             ) > self._yield_interval:
                 await asyncio.sleep(0)
                 start_time = self.loop.time()
-                write_ops_since_yield = 0
 
             try:
-                n_sent = await self._send_chunk(chunk_view, flags)
-            except CurlError as e:
-                await self._receive_queue.put((e, 0))
-                return
+                chunk = view[offset : offset + self._MAX_CURL_FRAME_SIZE]
+                n_sent = self._curl.ws_send(chunk, flags)
+                offset += n_sent
+                write_ops += 1
 
-            offset += n_sent
-            write_ops_since_yield += 1
+            except CurlError as e:
+                if e.code != CurlECode.AGAIN:
+                    # Non-recoverable error: queue it for the user and signal failure.
+                    with suppress(asyncio.QueueFull):
+                        self._receive_queue.put_nowait((e, 0))
+                    return False
+
+                # EAGAIN: wait until the socket is writable.
+                write_future = self.loop.create_future()
+                self.loop.add_writer(self._sock_fd, write_future.set_result, None)
+                try:
+                    await write_future
+                finally:
+                    if self._sock_fd != -1:
+                        self.loop.remove_writer(self._sock_fd)
+        return True
 
     async def flush(self) -> None:
         """
