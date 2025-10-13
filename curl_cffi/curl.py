@@ -144,7 +144,7 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
-    _WS_RECV_BUFFER_SIZE = 65536
+    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
 
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
@@ -190,6 +190,10 @@ class Curl:
         self.close()
 
     def _check_error(self, errcode: int, *args: Any) -> None:
+        # Add short-circuit optimization
+        if errcode == 0:
+            return
+
         error = self._get_error(errcode, *args)
         if error is not None:
             raise error
@@ -494,6 +498,10 @@ class Curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None
         ffi.release(self._error_buffer)
+
+        if self._ws_recv_buffer is not None:
+            ffi.release(self._ws_recv_buffer)
+            self._ws_recv_buffer = None
 
     def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
