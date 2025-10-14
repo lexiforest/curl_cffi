@@ -607,7 +607,7 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        queue_size: int = 8192,
+        queue_size: int = 4096,
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
@@ -631,7 +631,7 @@ class AsyncWebSocket(BaseWebSocket):
             curl (Curl): The underlying Curl to use.
             autoclose (bool, optional): Close the WS on receiving a close frame.
             debug (bool, optional): Enable debug messages. Defaults to False.
-            queue_size (int, optional): The recv/send queue max size. Defaults to 8192.
+            queue_size (int, optional): The recv/send queue max size. Defaults to 4096.
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             retry_on_recv_error (bool, optional): Retry recv on some transient errors.
@@ -645,6 +645,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._terminate_lock: threading.Lock = threading.Lock()
         self._read_task: Optional[asyncio.Task[None]] = None
         self._write_task: Optional[asyncio.Task[None]] = None
+        self._close_handle: Optional[asyncio.Handle] = None
         self._receive_queue: asyncio.Queue[RECV_QUEUE_ITEM] = asyncio.Queue(
             maxsize=queue_size
         )
@@ -812,6 +813,9 @@ class AsyncWebSocket(BaseWebSocket):
             will NOT be raised by this method. They will be raised by a
             subsequent call to `recv()`. Always ensure you are actively
             receiving data to handle potential connection errors.
+
+            Also: If the network is slow and the internal send queue becomes full,
+            this method will block until there is space in the queue.
         """
 
         if self.closed:
@@ -874,11 +878,16 @@ class AsyncWebSocket(BaseWebSocket):
     async def close(
         self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 5.0
     ) -> None:
-        """Send a graceful close frame, and then terminate the connection.
+        """
+        Performs a graceful WebSocket closing handshake and terminates the connection.
+
+        This method sends a WebSocket close frame to the peer, waits for queued
+        outgoing messages to be sent, and then shuts down the connection. It is
+        the recommended way to close the session.
 
         Args:
-            code (int, optional): Close code. Defaults to WsCloseCode.OK.
-            message (bytes, optional): Close reason. Defaults to b"".
+            code (int, optional): Close code. Defaults to `WsCloseCode.OK`.
+            message (bytes, optional): Close reason. Defaults to `b""`.
             timeout (float, optional): How long in seconds to wait closed.
         """
         async with self._close_lock:
@@ -903,8 +912,14 @@ class AsyncWebSocket(BaseWebSocket):
     @override
     def terminate(self) -> None:
         """
-        Public method to terminate the connection. This method is thread-safe,
-        task-safe, and idempotent.
+        Immediately terminates the connection without a graceful handshake.
+
+        This method is a forceful shutdown that cancels all background I/O tasks
+        and cleans up resources. It should be used for final cleanup or after an
+        unrecoverable error. Unlike `close()`, it does not attempt to send a
+        close frame or wait for pending messages.
+
+        This method is thread-safe, task-safe, and idempotent.
         """
 
         with self._terminate_lock:
@@ -912,26 +927,18 @@ class AsyncWebSocket(BaseWebSocket):
                 return
             self._terminated = True
 
+            # Terminate the connection
             if self._loop and self.loop.is_running():
-                for io_task in (self._read_task, self._write_task):
-                    if io_task and not io_task.done():
-                        self.loop.call_soon_threadsafe(io_task.cancel)
+                self._close_handle = self.loop.call_soon_threadsafe(
+                    self.loop.create_task, self._terminate_helper()
+                )
 
-                if self._sock_fd != -1:
-                    with suppress(Exception):
-                        self.loop.call_soon_threadsafe(
-                            self.loop.remove_reader, self._sock_fd
-                        )
-                    with suppress(Exception):
-                        self.loop.call_soon_threadsafe(
-                            self.loop.remove_writer, self._sock_fd
-                        )
-                    self._sock_fd = -1
-
-            super().terminate()
-            if self.session and not self.session._closed:
-                # WebSocket curls CANNOT be reused
-                self.session.push_curl(None)
+            # The event loop is not running
+            else:
+                super().terminate()
+                if self.session and not self.session._closed:
+                    # WebSocket curls CANNOT be reused
+                    self.session.push_curl(None)
 
     async def _read_loop(self) -> None:
         """The main asynchronous task for reading incoming WebSocket frames.
@@ -987,7 +994,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                         # If a CLOSE frame is received, the reader is done.
                         if flags & CurlWsFlag.CLOSE:
-                            self._handle_close_frame(message)
+                            await self._handle_close_frame(message)
                             return
 
                         if (msg_counter & self._YIELD_MASK) == 0 and (
@@ -1012,6 +1019,7 @@ class AsyncWebSocket(BaseWebSocket):
                             continue
                         with suppress(asyncio.QueueFull):
                             self._receive_queue.put_nowait((e, 0))
+                        self.terminate()
                         return
 
         except asyncio.CancelledError:
@@ -1063,39 +1071,41 @@ class AsyncWebSocket(BaseWebSocket):
                         if frame & CurlWsFlag.CLOSE:
                             break
 
-                # Process the batch depending on the coalescing strategy
-                if self._coalesce_frames:
-                    data_to_coalesce: dict[int, list[bytes]] = {}
-                    for payload, frame in batch:
-                        if frame & (CurlWsFlag.CLOSE | CurlWsFlag.PING):
-                            # Flush any pending data before sending the control frame.
-                            for frame_group, payloads in data_to_coalesce.items():
-                                if not await self._send_payload(
-                                    b"".join(payloads), frame_group
-                                ):
-                                    return
-                            data_to_coalesce.clear()
+                try:
+                    # Process the batch depending on the coalescing strategy
+                    if self._coalesce_frames:
+                        data_to_coalesce: dict[int, list[bytes]] = {}
+                        for payload, frame in batch:
+                            if frame & (CurlWsFlag.CLOSE | CurlWsFlag.PING):
+                                # Flush any pending data before the control frame.
+                                for frame_group, payloads in data_to_coalesce.items():
+                                    if not await self._send_payload(
+                                        b"".join(payloads), frame_group
+                                    ):
+                                        return
+                                data_to_coalesce.clear()
 
+                                if not await self._send_payload(payload, frame):
+                                    return
+                            else:
+                                data_to_coalesce.setdefault(frame, []).append(payload)
+
+                        # Send any remaining data at the end of the batch.
+                        for frame_group, payloads in data_to_coalesce.items():
+                            if not await self._send_payload(
+                                b"".join(payloads), frame_group
+                            ):
+                                return
+                    else:
+                        # Send each message in the batch, preserving frame boundaries.
+                        for payload, frame in batch:
                             if not await self._send_payload(payload, frame):
                                 return
-                        else:
-                            data_to_coalesce.setdefault(frame, []).append(payload)
 
-                    # Send any remaining data at the end of the batch.
-                    for frame_group, payloads in data_to_coalesce.items():
-                        if not await self._send_payload(
-                            b"".join(payloads), frame_group
-                        ):
-                            return
-                else:
-                    # Send each message in the batch, preserving frame boundaries.
-                    for payload, frame in batch:
-                        if not await self._send_payload(payload, frame):
-                            return
-
-                # Mark all processed items as done.
-                for _ in range(len(batch)):
-                    self._send_queue.task_done()
+                finally:
+                    # Mark all processed items as done.
+                    for _ in range(len(batch)):
+                        self._send_queue.task_done()
 
                 # Exit cleanly after sending a CLOSE frame.
                 if batch[-1][1] & CurlWsFlag.CLOSE:
@@ -1183,7 +1193,34 @@ class AsyncWebSocket(BaseWebSocket):
 
         await self._send_queue.join()
 
-    def _handle_close_frame(self, message: bytes) -> None:
+    async def _terminate_helper(self) -> None:
+        """Utility method to for connection termination"""
+
+        # Cancel all the I/O tasks
+        for io_task in (self._read_task, self._write_task):
+            try:
+                if io_task and not io_task.done():
+                    io_task.cancel()
+                    await io_task
+            except (asyncio.CancelledError, RuntimeError):
+                ...
+
+        # Remove the reader/writer if still registered
+        if self._sock_fd != -1:
+            with suppress(Exception):
+                self.loop.remove_reader(self._sock_fd)
+            with suppress(Exception):
+                self.loop.remove_writer(self._sock_fd)
+
+        self._sock_fd = -1
+
+        # Close the Curl connection
+        super().terminate()
+        if self.session and not self.session._closed:
+            # WebSocket curls CANNOT be reused
+            self.session.push_curl(None)
+
+    async def _handle_close_frame(self, message: bytes) -> None:
         """Unpack and handle the closing frame, then initiate shutdown."""
         try:
             self._close_code, self._close_reason = self._unpack_close_frame(message)
@@ -1191,7 +1228,7 @@ class AsyncWebSocket(BaseWebSocket):
             self._close_code = e.code
 
         if self.autoclose and not self.closed:
-            self.loop.create_task(self.close(self._close_code or WsCloseCode.OK))
+            await self.close(self._close_code or WsCloseCode.OK)
         else:
             # If not sending a reply, we must still terminate the connection.
             self.terminate()
