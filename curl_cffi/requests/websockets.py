@@ -964,7 +964,23 @@ class AsyncWebSocket(BaseWebSocket):
             while not self.closed:
                 # Wait for the socket to be readable.
                 read_future = self.loop.create_future()
-                self.loop.add_reader(self._sock_fd, read_future.set_result, None)
+
+                try:
+                    self.loop.add_reader(self._sock_fd, read_future.set_result, None)
+                except Exception as exc:
+                    with suppress(asyncio.QueueFull):
+                        self._receive_queue.put_nowait(
+                            (
+                                WebSocketError(
+                                    f"add_reader failed: {exc}",
+                                    CurlECode.NO_CONNECTION_AVAILABLE,
+                                ),
+                                0,
+                            )
+                        )
+                    self.terminate()
+                    return
+
                 try:
                     await read_future
                 finally:
@@ -1157,7 +1173,22 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # EAGAIN: wait until the socket is writable.
                 write_future = self.loop.create_future()
-                self.loop.add_writer(self._sock_fd, write_future.set_result, None)
+
+                try:
+                    self.loop.add_writer(self._sock_fd, write_future.set_result, None)
+                except Exception as exc:
+                    with suppress(asyncio.QueueFull):
+                        self._receive_queue.put_nowait(
+                            (
+                                WebSocketError(
+                                    f"add_writer failed: {exc}",
+                                    CurlECode.NO_CONNECTION_AVAILABLE,
+                                ),
+                                0,
+                            )
+                        )
+                    return False
+
                 try:
                     await write_future
                 finally:
