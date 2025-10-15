@@ -667,12 +667,14 @@ class AsyncWebSocket(BaseWebSocket):
 
     def __del__(self) -> None:
         """Warn if the user forgets to close the connection."""
-        if not self.closed:
+
+        if getattr(self, "closed", True):
+            return
+
+        with suppress(Exception):
             warnings.warn(
-                (
-                    f"Unclosed WebSocket {self!r} was garbage collected. "
-                    "Always call await ws.close() to ensure clean shutdown."
-                ),
+                f"Unclosed WebSocket {self!r} was garbage collected. "
+                "Always call await ws.close() to ensure clean shutdown.",
                 ResourceWarning,
                 stacklevel=2,
             )
@@ -930,7 +932,7 @@ class AsyncWebSocket(BaseWebSocket):
             # Terminate the connection
             if self._loop and self.loop.is_running():
                 self._close_handle = self.loop.call_soon_threadsafe(
-                    self.loop.create_task, self._terminate_helper()
+                    lambda: self.loop.create_task(self._terminate_helper())
                 )
 
             # The event loop is not running
@@ -1078,13 +1080,14 @@ class AsyncWebSocket(BaseWebSocket):
                 # Build the rest of the batch without awaiting.
                 batch = [(payload, flags)]
                 if not (flags & CurlWsFlag.CLOSE):
-                    while (
-                        len(batch) < self._max_send_batch_size
-                        and not self._send_queue.empty()
-                    ):
-                        payload, frame = self._send_queue.get_nowait()
-                        batch.append((payload, frame))
-                        if frame & CurlWsFlag.CLOSE:
+                    while len(batch) < self._max_send_batch_size:
+                        try:
+                            payload, frame = self._send_queue.get_nowait()
+                            batch.append((payload, frame))
+                            if frame & CurlWsFlag.CLOSE:
+                                break
+
+                        except asyncio.QueueEmpty:
                             break
 
                 try:
@@ -1151,16 +1154,29 @@ class AsyncWebSocket(BaseWebSocket):
         start_time: float = self.loop.time()
 
         while offset < len(view):
+            now: float = self.loop.time()
             # Cooperatively yield to the event loop to prevent starvation.
             if (write_ops & self._YIELD_MASK) == 0 or (
-                self.loop.time() - start_time
+                now - start_time
             ) > self._yield_interval:
                 await asyncio.sleep(0)
-                start_time = self.loop.time()
+                start_time = now
 
             try:
                 chunk = view[offset : offset + self._MAX_CURL_FRAME_SIZE]
                 n_sent = self._curl.ws_send(chunk, flags)
+                if n_sent == 0:
+                    with suppress(asyncio.QueueFull):
+                        self._receive_queue.put_nowait(
+                            (
+                                WebSocketError(
+                                    "ws_send returned 0 bytes",
+                                    CurlECode.SEND_ERROR,
+                                ),
+                                0,
+                            )
+                        )
+                    return False
                 offset += n_sent
                 write_ops += 1
 
@@ -1235,6 +1251,14 @@ class AsyncWebSocket(BaseWebSocket):
                     await io_task
             except (asyncio.CancelledError, RuntimeError):
                 ...
+
+        # Drain the send_queue
+        while not self._send_queue.empty():
+            try:
+                self._send_queue.get_nowait()
+                self._send_queue.task_done()
+            except (asyncio.QueueEmpty, ValueError):
+                break
 
         # Remove the reader/writer if still registered
         if self._sock_fd != -1:
