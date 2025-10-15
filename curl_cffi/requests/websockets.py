@@ -596,7 +596,9 @@ class AsyncWebSocket(BaseWebSocket):
     # Yield control every 64 operations for cooperative multitasking.
     # This is a (2^N)-1 value, allowing for efficient bitwise AND checks.
     _YIELD_MASK: ClassVar[int] = 63
-    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 1024 * 1024
+
+    # Match libcurl's documented max frame size limit.
+    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65535
     _MAX_RECV_RETRIES: ClassVar[int] = 3
     _RECV_RETRY_DELAY: ClassVar[float] = 0.3
 
