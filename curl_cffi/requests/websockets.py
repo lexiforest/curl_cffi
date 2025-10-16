@@ -804,6 +804,9 @@ class AsyncWebSocket(BaseWebSocket):
         into a send queue. The actual network transmission is handled by a
         background task.
 
+        The max frame size supported by libcurl is `65535` bytes. Larger frames
+        will be sent in chunks of that size, even when frame coalescing is enabled.
+
         Args:
             payload: data to send.
             flags: flags for the frame.
