@@ -22,7 +22,7 @@ from ssl import PROTOCOL_TLS_SERVER, SSLContext
 from typing import TextIO
 
 import uvloop
-from aiohttp import WebSocketError, WSMessageTypeError, web
+from aiohttp import web
 
 
 @dataclass
@@ -144,7 +144,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
 
         _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
 
-    except* (WebSocketError, WSMessageTypeError, ConnectionError):
+    except Exception:
         logger.exception("Connection closed with exception")
 
     finally:
