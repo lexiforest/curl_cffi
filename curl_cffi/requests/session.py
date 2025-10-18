@@ -869,6 +869,7 @@ class AsyncSession(BaseSession[R]):
         retry_on_recv_error: bool = False,
         yield_interval: float = 0.001,
         fair_scheduling: bool = False,
+        yield_mask: int = 63,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -924,6 +925,12 @@ class AsyncSession(BaseSession[R]):
                 to a balanced ratio (`1:1`). Enable this to improve send responsiveness
                 under heavy, concurrent load, at the cost of significantly lower overall
                 throughput.
+            yield_mask: Controls the frequency of cooperative multitasking
+                yields in the read loop. The loop yields every `yield_mask + 1`
+                operations. For efficiency, this value must be a power of two minus one
+                (e.g., `63`, `127`, `255`). Lower values yield more often, improving
+                fairness at the cost of throughput. Higher values yield less often,
+                prioritizing throughput.
         """
 
         self._check_session_closed()
@@ -980,6 +987,7 @@ class AsyncSession(BaseSession[R]):
             retry_on_recv_error=retry_on_recv_error,
             yield_interval=yield_interval,
             fair_scheduling=fair_scheduling,
+            yield_mask=yield_mask,
         )
 
         try:
