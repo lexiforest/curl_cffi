@@ -8,14 +8,14 @@ from asyncio import (
     FIRST_COMPLETED,
     AbstractEventLoop,
     CancelledError,
+    Task,
     get_running_loop,
     sleep,
     wait,
 )
-from typing_extensions import Never
 
 import uvloop
-from _asyncio import Task
+from typing_extensions import Never
 from ws_bench_1_server import binary_data_generator, config, logger
 
 from curl_cffi import AsyncSession, AsyncWebSocket, WebSocketClosed

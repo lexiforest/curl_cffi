@@ -35,6 +35,8 @@ class TestConfig:
     chunk_size: int = 65536
     cert_file: Path = Path("localhost.crt")
     cert_key: Path = Path("localhost.key")
+    data_filename: Path = Path("testdata.bin")
+    hash_filename: Path = data_filename.with_suffix(".hash")
     srv_host: IPv4Address = IPv4Address("127.0.0.1")
     srv_port: int = 4443
 

@@ -46,6 +46,16 @@ By default, both benchmarks are configured to download `10GB` with a `65535` byt
 
 > A concurrent test will finish when the fastest side finishes first, which is usually the download side
 
+These benchmarks can produce wildly varying results due to system level factors, CPU scheduling, etc.
+To make it more consistent, consider pinning the server and client to adjacent CPU cores:
+
+```bash
+taskset -c 0 ./ws_bench_1_server.py
+taskset -c 1 ./ws_bench_1_client.py
+```
+
+On a NUMA system (`lscpu | grep "NUMA node"`) with multiple CPUs, this can help a lot, especially if the server is running on one CPU core and the client on another. Crossing socket boundaries can be expensive, even for modern processors.
+
 ### First Benchmark
 
 Run the server:
