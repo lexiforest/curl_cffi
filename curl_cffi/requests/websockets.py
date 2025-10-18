@@ -1007,23 +1007,22 @@ class AsyncWebSocket(BaseWebSocket):
                 while True:
                     try:
                         chunk, frame = self._curl.ws_recv()
+                        flags: int = frame.flags
                         if self._recv_error_retries > 0:
                             self._recv_error_retries = 0
 
                         # If a CLOSE frame is received, the reader is done.
-                        if frame.flags & CurlWsFlag.CLOSE:
-                            await self._receive_queue.put((chunk, frame.flags))
+                        if flags & CurlWsFlag.CLOSE:
+                            await self._receive_queue.put((chunk, flags))
                             await self._handle_close_frame(chunk)
                             return
 
                         # Handle data frames with the fast-path optimization.
-                        is_fragmented = frame.bytesleft > 0 or (
-                            frame.flags & CurlWsFlag.CONT
-                        )
+                        is_fragmented = frame.bytesleft > 0 or (flags & CurlWsFlag.CONT)
 
                         # A single, complete data frame.
                         if not chunks and not is_fragmented:
-                            message, flags = chunk, frame.flags
+                            message = chunk
 
                         # This is a fragment of a larger message.
                         else:
@@ -1032,11 +1031,14 @@ class AsyncWebSocket(BaseWebSocket):
                                 continue
 
                             # The last fragment has been received.
-                            message, flags = b"".join(chunks), frame.flags
+                            message = b"".join(chunks)
                             chunks.clear()
 
                         msg_counter += 1
-                        await self._receive_queue.put((message, flags))
+                        try:
+                            self._receive_queue.put_nowait((message, flags))
+                        except asyncio.QueueFull:
+                            await self._receive_queue.put((message, flags))
 
                         op_check: bool = (msg_counter & self._yield_mask) == 0
                         time_check: bool = (
@@ -1110,7 +1112,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Build the rest of the batch without awaiting.
                 batch = [(payload, flags)]
-                if not (flags & CurlWsFlag.CLOSE):
+                if not flags & CurlWsFlag.CLOSE:
                     while len(batch) < self._max_send_batch_size:
                         try:
                             payload, frame = self._send_queue.get_nowait()
