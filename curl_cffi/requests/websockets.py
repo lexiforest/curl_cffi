@@ -614,6 +614,7 @@ class AsyncWebSocket(BaseWebSocket):
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
         yield_interval: float = 0.001,
+        fair_scheduling: bool = False,
     ) -> None:
         """Initializes an Async WebSocket session.
 
@@ -638,6 +639,8 @@ class AsyncWebSocket(BaseWebSocket):
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             retry_on_recv_error (bool, optional): Retry recv on some transient errors.
             yield_interval (float, optional): How often to yield control in seconds.
+            fair_scheduling (bool, optional): Change the ~5:1 ratio in favor
+                of `recv`:`send` to a fairer 1:1 ratio. This decreases recv throughput.
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -658,6 +661,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._coalesce_frames: bool = coalesce_frames
         self.retry_on_recv_error: bool = retry_on_recv_error
         self._yield_interval: float = yield_interval
+        self._use_fair_scheduling: bool = fair_scheduling
         self._recv_error_retries: int = 0
         self._terminated: bool = False
 
@@ -1003,25 +1007,43 @@ class AsyncWebSocket(BaseWebSocket):
                         if self._recv_error_retries > 0:
                             self._recv_error_retries = 0
 
-                        chunks.append(chunk)
+                        # If a CLOSE frame is received, the reader is done.
+                        if frame.flags & CurlWsFlag.CLOSE:
+                            await self._receive_queue.put((chunk, frame.flags))
+                            await self._handle_close_frame(chunk)
+                            return
 
-                        # Continue reading if the message is fragmented.
-                        if frame.bytesleft > 0 or (frame.flags & CurlWsFlag.CONT):
-                            continue
+                        # Handle data frames with the fast-path optimization.
+                        is_fragmented = frame.bytesleft > 0 or (
+                            frame.flags & CurlWsFlag.CONT
+                        )
 
-                        # A full message has been received.
-                        message, flags = b"".join(chunks), frame.flags
-                        chunks.clear()
+                        # A single, complete data frame.
+                        if not chunks and not is_fragmented:
+                            message, flags = chunk, frame.flags
+
+                        # This is a fragment of a larger message.
+                        else:
+                            chunks.append(chunk)
+                            if is_fragmented:
+                                continue
+
+                            # The last fragment has been received.
+                            message, flags = b"".join(chunks), frame.flags
+                            chunks.clear()
+
                         msg_counter += 1
                         await self._receive_queue.put((message, flags))
 
-                        # If a CLOSE frame is received, the reader is done.
-                        if flags & CurlWsFlag.CLOSE:
-                            await self._handle_close_frame(message)
-                            return
-
-                        if (msg_counter & self._YIELD_MASK) == 0 and (
+                        op_check: bool = (msg_counter & self._YIELD_MASK) == 0
+                        time_check: bool = (
                             self.loop.time() - start_time > self._yield_interval
+                        )
+
+                        if (
+                            (op_check or time_check)
+                            if self._use_fair_scheduling
+                            else (op_check and time_check)
                         ):
                             await asyncio.sleep(0)
                             start_time = self.loop.time()
@@ -1077,6 +1099,7 @@ class AsyncWebSocket(BaseWebSocket):
         boundaries do not matter. The final, consolidated payloads are then passed
         to the `_send_payload` method for transmission.
         """
+        control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING
 
         try:
             while True:
@@ -1100,7 +1123,7 @@ class AsyncWebSocket(BaseWebSocket):
                     if self._coalesce_frames:
                         data_to_coalesce: dict[int, list[bytes]] = {}
                         for payload, frame in batch:
-                            if frame & (CurlWsFlag.CLOSE | CurlWsFlag.PING):
+                            if frame & control_frame_flags:
                                 # Flush any pending data before the control frame.
                                 for frame_group, payloads in data_to_coalesce.items():
                                     if not await self._send_payload(

@@ -868,6 +868,7 @@ class AsyncSession(BaseSession[R]):
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
         yield_interval: float = 0.001,
+        fair_scheduling: bool = False,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -919,6 +920,10 @@ class AsyncSession(BaseSession[R]):
                 means the loop yields more frequently and enables other tasks to run,
                 while higher values are better for throughput. The balanced default
                 is `1ms` but you can customize this to fit your application/use case.
+            fair_scheduling: Changes the I/O priority from favoring receives (`5:1`)
+                to a balanced ratio (`1:1`). Enable this to improve send responsiveness
+                under heavy, concurrent load, at the cost of significantly lower overall
+                throughput.
         """
 
         self._check_session_closed()
@@ -974,6 +979,7 @@ class AsyncSession(BaseSession[R]):
             coalesce_frames=coalesce_frames,
             retry_on_recv_error=retry_on_recv_error,
             yield_interval=yield_interval,
+            fair_scheduling=fair_scheduling,
         )
 
         try:
