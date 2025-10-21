@@ -15,9 +15,11 @@ from typing import cast
 
 from aiohttp import web
 from aiohttp.helpers import IS_WINDOWS
+
+from curl_cffi import AsyncSession, AsyncWebSocket
+
 from ws_bench_1_server import config, logger
 
-# from curl_cffi import AsyncSession, CurlOpt
 
 # Config
 TOTAL_BYTES: int = int(config.total_gb * 1024**3)
@@ -201,13 +203,13 @@ async def stream_test_data() -> AsyncGenerator[bytes]:
         )
 
 
-async def server_recv_handler(ws: web.WebSocketResponse) -> None:
-    """Handle the server side download benchmark.
+async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> None:
+    """Handle the download benchmark, either as server or a client.
 
     Args:
-        ws (web.WebSocketResponse): WebSocket object.
+        ws (web.WebSocketResponse | AsyncWebSocket): AIOHTTP or Curl-CFFI WebSocket.
     """
-    logger.info("Client connected for UPLOAD")
+    logger.info("Connected for download benchmark")
     if not (config.hash_filename.is_file() and config.hash_filename.stat().st_size):
         logger.error("Hash file '%s' not found or empty", config.hash_filename)
         return
@@ -237,10 +239,17 @@ async def server_recv_handler(ws: web.WebSocketResponse) -> None:
         offset: int = 0
         logger.info("Receiving data from client")
         start_time = time.perf_counter()
-        async for msg in ws:
-            if msg.type == web.WSMsgType.BINARY:
-                msg_len: int = len(msg.data)
-                testdata_buffer[offset : offset + msg_len] = msg.data
+        if isinstance(ws, web.WebSocketResponse):
+            logger.info("WebSocket connection type: SERVER")
+            async for msg in ws:
+                if msg.type == web.WSMsgType.BINARY:
+                    msg_len: int = len(msg.data)
+                    testdata_buffer[offset : offset + msg_len] = msg.data
+                    offset += msg_len
+        else:
+            async for msg in ws:
+                msg_len = len(msg)
+                testdata_buffer[offset : offset + msg_len] = msg
                 offset += msg_len
 
         elapsed_time = time.perf_counter() - start_time
@@ -268,12 +277,32 @@ async def server_recv_handler(ws: web.WebSocketResponse) -> None:
     del testdata_buffer
 
 
-async def server_send_handler(ws: web.WebSocketResponse) -> None:
-    """Handle the server side upload benchmark.
+async def send_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> None:
+    """Handle the upload benchmark either as a server or client.
 
     Args:
-        ws (web.WebSocketResponse): WebSocket object.
+        ws (web.WebSocketResponse | AsyncWebSocket): AIOHTTP or Curl-CFFI WebSocket.
     """
+    logger.info("Connected for upload benchmark")
+    try:
+        if not (config.data_filename.is_file() and config.data_filename.stat().st_size):
+            logger.error(
+                "Test data '%s' not found, run 'generate' first.",
+                config.data_filename,
+            )
+            return
+
+        start_time: float = time.perf_counter()
+        async for chunk in stream_test_data():
+            await ws.send_bytes(chunk)
+
+        if isinstance(ws, AsyncWebSocket):
+            await ws.flush()
+        elapsed_time: float = time.perf_counter() - start_time
+        logger.info("Sent %d GB in %.2fs", config.total_gb, elapsed_time)
+    finally:
+        if isinstance(ws, web.WebSocketResponse):
+            _ = await ws.close()
 
 
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:
@@ -290,23 +319,44 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     logger.info("Client connected %s", request.host)
 
     if request.query.get("test") == "upload":
-        await server_recv_handler(ws)
+        await recv_benchmark_handler(ws)
     else:
-        await server_send_handler(ws)
+        await send_benchmark_handler(ws)
 
     return ws
 
 
+async def client_handler(opt: str) -> None:
+    """Handle the client benchmark functions.
+
+    Args:
+        opt (str): The benchmark mode to run.
+    """
+    async with AsyncSession(impersonate="chrome", verify=False) as session:
+        ws: AsyncWebSocket = await session.ws_connect(
+            f"wss://127.0.0.1:4443/ws?test={opt}"
+        )
+        try:
+            if opt == "download":
+                await recv_benchmark_handler(ws)
+                return
+
+            await send_benchmark_handler(ws)
+
+        finally:
+            await ws.close()
+
+
 def main() -> None:
     """Entrypoint"""
+    mode_opts: list[str] = ["generate", "server", "client"]
+    client_opts: list[str] = ["download", "upload"]
     parser: ArgumentParser = ArgumentParser(
         description="WebSocket Unidirectional Benchmark"
     )
+    _ = parser.add_argument("mode", choices=mode_opts, help="Operation", type=str)
     _ = parser.add_argument(
-        "mode", choices=["generate", "server", "client"], help="Operation", type=str
-    )
-    _ = parser.add_argument(
-        "--test", choices=["download", "upload"], default="download", type=str
+        "-t", "--test", choices=client_opts, default="download", type=str
     )
     args: Namespace = parser.parse_args()
     args.mode = cast(str, args.mode)
@@ -331,15 +381,10 @@ def main() -> None:
             print=logger.debug,
         )
 
-    # elif args.mode == "client":
-    #     if args.test == "download":
-    #         ...
-    #         source_hash = load_source_hash()
-    #         await download_client(source_hash)
-
-    #     elif args.test == "upload":
-    #         ...
-    #         await upload_client()
+    elif args.mode == "client" and args.test in client_opts:
+        loop: asyncio.AbstractEventLoop = get_loop()
+        loop.run_until_complete(client_handler(args.test))
+        loop.close()
 
     else:
         parser.print_help()

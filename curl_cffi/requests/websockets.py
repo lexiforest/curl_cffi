@@ -603,9 +603,9 @@ class WebSocket(BaseWebSocket):
 
 class AsyncWebSocket(BaseWebSocket):
     """
-    An async WebSocket implementation using libcurl.
+    An asyncio WebSocket implementation using libcurl.
 
-    Note: This object represents a single WebSocket connection. Once closed,
+    NOTE: This object represents a single WebSocket connection. Once closed,
     it cannot be reopened. A new instance must be created to reconnect.
     """
 
@@ -848,6 +848,8 @@ class AsyncWebSocket(BaseWebSocket):
         into a send queue. The actual network transmission is handled by a
         background task.
 
+        You must await `ws.flush(...)` to guarantee all your messages have been sent.
+
         The max frame size supported by libcurl is `65535` bytes. Larger frames
         will be sent in chunks of that size, even when frame coalescing is enabled.
 
@@ -933,7 +935,7 @@ class AsyncWebSocket(BaseWebSocket):
         Performs a graceful WebSocket closing handshake and terminates the connection.
 
         This method sends a WebSocket close frame to the peer, waits for queued
-        outgoing messages to be sent, and then shuts down the connection. It is
+        outgoing messages to be sent, and then shuts down the connection. This is
         the recommended way to close the session.
 
         Args:
@@ -1300,7 +1302,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def flush(self) -> None:
         """
-        Waits until all items in the send queue have been processed by the writer task.
+        Waits until all items in the send queue have been processed.
 
         This ensures that all messages passed to `send()` have been handed off to the
         underlying socket for transmission. It does not guarantee that the data has
