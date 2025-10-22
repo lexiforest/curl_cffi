@@ -711,6 +711,11 @@ class AsyncWebSocket(BaseWebSocket):
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
 
+    @property
+    def send_queue_size(self) -> int:
+        """Returns the current number of items in the send queue."""
+        return self._send_queue.qsize()
+
     def __del__(self) -> None:
         """Warn if the user forgets to close the connection."""
 
@@ -848,10 +853,10 @@ class AsyncWebSocket(BaseWebSocket):
         into a send queue. The actual network transmission is handled by a
         background task.
 
-        To guarantee all your messages have been sent `await ws.flush(...)`.
+        To guarantee all your messages have been sent `await ws.flush()`.
 
         The max frame size supported by libcurl is `65535` bytes. Larger frames
-        will be sent in chunks of that size, even when frame coalescing is enabled.
+        will be broken down and sent in chunks of that size.
 
         Args:
             payload: data to send.

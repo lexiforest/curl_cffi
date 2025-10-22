@@ -19,76 +19,129 @@ Async clients
 - httpx
 - aiohttp
 
-Async WebSocket
-------
-
-There are two benchmarks for the async WebSocket code:
-
-1. [`client`](ws_bench_1_client.py)/[`server`](ws_bench_1_server.py) - Simple test for checking the speed of the `AsyncWebSocket` code. It just keeps sending the same chunk of bytes in a tight loop, the other end receives. This is unrealistic and CPU caching also skews the results. Just a sanity check to make sure things are working normally and there are no regressions.
-2. [`benchmark`](benchmark/ws_bench_2.py) - Generates a large file full of random bytes and its hash. When ran as a server, it streams the file. The client connects and either downloads or uploads this file. The receiving end calculates and compares the file hash to make sure it matches the disk file.
-
-> These do not factor in real internet conditions and run on loopback interfaces with really high MTU sizes
-
-To run them you need Python 3.10+. In this directory, start by generating a self-signed cert:
-
-```bash
-openssl req -x509 -newkey rsa:2048 -nodes -keyout localhost.key -out localhost.crt -days 365 -subj "/CN=localhost"
-```
-
-Mark as executable:
-```bash
-chmod +x ws_bench_1_server.py ws_bench_1_client.py ws_bench_2.py
-```
-
-Install at least `aiohttp` and this code. Install `uvloop` or change the code to use the asyncio event loop. If you are on Windows, remove the `SSLContext` in the code and change WSS → WS URLs as needed.
-
-By default, both benchmarks are configured to download `10GB` with a `65535` byte chunk size. You can [edit](ws_bench_1_server.py) the code to change these values as well as enabling upload. You can also enable concurrent upload/download, just uncomment the relevant code in the benchmark files.
-
-> A concurrent test ends when the fastest side finishes first, which is usually the download side
-
-These benchmarks can produce wildly varying results due to system level factors, CPU scheduling, etc.
-To increase consistency, consider pinning the server and client to adjacent CPU cores:
-
-```bash
-taskset -c 0 ./ws_bench_1_server.py
-taskset -c 1 ./ws_bench_1_client.py
-```
-
-> On a NUMA system (`lscpu | grep "NUMA node"`) with multiple CPUs, using `taskset` makes it consistent. If the benchmark server instance is running on one CPU and the client on another, it can result in reduced throughput due to crossing CPU socket boundaries.
-
-### First Benchmark
-
-Run the server:
-```bash
-./ws_bench_1_server.py
-```
-
-Run the client:
-```bash
-./ws_bench_1_client.py
-```
-
-### Second Benchmark
-
-Generate the random bytes file (first time):
-```bash
-./ws_bench_2.py generate
-```
-
-Run the server:
-```bash
-./ws_bench_2.py server
-```
-
-Run the client:
-```bash
-./ws_bench_2.py client --test download
-./ws_bench_2.py client --test upload
-```
-
-> Ensure sufficient disk space and RAM is available, the entire file will be received in RAM before being hashed
-
 Target
 ------
 
 All the clients run with session/client enabled.
+
+Async WebSocket
+------
+
+Two distinct benchmarks are provided to evaluate the performance of the `AsyncWebSocket` implementation under different conditions.
+
+1. Simple Throughput Test ([`client`](ws_bench_1_client.py), [`server`](ws_bench_1_server.py))
+
+    This is a lightweight, in-memory benchmark designed to measure the raw throughput and overhead of the WebSocket client. The server sends a repeating chunk of random bytes from memory, and the client receives it. This test is useful for quick sanity checks and detecting performance regressions under ideal, CPU-cached conditions.
+
+2. Verified Streaming Test ([`benchmark`](ws_bench_2.py))
+
+    This is a rigorous, end-to-end test. It first generates a multi-gigabyte file of random data and its SHA256 hash. The benchmark then streams this file from disk over the WebSocket connection. The receiving end calculates the hash of the incoming stream and verifies it against the original, ensuring complete data integrity.
+
+    **Important**: This test requires enough RAM free on the system equal to the size of the random data. It measures the performance of the entire system pipeline, including Disk I/O speed, CPU hashing speed, and network transfer. On modern systems, it is likely to be bottlenecked by the CPU's hashing performance or the disk's read speed.
+
+### Prerequisites
+
+- Python 3.10+
+- Pip packages
+
+```bash
+pip install aiohttp curl_cffi
+```
+
+> `uvloop` is highly recommended for performance on Linux and macOS. The benchmarks will automatically fall back to the standard asyncio event loop if it is not installed or on Windows.
+
+### Setup
+
+1. TLS certificate (optional)
+
+    These benchmarks are configured to use WSS (secure WebSockets) by default on Linux and macOS. To generate a self-signed certificate:
+
+    ```bash
+    openssl req -x509 -newkey rsa:2048 -nodes -keyout localhost.key -out localhost.crt -days 365 -subj "/CN=localhost"
+    ```
+
+    > **Windows Users**: The code will automatically detect Windows and fall back to insecure `ws://`. If you are on Linux/macOS and skip certificate generation, the benchmarks will also use `ws://`.
+
+2. Configuration
+
+    The benchmark parameters (total data size, chunk size) can be modified by editing the `TestConfig` class within the [`ws_bench_utils.py`](ws_bench_utils.py) file. By default, both benchmarks are configured for `10 GiB` of data transfer.
+
+### Running the Benchmarks
+
+It is recommended to run the server and client in separate terminal windows.
+
+#### Benchmark 1: Simple Throughput Test
+
+1. Start the Server:
+
+    ```bash
+    python ws_bench_1_server.py
+    ```
+
+2. Run the Client:
+
+    ```bash
+    python ws_bench_1_client.py
+    ```
+
+#### Benchmark 2: Verified Streaming Test
+
+1. Generate Test File (Initial Setup):
+
+    This command will create a large (`10 GiB`) file named `testdata.bin` and its hash. Ensure you have sufficient disk space:
+
+    ```bash
+    python ws_bench_2.py generate
+    ```
+
+2. Start the Server:
+
+    ```bash
+    python ws_bench_2.py server
+    ```
+
+3. Run the Client (Choose one):
+
+    - To test download speed (server sends, client receives):
+
+    ```bash
+    python ws_bench_2.py client --test download
+    ```
+
+    - To test upload speed (client sends, server receives):
+
+    ```bash
+    python ws_bench_2.py client --test upload
+    ```
+
+### Performance Considerations
+
+Benchmark results can vary significantly based on system-level factors. The following should be kept in mind:
+
+- **Loopback Interface**: These tests run on a local loopback interface (`127.0.0.1`), which does not represent real-world internet conditions (latency, packet loss, etc.).
+
+- **CPU Affinity**: For maximum consistency, especially on multi-core or multi-CPU (NUMA) systems, you can pin the server and client processes to specific CPU cores. This avoids performance penalties from processes migrating between cores or crossing CPU socket boundaries.
+
+**On Linux:**
+Use `taskset` to specify a CPU core (e.g., core 0 for the server, core 1 for the client).
+
+```bash
+# Terminal 1
+taskset -c 0 python ws_bench_1_server.py
+
+# Terminal 2
+taskset -c 1 python ws_bench_1_client.py
+```
+
+**On Windows:**
+Use the `start /affinity` command. The affinity mask is a hexadecimal number. `1` corresponds to CPU 0, `2` to CPU 1, `4` to CPU 2, and so on.
+
+```powershell
+# PowerShell/CMD 1
+start /affinity 1 python ws_bench_1_server.py
+
+# PowerShell/CMD 2
+start /affinity 2 python ws_bench_1_client.py
+```
+
+- **Concurrent Tests**: The first benchmark code can be uncommented to run upload and download tests concurrently. Note that a concurrent test will terminate as soon as the faster of the two directions (typically download) completes.
