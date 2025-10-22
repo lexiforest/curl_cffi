@@ -848,7 +848,7 @@ class AsyncWebSocket(BaseWebSocket):
         into a send queue. The actual network transmission is handled by a
         background task.
 
-        You must await `ws.flush(...)` to guarantee all your messages have been sent.
+        To guarantee all your messages have been sent `await ws.flush(...)`.
 
         The max frame size supported by libcurl is `65535` bytes. Larger frames
         will be sent in chunks of that size, even when frame coalescing is enabled.
@@ -890,6 +890,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: binary data to send.
+
+        For more info, see the docstring for `ws.send(...)`
         """
         return await self.send(payload, CurlWsFlag.BINARY)
 
@@ -898,6 +900,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: binary data to send.
+
+        For more info, see the docstring for `ws.send(...)`
         """
         return await self.send(payload, CurlWsFlag.BINARY)
 
@@ -906,6 +910,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: text data to send.
+
+        For more info, see the docstring for `ws.send(...)`
         """
         return await self.send(payload, CurlWsFlag.TEXT)
 
@@ -916,7 +922,9 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: data to send.
-            dumps: JSON encoder, default is json.dumps.
+            dumps: JSON encoder, default is `json.dumps(...)`.
+
+        For more info, see the docstring for `ws.send(...)`
         """
         return await self.send_str(dumps(payload))
 

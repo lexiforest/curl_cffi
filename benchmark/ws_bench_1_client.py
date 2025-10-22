@@ -9,14 +9,12 @@ from asyncio import (
     AbstractEventLoop,
     CancelledError,
     Task,
-    get_running_loop,
     sleep,
     wait,
 )
 
-import uvloop
 from typing_extensions import Never
-from ws_bench_1_server import binary_data_generator, config, logger
+from ws_bench_utils import binary_data_generator, config, get_loop, logger
 
 from curl_cffi import AsyncSession, AsyncWebSocket, WebSocketClosed
 
@@ -109,21 +107,19 @@ async def ws_sender(ws: AsyncWebSocket) -> None:
         logger.info("Average throughput (send): %.2f Gbps", avg_rate)
 
 
-async def run_benchmark() -> None:
+async def run_benchmark(loop: AbstractEventLoop) -> None:
     """
     Simple client benchmark which sends/receives binary messages using curl-cffi.
     """
-    loop: AbstractEventLoop = get_running_loop()
     logger.info("Starting curl-cffi benchmark")
     ws: AsyncWebSocket | None = None
-    connect_url: str = f"wss://{config.srv_host}:{config.srv_port}/ws"
     waiters: set[Task[None]] = set()
     try:
         async with AsyncSession(impersonate="chrome", verify=False) as session:
-            ws = await session.ws_connect(connect_url)
-            logger.info("Connection established to %s", connect_url)
+            ws = await session.ws_connect(config.srv_path)
+            logger.info("Connection established to %s", config.srv_path)
 
-            # Uncomment for send/recv benchmark or both
+            # NOTE: Uncomment for send/recv benchmark or both
             waiters.add(loop.create_task(ws_counter(ws)))
             # waiters.add(loop.create_task(ws_sender(ws)))
 
@@ -146,16 +142,14 @@ async def run_benchmark() -> None:
             await ws.close(timeout=2)
 
 
-async def main() -> None:
+async def main(loop: AbstractEventLoop) -> None:
     """Entrypoint"""
-
-    loop: AbstractEventLoop = get_running_loop()
     waiters: set[Task[None]] = set()
 
     try:
         # Create the health check and benchmark tasks
         waiters.update(
-            {loop.create_task(health_check()), loop.create_task(run_benchmark())}
+            {loop.create_task(health_check()), loop.create_task(run_benchmark(loop))}
         )
         _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
 
@@ -173,4 +167,8 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    uvloop.run(main())
+    evt_loop: AbstractEventLoop = get_loop()
+    try:
+        evt_loop.run_until_complete(main(evt_loop))
+    finally:
+        evt_loop.close()

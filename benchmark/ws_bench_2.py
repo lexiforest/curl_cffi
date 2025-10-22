@@ -5,25 +5,16 @@ WebSocket benchmark with SHA256 verification.
 import asyncio
 import hashlib
 import mmap
-import os
 import time
 from argparse import ArgumentParser, Namespace
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 from secrets import compare_digest
-from ssl import PROTOCOL_TLS_SERVER, SSLContext
 from typing import cast
 
 from aiohttp import web
-from aiohttp.helpers import IS_WINDOWS
+from ws_bench_utils import config, generate_random_chunks, get_loop, logger
 
 from curl_cffi import AsyncSession, AsyncWebSocket
-
-from ws_bench_1_server import config, logger
-
-
-# Config
-TOTAL_BYTES: int = int(config.total_gb * 1024**3)
-CHUNK_SIZE: int = 4 * 1024 * 1024  # 4MiB
 
 
 def compare_hash(source_hash: str, received_hash: str) -> None:
@@ -34,63 +25,6 @@ def compare_hash(source_hash: str, received_hash: str) -> None:
 
     logger.warning("Received data hash: %s", received_hash)
     logger.warning("❌ Server-Side Hash Verification FAILED")
-
-
-def generate_random_chunks() -> Generator[bytes]:
-    """Generate chunks of random data up to a total size.
-
-    Returns:
-        Generator[bytes]: Generator that yields random chunks.
-    """
-    num_chunks: int = TOTAL_BYTES // CHUNK_SIZE
-    for _ in range(num_chunks):
-        yield os.urandom(CHUNK_SIZE)
-
-    remaining_size = TOTAL_BYTES % CHUNK_SIZE
-    if remaining_size > 0:
-        yield os.urandom(remaining_size)
-
-
-def get_ssl_ctx() -> SSLContext | None:
-    """Load in the SSL context if cert files present and host is non-Windows.
-
-    Returns:
-        `SSLContext | None`: The SSL context or `None`.
-    """
-    if IS_WINDOWS:
-        logger.info("Disabling TLS due to Windows host")
-        return None
-
-    if not (config.cert_file.is_file() and config.cert_key.is_file()):
-        logger.warning(
-            "Certificate file(s) %s or %s not found, disabling TLS",
-            config.cert_file,
-            config.cert_key,
-        )
-        return None
-
-    ssl_context: SSLContext = SSLContext(PROTOCOL_TLS_SERVER)
-    ssl_context.load_cert_chain(config.cert_file, config.cert_key)
-    return ssl_context
-
-
-def get_loop() -> asyncio.AbstractEventLoop:
-    """Returns the correct event loop for the platform and what's installed.
-
-    Returns:
-        asyncio.AbstractEventLoop: The created and installed event loop.
-    """
-
-    try:
-        # pylint: disable-next=import-outside-toplevel
-        import uvloop
-
-        loop: asyncio.AbstractEventLoop = uvloop.new_event_loop()
-    except ImportError:
-        loop = asyncio.new_event_loop()
-
-    asyncio.set_event_loop(loop)
-    return loop
 
 
 def generate_files() -> None:
@@ -109,7 +43,7 @@ def generate_files() -> None:
         # Pre-allocate the disk space
         logger.info("Pre-allocating disk space")
         with config.data_filename.open("wb") as fp:
-            _ = fp.seek(TOTAL_BYTES - 1)
+            _ = fp.seek(config.total_bytes - 1)
             _ = fp.write(b"\0")
 
         logger.info("Disk space allocation complete")
@@ -119,13 +53,18 @@ def generate_files() -> None:
         # Write file to disk
         with (
             config.data_filename.open("r+b") as fpath,
-            mmap.mmap(fpath.fileno(), TOTAL_BYTES, access=mmap.ACCESS_WRITE) as mm,
+            mmap.mmap(
+                fpath.fileno(), config.total_bytes, access=mmap.ACCESS_WRITE
+            ) as mm,
         ):
             offset: int = 0
             if hasattr(mm, "madvise"):
-                mm.madvise(mmap.MADV_SEQUENTIAL, 0, TOTAL_BYTES)
+                mm.madvise(mmap.MADV_SEQUENTIAL, 0, config.total_bytes)
 
-            logger.info("Writing data in %d chunks", TOTAL_BYTES // CHUNK_SIZE)
+            logger.info(
+                "Writing data in %d chunks",
+                config.total_bytes // config.large_chunk_size,
+            )
             for chunk in generate_random_chunks():
                 hash_object.update(chunk)
                 chunk_len = len(chunk)
@@ -147,7 +86,7 @@ def generate_files() -> None:
                 "Wrote '%s' in %.2fs. Average Speed: %.2f MiB/s",
                 config.data_filename,
                 elapsed_time,
-                (TOTAL_BYTES / (1024 * 1024)) / elapsed_time,
+                (config.total_bytes / (1024 * 1024)) / elapsed_time,
             )
 
     except Exception:
@@ -164,7 +103,9 @@ async def stream_test_data() -> AsyncGenerator[bytes]:
     drop_interval: int = 512 * 1024 * 1024  # 512 MiB
     file_size: int = config.data_filename.stat().st_size
     logger.info(
-        "Streaming '%s' in %d chunks", config.data_filename, file_size // CHUNK_SIZE
+        "Streaming '%s' in %d chunks",
+        config.data_filename,
+        file_size // config.large_chunk_size,
     )
 
     with (
@@ -176,8 +117,8 @@ async def stream_test_data() -> AsyncGenerator[bytes]:
             mm.madvise(mmap.MADV_SEQUENTIAL, 0, file_size)
         last_drop: int = 0
         start_time: float = time.perf_counter()
-        for offset in range(0, file_size, CHUNK_SIZE):
-            chunk: bytes = mm[offset : offset + CHUNK_SIZE]
+        for offset in range(0, file_size, config.large_chunk_size):
+            chunk: bytes = mm[offset : offset + config.large_chunk_size]
             yield chunk
             await asyncio.sleep(0)
             if can_madvise and offset - last_drop >= drop_interval:
@@ -222,13 +163,13 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
     testdata_buffer: bytearray = bytearray()
     try:
         start_time: float = time.perf_counter()
-        testdata_buffer = bytearray(TOTAL_BYTES)
+        testdata_buffer = bytearray(config.total_bytes)
         elapsed_time: float = time.perf_counter() - start_time
         logger.info(
             "Allocated %d GB in %.2fs. Speed: %.2f MiB/s ",
             config.total_gb,
             elapsed_time,
-            (TOTAL_BYTES / (1024**2)) / elapsed_time,
+            (config.total_bytes / (1024**2)) / elapsed_time,
         )
     except MemoryError:
         logger.exception("Not enough RAM to allocate %d GB", config.total_gb)
@@ -296,8 +237,11 @@ async def send_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
         async for chunk in stream_test_data():
             await ws.send_bytes(chunk)
 
+        # Wait for all the data to be sent
         if isinstance(ws, AsyncWebSocket):
+            logger.info("Waiting for send queue to be flushed")
             await ws.flush()
+
         elapsed_time: float = time.perf_counter() - start_time
         logger.info("Sent %d GB in %.2fs", config.total_gb, elapsed_time)
     finally:
@@ -333,9 +277,7 @@ async def client_handler(opt: str) -> None:
         opt (str): The benchmark mode to run.
     """
     async with AsyncSession(impersonate="chrome", verify=False) as session:
-        ws: AsyncWebSocket = await session.ws_connect(
-            f"wss://127.0.0.1:4443/ws?test={opt}"
-        )
+        ws: AsyncWebSocket = await session.ws_connect(f"{config.srv_path}?test={opt}")
         try:
             if opt == "download":
                 await recv_benchmark_handler(ws)
@@ -368,15 +310,13 @@ def main() -> None:
     elif args.mode == "server":
         app: web.Application = web.Application(logger=logger)
         _ = app.add_routes(routes=[web.get("/ws", ws_handler)])
-        logger.info(
-            "Starting server on wss://%s:%d/ws", config.srv_host, config.srv_port
-        )
+        logger.info("Starting server on %s", config.srv_path)
         web.run_app(
             app,
             host=config.srv_host.exploded,
             port=config.srv_port,
             loop=get_loop(),
-            ssl_context=get_ssl_ctx(),
+            ssl_context=config.ssl_ctx,
             access_log=logger,
             print=logger.debug,
         )
