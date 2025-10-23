@@ -1343,15 +1343,25 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _terminate_helper(self) -> None:
         """Utility method to for connection termination"""
+        tasks_to_cancel: set[asyncio.Task[None]] = set()
+        max_timeout: int = 2
 
         # Cancel all the I/O tasks
         for io_task in (self._read_task, self._write_task):
             try:
                 if io_task and not io_task.done():
                     io_task.cancel()
-                    await io_task
+                    tasks_to_cancel.add(io_task)
             except (asyncio.CancelledError, RuntimeError):
                 ...
+
+        # Wait for cancellation but don't get stuck
+        if tasks_to_cancel:
+            with suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks_to_cancel, return_exceptions=True),
+                    timeout=max_timeout,
+                )
 
         # Drain the send_queue
         while not self._send_queue.empty():
