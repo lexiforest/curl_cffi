@@ -973,8 +973,9 @@ class AsyncWebSocket(BaseWebSocket):
                             self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
                             timeout=timeout,
                         )
-                    with suppress(asyncio.TimeoutError):
-                        await asyncio.wait_for(self.flush(), timeout=timeout)
+                    with suppress(WebSocketTimeout, WebSocketError):
+                        await self.flush(timeout)
+
             finally:
                 self.terminate()
 
@@ -1326,33 +1327,36 @@ class AsyncWebSocket(BaseWebSocket):
                         loop.remove_writer(self._sock_fd)
         return True
 
-    async def flush(self) -> None:
-        """
-        Waits until all items in the send queue have been processed.
+    async def flush(self, timeout: Optional[float] = None) -> None:
+        """Waits until all items in the send queue have been processed.
 
         This ensures that all messages passed to `send()` have been handed off to the
         underlying socket for transmission. It does not guarantee that the data has
         been received by the remote peer.
+
+        Args:
+            timeout (Optional[float], optional): The maximum number of seconds to wait
+            for the queue to drain.
+
+        Raises:
+            WebSocketTimeout:  If the send queue is not fully processed within the
+            specified ``timeout`` period.
+            WebSocketError: If the writer task has already terminated while unsent
+            messages remain in the queue.
         """
         if (
             self._write_task
             and self._write_task.done()
             and not self._send_queue.empty()
         ):
-            # The writer is dead, but there are still items in the queue.
-            # These items will be lost. Warn the user if debugging is enabled.
-            if self.debug:
-                warnings.warn(
-                    (
-                        f"WebSocket writer task is dead, but {self._send_queue.qsize()}"
-                        " unsent messages remain in the queue."
-                    ),
-                    CurlCffiWarning,
-                    stacklevel=2,
-                )
-            return
+            raise WebSocketError(
+                "Cannot flush, writer task has terminated unexpectedly."
+            )
 
-        await self._send_queue.join()
+        try:
+            await asyncio.wait_for(self._send_queue.join(), timeout=timeout)
+        except asyncio.TimeoutError as e:
+            raise WebSocketTimeout("Timed out waiting for send queue to flush.") from e
 
     async def _terminate_helper(self) -> None:
         """Utility method to for connection termination"""
