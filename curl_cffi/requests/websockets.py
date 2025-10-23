@@ -856,7 +856,7 @@ class AsyncWebSocket(BaseWebSocket):
         into a send queue. The actual network transmission is handled by a
         background task.
 
-        To guarantee all your messages have been sent `await ws.flush()`.
+        To guarantee all your messages have been sent `await ws.flush(...)`.
 
         The max frame size supported by libcurl is `65535` bytes. Larger frames
         will be broken down and sent in chunks of that size.
@@ -899,7 +899,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: binary data to send.
 
-        For more info, see the docstring for `ws.send(...)`
+        For more info, see the docstring for `send(...)`
         """
         return await self.send(payload, CurlWsFlag.BINARY)
 
@@ -909,7 +909,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: binary data to send.
 
-        For more info, see the docstring for `ws.send(...)`
+        For more info, see the docstring for `send(...)`
         """
         return await self.send(payload, CurlWsFlag.BINARY)
 
@@ -919,7 +919,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: text data to send.
 
-        For more info, see the docstring for `ws.send(...)`
+        For more info, see the docstring for `send(...)`
         """
         return await self.send(payload, CurlWsFlag.TEXT)
 
@@ -932,7 +932,7 @@ class AsyncWebSocket(BaseWebSocket):
             payload: data to send.
             dumps: JSON encoder, default is `json.dumps(...)`.
 
-        For more info, see the docstring for `ws.send(...)`
+        For more info, see the docstring for `send(...)`
         """
         return await self.send_str(dumps(payload))
 
@@ -941,6 +941,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: data to send.
+
+        For more info, see the docstring for `send(...)`
         """
         return await self.send(payload, CurlWsFlag.PING)
 
@@ -1001,7 +1003,7 @@ class AsyncWebSocket(BaseWebSocket):
                 return
             self._terminated = True
 
-            # Terminate the connection
+            # Terminate the connection in a thread-safe way
             if self._loop and self.loop.is_running():
                 self._close_handle = self.loop.call_soon_threadsafe(
                     lambda: self.loop.create_task(self._terminate_helper())
@@ -1256,7 +1258,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: The complete byte payload to be sent.
-            flags: The CurlWsFlag indicating the frame type (e.g., TEXT, BINARY).
+            flags: The `CurlWsFlag` indicating the frame type (e.g., `TEXT`, `BINARY`).
         """
 
         # Cache locals to reduce lookup cost
@@ -1359,7 +1361,7 @@ class AsyncWebSocket(BaseWebSocket):
             raise WebSocketTimeout("Timed out waiting for send queue to flush.") from e
 
     async def _terminate_helper(self) -> None:
-        """Utility method to for connection termination"""
+        """Utility method for connection termination"""
         tasks_to_cancel: set[asyncio.Task[None]] = set()
         max_timeout: int = 2
 

@@ -20,11 +20,11 @@ from curl_cffi import AsyncSession, AsyncWebSocket
 def compare_hash(source_hash: str, received_hash: str) -> None:
     """Compare two hashes and log a message"""
     if compare_digest(source_hash, received_hash):
-        logger.info("✅ Server-Side Hash Verification SUCCESSFUL")
+        logger.info("✅ Hash Verification SUCCESSFUL")
         return
 
     logger.warning("Received data hash: %s", received_hash)
-    logger.warning("❌ Server-Side Hash Verification FAILED")
+    logger.warning("❌ Hash Verification FAILED")
 
 
 def generate_files() -> None:
