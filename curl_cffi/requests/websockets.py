@@ -628,6 +628,7 @@ class AsyncWebSocket(BaseWebSocket):
         "_yield_mask",
         "_recv_error_retries",
         "_terminated",
+        "_terminated_event",
     )
 
     # Match libcurl's documented max frame size limit.
@@ -687,6 +688,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._sock_fd: int = -1
         self._close_lock: asyncio.Lock = asyncio.Lock()
         self._terminate_lock: threading.Lock = threading.Lock()
+        self._terminated_event: asyncio.Event = asyncio.Event()
         self._read_task: Optional[asyncio.Task[None]] = None
         self._write_task: Optional[asyncio.Task[None]] = None
         self._close_handle: Optional[asyncio.Handle] = None
@@ -707,6 +709,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
+        """Get a reference to the running event loop"""
         if self._loop is None:
             self._loop = get_selector(asyncio.get_running_loop())
         return self._loop
@@ -975,6 +978,10 @@ class AsyncWebSocket(BaseWebSocket):
             finally:
                 self.terminate()
 
+                # Wait for the termination completion signal
+                with suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(self._terminated_event.wait(), timeout)
+
     @override
     def terminate(self) -> None:
         """
@@ -1005,6 +1012,7 @@ class AsyncWebSocket(BaseWebSocket):
                 if self.session and not self.session._closed:
                     # WebSocket curls CANNOT be reused
                     self.session.push_curl(None)
+                    self._terminated_event.set()
 
     async def _read_loop(self) -> None:
         """The main asynchronous task for reading incoming WebSocket frames.
@@ -1138,7 +1146,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         except asyncio.CancelledError:
             pass
-        except CurlError as e:
+        except Exception as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
                     queue_put_nowait((e, 0))
@@ -1228,6 +1236,11 @@ class AsyncWebSocket(BaseWebSocket):
 
         except asyncio.CancelledError:
             pass
+
+        except Exception as e:
+            if not self.closed:
+                with suppress(asyncio.QueueFull):
+                    self._receive_queue.put_nowait((e, 0))
 
         finally:
             # If the loop exits unexpectedly, ensure we terminate the connection.
@@ -1346,45 +1359,49 @@ class AsyncWebSocket(BaseWebSocket):
         tasks_to_cancel: set[asyncio.Task[None]] = set()
         max_timeout: int = 2
 
-        # Cancel all the I/O tasks
-        for io_task in (self._read_task, self._write_task):
-            try:
-                if io_task and not io_task.done():
-                    io_task.cancel()
-                    tasks_to_cancel.add(io_task)
-            except (asyncio.CancelledError, RuntimeError):
-                ...
+        try:
+            # Cancel all the I/O tasks
+            for io_task in (self._read_task, self._write_task):
+                try:
+                    if io_task and not io_task.done():
+                        io_task.cancel()
+                        tasks_to_cancel.add(io_task)
+                except (asyncio.CancelledError, RuntimeError):
+                    ...
 
-        # Wait for cancellation but don't get stuck
-        if tasks_to_cancel:
-            with suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    asyncio.gather(*tasks_to_cancel, return_exceptions=True),
-                    timeout=max_timeout,
-                )
+            # Wait for cancellation but don't get stuck
+            if tasks_to_cancel:
+                with suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(
+                        asyncio.gather(*tasks_to_cancel, return_exceptions=True),
+                        timeout=max_timeout,
+                    )
 
-        # Drain the send_queue
-        while not self._send_queue.empty():
-            try:
-                self._send_queue.get_nowait()
-                self._send_queue.task_done()
-            except (asyncio.QueueEmpty, ValueError):
-                break
+            # Drain the send_queue
+            while not self._send_queue.empty():
+                try:
+                    self._send_queue.get_nowait()
+                    self._send_queue.task_done()
+                except (asyncio.QueueEmpty, ValueError):
+                    break
 
-        # Remove the reader/writer if still registered
-        if self._sock_fd != -1:
-            with suppress(Exception):
-                self.loop.remove_reader(self._sock_fd)
-            with suppress(Exception):
-                self.loop.remove_writer(self._sock_fd)
+            # Remove the reader/writer if still registered
+            if self._sock_fd != -1:
+                with suppress(Exception):
+                    self.loop.remove_reader(self._sock_fd)
+                with suppress(Exception):
+                    self.loop.remove_writer(self._sock_fd)
 
-        self._sock_fd = -1
+            self._sock_fd = -1
 
-        # Close the Curl connection
-        super().terminate()
-        if self.session and not self.session._closed:
-            # WebSocket curls CANNOT be reused
-            self.session.push_curl(None)
+            # Close the Curl connection
+            super().terminate()
+            if self.session and not self.session._closed:
+                # WebSocket curls CANNOT be reused
+                self.session.push_curl(None)
+
+        finally:
+            self._terminated_event.set()
 
     async def _handle_close_frame(self, message: bytes) -> None:
         """Unpack and handle the closing frame, then initiate shutdown."""
