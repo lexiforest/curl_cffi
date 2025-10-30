@@ -6,10 +6,8 @@ VERSION := 1.2.2
 CURL_VERSION := curl-8_15_0
 
 ifeq ($(OS),Windows_NT)
-    # Windows 系统
     CURRENT_USER := $(shell echo %USERNAME%)
 else
-    # Unix/Linux/macOS 系统
     CURRENT_USER := $(shell whoami)
 endif
 
