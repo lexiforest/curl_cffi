@@ -13,8 +13,6 @@ from pathlib import Path
 from ssl import PROTOCOL_TLS_SERVER, SSLContext
 from typing import TextIO
 
-from aiohttp.helpers import IS_WINDOWS
-
 
 def get_logger() -> Logger:
     """Setup the logger.
@@ -44,9 +42,6 @@ def get_ssl_ctx(cert_file: Path, cert_key: Path) -> SSLContext | None:
     Returns:
         `SSLContext | None`: The SSL context or `None`.
     """
-    if IS_WINDOWS:
-        logger.info("Disabling TLS due to Windows host")
-        return None
 
     if not (cert_file.is_file() and cert_key.is_file()):
         logger.warning(
@@ -71,6 +66,8 @@ class TestConfig:
     chunk_size: int = 65536
     large_chunk_size: int = 4 * 1024**2
     total_bytes: int = total_gb * 1024**3
+    recv_queue: int = 512
+    send_queue: int = 128
     cert_file: Path = Path("localhost.crt")
     cert_key: Path = Path("localhost.key")
     data_filename: Path = Path("testdata.bin")

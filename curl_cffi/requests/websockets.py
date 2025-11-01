@@ -643,7 +643,8 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        queue_size: int = 4096,
+        recv_queue_size: int = 512,
+        send_queue_size: int = 256,
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
@@ -669,7 +670,13 @@ class AsyncWebSocket(BaseWebSocket):
             curl (Curl): The underlying Curl to use.
             autoclose (bool, optional): Close the WS on receiving a close frame.
             debug (bool, optional): Enable debug messages. Defaults to False.
-            queue_size (int, optional): The recv/send queue max size. Defaults to 4096.
+            recv_queue_size (int, optional): The maximum number of incoming WebSocket
+                messages to buffer internally. This queue stores messages received
+                by the Curl socket that are waiting to be consumed by calling `recv()`
+            send_queue_size (int, optional): The maximum number of outgoing WebSocket
+                messages to buffer before applying network backpressure. When you call
+                `send(...)` the message is placed in this queue and transmitted when
+                the Curl socket is next available for sending.
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             retry_on_recv_error (bool, optional): Retry recv on some transient errors.
@@ -693,10 +700,10 @@ class AsyncWebSocket(BaseWebSocket):
         self._write_task: Optional[asyncio.Task[None]] = None
         self._close_handle: Optional[asyncio.Handle] = None
         self._receive_queue: asyncio.Queue[RECV_QUEUE_ITEM] = asyncio.Queue(
-            maxsize=queue_size
+            maxsize=recv_queue_size
         )
         self._send_queue: asyncio.Queue[SEND_QUEUE_ITEM] = asyncio.Queue(
-            maxsize=queue_size
+            maxsize=send_queue_size
         )
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
@@ -718,6 +725,26 @@ class AsyncWebSocket(BaseWebSocket):
     def send_queue_size(self) -> int:
         """Returns the current number of items in the send queue."""
         return self._send_queue.qsize()
+
+    @property
+    def is_alive(self) -> bool:
+        """
+        Checks if the background I/O tasks are still running.
+
+        Returns `False` if either the read or write task has terminated due
+        to an error or a clean shutdown.
+
+        Note: This is a snapshot in time. A return value of `True` does not
+        guarantee the next network operation will succeed, but `False`
+        definitively indicates the connection is no longer active.
+        """
+        if self.closed or self._terminated:
+            return False
+
+        if self._read_task and self._read_task.done():
+            return False
+
+        return not (self._write_task and self._write_task.done())
 
     def __del__(self) -> None:
         """Warn if the user forgets to close the connection."""

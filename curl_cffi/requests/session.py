@@ -863,7 +863,8 @@ class AsyncSession(BaseSession[R]):
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
-        queue_size: int = 4096,
+        recv_queue_size: int = 512,
+        send_queue_size: int = 256,
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         retry_on_recv_error: bool = False,
@@ -907,7 +908,13 @@ class AsyncSession(BaseSession[R]):
             interface: which interface to use.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
-            queue_size: The size of the send/receive queues.
+            recv_queue_size: The maximum number of incoming WebSocket
+                messages to buffer internally. This queue stores messages received
+                by the Curl socket that are waiting to be consumed by calling `recv()`.
+            send_queue_size: The maximum number of outgoing WebSocket
+                messages to buffer before applying network backpressure. When you call
+                `send(...)` the message is placed in this queue and transmitted when
+                the Curl socket is next available for sending.
             max_send_batch_size: The max batch size for sent frames.
             coalesce_frames: If `True`, multiple pending messages in the send queue
                 may be merged into a single WebSocket frame for improved throughput.
@@ -981,7 +988,8 @@ class AsyncSession(BaseSession[R]):
             cast(AsyncSession[Response], self),
             curl,
             autoclose=autoclose,
-            queue_size=queue_size,
+            recv_queue_size=recv_queue_size,
+            send_queue_size=send_queue_size,
             max_send_batch_size=max_send_batch_size,
             coalesce_frames=coalesce_frames,
             retry_on_recv_error=retry_on_recv_error,

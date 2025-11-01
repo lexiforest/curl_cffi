@@ -60,7 +60,7 @@ pip install aiohttp curl_cffi
     openssl req -x509 -newkey rsa:2048 -nodes -keyout localhost.key -out localhost.crt -days 365 -subj "/CN=localhost"
     ```
 
-    > **Windows Users**: The code will automatically detect Windows and fall back to insecure `ws://`. If you are on Linux/macOS and skip certificate generation, the benchmarks will also use `ws://`.
+    > **Note**: If you are on any platform and skip certificate generation, the benchmarks will use the insecure `ws://` instead.
 
 2. Configuration
 
@@ -134,7 +134,7 @@ taskset -c 1 python ws_bench_1_client.py
 ```
 
 **On Windows:**
-Use the `start /affinity` command. The affinity mask is a hexadecimal number. `1` corresponds to CPU 0, `2` to CPU 1, `4` to CPU 2, and so on.
+Use the `start /affinity` command. The affinity mask is a hexadecimal number (`1` for CPU 0, `2` for CPU 1, `4` for CPU 2, etc.).
 
 ```powershell
 # PowerShell/CMD 1
@@ -144,4 +144,6 @@ start /affinity 1 python ws_bench_1_server.py
 start /affinity 2 python ws_bench_1_client.py
 ```
 
-- **Concurrent Tests**: The first benchmark code can be uncommented to run upload and download tests concurrently. Note that a concurrent test will terminate as soon as the faster of the two directions (typically download) completes.
+- **Concurrent Tests**: The first benchmark code (`ws_bench_1_client.py`) can be uncommented to run upload and download tests concurrently. Note that a concurrent test will terminate as soon as the faster of the two directions (typically download) completes.
+
+- **Queue Sizes**: Adjust the `send_queue` and `recv_queue` sizes within the [`TestConfig`](ws_bench_utils.py) class to observe the impact on performance and backpressure.

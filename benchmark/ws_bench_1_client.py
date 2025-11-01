@@ -116,7 +116,11 @@ async def run_benchmark(loop: AbstractEventLoop) -> None:
     waiters: set[Task[None]] = set()
     try:
         async with AsyncSession(impersonate="chrome", verify=False) as session:
-            ws = await session.ws_connect(config.srv_path)
+            ws = await session.ws_connect(
+                config.srv_path,
+                recv_queue_size=config.recv_queue,
+                send_queue_size=config.send_queue,
+            )
             logger.info("Connection established to %s", config.srv_path)
 
             # NOTE: Uncomment for send/recv benchmark or both
