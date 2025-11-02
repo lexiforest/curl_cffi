@@ -190,7 +190,6 @@ class Curl:
         self.close()
 
     def _check_error(self, errcode: int, *args: Any) -> None:
-        # Add short-circuit optimization
         if errcode == 0:
             return
 
@@ -505,8 +504,6 @@ class Curl:
 
     def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
         """Receive a frame from a websocket connection.
-
-        This method uses a pre-allocated buffer for efficiency.
 
         Returns:
             a tuple of frame content and curl frame meta struct.

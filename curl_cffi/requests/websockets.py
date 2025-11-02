@@ -726,7 +726,6 @@ class AsyncWebSocket(BaseWebSocket):
         """Returns the current number of items in the send queue."""
         return self._send_queue.qsize()
 
-    @property
     def is_alive(self) -> bool:
         """
         Checks if the background I/O tasks are still running.
