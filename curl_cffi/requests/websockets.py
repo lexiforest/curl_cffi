@@ -790,8 +790,14 @@ class AsyncWebSocket(BaseWebSocket):
                 "Invalid active socket.", code=CurlECode.NO_CONNECTION_AVAILABLE
             )
 
-        self._read_task = self.loop.create_task(self._read_loop())
-        self._write_task = self.loop.create_task(self._write_loop())
+        # Get an identifier for the websocket from its object id
+        ws_id: str = f"WebSocket-{id(self):#x}"
+
+        # Start the I/O loop tasks
+        self._read_task = self.loop.create_task(self._read_loop(), name=f"{ws_id}-read")
+        self._write_task = self.loop.create_task(
+            self._write_loop(), name=f"{ws_id}-write"
+        )
 
     async def recv(
         self, *, timeout: Optional[float] = None
@@ -1018,8 +1024,9 @@ class AsyncWebSocket(BaseWebSocket):
 
         This method is a forceful shutdown that cancels all background I/O tasks
         and cleans up resources. It should be used for final cleanup or after an
-        unrecoverable error. Unlike `close()`, it does not attempt to send a
-        close frame or wait for pending messages.
+        unrecoverable error. Unlike `close()`, it does not attempt to send a close
+        frame or wait for pending messages. It schedules the cleanup to run on the
+        event loop and returns immediately. It does not wait for cleanup completion.
 
         This method is thread-safe, task-safe, and idempotent.
         """
@@ -1112,7 +1119,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                         # If a CLOSE frame is received, the reader is done.
                         if flags & CurlWsFlag.CLOSE:
-                            await queue_put((chunk, flags))
+                            with suppress(asyncio.QueueFull):
+                                queue_put_nowait((chunk, flags))
                             await self._handle_close_frame(chunk)
                             return
 
@@ -1379,7 +1387,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def _terminate_helper(self) -> None:
         """Utility method for connection termination"""
         tasks_to_cancel: set[asyncio.Task[None]] = set()
-        max_timeout: int = 2
+        max_timeout: int = 3
 
         try:
             # Cancel all the I/O tasks
