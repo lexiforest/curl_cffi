@@ -624,7 +624,6 @@ async def echo(websocket):
             # Client sent us a close frame: echo it back exactly
             await websocket.close(code=e.code, reason=e.reason)
 
-
 class TestWebsocketServer:
     def __init__(self, port):
         self.url = f"ws://127.0.0.1:{port}"
@@ -633,8 +632,11 @@ class TestWebsocketServer:
     def run(self):
         async def serve(port):
             # GitHub actions only likes 127, not localhost, wtf...
-            async with websockets.serve(echo, "127.0.0.1", port):  # pyright: ignore
-                await asyncio.Future()  # run forever
+            try:
+                async with websockets.serve(echo, "127.0.0.1", port):  # pyright: ignore
+                    await asyncio.Future()  # run forever
+            except websockets.exceptions.ConnectionClosedError:
+                return
 
         asyncio.run(serve(self.port))
 
