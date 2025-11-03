@@ -1116,29 +1116,19 @@ class AsyncWebSocket(BaseWebSocket):
                             await self._handle_close_frame(chunk)
                             return
 
-                        # Handle data frames with the fast-path optimization.
-                        is_fragmented = frame.bytesleft > 0 or (flags & CurlWsFlag.CONT)
+                        # Collect the chunk
+                        chunks.append(chunk)
 
-                        # A single, complete data frame.
-                        if not chunks and not is_fragmented:
-                            message = chunk
-
-                        # This is a fragment of a larger message.
-                        else:
-                            chunks.append(chunk)
-                            if is_fragmented:
-                                continue
-
-                            # The last fragment has been received.
+                        # If the message is complete, process and dispatch it
+                        if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
                             message = b"".join(chunks)
                             chunks.clear()
+                            try:
+                                queue_put_nowait((message, flags))
+                            except asyncio.QueueFull:
+                                await queue_put((message, flags))
 
                         msg_counter += 1
-                        try:
-                            queue_put_nowait((message, flags))
-                        except asyncio.QueueFull:
-                            await queue_put((message, flags))
-
                         op_check: bool = (msg_counter & yield_mask) == 0
                         time_check: bool = loop.time() - start_time > yield_interval
 
