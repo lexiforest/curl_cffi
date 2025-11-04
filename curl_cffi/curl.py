@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import locale
 import struct
 import sys
 import warnings
@@ -256,7 +257,34 @@ class Curl:
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
             option = CurlOpt.DEBUGDATA
         elif value_type == "char*":
-            c_value = value.encode() if isinstance(value, str) else value
+            if isinstance(value, str):
+                # Windows/libcurl expects ANSI code page for file paths (char*).
+                # Non-ASCII paths encoded as UTF-8 can trigger ErrCode 77.
+                # Encode file-path-like options using the system encoding on Windows.
+                filepath_opts = {
+                    CurlOpt.CAINFO,
+                    CurlOpt.CAPATH,
+                    CurlOpt.PROXY_CAINFO,
+                    CurlOpt.PROXY_CAPATH,
+                    CurlOpt.SSLCERT,
+                    CurlOpt.SSLKEY,
+                    CurlOpt.CRLFILE,
+                    CurlOpt.ISSUERCERT,
+                    CurlOpt.SSH_PUBLIC_KEYFILE,
+                    CurlOpt.SSH_PRIVATE_KEYFILE,
+                    CurlOpt.COOKIEFILE,
+                    CurlOpt.COOKIEJAR,
+                    CurlOpt.NETRC_FILE,
+                    CurlOpt.UNIX_SOCKET_PATH,
+                }
+                if sys.platform.startswith("win") and option in filepath_opts:
+                    # Use the process ANSI code page to match what CRT fopen expects.
+                    enc = locale.getpreferredencoding(False)
+                    c_value = value.encode(enc, errors="strict")
+                else:
+                    c_value = value.encode()
+            else:
+                c_value = value
             # Must keep a reference, otherwise may be GCed.
             if option == CurlOpt.POSTFIELDS:
                 self._body_handle = c_value
