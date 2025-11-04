@@ -9,10 +9,10 @@ from enum import IntEnum
 from functools import partial
 from json import dumps, loads
 from select import select
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Literal,
     Optional,

@@ -9,10 +9,10 @@ import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
+from collections.abc import Callable
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
-    Callable,
     Generic,
     Literal,
     Optional,

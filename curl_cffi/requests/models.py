@@ -3,8 +3,8 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
-from typing import Any, Callable, Optional, Union
-from collections.abc import Awaitable
+from typing import Any, Optional, Union
+from collections.abc import Awaitable, Callable
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning

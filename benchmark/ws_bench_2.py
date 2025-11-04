@@ -2,6 +2,7 @@
 """
 WebSocket benchmark with SHA256 verification.
 """
+
 import asyncio
 import hashlib
 import mmap
