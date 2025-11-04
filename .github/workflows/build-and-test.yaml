@@ -78,11 +78,11 @@ jobs:
 
     # When we build all dependencies with the 11.0 target, we can downgrade this back.
     - if: ${{ matrix.os == 'macos-14' }}
-      run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> "$GITHUB_ENV"
+      run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> "$GITHUB_ENV"
 
     # TODO: fix the target
     - if: ${{ matrix.os == 'macos-15-intel' }}
-      run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> "$GITHUB_ENV"
+      run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
 
     - name: Build and test wheels
       uses: pypa/cibuildwheel@v3.1.3
