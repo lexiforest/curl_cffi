@@ -4,31 +4,20 @@ import asyncio
 import struct
 import threading
 import warnings
+from collections.abc import Callable
 from contextlib import suppress
 from enum import IntEnum
 from functools import partial
 from json import dumps, loads
 from select import select
-from collections.abc import Callable
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Literal,
-    Optional,
-    TypeVar,
-    Union,
-)
-
-from typing_extensions import override
-
-from curl_cffi.requests import Response
-from curl_cffi.utils import CurlCffiWarning
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, TypeVar, Union
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
+from ..utils import CurlCffiWarning
 from .exceptions import SessionClosed, Timeout
+from .models import Response
 from .utils import not_set, set_curl_options
 
 if TYPE_CHECKING:
@@ -1017,7 +1006,6 @@ class AsyncWebSocket(BaseWebSocket):
                 with suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(self._terminated_event.wait(), timeout)
 
-    @override
     def terminate(self) -> None:
         """
         Immediately terminates the connection without a graceful handshake.

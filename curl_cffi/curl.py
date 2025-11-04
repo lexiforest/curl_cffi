@@ -521,6 +521,8 @@ class Curl:
             self._ws_recv_p_frame,
         )
         self._check_error(ret, "WS_RECV")
+
+        # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
         frame = self._ws_recv_p_frame[0]
         return ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]], frame
 
