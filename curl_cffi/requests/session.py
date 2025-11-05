@@ -9,10 +9,10 @@ import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
+from collections.abc import Callable
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
-    Callable,
     Generic,
     Literal,
     Optional,
@@ -33,8 +33,7 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
 from .utils import HttpVersionLiteral, not_set, set_curl_options
-from .websockets import AsyncWebSocket, WebSocket
-
+from .websockets import AsyncWebSocket, WebSocket, WebSocketError
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
@@ -641,10 +640,12 @@ class Session(BaseSession[R]):
                 if self._thread == "eventlet":
                     # see: https://eventlet.net/doc/threading.html
                     import eventlet.tpool
+
                     eventlet.tpool.execute(c.perform)  # type: ignore
                 elif self._thread == "gevent":
                     # see: https://www.gevent.org/api/gevent.threadpool.html
                     import gevent
+
                     gevent.get_hub().threadpool.spawn(c.perform).get()  # type: ignore
                 else:
                     c.perform()
@@ -862,6 +863,14 @@ class AsyncSession(BaseSession[R]):
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         max_recv_speed: int = 0,
+        recv_queue_size: int = 512,
+        send_queue_size: int = 256,
+        max_send_batch_size: int = 256,
+        coalesce_frames: bool = False,
+        retry_on_recv_error: bool = False,
+        yield_interval: float = 0.001,
+        fair_scheduling: bool = False,
+        yield_mask: int = 63,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -899,6 +908,36 @@ class AsyncSession(BaseSession[R]):
             interface: which interface to use.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
+            recv_queue_size: The maximum number of incoming WebSocket
+                messages to buffer internally. This queue stores messages received
+                by the Curl socket that are waiting to be consumed by calling `recv()`.
+            send_queue_size: The maximum number of outgoing WebSocket
+                messages to buffer before applying network backpressure. When you call
+                `send(...)` the message is placed in this queue and transmitted when
+                the Curl socket is next available for sending.
+            max_send_batch_size: The max batch size for sent frames.
+            coalesce_frames: If `True`, multiple pending messages in the send queue
+                may be merged into a single WebSocket frame for improved throughput.
+                **Warning:** This breaks the one-to-one mapping of `send()` calls to
+                frames and should only be used when the application protocol is
+                designed to handle concatenated data streams. Defaults to `False`.
+            retry_on_recv_error: Retries `ws_recv()` if a recv error is raised.
+                Retries up to a limited number of times with a delay in between.
+            yield_interval: How often to yield control back to the event loop.
+                This is a trade-off between throughput and responsiveness. Lower values
+                means the loop yields more frequently and enables other tasks to run,
+                while higher values are better for throughput. The balanced default
+                is `1ms` but you can customize this to fit your application/use case.
+            fair_scheduling: Changes the I/O priority from favoring receives (`5:1`)
+                to a balanced ratio (`1:1`). Enable this to improve send responsiveness
+                under heavy, concurrent load, at the cost of significantly lower overall
+                throughput.
+            yield_mask: Controls the frequency of cooperative multitasking
+                yields in the read loop. The loop yields every `yield_mask + 1`
+                operations. For efficiency, this value must be a power of two minus one
+                (e.g., `63`, `127`, `255`). Lower values yield more often, improving
+                fairness at the cost of throughput. Higher values yield less often,
+                prioritizing throughput.
         """
 
         self._check_session_closed()
@@ -941,14 +980,31 @@ class AsyncSession(BaseSession[R]):
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
+        curl.setopt(CurlOpt.TCP_NODELAY, 1)
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
         await self.loop.run_in_executor(None, curl.perform)
-        return AsyncWebSocket(
+        ws: AsyncWebSocket = AsyncWebSocket(
             cast(AsyncSession[Response], self),
             curl,
             autoclose=autoclose,
+            recv_queue_size=recv_queue_size,
+            send_queue_size=send_queue_size,
+            max_send_batch_size=max_send_batch_size,
+            coalesce_frames=coalesce_frames,
+            retry_on_recv_error=retry_on_recv_error,
+            yield_interval=yield_interval,
+            fair_scheduling=fair_scheduling,
+            yield_mask=yield_mask,
         )
+
+        try:
+            ws._start_io_tasks()
+        except WebSocketError:
+            ws.terminate()
+            raise
+
+        return ws
 
     async def request(
         self,

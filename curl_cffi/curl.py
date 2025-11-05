@@ -145,6 +145,8 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
+    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
+
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
         Parameters:
@@ -167,6 +169,12 @@ class Curl:
         self._debug = debug
         self._set_error_buffer()
 
+        # Pre-allocated CFFI objects for WebSocket performance
+        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
+        self._ws_recv_n_recv = ffi.new("size_t *")
+        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent = ffi.new("size_t *")
+
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
         if ret != 0:
@@ -183,6 +191,9 @@ class Curl:
         self.close()
 
     def _check_error(self, errcode: int, *args: Any) -> None:
+        if errcode == 0:
+            return
+
         error = self._get_error(errcode, *args)
         if error is not None:
             raise error
@@ -515,11 +526,12 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
 
-    def ws_recv(self, n: int = 1024) -> tuple[bytes, CurlWsFrame]:
-        """Receive a frame from a websocket connection.
+        if self._ws_recv_buffer is not None:
+            ffi.release(self._ws_recv_buffer)
+            self._ws_recv_buffer = None
 
-        Args:
-            n: maximum data to receive.
+    def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
+        """Receive a frame from a websocket connection.
 
         Returns:
             a tuple of frame content and curl frame meta struct.
@@ -529,18 +541,18 @@ class Curl:
         """
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
-
-        buffer = ffi.new("char[]", n)
-        n_recv = ffi.new("size_t *")
-        p_frame = ffi.new("struct curl_ws_frame **")
-
-        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
+        ret = lib.curl_ws_recv(
+            self._curl,
+            self._ws_recv_buffer,
+            self._WS_RECV_BUFFER_SIZE,
+            self._ws_recv_n_recv,
+            self._ws_recv_p_frame,
+        )
         self._check_error(ret, "WS_RECV")
 
         # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
-        frame = p_frame[0]
-
-        return ffi.buffer(buffer)[: n_recv[0]], frame
+        frame = self._ws_recv_p_frame[0]
+        return ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]], frame
 
     def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
         """Send data to a websocket connection.
@@ -558,11 +570,12 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
-        n_sent = ffi.new("size_t *")
         buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(payload), n_sent, 0, flags)
+        ret = lib.curl_ws_send(
+            self._curl, buffer, len(payload), self._ws_send_n_sent, 0, flags
+        )
         self._check_error(ret, "WS_SEND")
-        return n_sent[0]
+        return self._ws_send_n_sent[0]
 
     def ws_close(self, code: int = 1000, message: bytes = b"") -> int:
         """Close a websocket connection. Shorthand for :meth:`ws_send`
@@ -579,7 +592,8 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        return self.ws_send(struct.pack("!H", code) + message)
+        payload = struct.pack("!H", code) + message
+        return self.ws_send(payload, flags=CurlWsFlag.CLOSE)
 
 
 class CurlMime:

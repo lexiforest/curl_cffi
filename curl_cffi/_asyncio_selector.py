@@ -15,10 +15,10 @@ import select
 import socket
 import threading
 import typing
+from collections.abc import Callable
 from contextlib import suppress
 from typing import (
     Any,
-    Callable,
     Optional,
     Protocol,
     TypeVar,
