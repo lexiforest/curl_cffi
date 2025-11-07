@@ -62,7 +62,7 @@ test = [
     "trio>=0.25.0,<1.0",
     "trustme>=1.1.0,<2.0",
     "uvicorn>=0.29.0,<1.0",
-    "websockets>=12.0,<13.0",
+    "websockets>=12.0",
     "typing_extensions",
 ]
 
