@@ -92,7 +92,7 @@ async def ws_sender(ws: AsyncWebSocket) -> None:
     logger.info("Sending data to server")
     try:
         async for data_chunk in binary_data_generator(
-            total_gb=config.total_gb, chunk_size=min(65535, config.chunk_size)
+            total_gb=config.total_gb, chunk_size=config.chunk_size
         ):
             _ = await ws.send(payload=data_chunk)
             sent_len += len(data_chunk)

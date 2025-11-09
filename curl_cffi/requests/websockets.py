@@ -1094,7 +1094,7 @@ class AsyncWebSocket(BaseWebSocket):
                 finally:
                     # Remove the reader immediately after waking.
                     if self._sock_fd != -1:
-                        loop.remove_reader(self._sock_fd)
+                        _ = loop.remove_reader(self._sock_fd)
 
                 # There is data, so we now read until it's empty.
                 start_time = loop.time()
@@ -1292,8 +1292,8 @@ class AsyncWebSocket(BaseWebSocket):
                 start_time = loop.time()
 
             try:
-                chunk = view[offset : offset + self._MAX_CURL_FRAME_SIZE]
-                n_sent = curl_ws_send(chunk, flags)
+                chunk = view[offset: offset + self._MAX_CURL_FRAME_SIZE]
+                n_sent: int = curl_ws_send(chunk, flags)
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait(
@@ -1338,7 +1338,7 @@ class AsyncWebSocket(BaseWebSocket):
                     await write_future
                 finally:
                     if self._sock_fd != -1:
-                        loop.remove_writer(self._sock_fd)
+                        _ = loop.remove_writer(self._sock_fd)
         return True
 
     async def flush(self, timeout: Optional[float] = None) -> None:
@@ -1382,7 +1382,7 @@ class AsyncWebSocket(BaseWebSocket):
             for io_task in (self._read_task, self._write_task):
                 try:
                     if io_task and not io_task.done():
-                        io_task.cancel()
+                        _ = io_task.cancel()
                         tasks_to_cancel.add(io_task)
                 except (asyncio.CancelledError, RuntimeError):
                     ...
@@ -1390,7 +1390,7 @@ class AsyncWebSocket(BaseWebSocket):
             # Wait for cancellation but don't get stuck
             if tasks_to_cancel:
                 with suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
+                    _ = await asyncio.wait_for(
                         asyncio.gather(*tasks_to_cancel, return_exceptions=True),
                         timeout=max_timeout,
                     )
@@ -1398,7 +1398,7 @@ class AsyncWebSocket(BaseWebSocket):
             # Drain the send_queue
             while not self._send_queue.empty():
                 try:
-                    self._send_queue.get_nowait()
+                    _ = self._send_queue.get_nowait()
                     self._send_queue.task_done()
                 except (asyncio.QueueEmpty, ValueError):
                     break
@@ -1406,9 +1406,9 @@ class AsyncWebSocket(BaseWebSocket):
             # Remove the reader/writer if still registered
             if self._sock_fd != -1:
                 with suppress(Exception):
-                    self.loop.remove_reader(self._sock_fd)
+                    _ = self.loop.remove_reader(self._sock_fd)
                 with suppress(Exception):
-                    self.loop.remove_writer(self._sock_fd)
+                    _ = self.loop.remove_writer(self._sock_fd)
 
             self._sock_fd = -1
 
