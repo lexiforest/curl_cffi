@@ -496,7 +496,7 @@ def test_response_cookies(server):
 
 def test_elapsed(server):
     r = requests.get(str(server.url.copy_with(path="/slow_response")))
-    assert r.elapsed > 0.1
+    assert r.elapsed.total_seconds() > 0.1
 
 
 def test_reason(server):

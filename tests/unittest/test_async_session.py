@@ -240,7 +240,7 @@ async def test_response_cookies(server):
 async def test_elapsed(server):
     async with AsyncSession() as s:
         r = await s.get(str(server.url.copy_with(path="/slow_response")))
-        assert r.elapsed > 0.1
+        assert r.elapsed.total_seconds() > 0.1
 
 
 async def test_reason(server):
