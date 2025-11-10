@@ -42,7 +42,7 @@ dev = [
     "trio>=0.25.0,<1.0",
     "trustme>=1.1.0,<2.0",
     "uvicorn>=0.29.0,<1.0",
-    "websockets>=12.0,<13.0",
+    "websockets>=14.0",
     "typing_extensions",
 ]
 build = [
@@ -52,7 +52,7 @@ build = [
 test = [
     "charset_normalizer>=3.3.2,<4.0",
     "cryptography>=42.0.5,<43.0",
-    "fastapi==0.110.0,<1.0",
+    "fastapi>=0.110.0,<1.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "proxy.py>=2.4.3,<3.0",
     "pytest>=8.1.1,<9.0",
@@ -62,7 +62,7 @@ test = [
     "trio>=0.25.0,<1.0",
     "trustme>=1.1.0,<2.0",
     "uvicorn>=0.29.0,<1.0",
-    "websockets>=12.0",
+    "websockets>=14.0",
     "typing_extensions",
 ]
 
