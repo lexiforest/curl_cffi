@@ -5,6 +5,7 @@ import warnings
 from concurrent.futures import Future
 from typing import Any, Optional, Union
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
@@ -54,7 +55,7 @@ class Response:
         ok: is status_code in [200, 400)?
         headers: response headers.
         cookies: response cookies.
-        elapsed: how many seconds the request cost.
+        elapsed: timedelta of the request duration.
         encoding: http body encoding.
         charset: alias for encoding.
         primary_ip: primary ip of the server.
@@ -86,7 +87,7 @@ class Response:
         self.ok = True
         self.headers = Headers()
         self.cookies = Cookies()
-        self.elapsed = 0.0
+        self.elapsed: timedelta = timedelta()
         self.default_encoding: Union[str, Callable[[bytes], str]] = "utf-8"
         self.redirect_count = 0
         self.redirect_url = ""
