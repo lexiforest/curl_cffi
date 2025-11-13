@@ -327,7 +327,7 @@ class Curl:
 
         return ret
 
-    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list]:
+    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list[str | int]]:
         """Wrapper for ``curl_easy_getinfo``. Gets information in response after
         curl.perform.
 
@@ -613,7 +613,7 @@ class CurlMime:
         *,
         content_type: Optional[str] = None,
         filename: Optional[str] = None,
-        local_path: Optional[Union[str, bytes, Path]] = None,
+        local_path: str | bytes | Path | None = None,
         data: Optional[bytes] = None,
     ) -> None:
         """Add a mime part for a mutlipart html form.

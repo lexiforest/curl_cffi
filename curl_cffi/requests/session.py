@@ -33,7 +33,7 @@ from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
-from .utils import HttpVersionLiteral, not_set, set_curl_options
+from .utils import HttpVersionLiteral, NOT_SET, set_curl_options
 from .websockets import AsyncWebSocket, WebSocket, WebSocketError
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
@@ -510,7 +510,7 @@ class Session(BaseSession[R]):
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
-        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
@@ -558,7 +558,7 @@ class Session(BaseSession[R]):
             cookies_list=[self._cookies, cookies],
             files=files,
             auth=auth or self.auth,
-            timeout=self.timeout if timeout is not_set else timeout,
+            timeout=self.timeout if timeout is NOT_SET else timeout,
             allow_redirects=(
                 self.allow_redirects if allow_redirects is None else allow_redirects
             ),
@@ -845,7 +845,7 @@ class AsyncSession(BaseSession[R]):
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
         auth: Optional[tuple[str, str]] = None,
-        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
@@ -953,7 +953,7 @@ class AsyncSession(BaseSession[R]):
             headers_list=[self.headers, headers],
             cookies_list=[self.cookies, cookies],
             auth=auth or self.auth,
-            timeout=self.timeout if timeout is not_set else timeout,
+            timeout=self.timeout if timeout is NOT_SET else timeout,
             allow_redirects=(
                 self.allow_redirects if allow_redirects is None else allow_redirects
             ),
@@ -1018,7 +1018,7 @@ class AsyncSession(BaseSession[R]):
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
-        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
@@ -1060,7 +1060,7 @@ class AsyncSession(BaseSession[R]):
             cookies_list=[self.cookies, cookies],
             files=files,
             auth=auth or self.auth,
-            timeout=self.timeout if timeout is not_set else timeout,
+            timeout=self.timeout if timeout is NOT_SET else timeout,
             allow_redirects=(
                 self.allow_redirects if allow_redirects is None else allow_redirects
             ),

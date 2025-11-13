@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["HttpVersionLiteral", "set_curl_options", "not_set"]
+__all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
 import asyncio
@@ -11,7 +11,7 @@ from collections import Counter
 from io import BytesIO
 from json import dumps
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
@@ -46,7 +46,15 @@ HttpVersionLiteral = Literal["v1", "v2", "v2tls", "v2_prior_knowledge", "v3", "v
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
-not_set: Final[Any] = object()
+
+@final
+class NotSetType:
+    """
+    Unique single initialized type distinct from ``None``.
+    """
+
+
+NOT_SET: Final[NotSetType] = NotSetType()
 
 
 # ruff: noqa: SIM116
@@ -342,7 +350,7 @@ def set_curl_options(
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
     files: Optional[dict] = None,
     auth: Optional[tuple[str, str]] = None,
-    timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+    timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
     allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
     proxies_list: list[Optional[ProxySpec]] = [],  # noqa: B006

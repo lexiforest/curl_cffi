@@ -16,7 +16,7 @@ python http clients like `httpx` or `requests`, `curl_cffi` can impersonate
 browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Python 3.9 is the minimum supported version since v0.10.
+Python 3.10 is the minimum supported version since v0.14.
 
 ## Recall.ai - API for meeting recordings
 
@@ -36,7 +36,7 @@ Maintenance of this project is made possible by all the <a href="https://github.
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
-to register: https://yescaptcha.com/i/stfnIO
+to register: <https://yescaptcha.com/i/stfnIO>
 
 ------
 
@@ -63,17 +63,18 @@ No browser automation. Just simple API calls that return the exact cookies and h
 - Supports websocket.
 - MIT licensed.
 
-||requests|aiohttp|httpx|pycurl|curl_cffi|
-|---|---|---|---|---|---|
-|http/2|❌|❌|✅|✅|✅|
-|http/3|❌|❌|❌|☑️<sup>1</sup>|✅<sup>2</sup>|
-|sync|✅|❌|✅|✅|✅|
-|async|❌|✅|✅|❌|✅|
-|websocket|❌|✅|❌|❌|✅|
-|fingerprints|❌|❌|❌|❌|✅|
-|speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
+|              | requests | aiohttp | httpx | pycurl        | curl_cffi     |
+| ------------ | -------- | ------- | ----- | ------------- | ------------- |
+| http/2       | ❌        | ❌       | ✅     | ✅             | ✅             |
+| http/3       | ❌        | ❌       | ❌     | ☑️<sup>1</sup> | ✅<sup>2</sup> |
+| sync         | ✅        | ❌       | ✅     | ✅             | ✅             |
+| async        | ❌        | ✅       | ✅     | ❌             | ✅             |
+| websocket    | ❌        | ✅       | ❌     | ❌             | ✅             |
+| fingerprints | ❌        | ❌       | ❌     | ❌             | ✅             |
+| speed        | 🐇        | 🐇🐇      | 🐇     | 🐇🐇            | 🐇🐇            |
 
 Notes:
+
 1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
 2. Since v0.11.4.
 
@@ -105,7 +106,6 @@ On macOS, you may need to install the following dependencies:
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
 
 ### requests-like
-
 
 ```python
 import curl_cffi
@@ -187,6 +187,7 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 
 Notes:
+
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
@@ -229,7 +230,6 @@ async with AsyncSession() as s:
 
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
-
 
 ### WebSockets
 
