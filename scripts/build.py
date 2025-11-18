@@ -11,7 +11,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.2.2"
+__version__ = "1.2.3"
 
 
 def detect_arch():

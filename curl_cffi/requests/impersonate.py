@@ -25,6 +25,7 @@ BrowserTypeLiteral = Literal[
     "chrome131",
     "chrome133a",
     "chrome136",
+    "chrome142",
     "chrome99_android",
     "chrome131_android",
     # Safari
@@ -37,10 +38,12 @@ BrowserTypeLiteral = Literal[
     "safari184",
     "safari184_ios",
     "safari260",
+    "safari2601",
     "safari260_ios",
     # Firefox
     "firefox133",
     "firefox135",
+    "firefox144",
     "tor145",
     # alias
     "chrome",
@@ -72,26 +75,26 @@ BrowserTypeLiteral = Literal[
 ]
 
 
-DEFAULT_CHROME = "chrome136"
+DEFAULT_CHROME = "chrome142"
 DEFAULT_EDGE = "edge101"
-DEFAULT_SAFARI = "safari184"
-DEFAULT_SAFARI_IOS = "safari184_ios"
-DEFAULT_SAFARI_BETA = "safari260"
+DEFAULT_SAFARI = "safari2601"
+DEFAULT_SAFARI_IOS = "safari260_ios"
+DEFAULT_SAFARI_BETA = "safari2601"
 DEFAULT_SAFARI_IOS_BETA = "safari260_ios"
 DEFAULT_CHROME_ANDROID = "chrome131_android"
-DEFAULT_FIREFOX = "firefox135"
+DEFAULT_FIREFOX = "firefox144"
 DEFAULT_TOR = "tor145"
 
 
 REAL_TARGET_MAP = {
-    "chrome": "chrome136",
+    "chrome": "chrome142",
     "edge": "edge101",
-    "safari": "safari184",
-    "safari_ios": "safari184_ios",
-    "safari_beta": "safari260",
+    "safari": "safari2601",
+    "safari_ios": "safari260_ios",
+    "safari_beta": "safari2601",
     "safari_ios_beta": "safari260_ios",
     "chrome_android": "chrome131_android",
-    "firefox": "firefox135",
+    "firefox": "firefox144",
     "tor": "tor145",
 }
 
@@ -136,6 +139,7 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     chrome131 = "chrome131"
     chrome133a = "chrome133a"
     chrome136 = "chrome136"
+    chrome142 = "chrome142"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari153 = "safari153"
@@ -148,6 +152,7 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     safari184_ios = "safari184_ios"
     safari260 = "safari260"
     safari260_ios = "safari260_ios"
+    safari2601 = "safari2601"
     firefox133 = "firefox133"
     firefox135 = "firefox135"
     tor145 = "tor145"
