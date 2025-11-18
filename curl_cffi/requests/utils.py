@@ -53,20 +53,21 @@ not_set: Final[Any] = object()
 def normalize_http_version(
     version: Union[CurlHttpVersion, HttpVersionLiteral],
 ) -> CurlHttpVersion:
-    if version == "v1":
-        return CurlHttpVersion.V1_1
-    elif version == "v3":
-        return CurlHttpVersion.V3
-    elif version == "v3only":
-        return CurlHttpVersion.V3ONLY
-    elif version == "v2":
-        return CurlHttpVersion.V2_0
-    elif version == "v2tls":
-        return CurlHttpVersion.V2TLS
-    elif version == "v2_prior_knowledge":
-        return CurlHttpVersion.V2_PRIOR_KNOWLEDGE
-
-    return version  # type: ignore
+    match version:
+        case "v1":
+            return CurlHttpVersion.V1_1
+        case "v3":
+            return CurlHttpVersion.V3
+        case "v3only":
+            return CurlHttpVersion.V3ONLY
+        case "v2":
+            return CurlHttpVersion.V2_0
+        case "v2tls":
+            return CurlHttpVersion.V2TLS
+        case "v2_prior_knowledge":
+            return CurlHttpVersion.V2_PRIOR_KNOWLEDGE
+        case _:
+            return version  # type: ignore
 
 
 def is_absolute_url(url: str) -> bool:
