@@ -13,8 +13,6 @@ from collections.abc import Callable
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
-    AsyncGenerator,
-    Generator,
     Generic,
     Literal,
     Optional,
@@ -23,6 +21,7 @@ from typing import (
     Union,
     cast,
 )
+from collections.abc import AsyncGenerator, Generator
 from urllib.parse import urlparse
 from datetime import timedelta
 
@@ -247,12 +246,12 @@ class BaseSession(Generic[R]):
             )
 
     def _parse_response(
-        self, 
-        curl: Curl, 
-        buffer: BytesIO, 
-        header_buffer: BytesIO, 
-        default_encoding: Union[str, Callable[[bytes], str]], 
-        discard_cookies:bool
+        self,
+        curl: Curl,
+        buffer: BytesIO,
+        header_buffer: BytesIO,
+        default_encoding: Union[str, Callable[[bytes], str]],
+        discard_cookies: bool,
     ) -> R:
         c = curl
         rsp = cast(R, self.response_class(c))
@@ -469,7 +468,13 @@ class Session(BaseSession[R]):
             rsp.close()
 
     def ws_connect(
-        self, url: str, on_message=None, on_error=None, on_open=None, on_close=None, **kwargs
+        self,
+        url: str,
+        on_message=None,
+        on_error=None,
+        on_open=None,
+        on_close=None,
+        **kwargs,
     ) -> WebSocket:
         """Connects to a websocket url.
 
@@ -798,11 +803,11 @@ class AsyncSession(BaseSession[R]):
             curl = Curl(debug=self.debug)
         return curl
 
-    def push_curl(self, curl: Curl | None) -> None: 
+    def push_curl(self, curl: Curl | None) -> None:
         with suppress(asyncio.QueueFull):
             self.pool.put_nowait(curl)
 
-    async def __aenter__(self): # TODO: -> Self
+    async def __aenter__(self):  # TODO: -> Self
         return self
 
     async def __aexit__(self, *args) -> None:
