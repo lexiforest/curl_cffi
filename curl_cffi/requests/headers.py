@@ -102,7 +102,7 @@ class Headers(MutableMapping[str, Optional[str]]):
             ]
         elif isinstance(headers, list):
             # list of "Name: Value" pairs
-            if isinstance(headers[0], (str, bytes)):
+            if isinstance(headers[0], str | bytes):
                 sep = ":" if isinstance(headers[0], str) else b":"
                 h = []
                 for line in headers:
