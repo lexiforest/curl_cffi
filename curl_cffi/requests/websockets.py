@@ -10,13 +10,13 @@ import threading
 import warnings
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from dataclasses import dataclass, field
 from enum import IntEnum
-from random import uniform
 from functools import partial
 from json import dumps as json_dumps
 from json import loads as json_loads
+from random import uniform
 from select import select
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -660,7 +660,6 @@ class AsyncWebSocket(BaseWebSocket):
         "_yield_mask",
         "_terminated",
         "_terminated_event",
-        "_recv_error_retries",
         "ws_retry",
     )
 
@@ -745,7 +744,6 @@ class AsyncWebSocket(BaseWebSocket):
         self._yield_mask: int = yield_mask
         self._terminated: bool = False
         self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
-        self._recv_error_retries: int = 0
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -1115,6 +1113,7 @@ class AsyncWebSocket(BaseWebSocket):
         yield_mask: int = self._yield_mask
         yield_interval: float = self._yield_interval
         ws_retry: WsRetryOnRecvError = self.ws_retry
+        recv_error_retries: int = 0
 
         # Message specific values
         chunks: list[bytes] = []
@@ -1157,8 +1156,8 @@ class AsyncWebSocket(BaseWebSocket):
                     try:
                         chunk, frame = curl_ws_recv()
                         flags: int = frame.flags
-                        if self._recv_error_retries > 0:
-                            self._recv_error_retries = 0
+                        if recv_error_retries > 0:
+                            recv_error_retries = 0
 
                         # If a CLOSE frame is received, the reader is done.
                         if flags & CurlWsFlag.CLOSE:
@@ -1202,26 +1201,27 @@ class AsyncWebSocket(BaseWebSocket):
                         if (
                             ws_retry.retry_on_error
                             and e.code in ws_retry.retry_error_codes
-                            and self._recv_error_retries < ws_retry.max_retry_count
+                            and recv_error_retries < ws_retry.max_retry_count
                         ):
-                            self._recv_error_retries += 1
-                            base = ws_retry.retry_delay_base
+                            recv_error_retries += 1
 
                             if ws_retry.exponential_backoff:
                                 # Formula: base * (2 ^ (attempt - 1))
-                                delay: float = base * (
-                                    2 ** (self._recv_error_retries - 1)
+                                retry_delay: float = ws_retry.retry_delay_base * (
+                                    2 ** (recv_error_retries - 1)
                                 )
-                                # Add Jitter: +/- 10% of the delay (standard practice)
-                                jitter: float = delay * 0.1
-                                delay += uniform(-jitter, jitter)
+                                # Add Jitter: +/- 10% of the delay
+                                jitter: float = retry_delay * 0.1
+                                retry_delay += uniform(-jitter, jitter)
                             else:
                                 # Linear: base * count
-                                delay = base * self._recv_error_retries
+                                retry_delay = (
+                                    ws_retry.retry_delay_base * recv_error_retries
+                                )
 
-                            delay = max(0.0, delay)
+                            retry_delay = max(0.0, retry_delay)
 
-                            await asyncio.sleep(delay)
+                            await asyncio.sleep(retry_delay)
                             continue
 
                         # Unrecoverable or max retries exceeded
