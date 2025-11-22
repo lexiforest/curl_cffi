@@ -15,6 +15,7 @@ from functools import partial
 from json import dumps as json_dumps
 from json import loads as json_loads
 from select import select
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -49,6 +50,26 @@ if TYPE_CHECKING:
 
 # We need a partial for dumps() because a custom function may not accept the parameter
 dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
+
+
+@dataclass
+class WsRetryOnRecvError:
+    """WebSocket receive retry object.
+
+    retry_on_error (bool): When a WebSocket receive operation fails due to an error,
+        retry the receive attempt (``True``) or fail the connection (``False``).
+    exponential_backoff (bool): On each failed retry attempt use exponential backoff
+        with jitter, calculated as ``base * (2 ** (attempt - 1)) +- jitter``
+
+    """
+
+    retry_on_error: bool = False
+    exponential_backoff: bool = True
+    retry_delay_base: float = 0.0
+    max_retry_count: int = 3
+    retry_error_codes: set[CurlECode] = field(
+        default_factory=lambda: {CurlECode.RECV_ERROR}
+    )
 
 
 class WsCloseCode(IntEnum):
@@ -662,7 +683,7 @@ class AsyncWebSocket(BaseWebSocket):
         """Initializes an Async WebSocket session.
 
         This class should not be instantiated directly. It is intended to be created
-        via the `AsyncSession.ws_connect()` method, which correctly handles setup and
+        via the ``AsyncSession.ws_connect()`` method, which correctly handles setup and
         initialization of the underlying I/O tasks. This object represents a single
         WebSocket connection. Once closed, it cannot be reopened. A new instance must
         be created to reconnect.
@@ -670,9 +691,9 @@ class AsyncWebSocket(BaseWebSocket):
         Important:
             This WebSocket implementation uses a decoupled I/O model. Network
             operations occur in background tasks. As a result, network-related
-            errors that occur during a `send()` operation will not be raised by
-            `send()`. Instead, they are placed into the receive queue and will be
-            raised by the next call to `recv()`.
+            errors that occur during a ``send()`` operation will not be raised by
+            ``send()``. Instead, they are placed into the receive queue and will be
+            raised by the next call to ``recv()``.
 
         Args:
             session (AsyncSession): An instantiated AsyncSession object.
@@ -684,17 +705,18 @@ class AsyncWebSocket(BaseWebSocket):
                 by the Curl socket that are waiting to be consumed by calling `recv()`
             send_queue_size (int, optional): The maximum number of outgoing WebSocket
                 messages to buffer before applying network backpressure. When you call
-                `send(...)` the message is placed in this queue and transmitted when
+                ``send(...)`` the message is placed in this queue and transmitted when
                 the Curl socket is next available for sending.
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             retry_on_recv_error (bool, optional): Retry recv on some transient errors.
             yield_interval (float, optional): How often to yield control in seconds.
-            fair_scheduling (bool, optional): Change the ~5:1 ratio in favor
-                of `recv`:`send` to a fairer 1:1 ratio. This decreases recv throughput.
+            fair_scheduling (bool, optional): Change the ``~5:1`` ratio in favor of
+                ``recv``:``send`` to a fairer ``1:1`` ratio. This decreases receive
+                throughput substantially as send operations require more loop time.
             yield_mask (int, optional): A bitmask that sets the yield frequency for
-                cooperative multitasking, checked every `yield_mask + 1` operations.
-                Must be a power of two minus one (e.g., `63`, `127`, `255`) for
+                cooperative multitasking, checked every ``yield_mask + 1`` operations.
+                Must be a power of two minus one (e.g., ``63``, ``127``, ``255``) for
                 efficient bitwise checks. Lower values increase fairness; higher values
                 increase throughput.
         """
@@ -716,12 +738,12 @@ class AsyncWebSocket(BaseWebSocket):
         )
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
-        self.retry_on_recv_error: bool = retry_on_recv_error
         self._yield_interval: float = yield_interval
         self._use_fair_scheduling: bool = fair_scheduling
         self._yield_mask: int = yield_mask
-        self._recv_error_retries: int = 0
         self._terminated: bool = False
+        self._recv_error_retries: int = 0
+        self.retry_on_recv_error: bool = retry_on_recv_error
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -739,11 +761,11 @@ class AsyncWebSocket(BaseWebSocket):
         """
         Checks if the background I/O tasks are still running.
 
-        Returns `False` if either the read or write task has terminated due
+        Returns ``False`` if either the read or write task has terminated due
         to an error or a clean shutdown.
 
-        Note: This is a snapshot in time. A return value of `True` does not
-        guarantee the next network operation will succeed, but `False`
+        Note: This is a snapshot in time. A return value of ``True`` does not
+        guarantee the next network operation will succeed, but ``False``
         definitively indicates the connection is no longer active.
         """
         if self.closed or self._terminated:
@@ -783,7 +805,8 @@ class AsyncWebSocket(BaseWebSocket):
 
     def _start_io_tasks(self) -> None:
         """Start the read/write I/O loop tasks.
-        This should be called only once after object creation by the factory.
+
+        NOTE: This should be called only once after object creation by the factory.
         Once started, the tasks cannot be restarted again, this is a one-shot.
 
         Raises:
@@ -820,11 +843,11 @@ class AsyncWebSocket(BaseWebSocket):
             timeout: how many seconds to wait before giving up.
 
         Raises:
-            WebSocketClosed: If `recv()` is called on a closed connection after
+            WebSocketClosed: If ``recv()`` is called on a closed connection after
                 the receive queue is empty.
             WebSocketTimeout: If the operation times out.
             WebSocketError: A protocol or network error that occurred in a
-                background I/O task, including errors from previous `send()`
+                background I/O task, including errors from previous ``send()``
                 operations.
 
         Returns:
@@ -869,7 +892,7 @@ class AsyncWebSocket(BaseWebSocket):
         """Receive a JSON frame.
 
         Args:
-            loads: JSON decoder, default is json.loads.
+            loads: JSON decoder, default is :meth:`json.loads`.
             timeout: how many seconds to wait before giving up.
         """
         data, flags = await self.recv(timeout=timeout)
@@ -897,9 +920,9 @@ class AsyncWebSocket(BaseWebSocket):
         into a send queue. The actual network transmission is handled by a
         background task.
 
-        To guarantee all your messages have been sent `await ws.flush(...)`.
+        To guarantee all your messages have been sent ``await ws.flush()``.
 
-        The max frame size supported by libcurl is `65535` bytes. Larger frames
+        The max frame size supported by libcurl is ``65535`` bytes. Larger frames
         will be broken down and sent in chunks of that size.
 
         Args:
@@ -913,7 +936,7 @@ class AsyncWebSocket(BaseWebSocket):
             Due to the asynchronous nature of this client, network errors
             (e.g., connection dropped) that occur during the actual transmission
             will NOT be raised by this method. They will be raised by a
-            subsequent call to `recv()`. Always ensure you are actively
+            subsequent call to ``recv()``. Always ensure you are actively
             receiving data to handle potential connection errors.
 
             Also: If the network is slow and the internal send queue becomes full,
@@ -940,7 +963,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: binary data to send.
 
-        For more info, see the docstring for `send(...)`
+        For more info, see the docstring for :meth:`send()`
         """
         return await self.send(payload, CurlWsFlag.BINARY)
 
@@ -950,7 +973,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: binary data to send.
 
-        For more info, see the docstring for `send(...)`
+        For more info, see the docstring for :meth:`send()`
         """
         return await self.send(payload, CurlWsFlag.BINARY)
 
@@ -960,7 +983,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: text data to send.
 
-        For more info, see the docstring for `send(...)`
+        For more info, see the docstring for :meth:`send()`
         """
         return await self.send(payload, CurlWsFlag.TEXT)
 
@@ -971,9 +994,9 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             payload: data to send.
-            dumps: JSON encoder, default is `json.dumps(...)`.
+            dumps: JSON encoder, default is :meth:`json.dumps()`.
 
-        For more info, see the docstring for `send(...)`
+        For more info, see the docstring for :meth:`send()`
         """
         return await self.send_str(dumps(payload))
 
@@ -983,7 +1006,7 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: data to send.
 
-        For more info, see the docstring for `send(...)`
+        For more info, see the docstring for :meth:`send()`
         """
         return await self.send(payload, CurlWsFlag.PING)
 
@@ -998,8 +1021,8 @@ class AsyncWebSocket(BaseWebSocket):
         the recommended way to close the session.
 
         Args:
-            code (int, optional): Close code. Defaults to `WsCloseCode.OK`.
-            message (bytes, optional): Close reason. Defaults to `b""`.
+            code (int, optional): Close code. Defaults to ``WsCloseCode.OK``.
+            message (bytes, optional): Close reason. Defaults to ``b""``.
             timeout (float, optional): How long in seconds to wait closed.
         """
         async with self._close_lock:
@@ -1032,7 +1055,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         This method is a forceful shutdown that cancels all background I/O tasks
         and cleans up resources. It should be used for final cleanup or after an
-        unrecoverable error. Unlike `close()`, it does not attempt to send a close
+        unrecoverable error. Unlike ``close()``, it does not attempt to send a close
         frame or wait for pending messages. It schedules the cleanup to run on the
         event loop and returns immediately. It does not wait for cleanup completion.
 
@@ -1050,7 +1073,7 @@ class AsyncWebSocket(BaseWebSocket):
                     lambda: self.loop.create_task(self._terminate_helper())
                 )
 
-            # The event loop is not running
+            # Handle case where event loop is no longer running
             else:
                 super().terminate()
                 if self.session and not self.session._closed:
@@ -1070,7 +1093,7 @@ class AsyncWebSocket(BaseWebSocket):
         To ensure cooperative multitasking during high-volume message streams,
         the loop yields control to the asyncio event loop periodically.
 
-        If the receive queue becomes full, await `self._receive_queue.put(...)`
+        If the receive queue becomes full, await ``self._receive_queue.put()``
         will block the reader loop and stall the socket read task. Thus, appropriate
         queue sizes should be set by the user, even though the defaults are generous
         and should be suitable for most use cases.
@@ -1095,7 +1118,7 @@ class AsyncWebSocket(BaseWebSocket):
             # The outer loop waits for readability events.
             while not self.closed:
                 # Wait for the socket to be readable.
-                read_future = loop.create_future()
+                read_future: asyncio.Future[None] = loop.create_future()
 
                 try:
                     loop.add_reader(self._sock_fd, read_future.set_result, None)
@@ -1204,23 +1227,23 @@ class AsyncWebSocket(BaseWebSocket):
         from the send queue and orchestrates their transmission.
 
         This method runs a continuous loop that consumes messages from the
-        `_send_queue`. To improve performance and reduce system call overhead,
+        ``_send_queue``. To improve performance and reduce system call overhead,
         it implements an adaptive batching strategy. It greedily gathers
-        multiple pending messages from the queue and then coalesces the
+        multiple pending messages from the queue and optionally coalesces the
         payloads of messages that share the same flags (e.g., all text frames)
-        into a single, larger payload, ONLY if `coalesce_frames=True` and the
+        into a single, larger payload, ONLY if ``coalesce_frames=True`` and the
         frame is not a CONTROL frame, as the spec requires them to be whole.
 
         It will batch as many as possible, then iterate over the batch and send
         the frames, one at a time. This batching and coalescing significantly
         improves throughput for high volumes of small messages where the message
         boundaries do not matter. The final, consolidated payloads are then passed
-        to the `_send_payload` method for transmission.
+        to the ``_send_payload`` method for transmission.
         """
         control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING
-        send_payload = self._send_payload
-        queue_get = self._send_queue.get
-        queue_get_nowait = self._send_queue.get_nowait
+        send_payload: Callable[..., Awaitable[bool]] = self._send_payload
+        queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
+        queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
 
         try:
             while True:
@@ -1295,11 +1318,12 @@ class AsyncWebSocket(BaseWebSocket):
         """
         The low-level I/O Handler. It transmits a single payload, handling
         fragmentation, backpressure (EAGAIN), and cooperative multitasking.
-        Returns False on a non-recoverable error.
+        Returns ``False`` on a non-recoverable error.
 
         Args:
             payload: The complete byte payload to be sent.
-            flags: The `CurlWsFlag` indicating the frame type (e.g., `TEXT`, `BINARY`).
+            flags: The ``CurlWsFlag`` indicating the frame type
+                (e.g., ``TEXT``, ``BINARY``).
         """
 
         # Cache locals to reduce lookup cost
@@ -1350,7 +1374,7 @@ class AsyncWebSocket(BaseWebSocket):
                     return False
 
                 # EAGAIN: wait until the socket is writable.
-                write_future = loop.create_future()
+                write_future: asyncio.Future[None] = loop.create_future()
 
                 try:
                     loop.add_writer(self._sock_fd, write_future.set_result, None)
