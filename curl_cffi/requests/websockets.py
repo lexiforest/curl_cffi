@@ -11,6 +11,7 @@ import warnings
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from enum import IntEnum
+from random import uniform
 from functools import partial
 from json import dumps as json_dumps
 from json import loads as json_loads
@@ -54,18 +55,22 @@ dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
 
 @dataclass
 class WsRetryOnRecvError:
-    """WebSocket receive retry object.
+    """Configurable WebSocket behaviour for retrying failed message receives.
 
-    retry_on_error (bool): When a WebSocket receive operation fails due to an error,
+    retry_on_error: When a WebSocket receive operation fails due to an error,
         retry the receive attempt (``True``) or fail the connection (``False``).
-    exponential_backoff (bool): On each failed retry attempt use exponential backoff
-        with jitter, calculated as ``base * (2 ** (attempt - 1)) +- jitter``
-
+    exponential_backoff: On each failed receive attempt use exponential backoff
+        with jitter, calculated as ``base * (2 ** (attempt - 1)) +- jitter``, or use
+        linear backoff which is calculated as ``base * retry_count``.
+    retry_delay_base: The base value to compute the retry delay from.
+    max_retry_count: How many times to retry a receive operation before giving up.
+    retry_error_codes: A user-provided set of ``CurlECode`` values for which
+        the receive operation should be retried. Default is ``CurlECode.RECV_ERROR``.
     """
 
     retry_on_error: bool = False
     exponential_backoff: bool = True
-    retry_delay_base: float = 0.0
+    retry_delay_base: float = 0.2
     max_retry_count: int = 3
     retry_error_codes: set[CurlECode] = field(
         default_factory=lambda: {CurlECode.RECV_ERROR}
@@ -650,19 +655,17 @@ class AsyncWebSocket(BaseWebSocket):
         "_send_queue",
         "_max_send_batch_size",
         "_coalesce_frames",
-        "retry_on_recv_error",
         "_yield_interval",
         "_use_fair_scheduling",
         "_yield_mask",
-        "_recv_error_retries",
         "_terminated",
         "_terminated_event",
+        "_recv_error_retries",
+        "ws_retry",
+        "max_message_size",
     )
 
-    # Match libcurl's documented max frame size limit.
-    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65535
-    _MAX_RECV_RETRIES: ClassVar[int] = 3
-    _RECV_RETRY_DELAY: ClassVar[float] = 0.3
+    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
 
     def __init__(
         self,
@@ -675,10 +678,11 @@ class AsyncWebSocket(BaseWebSocket):
         send_queue_size: int = 256,
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
-        retry_on_recv_error: bool = False,
+        ws_retry: WsRetryOnRecvError | None = None,
         yield_interval: float = 0.001,
         fair_scheduling: bool = False,
         yield_mask: int = 63,
+        max_message_size: int = 1_048_576,  # 1MB
     ) -> None:
         """Initializes an Async WebSocket session.
 
@@ -709,7 +713,7 @@ class AsyncWebSocket(BaseWebSocket):
                 the Curl socket is next available for sending.
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
-            retry_on_recv_error (bool, optional): Retry recv on some transient errors.
+            ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
             yield_interval (float, optional): How often to yield control in seconds.
             fair_scheduling (bool, optional): Change the ``~5:1`` ratio in favor of
                 ``recv``:``send`` to a fairer ``1:1`` ratio. This decreases receive
@@ -719,6 +723,8 @@ class AsyncWebSocket(BaseWebSocket):
                 Must be a power of two minus one (e.g., ``63``, ``127``, ``255``) for
                 efficient bitwise checks. Lower values increase fairness; higher values
                 increase throughput.
+            max_message_size (int, optional): The largest size single WebSocket message
+                that can be received.
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -742,8 +748,9 @@ class AsyncWebSocket(BaseWebSocket):
         self._use_fair_scheduling: bool = fair_scheduling
         self._yield_mask: int = yield_mask
         self._terminated: bool = False
+        self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
         self._recv_error_retries: int = 0
-        self.retry_on_recv_error: bool = retry_on_recv_error
+        self.max_message_size: int = max_message_size
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -1111,9 +1118,14 @@ class AsyncWebSocket(BaseWebSocket):
         fair_scheduling: bool = self._use_fair_scheduling
         yield_mask: int = self._yield_mask
         yield_interval: float = self._yield_interval
+        max_msg_size: int = self.max_message_size
+        ws_retry: WsRetryOnRecvError = self.ws_retry
 
+        # Message specific values
         chunks: list[bytes] = []
+        current_msg_size: int = 0
         msg_counter = 0
+
         try:
             # The outer loop waits for readability events.
             while not self.closed:
@@ -1161,13 +1173,27 @@ class AsyncWebSocket(BaseWebSocket):
                             await self._handle_close_frame(chunk)
                             return
 
+                        # Max size check
+                        chunk_len: int = len(chunk)
+                        if 0 < max_msg_size < current_msg_size + chunk_len:
+                            raise WebSocketError(
+                                message=(
+                                    "Message size exceeds limit of "
+                                    f"{max_msg_size} bytes"
+                                ),
+                                code=WsCloseCode.MESSAGE_TOO_BIG,
+                            )
+
                         # Collect the chunk
                         chunks.append(chunk)
+                        current_msg_size += chunk_len
 
                         # If the message is complete, process and dispatch it
                         if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
                             message = b"".join(chunks)
                             chunks.clear()
+                            current_msg_size = 0
+
                             try:
                                 queue_put_nowait((message, flags))
                             except asyncio.QueueFull:
@@ -1184,25 +1210,40 @@ class AsyncWebSocket(BaseWebSocket):
                         ):
                             await asyncio.sleep(0)
                             start_time = loop.time()
+                            msg_counter = 0
 
                     except CurlError as e:
-                        # Normal EAGAIN from Curl
+                        # Normal EAGAIN from Curl - Socket is empty, go back to waiting
                         if e.code == CurlECode.AGAIN:
                             break
 
-                        # Transient error, can be retried
+                        # Apply the user defined retry logic
                         if (
-                            e.code == CurlECode.RECV_ERROR
-                            and self.retry_on_recv_error
-                            and self._recv_error_retries < self._MAX_RECV_RETRIES
+                            ws_retry.retry_on_error
+                            and e.code in ws_retry.retry_error_codes
+                            and self._recv_error_retries < ws_retry.max_retry_count
                         ):
                             self._recv_error_retries += 1
-                            await asyncio.sleep(
-                                self._RECV_RETRY_DELAY * self._recv_error_retries
-                            )
+                            base = ws_retry.retry_delay_base
+
+                            if ws_retry.exponential_backoff:
+                                # Formula: base * (2 ^ (attempt - 1))
+                                delay: float = base * (
+                                    2 ** (self._recv_error_retries - 1)
+                                )
+                                # Add Jitter: +/- 10% of the delay (standard practice)
+                                jitter: float = delay * 0.1
+                                delay += uniform(-jitter, jitter)
+                            else:
+                                # Linear: base * count
+                                delay = base * self._recv_error_retries
+
+                            delay = max(0.0, delay)
+
+                            await asyncio.sleep(delay)
                             continue
 
-                        # Unrecoverable, place error on queue and cleanup
+                        # Unrecoverable or max retries exceeded
                         with suppress(asyncio.QueueFull):
                             queue_put_nowait((e, 0))
                         self.terminate()
@@ -1217,6 +1258,7 @@ class AsyncWebSocket(BaseWebSocket):
                 with suppress(asyncio.QueueFull):
                     queue_put_nowait((e, 0))
             self.terminate()
+
         finally:
             with suppress(asyncio.QueueFull):
                 queue_put_nowait((WebSocketClosed("Connection closed."), 0))
@@ -1249,8 +1291,8 @@ class AsyncWebSocket(BaseWebSocket):
             while True:
                 payload, flags = await queue_get()
 
-                # Build the rest of the batch without awaiting.
-                batch = [(payload, flags)]
+                # Build the rest of the batch without waiting.
+                batch: list[tuple[bytes, CurlWsFlag]] = [(payload, flags)]
                 if not flags & CurlWsFlag.CLOSE:
                     while len(batch) < self._max_send_batch_size:
                         try:
@@ -1332,6 +1374,7 @@ class AsyncWebSocket(BaseWebSocket):
             self._receive_queue.put_nowait
         )
         loop: asyncio.AbstractEventLoop = self.loop
+        max_frame_size: int = self._MAX_CURL_FRAME_SIZE
 
         view: memoryview = memoryview(payload)
         offset = 0
@@ -1345,11 +1388,10 @@ class AsyncWebSocket(BaseWebSocket):
             ) > self._yield_interval:
                 await asyncio.sleep(0)
                 start_time = loop.time()
+                write_ops = 0
 
             try:
-                chunk: memoryview[int] = view[
-                    offset: offset + self._MAX_CURL_FRAME_SIZE
-                ]
+                chunk: memoryview[int] = view[offset : offset + max_frame_size]
                 n_sent: int = curl_ws_send(chunk, flags)
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):

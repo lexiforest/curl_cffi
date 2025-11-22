@@ -34,7 +34,7 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
 from .utils import HttpVersionLiteral, NOT_SET, set_curl_options
-from .websockets import AsyncWebSocket, WebSocket, WebSocketError
+from .websockets import AsyncWebSocket, WebSocket, WebSocketError, WsRetryOnRecvError
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
@@ -868,7 +868,7 @@ class AsyncSession(BaseSession[R]):
         send_queue_size: int = 256,
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
-        retry_on_recv_error: bool = False,
+        ws_retry: WsRetryOnRecvError | None = None,
         yield_interval: float = 0.001,
         fair_scheduling: bool = False,
         yield_mask: int = 63,
@@ -922,7 +922,7 @@ class AsyncSession(BaseSession[R]):
                 **Warning:** This breaks the one-to-one mapping of ``send()`` calls
                 to frames and should only be used when the application protocol is
                 designed to handle concatenated data streams. Defaults to ``False``.
-            retry_on_recv_error: Retries ``ws_recv()`` if a recv error is raised.
+            ws_retry: Retry behaviour on failed ``recv()`` attempt.
                 Retries up to a limited number of times with a delay in between.
             yield_interval: How often to yield control back to the event loop.
                 This is a trade-off between throughput and responsiveness. Lower values
@@ -993,7 +993,7 @@ class AsyncSession(BaseSession[R]):
             send_queue_size=send_queue_size,
             max_send_batch_size=max_send_batch_size,
             coalesce_frames=coalesce_frames,
-            retry_on_recv_error=retry_on_recv_error,
+            ws_retry=ws_retry,
             yield_interval=yield_interval,
             fair_scheduling=fair_scheduling,
             yield_mask=yield_mask,
