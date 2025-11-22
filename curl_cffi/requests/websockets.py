@@ -1,5 +1,5 @@
 """
-The Curl CFFI WebSockets client implementation.
+The Curl CFFI WebSocket client implementation.
 """
 
 from __future__ import annotations
@@ -8,14 +8,14 @@ import asyncio
 import struct
 import threading
 import warnings
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from enum import IntEnum
 from functools import partial
 from json import dumps as json_dumps
-from json import loads
+from json import loads as json_loads
 from select import select
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar, final
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
-dumps: partial[str] = partial[str](json_dumps, separators=(",", ":"))
+dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
 
 
 class WsCloseCode(IntEnum):
@@ -102,9 +102,9 @@ class BaseWebSocket:
     )
 
     def __init__(
-        self, curl: Curl, *, autoclose: bool = True, debug: bool = False
+        self, curl: Curl | NotSetType, *, autoclose: bool = True, debug: bool = False
     ) -> None:
-        self._curl: Curl = curl
+        self._curl: Curl | NotSetType = curl
         self.autoclose: bool = autoclose
         self._close_code: int | None = None
         self._close_reason: str | None = None
@@ -113,7 +113,8 @@ class BaseWebSocket:
 
     @property
     def curl(self) -> Curl:
-        if self._curl is NOT_SET:
+        """Return reference to Curl associated with current WebSocket."""
+        if isinstance(self._curl, NotSetType):
             self._curl = Curl(debug=self.debug)
         return self._curl
 
@@ -134,7 +135,7 @@ class BaseWebSocket:
     @staticmethod
     def _unpack_close_frame(frame: bytes) -> tuple[int, str]:
         if len(frame) < 2:
-            code = WsCloseCode.UNKNOWN
+            code: int = WsCloseCode.UNKNOWN
             reason = ""
         else:
             try:
@@ -158,7 +159,7 @@ class BaseWebSocket:
                     )
         return code, reason
 
-    def terminate(self):
+    def terminate(self) -> None:
         """Terminate the underlying connection."""
         self.closed = True
         self.curl.close()
@@ -203,10 +204,10 @@ class WebSocket(BaseWebSocket):
             on_error: error callback, ``def on_error(ws, exception)``
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
-        self.skip_utf8_validation = skip_utf8_validation
-        self.keep_running = False
+        self.skip_utf8_validation: bool = skip_utf8_validation
+        self.keep_running: bool = False
 
-        self._emitters: dict[EventTypeLiteral, Callable] = {}
+        self._emitters: dict[EventTypeLiteral, Callable[..., object]] = {}
         if on_open:
             self._emitters["open"] = on_open
         if on_close:
@@ -229,15 +230,21 @@ class WebSocket(BaseWebSocket):
             raise StopIteration
         return msg
 
-    def _emit(self, event_type: EventTypeLiteral, *args) -> None:
-        callback = self._emitters.get(event_type)
+    def _emit(
+        self, event_type: EventTypeLiteral, *args: str | bytes | int | CurlWsFrame
+    ) -> None:
+        callback: Callable[..., object] | None = self._emitters.get(event_type)
         if callback:
             try:
-                callback(self, *args)
+                _ = callback(self, *args)
+
+            # pylint: disable-next=broad-exception-caught
             except Exception as e:
-                error_callback = self._emitters.get("error")
+                error_callback: Callable[..., object] | None = self._emitters.get(
+                    "error"
+                )
                 if error_callback:
-                    error_callback(self, e)
+                    _ = error_callback(self, e)
                 else:
                     warnings.warn(
                         f"WebSocket callback '{event_type}' failed",
@@ -249,7 +256,10 @@ class WebSocket(BaseWebSocket):
         self,
         url: str,
         params: (
-            dict | list | tuple[str, int | list[str] | dict[str, str | int]] | None
+            dict[str, object]
+            | list[object]
+            | tuple[str, int | list[str] | dict[str, str | int]]
+            | None
         ) = None,
         headers: HeaderTypes | None = None,
         cookies: CookieTypes | None = None,
@@ -319,9 +329,8 @@ class WebSocket(BaseWebSocket):
             curl_options: extra curl options to use.
         """
 
-        curl = self.curl
-
-        set_curl_options(
+        curl: Curl = self.curl
+        _ = set_curl_options(
             curl=curl,
             method="GET",
             url=url,
@@ -352,7 +361,7 @@ class WebSocket(BaseWebSocket):
         )
 
         # Magic number defined in: https://curl.se/docs/websocket.html
-        curl.setopt(CurlOpt.CONNECT_ONLY, 2)
+        _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         curl.perform()
         return self
 
@@ -383,8 +392,8 @@ class WebSocket(BaseWebSocket):
         Receive a frame as bytes. libcurl splits frames into fragments, so we have to
         collect all the chunks for a frame.
         """
-        chunks = []
-        flags = 0
+        chunks: list[bytes] = []
+        flags: int = 0
 
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
@@ -417,7 +426,7 @@ class WebSocket(BaseWebSocket):
             raise WebSocketError("Not valid text frame", WsCloseCode.INVALID_DATA)
         return data.decode()
 
-    def recv_json(self, *, loads: Callable[[str], T] = loads) -> T:
+    def recv_json(self, *, loads: Callable[[str], T] = json_loads) -> T:
         """Receive a JSON frame.
 
         Args:
@@ -430,7 +439,7 @@ class WebSocket(BaseWebSocket):
         self,
         payload: str | bytes | memoryview,
         flags: CurlWsFlag = CurlWsFlag.BINARY,
-    ):
+    ) -> int:
         """Send a data frame.
 
         Args:
@@ -473,7 +482,7 @@ class WebSocket(BaseWebSocket):
 
         return offset
 
-    def send_binary(self, payload: bytes):
+    def send_binary(self, payload: bytes) -> int:
         """Send a binary frame.
 
         Args:
@@ -489,7 +498,7 @@ class WebSocket(BaseWebSocket):
         """
         return self.send(payload, CurlWsFlag.BINARY)
 
-    def send_str(self, payload: str):
+    def send_str(self, payload: str) -> int:
         """Send a text frame.
 
         Args:
@@ -497,7 +506,9 @@ class WebSocket(BaseWebSocket):
         """
         return self.send(payload, CurlWsFlag.TEXT)
 
-    def send_json(self, payload: Any, *, dumps: Callable[[Any], str] = dumps):
+    def send_json(
+        self, payload: object, *, dumps: Callable[..., str] = dumps_partial
+    ) -> int:
         """Send a JSON frame.
 
         Args:
@@ -514,7 +525,7 @@ class WebSocket(BaseWebSocket):
         """
         return self.send(payload, CurlWsFlag.PING)
 
-    def run_forever(self, url: str = "", **kwargs):
+    def run_forever(self, url: str = "", **kwargs) -> None:
         """Run the WebSocket forever. See :meth:`connect` for details on parameters.
 
         libcurl automatically handles pings and pongs.
@@ -522,7 +533,7 @@ class WebSocket(BaseWebSocket):
         """
 
         if url:
-            self.connect(url, **kwargs)
+            _ = self.connect(url, **kwargs)
 
         sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
         if sock_fd == CURL_SOCKET_BAD:
@@ -534,7 +545,7 @@ class WebSocket(BaseWebSocket):
 
         # Keep reading the messages and invoke callbacks
         # TODO: Reconnect logic
-        chunks = []
+        chunks: list[bytes] = []
         self.keep_running = True
         while self.keep_running:
             try:
@@ -595,12 +606,11 @@ class WebSocket(BaseWebSocket):
         # TODO: As per spec, we should wait for the server to close the connection
         # But this is not a requirement
         msg = self._pack_close_frame(code, message)
-        self.send(msg, CurlWsFlag.CLOSE)
+        _ = self.send(msg, CurlWsFlag.CLOSE)
         # The only way to close the connection appears to be curl_easy_cleanup
         self.terminate()
 
 
-@final
 class AsyncWebSocket(BaseWebSocket):
     """
     An asyncio WebSocket implementation using libcurl.
@@ -785,7 +795,7 @@ class AsyncWebSocket(BaseWebSocket):
             return
 
         # Get the currently active socket FD
-        self._sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        self._sock_fd = cast(int, self.curl.getinfo(CurlInfo.ACTIVESOCKET))
         if self._sock_fd == CURL_SOCKET_BAD:
             raise WebSocketError(
                 "Invalid active socket.", code=CurlECode.NO_CONNECTION_AVAILABLE
@@ -853,7 +863,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv_json(
         self,
         *,
-        loads: Callable[[str | bytes], T] = loads,
+        loads: Callable[[str | bytes], T] = json_loads,
         timeout: float | None = None,
     ) -> T:
         """Receive a JSON frame.
@@ -955,7 +965,7 @@ class AsyncWebSocket(BaseWebSocket):
         return await self.send(payload, CurlWsFlag.TEXT)
 
     async def send_json(
-        self, payload: Any, *, dumps: Callable[[Any], str] = dumps
+        self, payload: object, *, dumps: Callable[..., str] = dumps_partial
     ) -> None:
         """Send a JSON frame.
 
@@ -1014,7 +1024,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Wait for the termination completion signal
                 with suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(self._terminated_event.wait(), timeout)
+                    _ = await asyncio.wait_for(self._terminated_event.wait(), timeout)
 
     def terminate(self) -> None:
         """
@@ -1067,13 +1077,17 @@ class AsyncWebSocket(BaseWebSocket):
         """
 
         # Cache locals to avoid repeated attribute lookups
-        curl_ws_recv = self._curl.ws_recv
-        queue_put_nowait = self._receive_queue.put_nowait
-        queue_put = self._receive_queue.put
-        loop = self.loop
-        fair_scheduling = self._use_fair_scheduling
-        yield_mask = self._yield_mask
-        yield_interval = self._yield_interval
+        curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
+        queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
+            self._receive_queue.put_nowait
+        )
+        queue_put: Callable[[RECV_QUEUE_ITEM], Awaitable[None]] = (
+            self._receive_queue.put
+        )
+        loop: asyncio.AbstractEventLoop = self.loop
+        fair_scheduling: bool = self._use_fair_scheduling
+        yield_mask: int = self._yield_mask
+        yield_interval: float = self._yield_interval
 
         chunks: list[bytes] = []
         msg_counter = 0
@@ -1085,6 +1099,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                 try:
                     loop.add_reader(self._sock_fd, read_future.set_result, None)
+
+                # pylint: disable-next=broad-exception-caught
                 except Exception as exc:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait(
@@ -1171,6 +1187,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         except asyncio.CancelledError:
             pass
+
+        # pylint: disable-next=broad-exception-caught
         except Exception as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
@@ -1224,7 +1242,7 @@ class AsyncWebSocket(BaseWebSocket):
                 try:
                     # Process the batch depending on the coalescing strategy
                     if self._coalesce_frames:
-                        data_to_coalesce: dict[int, list[bytes]] = {}
+                        data_to_coalesce: dict[CurlWsFlag, list[bytes]] = {}
                         for payload, frame in batch:
                             if frame & control_frame_flags:
                                 # Flush any pending data before the control frame.
@@ -1262,6 +1280,7 @@ class AsyncWebSocket(BaseWebSocket):
         except asyncio.CancelledError:
             pass
 
+        # pylint: disable-next=broad-exception-caught
         except Exception as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
@@ -1284,11 +1303,13 @@ class AsyncWebSocket(BaseWebSocket):
         """
 
         # Cache locals to reduce lookup cost
-        curl_ws_send = self._curl.ws_send
-        queue_put_nowait = self._receive_queue.put_nowait
-        loop = self.loop
+        curl_ws_send: Callable[[memoryview, CurlWsFlag], int] = self.curl.ws_send
+        queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
+            self._receive_queue.put_nowait
+        )
+        loop: asyncio.AbstractEventLoop = self.loop
 
-        view = memoryview(payload)
+        view: memoryview = memoryview(payload)
         offset = 0
         write_ops = 0
         start_time: float = loop.time()
@@ -1302,7 +1323,9 @@ class AsyncWebSocket(BaseWebSocket):
                 start_time = loop.time()
 
             try:
-                chunk = view[offset : offset + self._MAX_CURL_FRAME_SIZE]
+                chunk: memoryview[int] = view[
+                    offset: offset + self._MAX_CURL_FRAME_SIZE
+                ]
                 n_sent: int = curl_ws_send(chunk, flags)
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
@@ -1331,6 +1354,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                 try:
                     loop.add_writer(self._sock_fd, write_future.set_result, None)
+
+                # pylint: disable-next=broad-exception-caught
                 except Exception as exc:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait(

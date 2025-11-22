@@ -791,7 +791,7 @@ class AsyncSession(BaseSession[R]):
             curl = Curl(debug=self.debug)
         return curl
 
-    def push_curl(self, curl):
+    def push_curl(self, curl: Curl | None) -> None:
         with suppress(asyncio.QueueFull):
             self.pool.put_nowait(curl)
 
