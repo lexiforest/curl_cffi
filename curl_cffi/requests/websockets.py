@@ -57,11 +57,12 @@ dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
 class WsRetryOnRecvError:
     """Configurable WebSocket behaviour for retrying failed message receives.
 
+    When enabled, each failed receive attempt will use exponential backoff with
+    jitter, calculated as the ``base * (2 ** (attempt - 1)) +- jitter``, where
+    the jitter is ``+-10%`` the result of computed delay value.
+
     retry_on_error: When a WebSocket receive operation fails due to an error,
         retry the receive attempt (``True``) or fail the connection (``False``).
-    exponential_backoff: On each failed receive attempt use exponential backoff
-        with jitter, calculated as ``base * (2 ** (attempt - 1)) +- jitter``, or use
-        linear backoff which is calculated as ``base * retry_count``.
     retry_delay_base: The base value to compute the retry delay from.
     max_retry_count: How many times to retry a receive operation before giving up.
     retry_error_codes: A user-provided set of ``CurlECode`` values for which
@@ -69,8 +70,7 @@ class WsRetryOnRecvError:
     """
 
     retry_on_error: bool = False
-    exponential_backoff: bool = True
-    retry_delay_base: float = 0.2
+    retry_delay_base: float = 0.3
     max_retry_count: int = 3
     retry_error_codes: set[CurlECode] = field(
         default_factory=lambda: {CurlECode.RECV_ERROR}
@@ -257,7 +257,9 @@ class WebSocket(BaseWebSocket):
         return msg
 
     def _emit(
-        self, event_type: EventTypeLiteral, *args: str | bytes | int | CurlWsFrame
+        self,
+        event_type: EventTypeLiteral,
+        *args: str | bytes | int | CurlWsFrame | CurlError,
     ) -> None:
         callback: Callable[..., object] | None = self._emitters.get(event_type)
         if callback:
@@ -463,7 +465,7 @@ class WebSocket(BaseWebSocket):
 
     def send(
         self,
-        payload: str | bytes | memoryview,
+        payload: str | bytes,
         flags: CurlWsFlag = CurlWsFlag.BINARY,
     ) -> int:
         """Send a data frame.
@@ -855,17 +857,23 @@ class AsyncWebSocket(BaseWebSocket):
         """
         if self.closed and self._receive_queue.empty():
             raise WebSocketClosed("WebSocket is closed")
+
         try:
-            result, flags = await asyncio.wait_for(self._receive_queue.get(), timeout)
+            result, flags = self._receive_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            try:
+                result, flags = await asyncio.wait_for(
+                    self._receive_queue.get(), timeout
+                )
+            except asyncio.TimeoutError as e:
+                raise WebSocketTimeout(
+                    "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
+                ) from e
 
-            if isinstance(result, Exception):
-                raise result
-            return result, flags
+        if isinstance(result, Exception):
+            raise result
 
-        except asyncio.TimeoutError as e:
-            raise WebSocketTimeout(
-                "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
-            ) from e
+        return result, flags
 
     async def recv_str(self, *, timeout: float | None = None) -> str:
         """Receive a text frame.
@@ -1197,7 +1205,7 @@ class AsyncWebSocket(BaseWebSocket):
                         if e.code == CurlECode.AGAIN:
                             break
 
-                        # Apply the user defined retry logic
+                        # Apply the user configured retry logic
                         if (
                             ws_retry.retry_on_error
                             and e.code in ws_retry.retry_error_codes
@@ -1205,20 +1213,15 @@ class AsyncWebSocket(BaseWebSocket):
                         ):
                             recv_error_retries += 1
 
-                            if ws_retry.exponential_backoff:
-                                # Formula: base * (2 ^ (attempt - 1))
-                                retry_delay: float = ws_retry.retry_delay_base * (
-                                    2 ** (recv_error_retries - 1)
-                                )
-                                # Add Jitter: +/- 10% of the delay
-                                jitter: float = retry_delay * 0.1
-                                retry_delay += uniform(-jitter, jitter)
-                            else:
-                                # Linear: base * count
-                                retry_delay = (
-                                    ws_retry.retry_delay_base * recv_error_retries
-                                )
-
+                            # Formula: base * (2 ^ (attempt - 1))
+                            retry_delay: float = cast(
+                                float,
+                                ws_retry.retry_delay_base
+                                * (2 ** (recv_error_retries - 1)),
+                            )
+                            # Add Jitter: +/- 10% of the delay
+                            jitter: float = retry_delay * 0.1
+                            retry_delay += uniform(-jitter, jitter)
                             retry_delay = max(0.0, retry_delay)
 
                             await asyncio.sleep(retry_delay)
@@ -1350,7 +1353,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
 
         # Cache locals to reduce lookup cost
-        curl_ws_send: Callable[[memoryview, CurlWsFlag], int] = self.curl.ws_send
+        curl_ws_send: Callable[[bytes, CurlWsFlag], int] = self.curl.ws_send
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
         )
@@ -1372,8 +1375,8 @@ class AsyncWebSocket(BaseWebSocket):
                 write_ops = 0
 
             try:
-                chunk: memoryview[int] = view[offset : offset + max_frame_size]
-                n_sent: int = curl_ws_send(chunk, flags)
+                chunk: memoryview = view[offset : offset + max_frame_size]
+                n_sent: int = curl_ws_send(bytes(chunk), flags)
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait(
