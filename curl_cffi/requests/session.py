@@ -869,9 +869,8 @@ class AsyncSession(BaseSession[R]):
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         ws_retry: WsRetryOnRecvError | None = None,
-        yield_interval: float = 0.001,
-        fair_scheduling: bool = False,
-        yield_mask: int = 63,
+        recv_yield_mask: int = 31,
+        send_yield_mask: int = 15,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -924,15 +923,6 @@ class AsyncSession(BaseSession[R]):
                 designed to handle concatenated data streams. Defaults to ``False``.
             ws_retry: Retry behaviour on failed ``recv()`` attempt.
                 Retries up to a limited number of times with a delay in between.
-            yield_interval: How often to yield control back to the event loop.
-                This is a trade-off between throughput and responsiveness. Lower values
-                means the loop yields more frequently and enables other tasks to run,
-                while higher values are better for throughput. The balanced default
-                is ``1ms`` but you can customize this to fit your application/use case.
-            fair_scheduling: Changes the I/O priority from favoring receives (``5:1``)
-                to a balanced ratio (``1:1``). Enable this to improve send
-                responsiveness under heavy, concurrent load, at the cost of
-                significantly lower overall throughput.
             yield_mask: Controls the frequency of cooperative multitasking
                 yields in the read loop. The loop yields every ``yield_mask + 1``
                 operations. For efficiency, this value must be a power of two minus one
@@ -981,6 +971,7 @@ class AsyncSession(BaseSession[R]):
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
+        curl.setopt(CurlOpt.NOSIGNAL, 1)
         curl.setopt(CurlOpt.TCP_NODELAY, 1)
         curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
@@ -994,9 +985,8 @@ class AsyncSession(BaseSession[R]):
             max_send_batch_size=max_send_batch_size,
             coalesce_frames=coalesce_frames,
             ws_retry=ws_retry,
-            yield_interval=yield_interval,
-            fair_scheduling=fair_scheduling,
-            yield_mask=yield_mask,
+            recv_yield_mask=recv_yield_mask,
+            send_yield_mask=send_yield_mask,
         )
 
         try:

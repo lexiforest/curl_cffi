@@ -657,9 +657,8 @@ class AsyncWebSocket(BaseWebSocket):
         "_send_queue",
         "_max_send_batch_size",
         "_coalesce_frames",
-        "_yield_interval",
-        "_use_fair_scheduling",
-        "_yield_mask",
+        "_recv_yield_mask",
+        "_send_yield_mask",
         "_terminated",
         "_terminated_event",
         "ws_retry",
@@ -679,9 +678,8 @@ class AsyncWebSocket(BaseWebSocket):
         max_send_batch_size: int = 256,
         coalesce_frames: bool = False,
         ws_retry: WsRetryOnRecvError | None = None,
-        yield_interval: float = 0.001,
-        fair_scheduling: bool = False,
-        yield_mask: int = 63,
+        recv_yield_mask: int = 31,
+        send_yield_mask: int = 15,
     ) -> None:
         """Initializes an Async WebSocket session.
 
@@ -713,10 +711,6 @@ class AsyncWebSocket(BaseWebSocket):
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
-            yield_interval (float, optional): How often to yield control in seconds.
-            fair_scheduling (bool, optional): Change the ``~5:1`` ratio in favor of
-                ``recv``:``send`` to a fairer ``1:1`` ratio. This decreases receive
-                throughput substantially as send operations require more loop time.
             yield_mask (int, optional): A bitmask that sets the yield frequency for
                 cooperative multitasking, checked every ``yield_mask + 1`` operations.
                 Must be a power of two minus one (e.g., ``63``, ``127``, ``255``) for
@@ -741,11 +735,19 @@ class AsyncWebSocket(BaseWebSocket):
         )
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
-        self._yield_interval: float = yield_interval
-        self._use_fair_scheduling: bool = fair_scheduling
-        self._yield_mask: int = yield_mask
         self._terminated: bool = False
         self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
+        self._recv_yield_mask: int = recv_yield_mask
+        self._send_yield_mask: int = send_yield_mask
+
+        if (recv_yield_mask & (recv_yield_mask + 1)) != 0:
+            raise ValueError(
+                "recv_yield_mask must be a power of two minus one (e.g. 15, 31)"
+            )
+        if (send_yield_mask & (send_yield_mask + 1)) != 0:
+            raise ValueError(
+                "send_yield_mask must be a power of two minus one (e.g. 7, 15)"
+            )
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -862,9 +864,12 @@ class AsyncWebSocket(BaseWebSocket):
             result, flags = self._receive_queue.get_nowait()
         except asyncio.QueueEmpty:
             try:
-                result, flags = await asyncio.wait_for(
-                    self._receive_queue.get(), timeout
-                )
+                if timeout is None:
+                    result, flags = await self._receive_queue.get()
+                else:
+                    result, flags = await asyncio.wait_for(
+                        self._receive_queue.get(), timeout
+                    )
             except asyncio.TimeoutError as e:
                 raise WebSocketTimeout(
                     "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
@@ -910,7 +915,7 @@ class AsyncWebSocket(BaseWebSocket):
             )
         if flags & CurlWsFlag.TEXT:
             try:
-                return loads(data.decode("utf-8"))
+                return loads(data)
             except UnicodeDecodeError as e:
                 raise WebSocketError(
                     "Invalid UTF-8 in JSON text frame", WsCloseCode.INVALID_DATA
@@ -962,7 +967,10 @@ class AsyncWebSocket(BaseWebSocket):
 
         try:
             self._send_queue.put_nowait((payload, flags))
-        except asyncio.QueueFull:
+        except asyncio.QueueFull as exc:
+            if self._terminated:
+                raise WebSocketClosed("WebSocket connection is terminated") from exc
+
             await self._send_queue.put((payload, flags))
 
     async def send_binary(self, payload: bytes) -> None:
@@ -1091,24 +1099,11 @@ class AsyncWebSocket(BaseWebSocket):
                     self._terminated_event.set()
 
     async def _read_loop(self) -> None:
-        """The main asynchronous task for reading incoming WebSocket frames.
-
-        This method is fully event-driven. It waits for the underlying socket
-        to become readable, and upon being woken by the event loop, it drains
-        all buffered data from libcurl until it receives an EAGAIN error. This
-        error signals that the buffer is empty, and the loop returns to an
-        idle state, waiting for the next readability event.
-
-        To ensure cooperative multitasking during high-volume message streams,
-        the loop yields control to the asyncio event loop periodically.
-
-        If the receive queue becomes full, await ``self._receive_queue.put()``
-        will block the reader loop and stall the socket read task. Thus, appropriate
-        queue sizes should be set by the user, even though the defaults are generous
-        and should be suitable for most use cases.
         """
-
-        # Cache locals to avoid repeated attribute lookups
+        Optimized read loop. Attempts to read immediately and only registers
+        an event loop reader if the socket returns EAGAIN (empty).
+        """
+        # Cache locals
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
@@ -1117,132 +1112,118 @@ class AsyncWebSocket(BaseWebSocket):
             self._receive_queue.put
         )
         loop: asyncio.AbstractEventLoop = self.loop
-        fair_scheduling: bool = self._use_fair_scheduling
-        yield_mask: int = self._yield_mask
-        yield_interval: float = self._yield_interval
-        ws_retry: WsRetryOnRecvError = self.ws_retry
-        recv_error_retries: int = 0
+        # Optimization: Use locals for fairness checks to avoid self lookup
+        yield_mask: int = self._recv_yield_mask
 
-        # Message specific values
+        # Optimization: Cache retry config
+        ws_retry: WsRetryOnRecvError = self.ws_retry
+        retry_on_error = ws_retry.retry_on_error
+        retry_codes = ws_retry.retry_error_codes
+        max_retries = ws_retry.max_retry_count
+        retry_base = float(ws_retry.retry_delay_base)
+
+        recv_error_retries: int = 0
         chunks: list[bytes] = []
         msg_counter = 0
 
         try:
-            # The outer loop waits for readability events.
             while not self.closed:
-                # Wait for the socket to be readable.
-                read_future: asyncio.Future[None] = loop.create_future()
-
+                # -----------------------------------------------------------
+                # 1. OPTIMISTIC READ ATTEMPT
+                # -----------------------------------------------------------
                 try:
-                    loop.add_reader(self._sock_fd, read_future.set_result, None)
+                    chunk, frame = curl_ws_recv()
 
-                # pylint: disable-next=broad-exception-caught
-                except Exception as exc:
-                    with suppress(asyncio.QueueFull):
-                        queue_put_nowait(
-                            (
-                                WebSocketError(
-                                    f"add_reader failed: {exc}",
-                                    CurlECode.NO_CONNECTION_AVAILABLE,
-                                ),
-                                0,
-                            )
+                except CurlError as e:
+                    # -------------------------------------------------------
+                    # 2. HANDLE EAGAIN (SOCKET EMPTY)
+                    # -------------------------------------------------------
+                    if e.code == CurlECode.AGAIN:
+                        # The socket is empty. NOW we pay the cost to register
+                        # a reader and wait for the OS to wake us up.
+                        read_future: asyncio.Future[None] = loop.create_future()
+                        try:
+                            loop.add_reader(self._sock_fd, read_future.set_result, None)
+                            await read_future
+                        finally:
+                            if self._sock_fd != -1:
+                                _ = loop.remove_reader(self._sock_fd)
+                        # Loop back to the top to try reading again
+                        continue
+
+                    # -------------------------------------------------------
+                    # 3. HANDLE REAL ERRORS / RETRIES
+                    # -------------------------------------------------------
+                    if (
+                        retry_on_error
+                        and e.code in retry_codes
+                        and recv_error_retries < max_retries
+                    ):
+                        recv_error_retries += 1
+                        # Formula: base * (2 ^ (attempt - 1))
+                        retry_delay: float = cast(
+                            float, retry_base * (2 ** (recv_error_retries - 1))
                         )
+                        # Add Jitter: +/- 10%
+                        jitter: float = retry_delay * 0.1
+                        retry_delay += uniform(-jitter, jitter)
+                        await asyncio.sleep(max(0.0, retry_delay))
+                        continue
+
+                    # Fatal error
+                    with suppress(asyncio.QueueFull):
+                        queue_put_nowait((e, 0))
                     self.terminate()
                     return
 
-                try:
-                    await read_future
-                finally:
-                    # Remove the reader immediately after waking.
-                    if self._sock_fd != -1:
-                        _ = loop.remove_reader(self._sock_fd)
+                # -----------------------------------------------------------
+                # 4. PROCESS SUCCESSFUL READ
+                # -----------------------------------------------------------
+                flags: int = frame.flags
+                if recv_error_retries > 0:
+                    recv_error_retries = 0
 
-                # There is data, so we now read until it's empty.
-                start_time = loop.time()
-                while True:
+                # Handle Close
+                if flags & CurlWsFlag.CLOSE:
+                    with suppress(asyncio.QueueFull):
+                        queue_put_nowait((chunk, flags))
+                    await self._handle_close_frame(chunk)
+                    return
+
+                # Collect Chunk
+                chunks.append(chunk)
+
+                # Message Complete?
+                if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
+                    message = b"".join(chunks)
+                    chunks.clear()
+
                     try:
-                        chunk, frame = curl_ws_recv()
-                        flags: int = frame.flags
-                        if recv_error_retries > 0:
-                            recv_error_retries = 0
+                        queue_put_nowait((message, flags))
+                    except asyncio.QueueFull:
+                        # Backpressure: Wait for space, blocking this read loop
+                        await queue_put((message, flags))
 
-                        # If a CLOSE frame is received, the reader is done.
-                        if flags & CurlWsFlag.CLOSE:
-                            with suppress(asyncio.QueueFull):
-                                queue_put_nowait((chunk, flags))
-                            await self._handle_close_frame(chunk)
-                            return
+                # -----------------------------------------------------------
+                # 5. COOPERATIVE YIELDING
+                # -----------------------------------------------------------
+                # Since we are optimistic looping, we might starve other tasks
+                # if data comes in too fast. We must yield periodically.
+                msg_counter += 1
 
-                        # Collect the chunk
-                        chunks.append(chunk)
-
-                        # If the message is complete, process and dispatch it
-                        if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
-                            message = b"".join(chunks)
-                            chunks.clear()
-
-                            try:
-                                queue_put_nowait((message, flags))
-                            except asyncio.QueueFull:
-                                await queue_put((message, flags))
-
-                        msg_counter += 1
-                        op_check: bool = (msg_counter & yield_mask) == 0
-                        time_check: bool = loop.time() - start_time > yield_interval
-
-                        if (
-                            (op_check or time_check)
-                            if fair_scheduling
-                            else (op_check and time_check)
-                        ):
-                            await asyncio.sleep(0)
-                            start_time = loop.time()
-                            msg_counter = 0
-
-                    except CurlError as e:
-                        # Normal EAGAIN from Curl - Socket is empty, go back to waiting
-                        if e.code == CurlECode.AGAIN:
-                            break
-
-                        # Apply the user configured retry logic
-                        if (
-                            ws_retry.retry_on_error
-                            and e.code in ws_retry.retry_error_codes
-                            and recv_error_retries < ws_retry.max_retry_count
-                        ):
-                            recv_error_retries += 1
-
-                            # Formula: base * (2 ^ (attempt - 1))
-                            retry_delay: float = cast(
-                                float,
-                                ws_retry.retry_delay_base
-                                * (2 ** (recv_error_retries - 1)),
-                            )
-                            # Add Jitter: +/- 10% of the delay
-                            jitter: float = retry_delay * 0.1
-                            retry_delay += uniform(-jitter, jitter)
-                            retry_delay = max(0.0, retry_delay)
-
-                            await asyncio.sleep(retry_delay)
-                            continue
-
-                        # Unrecoverable or max retries exceeded
-                        with suppress(asyncio.QueueFull):
-                            queue_put_nowait((e, 0))
-                        self.terminate()
-                        return
+                # Check 1: Bitmask (Fast CPU check)
+                if (msg_counter & yield_mask) == 0:
+                    # I removed the time check for pure speed, relying on the mask.
+                    await asyncio.sleep(0)
+                    msg_counter = 0
 
         except asyncio.CancelledError:
             pass
-
-        # pylint: disable-next=broad-exception-caught
         except Exception as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
                     queue_put_nowait((e, 0))
             self.terminate()
-
         finally:
             with suppress(asyncio.QueueFull):
                 queue_put_nowait((WebSocketClosed("Connection closed."), 0))
@@ -1270,6 +1251,7 @@ class AsyncWebSocket(BaseWebSocket):
         send_payload: Callable[..., Awaitable[bool]] = self._send_payload
         queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
         queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
+        yield_mask: int = self._send_yield_mask
 
         try:
             while True:
@@ -1312,10 +1294,16 @@ class AsyncWebSocket(BaseWebSocket):
                             if not await send_payload(b"".join(payloads), frame_group):
                                 return
                     else:
+                        ops_count = 0
                         # Send each message in the batch, preserving frame boundaries.
                         for payload, frame in batch:
                             if not await send_payload(payload, frame):
                                 return
+
+                            ops_count += 1
+                            if (ops_count & yield_mask) == 0:
+                                await asyncio.sleep(0)
+                                ops_count = 0
 
                 finally:
                     # Mark all processed items as done.
@@ -1342,41 +1330,44 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _send_payload(self, payload: bytes, flags: CurlWsFlag) -> bool:
         """
-        The low-level I/O Handler. It transmits a single payload, handling
-        fragmentation, backpressure (EAGAIN), and cooperative multitasking.
-        Returns ``False`` on a non-recoverable error.
-
-        Args:
-            payload: The complete byte payload to be sent.
-            flags: The ``CurlWsFlag`` indicating the frame type
-                (e.g., ``TEXT``, ``BINARY``).
+        Optimized low-level sender with correct fragmentation logic.
         """
-
-        # Cache locals to reduce lookup cost
+        # Local cache
         curl_ws_send: Callable[[bytes, CurlWsFlag], int] = self.curl.ws_send
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
         )
         loop: asyncio.AbstractEventLoop = self.loop
+        sock_fd: int = self._sock_fd
+        yield_mask: int = self._send_yield_mask
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
 
-        view: memoryview = memoryview(payload)
+        # Flag logic for fragmentation
+        # If the frame is TEXT or BINARY, subsequent chunks must be CONT.
+        # We preserve other flags like CLOSE or PING.
+        is_data_frame = flags & (CurlWsFlag.TEXT | CurlWsFlag.BINARY)
+        next_flags = CurlWsFlag.CONT if is_data_frame else flags
+
+        view = memoryview(payload)
         offset = 0
         write_ops = 0
-        start_time: float = loop.time()
 
         while offset < len(view):
-            # Cooperatively yield to the event loop to prevent starvation.
-            if (write_ops & self._yield_mask) == 0 or (
-                loop.time() - start_time
-            ) > self._yield_interval:
+            # CPU Yield
+            if (write_ops & yield_mask) == 0 and write_ops > 0:
                 await asyncio.sleep(0)
-                start_time = loop.time()
                 write_ops = 0
 
             try:
-                chunk: memoryview = view[offset : offset + max_frame_size]
-                n_sent: int = curl_ws_send(bytes(chunk), flags)
+                chunk = view[offset : offset + max_frame_size]
+
+                # PROTOCOL FIX: Use original flags for the first chunk,
+                # CONT flags for subsequent chunks of the same message.
+                current_flags = flags if offset == 0 else next_flags
+
+                # CAST FIX: memoryview -> bytes
+                n_sent = curl_ws_send(bytes(chunk), current_flags)
+
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait(
@@ -1389,41 +1380,39 @@ class AsyncWebSocket(BaseWebSocket):
                             )
                         )
                     return False
+
                 offset += n_sent
                 write_ops += 1
 
             except CurlError as e:
-                if e.code != CurlECode.AGAIN:
-                    # Non-recoverable error: queue it for the user and signal failure.
-                    with suppress(asyncio.QueueFull):
-                        queue_put_nowait((e, 0))
-                    return False
-
-                # EAGAIN: wait until the socket is writable.
-                write_future: asyncio.Future[None] = loop.create_future()
-
-                try:
-                    loop.add_writer(self._sock_fd, write_future.set_result, None)
-
-                # pylint: disable-next=broad-exception-caught
-                except Exception as exc:
-                    with suppress(asyncio.QueueFull):
-                        queue_put_nowait(
-                            (
-                                WebSocketError(
-                                    f"add_writer failed: {exc}",
-                                    CurlECode.NO_CONNECTION_AVAILABLE,
-                                ),
-                                0,
+                if e.code == CurlECode.AGAIN:
+                    # Wait for socket to be writable
+                    write_future: asyncio.Future[None] = loop.create_future()
+                    try:
+                        loop.add_writer(sock_fd, write_future.set_result, None)
+                        await write_future
+                    except Exception as exc:
+                        with suppress(asyncio.QueueFull):
+                            queue_put_nowait(
+                                (
+                                    WebSocketError(
+                                        f"add_writer failed: {exc}",
+                                        CurlECode.NO_CONNECTION_AVAILABLE,
+                                    ),
+                                    0,
+                                )
                             )
-                        )
-                    return False
+                        return False
+                    finally:
+                        if sock_fd != -1:
+                            loop.remove_writer(sock_fd)
+                    continue
 
-                try:
-                    await write_future
-                finally:
-                    if self._sock_fd != -1:
-                        _ = loop.remove_writer(self._sock_fd)
+                # Fatal Error
+                with suppress(asyncio.QueueFull):
+                    queue_put_nowait((e, 0))
+                return False
+
         return True
 
     async def flush(self, timeout: float | None = None) -> None:
