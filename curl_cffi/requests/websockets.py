@@ -175,14 +175,14 @@ class BaseWebSocket:
                 raise WebSocketError(
                     "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
                 ) from e
-            else:
-                if (
-                    code not in WsCloseCode._value2member_map_
-                    or code == WsCloseCode.UNKNOWN
-                ):
-                    raise WebSocketError(
-                        f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
-                    )
+
+            if (
+                code not in WsCloseCode._value2member_map_
+                or code == WsCloseCode.UNKNOWN
+            ):
+                raise WebSocketError(
+                    f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
+                )
         return code, reason
 
     def terminate(self) -> None:
@@ -721,6 +721,7 @@ class AsyncWebSocket(BaseWebSocket):
         self.session: AsyncSession[Response] = session
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sock_fd: int = -1
+        self._terminated: bool = False
         self._close_lock: asyncio.Lock = asyncio.Lock()
         self._terminate_lock: threading.Lock = threading.Lock()
         self._terminated_event: asyncio.Event = asyncio.Event()
@@ -735,19 +736,9 @@ class AsyncWebSocket(BaseWebSocket):
         )
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
-        self._terminated: bool = False
         self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
         self._recv_yield_mask: int = recv_yield_mask
         self._send_yield_mask: int = send_yield_mask
-
-        if (recv_yield_mask & (recv_yield_mask + 1)) != 0:
-            raise ValueError(
-                "recv_yield_mask must be a power of two minus one (e.g. 15, 31)"
-            )
-        if (send_yield_mask & (send_yield_mask + 1)) != 0:
-            raise ValueError(
-                "send_yield_mask must be a power of two minus one (e.g. 7, 15)"
-            )
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -790,11 +781,33 @@ class AsyncWebSocket(BaseWebSocket):
             warnings.warn(
                 (
                     f"Unclosed WebSocket {self!r} was garbage collected. "
-                    "Always call await ws.close() to ensure clean shutdown."
+                    "Use context manager or await ws.close() to ensure clean shutdown."
                 ),
                 ResourceWarning,
                 stacklevel=2,
             )
+
+    async def __aenter__(self) -> Self:
+        """Enable context manager usage for automatic session management and closure.
+        This cannot be used to initiate a WebSocket connection, that must be done
+        beforehand using the :meth:`AsyncSession.ws_connect()` factory method.
+
+        Returns:
+            Self: The instantiated AsyncWebSocket object.
+        """
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """
+        On exiting the context manager, close the WebSocket connection.
+        """
+        if not self.closed:
+            await self.close()
 
     def __aiter__(self) -> Self:
         if self.closed:
@@ -820,6 +833,18 @@ class AsyncWebSocket(BaseWebSocket):
         # Return early if already started
         if self._read_task is not None:
             return
+
+        # Check the yield masks are correctly configured
+        if (self._recv_yield_mask & (self._recv_yield_mask + 1)) != 0:
+            raise WebSocketError(
+                "recv_yield_mask must be a power of two minus one (e.g. 15, 31)",
+                code=CurlECode.BAD_FUNCTION_ARGUMENT,
+            )
+        if (self._send_yield_mask & (self._send_yield_mask + 1)) != 0:
+            raise WebSocketError(
+                "send_yield_mask must be a power of two minus one (e.g. 7, 15)",
+                code=CurlECode.BAD_FUNCTION_ARGUMENT,
+            )
 
         # Get the currently active socket FD
         self._sock_fd = cast(int, self.curl.getinfo(CurlInfo.ACTIVESOCKET))
@@ -935,7 +960,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         To guarantee all your messages have been sent ``await ws.flush()``.
 
-        The max frame size supported by libcurl is ``65535`` bytes. Larger frames
+        The max frame size supported by libcurl is ``65536`` bytes. Larger frames
         will be broken down and sent in chunks of that size.
 
         Args:
@@ -1103,7 +1128,7 @@ class AsyncWebSocket(BaseWebSocket):
         Optimized read loop. Attempts to read immediately and only registers
         an event loop reader if the socket returns EAGAIN (empty).
         """
-        # Cache locals
+        # Cache locals to reduce lookup cost
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
@@ -1112,15 +1137,12 @@ class AsyncWebSocket(BaseWebSocket):
             self._receive_queue.put
         )
         loop: asyncio.AbstractEventLoop = self.loop
-        # Optimization: Use locals for fairness checks to avoid self lookup
         yield_mask: int = self._recv_yield_mask
-
-        # Optimization: Cache retry config
         ws_retry: WsRetryOnRecvError = self.ws_retry
-        retry_on_error = ws_retry.retry_on_error
-        retry_codes = ws_retry.retry_error_codes
-        max_retries = ws_retry.max_retry_count
-        retry_base = float(ws_retry.retry_delay_base)
+        retry_on_error: bool = ws_retry.retry_on_error
+        retry_codes: set[CurlECode] = ws_retry.retry_error_codes
+        max_retries: int = ws_retry.max_retry_count
+        retry_base: float = float(ws_retry.retry_delay_base)
 
         recv_error_retries: int = 0
         chunks: list[bytes] = []
@@ -1128,19 +1150,13 @@ class AsyncWebSocket(BaseWebSocket):
 
         try:
             while not self.closed:
-                # -----------------------------------------------------------
-                # 1. OPTIMISTIC READ ATTEMPT
-                # -----------------------------------------------------------
                 try:
                     chunk, frame = curl_ws_recv()
 
                 except CurlError as e:
-                    # -------------------------------------------------------
-                    # 2. HANDLE EAGAIN (SOCKET EMPTY)
-                    # -------------------------------------------------------
                     if e.code == CurlECode.AGAIN:
-                        # The socket is empty. NOW we pay the cost to register
-                        # a reader and wait for the OS to wake us up.
+                        # The socket is empty. Register a reader and wait
+                        # until data is available to read.
                         read_future: asyncio.Future[None] = loop.create_future()
                         try:
                             loop.add_reader(self._sock_fd, read_future.set_result, None)
@@ -1148,12 +1164,11 @@ class AsyncWebSocket(BaseWebSocket):
                         finally:
                             if self._sock_fd != -1:
                                 _ = loop.remove_reader(self._sock_fd)
+
                         # Loop back to the top to try reading again
                         continue
 
-                    # -------------------------------------------------------
-                    # 3. HANDLE REAL ERRORS / RETRIES
-                    # -------------------------------------------------------
+                    # Handle other errors and apply configured retry behaviour
                     if (
                         retry_on_error
                         and e.code in retry_codes
@@ -1176,14 +1191,11 @@ class AsyncWebSocket(BaseWebSocket):
                     self.terminate()
                     return
 
-                # -----------------------------------------------------------
-                # 4. PROCESS SUCCESSFUL READ
-                # -----------------------------------------------------------
                 flags: int = frame.flags
                 if recv_error_retries > 0:
                     recv_error_retries = 0
 
-                # Handle Close
+                # Handle Close frame
                 if flags & CurlWsFlag.CLOSE:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait((chunk, flags))
@@ -1195,35 +1207,29 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Message Complete?
                 if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
-                    message = b"".join(chunks)
+                    message: bytes = b"".join(chunks)
                     chunks.clear()
 
                     try:
                         queue_put_nowait((message, flags))
                     except asyncio.QueueFull:
-                        # Backpressure: Wait for space, blocking this read loop
                         await queue_put((message, flags))
 
-                # -----------------------------------------------------------
-                # 5. COOPERATIVE YIELDING
-                # -----------------------------------------------------------
-                # Since we are optimistic looping, we might starve other tasks
-                # if data comes in too fast. We must yield periodically.
                 msg_counter += 1
-
-                # Check 1: Bitmask (Fast CPU check)
                 if (msg_counter & yield_mask) == 0:
-                    # I removed the time check for pure speed, relying on the mask.
                     await asyncio.sleep(0)
                     msg_counter = 0
 
         except asyncio.CancelledError:
             pass
+
+        # pylint: disable-next=broad-exception-caught
         except Exception as e:
             if not self.closed:
                 with suppress(asyncio.QueueFull):
                     queue_put_nowait((e, 0))
             self.terminate()
+
         finally:
             with suppress(asyncio.QueueFull):
                 queue_put_nowait((WebSocketClosed("Connection closed."), 0))
@@ -1252,6 +1258,7 @@ class AsyncWebSocket(BaseWebSocket):
         queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
         queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
         yield_mask: int = self._send_yield_mask
+        ops_count = 0
 
         try:
             while True:
@@ -1294,12 +1301,12 @@ class AsyncWebSocket(BaseWebSocket):
                             if not await send_payload(b"".join(payloads), frame_group):
                                 return
                     else:
-                        ops_count = 0
                         # Send each message in the batch, preserving frame boundaries.
                         for payload, frame in batch:
                             if not await send_payload(payload, frame):
                                 return
 
+                            # Yield check when payload is less than max frame size.
                             ops_count += 1
                             if (ops_count & yield_mask) == 0:
                                 await asyncio.sleep(0)
@@ -1332,7 +1339,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
         Optimized low-level sender with correct fragmentation logic.
         """
-        # Local cache
+        # Cache locals to reduce lookup cost
         curl_ws_send: Callable[[bytes, CurlWsFlag], int] = self.curl.ws_send
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
@@ -1345,28 +1352,25 @@ class AsyncWebSocket(BaseWebSocket):
         # Flag logic for fragmentation
         # If the frame is TEXT or BINARY, subsequent chunks must be CONT.
         # We preserve other flags like CLOSE or PING.
-        is_data_frame = flags & (CurlWsFlag.TEXT | CurlWsFlag.BINARY)
-        next_flags = CurlWsFlag.CONT if is_data_frame else flags
+        is_data_frame: int = flags & (CurlWsFlag.TEXT | CurlWsFlag.BINARY)
+        next_flags: CurlWsFlag = CurlWsFlag.CONT if is_data_frame else flags
 
-        view = memoryview(payload)
+        view: memoryview = memoryview(payload)
         offset = 0
         write_ops = 0
 
         while offset < len(view):
-            # CPU Yield
             if (write_ops & yield_mask) == 0 and write_ops > 0:
                 await asyncio.sleep(0)
                 write_ops = 0
 
             try:
-                chunk = view[offset : offset + max_frame_size]
+                chunk: memoryview = view[offset: offset + max_frame_size]
 
-                # PROTOCOL FIX: Use original flags for the first chunk,
-                # CONT flags for subsequent chunks of the same message.
-                current_flags = flags if offset == 0 else next_flags
-
-                # CAST FIX: memoryview -> bytes
-                n_sent = curl_ws_send(bytes(chunk), current_flags)
+                # Use original flags for the first chunk, CONT flags
+                # for subsequent chunks of the same message.
+                current_flags: CurlWsFlag = flags if offset == 0 else next_flags
+                n_sent: int = curl_ws_send(bytes(chunk), current_flags)
 
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
@@ -1391,6 +1395,8 @@ class AsyncWebSocket(BaseWebSocket):
                     try:
                         loop.add_writer(sock_fd, write_future.set_result, None)
                         await write_future
+
+                    # pylint: disable-next=broad-exception-caught
                     except Exception as exc:
                         with suppress(asyncio.QueueFull):
                             queue_put_nowait(
@@ -1405,7 +1411,7 @@ class AsyncWebSocket(BaseWebSocket):
                         return False
                     finally:
                         if sock_fd != -1:
-                            loop.remove_writer(sock_fd)
+                            _ = loop.remove_writer(sock_fd)
                     continue
 
                 # Fatal Error
@@ -1448,7 +1454,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _terminate_helper(self) -> None:
         """Utility method for connection termination"""
-        tasks_to_cancel: set[asyncio.Task[None]] = set()
+        tasks_to_cancel: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
         max_timeout: int = 3
 
         try:
