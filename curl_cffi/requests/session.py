@@ -1094,6 +1094,7 @@ class AsyncSession(BaseSession[R]):
         )
         if stream:
             task = self.acurl.add_handle(curl)
+            curl_released = False
 
             async def perform():
                 try:
@@ -1110,7 +1111,10 @@ class AsyncSession(BaseSession[R]):
                     await q.put(STREAM_END)  # type: ignore
 
             def cleanup(fut):
-                self.release_curl(curl)
+                nonlocal curl_released
+                if not curl_released:
+                    self.release_curl(curl)
+                curl_released = True
 
             stream_task = asyncio.create_task(perform())
             stream_task.add_done_callback(cleanup)
@@ -1127,7 +1131,9 @@ class AsyncSession(BaseSession[R]):
 
             first_element = _peek_aio_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
-                self.release_curl(curl)
+                if not curl_released:
+                    self.release_curl(curl)
+                curl_released = True
                 raise first_element
 
             rsp.request = req
