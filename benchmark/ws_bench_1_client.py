@@ -2,7 +2,6 @@
 """
 Websocket client simple benchmark - TLS (WSS)
 """
-
 import time
 from asyncio import (
     FIRST_COMPLETED,
@@ -14,9 +13,15 @@ from asyncio import (
 )
 
 from typing_extensions import Never
-from ws_bench_utils import binary_data_generator, config, get_loop, logger
+from ws_bench_utils import (
+    BenchmarkDirection,
+    binary_data_generator,
+    config,
+    get_loop,
+    logger,
+)
 
-from curl_cffi import AsyncSession, AsyncWebSocket, WebSocketClosed
+from curl_cffi import AsyncSession, AsyncWebSocket, Response, WebSocketClosed
 
 
 def calculate_stats(start_time: float, total_len: int) -> tuple[float, float]:
@@ -94,7 +99,7 @@ async def ws_sender(ws: AsyncWebSocket) -> None:
         async for data_chunk in binary_data_generator(
             total_gb=config.total_gb, chunk_size=config.chunk_size
         ):
-            _ = await ws.send(payload=data_chunk)
+            await ws.send(payload=data_chunk)
             sent_len += len(data_chunk)
 
     except WebSocketClosed as exc:
@@ -111,23 +116,34 @@ async def run_benchmark(loop: AbstractEventLoop) -> None:
     """
     Simple client benchmark which sends/receives binary messages using curl-cffi.
     """
-    logger.info("Starting curl-cffi benchmark")
-    ws: AsyncWebSocket | None = None
-    waiters: set[Task[None]] = set()
+    logger.info("Starting curl-cffi WebSocket benchmark")
+    waiters: set[Task[None]] = set[Task[None]]()
     try:
-        async with AsyncSession(impersonate="chrome", verify=False) as session:
-            ws = await session.ws_connect(
+        async with AsyncSession[Response](
+            impersonate="chrome", verify=False
+        ) as session:
+            logger.info(
+                "Client connection established to %s, benchmark direction is %s",
+                config.srv_path,
+                config.benchmark_direction.name,
+            )
+            async with await session.ws_connect(
                 config.srv_path,
                 recv_queue_size=config.recv_queue,
                 send_queue_size=config.send_queue,
-            )
-            logger.info("Connection established to %s", config.srv_path)
+            ) as ws:
+                match config.benchmark_direction:
+                    case BenchmarkDirection.READ_ONLY:
+                        waiters.add(loop.create_task(ws_counter(ws)))
 
-            # NOTE: Uncomment for send/recv benchmark or both
-            waiters.add(loop.create_task(ws_counter(ws)))
-            # waiters.add(loop.create_task(ws_sender(ws)))
+                    case BenchmarkDirection.SEND_ONLY:
+                        waiters.add(loop.create_task(ws_sender(ws)))
 
-            _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
+                    case BenchmarkDirection.CONCURRENT:
+                        waiters.add(loop.create_task(ws_counter(ws)))
+                        waiters.add(loop.create_task(ws_sender(ws)))
+
+                _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
 
     except Exception:
         logger.exception("curl-cffi benchmark failed")
@@ -142,13 +158,11 @@ async def run_benchmark(loop: AbstractEventLoop) -> None:
 
             except CancelledError:
                 ...
-        if ws:
-            await ws.close(timeout=2)
 
 
 async def main(loop: AbstractEventLoop) -> None:
     """Entrypoint"""
-    waiters: set[Task[None]] = set()
+    waiters: set[Task[None]] = set[Task[None]]()
 
     try:
         # Create the health check and benchmark tasks

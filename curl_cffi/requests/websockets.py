@@ -1125,10 +1125,27 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _read_loop(self) -> None:
         """
-        Optimized read loop. Attempts to read immediately and only registers
-        an event loop reader if the socket returns EAGAIN (empty).
+        The main asynchronous task for reading incoming WebSocket frames.
+
+        Attempts to read immediately and only registers an event loop reader if
+        the socket returns EAGAIN (empty). It waits for the underlying socket to
+        become readable, and upon being woken by the event loop, it drains all
+        buffered data from libcurl until it receives an EAGAIN error. This error
+        signals that the buffer is empty, and the loop returns to an idle state,
+        waiting for the next readability event. This is "optimistic reading".
+
+        To ensure cooperative multitasking during high-volume message streams,
+        the loop yields control to the asyncio event loop periodically which
+        is tracked using an operation counter.
+
+        If the receive queue becomes full, ``await self._receive_queue.put()`` will
+        block the reader loop and stall the socket read task. Thus, appropriate queue
+        sizes should be set by the user, to match the speed at which they are expected
+        to be consumed. If latency is a factor, a smaller queue size should be used.
+        Conversely, a larger queue size provides burst message handling capacity.
         """
-        # Cache locals to reduce lookup cost
+
+        # Cache locals to avoid repeated attribute lookups
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
@@ -1144,6 +1161,7 @@ class AsyncWebSocket(BaseWebSocket):
         max_retries: int = ws_retry.max_retry_count
         retry_base: float = float(ws_retry.retry_delay_base)
 
+        # Message specific values
         recv_error_retries: int = 0
         chunks: list[bytes] = []
         msg_counter = 0
@@ -1155,8 +1173,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 except CurlError as e:
                     if e.code == CurlECode.AGAIN:
-                        # The socket is empty. Register a reader and wait
-                        # until data is available to read.
+                        # Register a reader and wait until data is available to read.
                         read_future: asyncio.Future[None] = loop.create_future()
                         try:
                             loop.add_reader(self._sock_fd, read_future.set_result, None)
@@ -1168,7 +1185,7 @@ class AsyncWebSocket(BaseWebSocket):
                         # Loop back to the top to try reading again
                         continue
 
-                    # Handle other errors and apply configured retry behaviour
+                    # Apply the user-configured retry logic
                     if (
                         retry_on_error
                         and e.code in retry_codes
@@ -1185,7 +1202,7 @@ class AsyncWebSocket(BaseWebSocket):
                         await asyncio.sleep(max(0.0, retry_delay))
                         continue
 
-                    # Fatal error
+                    # Fatal error - can't retry
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait((e, 0))
                     self.terminate()
@@ -1195,17 +1212,17 @@ class AsyncWebSocket(BaseWebSocket):
                 if recv_error_retries > 0:
                     recv_error_retries = 0
 
-                # Handle Close frame
+                # If a CLOSE frame is received, the reader is done.
                 if flags & CurlWsFlag.CLOSE:
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait((chunk, flags))
                     await self._handle_close_frame(chunk)
                     return
 
-                # Collect Chunk
+                # Collect the chunk
                 chunks.append(chunk)
 
-                # Message Complete?
+                # If the message is complete, process and dispatch it
                 if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
                     message: bytes = b"".join(chunks)
                     chunks.clear()
@@ -1365,7 +1382,7 @@ class AsyncWebSocket(BaseWebSocket):
                 write_ops = 0
 
             try:
-                chunk: memoryview = view[offset: offset + max_frame_size]
+                chunk: memoryview = view[offset : offset + max_frame_size]
 
                 # Use original flags for the first chunk, CONT flags
                 # for subsequent chunks of the same message.

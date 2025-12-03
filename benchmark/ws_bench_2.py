@@ -15,7 +15,7 @@ from typing import cast
 from aiohttp import web
 from ws_bench_utils import config, generate_random_chunks, get_loop, logger
 
-from curl_cffi import AsyncSession, AsyncWebSocket
+from curl_cffi import AsyncSession, AsyncWebSocket, Response
 
 
 def compare_hash(source_hash: str, received_hash: str) -> None:
@@ -277,21 +277,19 @@ async def client_handler(opt: str) -> None:
     Args:
         opt (str): The benchmark mode to run.
     """
-    async with AsyncSession(impersonate="chrome", verify=False) as session:
-        ws: AsyncWebSocket = await session.ws_connect(
+    async with (
+        AsyncSession[Response](impersonate="chrome", verify=False) as session,
+        await session.ws_connect(
             f"{config.srv_path}?test={opt}",
             recv_queue_size=config.recv_queue,
             send_queue_size=config.send_queue,
-        )
-        try:
-            if opt == "download":
-                await recv_benchmark_handler(ws)
-                return
+        ) as ws,
+    ):
+        if opt == "download":
+            await recv_benchmark_handler(ws)
+            return
 
-            await send_benchmark_handler(ws)
-
-        finally:
-            await ws.close()
+        await send_benchmark_handler(ws)
 
 
 def main() -> None:

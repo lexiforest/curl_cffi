@@ -13,7 +13,13 @@ from asyncio import (
 )
 
 from aiohttp import web
-from ws_bench_utils import binary_data_generator, config, get_loop, logger
+from ws_bench_utils import (
+    BenchmarkDirection,
+    binary_data_generator,
+    config,
+    get_loop,
+    logger,
+)
 
 
 async def recv(ws: web.WebSocketResponse) -> None:
@@ -55,15 +61,23 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
         web.WebSocketResponse: Response object
     """
     loop: AbstractEventLoop = get_running_loop()
-    waiters: set[Task[None]] = set()
+    waiters: set[Task[None]] = set[Task[None]]()
     ws: web.WebSocketResponse = web.WebSocketResponse()
     _ = await ws.prepare(request)
     logger.info("Secure client connected.")
 
     try:
-        # NOTE: Uncomment for send/recv or both concurrently
-        # waiters.add(loop.create_task(recv(ws)))
-        waiters.add(loop.create_task(send(ws)))
+        # This is server side so everything is reversed
+        match config.benchmark_direction:
+            case BenchmarkDirection.READ_ONLY:
+                waiters.add(loop.create_task(send(ws)))
+
+            case BenchmarkDirection.SEND_ONLY:
+                waiters.add(loop.create_task(recv(ws)))
+
+            case BenchmarkDirection.CONCURRENT:
+                waiters.add(loop.create_task(send(ws)))
+                waiters.add(loop.create_task(recv(ws)))
 
         _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
 

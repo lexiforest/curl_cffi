@@ -12,6 +12,22 @@ from logging import DEBUG, Formatter, Logger, StreamHandler, getLogger
 from pathlib import Path
 from ssl import PROTOCOL_TLS_SERVER, SSLContext
 from typing import TextIO
+from enum import Enum, auto
+
+
+class BenchmarkDirection(Enum):
+    """Enum which controls the direction of the benchmarks.
+    Read benchmarks only test the download performance (default).
+    Send benchmarks only test uploads and concurrent will run
+    the send and receive benchmarks at the same time.
+
+    Args:
+        Enum (int): The benchmark direction to use.
+    """
+
+    READ_ONLY = auto()
+    SEND_ONLY = auto()
+    CONCURRENT = auto()
 
 
 def get_logger() -> Logger:
@@ -77,6 +93,7 @@ class TestConfig:
     ssl_ctx: SSLContext | None = get_ssl_ctx(cert_file, cert_key)
     proto: str = "wss://" if ssl_ctx else "ws://"
     srv_path: str = f"{proto}{srv_host}:{srv_port}/ws"
+    benchmark_direction: BenchmarkDirection = BenchmarkDirection.READ_ONLY
 
 
 # Initialize config object
