@@ -1047,8 +1047,18 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: data to send.
 
+        Raises:
+            WebSocketError: The payload length is outside specification.
+
         For more info, see the docstring for :meth:`send()`
         """
+
+        if len(payload) not in range(0, 126):
+            raise WebSocketError(
+                f"Ping frame has invalid length: {len(payload)}",
+                CurlECode.TOO_LARGE,
+            )
+
         return await self.send(payload, CurlWsFlag.PING)
 
     async def close(
