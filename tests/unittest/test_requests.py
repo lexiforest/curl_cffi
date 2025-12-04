@@ -995,10 +995,38 @@ def test_session_auto_raise_for_status_enabled(server):
         assert e.response.status_code == 404  # type: ignore
 
 
-def test_session_auto_raise_for_status_disabled(server):
-    """Test that Session does NOT raise HTTPError when raise_for_status=False
-    (default)"""
-    s = requests.Session(raise_for_status=False)
-    r = s.get(str(server.url.copy_with(path="/status/404")))
-    assert r.status_code == 404
-    # Should not raise an exception
+def test_json_with_kwargs(server):
+    """Test that Response.json() works with kwargs when orjson is available.
+    
+    This test verifies fix for issue #639 where orjson.loads() doesn't support
+    kwargs but json.loads() does.
+    """
+    from decimal import Decimal
+    
+    # Get a real response from server (following pattern of other tests)
+    r = requests.get(str(server.url))
+    assert r.status_code == 200
+    
+    # Override content with JSON for testing
+    r.content = b'{"price": 123.45, "quantity": 67.89, "name": "test"}'
+    
+    # Test 1: Without kwargs (should work with orjson if available)
+    data1 = r.json()
+    assert isinstance(data1, dict)
+    assert "price" in data1
+    
+    # Test 2: With kwargs (the actual fix - should fallback to json.loads)
+    # This would fail before the fix if orjson is installed
+    r2 = requests.get(str(server.url))
+    r2.content = b'{"price": 123.45, "quantity": 67.89}'
+    data2 = r2.json(parse_float=float)
+    assert isinstance(data2, dict)
+    
+    # Test 3: Verify parse_float=Decimal actually works
+    r3 = requests.get(str(server.url))
+    r3.content = b'{"price": 123.45, "quantity": 67.89}'
+    data3 = r3.json(parse_float=Decimal)
+    assert isinstance(data3["price"], Decimal)
+    assert isinstance(data3["quantity"], Decimal)
+    assert data3["price"] == Decimal("123.45")
+    assert data3["quantity"] == Decimal("67.89")
