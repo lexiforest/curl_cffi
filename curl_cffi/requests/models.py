@@ -6,6 +6,7 @@ from concurrent.futures import Future
 from typing import Any, Optional, Union
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
+from json import loads as _json_loads
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
@@ -15,9 +16,11 @@ from .headers import Headers
 
 # Use orjson if present
 try:
-    from orjson import loads
+    from orjson import loads as _orjson_loads 
+    _HAS_ORJSON = True
 except ImportError:
-    from json import loads
+    _HAS_ORJSON = False
+
 
 with suppress(ImportError):
     from markdownify import markdownify as md
@@ -232,9 +235,23 @@ class Response:
 
             yield chunk
 
+    @staticmethod
+    def _safe_json_loads(content: bytes, **kwargs):
+        """
+        Safely load JSON with support for kwargs.
+        
+        Uses orjson for performance when no kwargs are provided.
+        Falls back to stdlib json when kwargs are needed (orjson doesn't support them).
+        """
+        
+        if _HAS_ORJSON and not kwargs:
+            return _orjson_loads(content)
+        else:
+            return _json_loads(content, **kwargs)
+
     def json(self, **kw):
         """return a parsed json object of the content."""
-        return loads(self.content, **kw)
+        return self._safe_json_loads(self.content, **kw)
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
