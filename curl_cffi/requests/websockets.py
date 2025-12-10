@@ -175,14 +175,11 @@ class BaseWebSocket:
                 raise WebSocketError(
                     "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
                 ) from e
-
-            if (
-                code not in WsCloseCode._value2member_map_
-                or code == WsCloseCode.UNKNOWN
-            ):
-                raise WebSocketError(
-                    f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
-                )
+            else:
+                if code == WsCloseCode.UNKNOWN or code < 1000 or code >= 5000:
+                    raise WebSocketError(
+                        f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
+                    )
         return code, reason
 
     def terminate(self) -> None:
