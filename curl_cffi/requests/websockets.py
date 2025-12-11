@@ -1169,6 +1169,7 @@ class AsyncWebSocket(BaseWebSocket):
         retry_codes: set[CurlECode] = ws_retry.retry_error_codes
         max_retries: int = ws_retry.max_retry_count
         retry_base: float = float(ws_retry.retry_delay_base)
+        e_again: CurlECode = CurlECode.AGAIN
 
         # Message specific values
         recv_error_retries: int = 0
@@ -1181,7 +1182,7 @@ class AsyncWebSocket(BaseWebSocket):
                     chunk, frame = curl_ws_recv()
 
                 except CurlError as e:
-                    if e.code == CurlECode.AGAIN:
+                    if e.code == e_again:
                         # Register a reader and wait until data is available to read.
                         read_future: asyncio.Future[None] = loop.create_future()
                         try:
@@ -1374,6 +1375,7 @@ class AsyncWebSocket(BaseWebSocket):
         sock_fd: int = self._sock_fd
         yield_mask: int = self._send_yield_mask
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
+        e_again: CurlECode = CurlECode.AGAIN
 
         # Flag logic for fragmentation
         # If the frame is TEXT or BINARY, subsequent chunks must be CONT.
@@ -1415,7 +1417,7 @@ class AsyncWebSocket(BaseWebSocket):
                 write_ops += 1
 
             except CurlError as e:
-                if e.code == CurlECode.AGAIN:
+                if e.code == e_again:
                     # Wait for socket to be writable
                     write_future: asyncio.Future[None] = loop.create_future()
                     try:
