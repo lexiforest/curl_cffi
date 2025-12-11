@@ -285,11 +285,15 @@ async def client_handler(opt: str) -> None:
             send_queue_size=config.send_queue,
         ) as ws,
     ):
-        if opt == "download":
-            await recv_benchmark_handler(ws)
-            return
+        match opt:
+            case "download":
+                await recv_benchmark_handler(ws)
 
-        await send_benchmark_handler(ws)
+            case "upload":
+                await send_benchmark_handler(ws)
+
+            case _:
+                ...
 
 
 def main() -> None:

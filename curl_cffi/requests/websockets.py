@@ -63,7 +63,7 @@ class WsRetryOnRecvError:
 
     retry_on_error: When a WebSocket receive operation fails due to an error,
         retry the receive attempt (``True``) or fail the connection (``False``).
-    retry_delay_base: The base value to compute the retry delay from.
+    retry_delay_base: The base value in seconds to compute the retry delay from.
     max_retry_count: How many times to retry a receive operation before giving up.
     retry_error_codes: A user-provided set of ``CurlECode`` values for which
         the receive operation should be retried. Default is ``CurlECode.RECV_ERROR``.
@@ -109,11 +109,15 @@ class WebSocketError(CurlError):
         super().__init__(message, code)  # type: ignore
 
 
-class WebSocketClosed(WebSocketError, SessionClosed):
+class WebSocketClosed(  # pyright: ignore[reportUnsafeMultipleInheritance]
+    WebSocketError, SessionClosed
+):
     """WebSocket is already closed."""
 
 
-class WebSocketTimeout(WebSocketError, Timeout):
+class WebSocketTimeout(  # pyright: ignore[reportUnsafeMultipleInheritance]
+    WebSocketError, Timeout
+):
     """WebSocket operation timed out."""
 
 
@@ -612,7 +616,7 @@ class WebSocket(BaseWebSocket):
                 else:
                     self._emit("error", e)
                     if not self.closed:
-                        code = WsCloseCode.UNKNOWN
+                        code: int = WsCloseCode.UNKNOWN
                         if isinstance(e, WebSocketError):
                             code = e.code
                         self.close(code)
@@ -625,8 +629,6 @@ class WebSocket(BaseWebSocket):
             code: close code.
             message: close reason.
         """
-        if self.curl is NOT_SET:
-            return
 
         # TODO: As per spec, we should wait for the server to close the connection
         # But this is not a requirement
@@ -803,8 +805,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
         On exiting the context manager, close the WebSocket connection.
         """
-        if not self.closed:
-            await self.close()
+        await self.close()
 
     def __aiter__(self) -> Self:
         if self.closed:
@@ -1117,9 +1118,10 @@ class AsyncWebSocket(BaseWebSocket):
 
             # Terminate the connection in a thread-safe way
             if self._loop and self.loop.is_running():
+                loop: asyncio.AbstractEventLoop = self._loop
                 with suppress(RuntimeError):
-                    self._close_handle = self.loop.call_soon_threadsafe(
-                        lambda: self.loop.create_task(self._terminate_helper())
+                    self._close_handle = loop.call_soon_threadsafe(
+                        lambda: loop.create_task(self._terminate_helper())
                     )
 
             # Handle case where event loop is no longer running
@@ -1361,7 +1363,7 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _send_payload(self, payload: bytes, flags: CurlWsFlag) -> bool:
         """
-        Optimized low-level sender with correct fragmentation logic.
+        Optimized low-level sender with fragmentation logic.
         """
         # Cache locals to reduce lookup cost
         curl_ws_send: Callable[[bytes, CurlWsFlag], int] = self.curl.ws_send
@@ -1389,12 +1391,12 @@ class AsyncWebSocket(BaseWebSocket):
                 write_ops = 0
 
             try:
-                chunk: memoryview = view[offset : offset + max_frame_size]
+                chunk: memoryview = view[offset: offset + max_frame_size]
 
                 # Use original flags for the first chunk, CONT flags
                 # for subsequent chunks of the same message.
                 current_flags: CurlWsFlag = flags if offset == 0 else next_flags
-                n_sent: int = curl_ws_send(bytes(chunk), current_flags)
+                n_sent: int = curl_ws_send(chunk.tobytes(), current_flags)
 
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
@@ -1478,26 +1480,28 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _terminate_helper(self) -> None:
         """Utility method for connection termination"""
-        tasks_to_cancel: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
-        max_timeout: int = 3
+        tasks_to_cancel: set[asyncio.Task[None]] = {
+            t
+            for t in (self._read_task, self._write_task)
+            if t is not None and not t.done()
+        }
+        max_timeout: int = 2
 
         try:
             # Cancel all the I/O tasks
-            for io_task in (self._read_task, self._write_task):
-                try:
-                    if io_task and not io_task.done():
-                        _ = io_task.cancel()
-                        tasks_to_cancel.add(io_task)
-                except (asyncio.CancelledError, RuntimeError):
-                    ...
+            for io_task in tasks_to_cancel:
+                _ = io_task.cancel()
 
             # Wait for cancellation but don't get stuck
             if tasks_to_cancel:
-                with suppress(asyncio.TimeoutError):
-                    _ = await asyncio.wait_for(
-                        asyncio.gather(*tasks_to_cancel, return_exceptions=True),
-                        timeout=max_timeout,
-                    )
+                _, pending = await asyncio.wait(
+                    tasks_to_cancel,
+                    timeout=max_timeout,
+                    return_when=asyncio.ALL_COMPLETED,
+                )
+                # Force cancel tasks that didn't complete within timeout.
+                for p in pending:
+                    _ = p.cancel()
 
             # Drain the send_queue
             while not self._send_queue.empty():

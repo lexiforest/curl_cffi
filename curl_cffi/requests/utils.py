@@ -342,13 +342,13 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: list[Union[dict, list, tuple, None]] = [],  # noqa: B006
+    params_list: list[Union[dict[str, object], list[object], tuple[object, ...], None]] = [],  # noqa: B006
     base_url: Optional[str] = None,
-    data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-    json: Optional[dict | list] = None,
+    data: Optional[Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]] = None,
+    json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
-    files: Optional[dict] = None,
+    files: Optional[dict[object, object]] = None,
     auth: Optional[tuple[str, str]] = None,
     timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
     allow_redirects: Optional[bool] = True,
@@ -359,7 +359,7 @@ def set_curl_options(
     verify_list: list[Union[bool, str, None]] = [],  # noqa: B006
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
-    content_callback: Optional[Callable] = None,
+    content_callback: Optional[Callable[..., object]] = None,
     impersonate: Optional[Union[BrowserTypeLiteral, str]] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
