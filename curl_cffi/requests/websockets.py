@@ -663,7 +663,7 @@ class AsyncWebSocket(BaseWebSocket):
         "ws_retry",
     )
 
-    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
+    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 64512
 
     def __init__(
         self,
@@ -710,11 +710,15 @@ class AsyncWebSocket(BaseWebSocket):
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
-            yield_mask (int, optional): A bitmask that sets the yield frequency for
-                cooperative multitasking, checked every ``yield_mask + 1`` operations.
-                Must be a power of two minus one (e.g., ``63``, ``127``, ``255``) for
-                efficient bitwise checks. Lower values increase fairness; higher values
-                increase throughput.
+            recv_yield_mask (int): Set the yield frequency for recieved messages.
+            send_yield_mask (int): Set the yield frequency for sent messages.
+
+            Yield masks are bitmasks that sets the yield frequency for cooperative
+                multitasking, checked every ``yield_mask + 1`` operations. This value
+                must be a power of two minus one (e.g., ``63``, ``127``, ``255``) in
+                order to carry out efficient bitwise checks. Lower values increase
+                fairness by taking up less event loop time, while higher values
+                increase throughput at the cost of consuming more loop time.
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -958,8 +962,10 @@ class AsyncWebSocket(BaseWebSocket):
 
         To guarantee all your messages have been sent ``await ws.flush()``.
 
-        The max frame size supported by libcurl is ``65536`` bytes. Larger frames
-        will be broken down and sent in chunks of that size.
+        The max frame size supported by libcurl is ``65536`` bytes.
+        Larger frames will be broken down and sent in chunks of that size,
+        using fragmentation logic and the CONT flag to send the payload as
+        a single complete WebSocket message.
 
         Args:
             payload: data to send.
@@ -1182,8 +1188,14 @@ class AsyncWebSocket(BaseWebSocket):
                     chunk, frame = curl_ws_recv()
 
                 except CurlError as e:
-                    if e.code == e_again:
-                        # Register a reader and wait until data is available to read.
+                    # Handle EAGAIN / BoringSSL "errno 11" bubbling up as RECV_ERROR
+                    if e.code == e_again or (
+                        e.code == CurlECode.RECV_ERROR
+                        and (
+                            "errno 11" in str(e)
+                            or "Resource temporarily unavailable" in str(e)
+                        )
+                    ):
                         read_future: asyncio.Future[None] = loop.create_future()
                         try:
                             loop.add_reader(self._sock_fd, read_future.set_result, None)
@@ -1234,7 +1246,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # If the message is complete, process and dispatch it
                 if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
-                    message: bytes = b"".join(chunks)
+                    message: bytes = chunks[0] if len(chunks) == 1 else b"".join(chunks)
                     chunks.clear()
 
                     try:
@@ -1367,7 +1379,7 @@ class AsyncWebSocket(BaseWebSocket):
         Optimized low-level sender with fragmentation logic.
         """
         # Cache locals to reduce lookup cost
-        curl_ws_send: Callable[[bytes, CurlWsFlag], int] = self.curl.ws_send
+        curl_ws_send: Callable[[bytes, CurlWsFlag | int], int] = self.curl.ws_send
         queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
             self._receive_queue.put_nowait
         )
@@ -1377,28 +1389,41 @@ class AsyncWebSocket(BaseWebSocket):
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
         e_again: CurlECode = CurlECode.AGAIN
 
-        # Flag logic for fragmentation
-        # If the frame is TEXT or BINARY, subsequent chunks must be CONT.
-        # We preserve other flags like CLOSE or PING.
-        is_data_frame: int = flags & (CurlWsFlag.TEXT | CurlWsFlag.BINARY)
-        next_flags: CurlWsFlag = CurlWsFlag.CONT if is_data_frame else flags
-
         view: memoryview = memoryview(payload)
         offset = 0
         write_ops = 0
 
+        # Loop until the entire view is sent
         while offset < len(view):
             if (write_ops & yield_mask) == 0 and write_ops > 0:
                 await asyncio.sleep(0)
                 write_ops = 0
 
-            try:
-                chunk: memoryview = view[offset: offset + max_frame_size]
+            # Calculate the size of the current fragment
+            chunk_len: int = min(len(view) - offset, max_frame_size)
+            chunk: memoryview[int] = view[offset: offset + chunk_len]
 
-                # Use original flags for the first chunk, CONT flags
-                # for subsequent chunks of the same message.
-                current_flags: CurlWsFlag = flags if offset == 0 else next_flags
-                n_sent: int = curl_ws_send(chunk.tobytes(), current_flags)
+            # First chunk: Inherit the Opcode (TEXT/BINARY/PING)
+            if offset == 0:
+                base_flags: CurlWsFlag | int = flags
+            else:
+                # Subsequent chunks: Must use Opcode 0 (Continuation).
+                # Start with 0 (which implies Opcode 0 and FIN 1).
+                base_flags = 0
+
+                # If the USER passed CONT originally (manual streaming),
+                # we must preserve that intent for the final chunk.
+                if flags & CurlWsFlag.CONT:
+                    base_flags |= CurlWsFlag.CONT
+
+            # Determine FIN bit (Internal Fragmentation)
+            # If there is more data in THIS payload, force FIN=0 (add CONT flag).
+            if (offset + chunk_len) < len(view):
+                base_flags |= CurlWsFlag.CONT
+
+            try:
+                # libcurl returns the number of bytes actually sent
+                n_sent: int = curl_ws_send(chunk.tobytes(), base_flags)
 
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):

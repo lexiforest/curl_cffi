@@ -923,10 +923,12 @@ class AsyncSession(BaseSession[R]):
                 **Warning:** This breaks the one-to-one mapping of ``send()`` calls
                 to frames and should only be used when the application protocol is
                 designed to handle concatenated data streams. Defaults to ``False``.
-            ws_retry: Retry behaviour on failed ``recv()`` attempt.
-                Retries up to a limited number of times with a delay in between.
-            yield_mask: Controls the frequency of cooperative multitasking
-                yields in the read loop. The loop yields every ``yield_mask + 1``
+            ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
+            recv_yield_mask (int): Set the yield frequency for recieved messages.
+            send_yield_mask (int): Set the yield frequency for sent messages.
+
+            Yield masks control the frequency of cooperative multitasking yields
+                in the read/send loop. The loop yields every ``yield_mask + 1``
                 operations. For efficiency, this value must be a power of two minus one
                 (e.g., ``63``, ``127``, ``255``). Lower values yield more often,
                 improving fairness at the cost of throughput. Higher values yield
