@@ -80,7 +80,7 @@ class TestConfig:
 
     total_gb: int = 10
     chunk_size: int = 65536
-    large_chunk_size: int = 4 * 1024**2
+    large_chunk_size: int = 2 * 1024**2
     total_bytes: int = total_gb * 1024**3
     recv_queue: int = 512
     send_queue: int = 128
