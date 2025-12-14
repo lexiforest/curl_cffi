@@ -663,7 +663,7 @@ class AsyncWebSocket(BaseWebSocket):
         "ws_retry",
     )
 
-    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 64512
+    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
 
     def __init__(
         self,
@@ -1374,7 +1374,7 @@ class AsyncWebSocket(BaseWebSocket):
             if not self.closed:
                 self.terminate()
 
-    async def _send_payload(self, payload: bytes, flags: CurlWsFlag) -> bool:
+    async def _send_payload(self, payload: bytes, flags: CurlWsFlag | int) -> bool:
         """
         Optimized low-level sender with fragmentation logic.
         """
@@ -1401,29 +1401,16 @@ class AsyncWebSocket(BaseWebSocket):
 
             # Calculate the size of the current fragment
             chunk_len: int = min(len(view) - offset, max_frame_size)
-            chunk: memoryview[int] = view[offset: offset + chunk_len]
+            chunk: memoryview = view[offset : offset + chunk_len]
 
-            # First chunk: Inherit the Opcode (TEXT/BINARY/PING)
-            if offset == 0:
-                base_flags: CurlWsFlag | int = flags
-            else:
-                # Subsequent chunks: Must use Opcode 0 (Continuation).
-                # Start with 0 (which implies Opcode 0 and FIN 1).
-                base_flags = 0
-
-                # If the USER passed CONT originally (manual streaming),
-                # we must preserve that intent for the final chunk.
-                if flags & CurlWsFlag.CONT:
-                    base_flags |= CurlWsFlag.CONT
-
-            # Determine FIN bit (Internal Fragmentation)
-            # If there is more data in THIS payload, force FIN=0 (add CONT flag).
+            # Handle frame fragmentation
+            flags = flags if offset == 0 else CurlWsFlag.CONT
             if (offset + chunk_len) < len(view):
-                base_flags |= CurlWsFlag.CONT
+                flags |= CurlWsFlag.CONT
 
             try:
                 # libcurl returns the number of bytes actually sent
-                n_sent: int = curl_ws_send(chunk.tobytes(), base_flags)
+                n_sent: int = curl_ws_send(chunk.tobytes(), flags)
 
                 if n_sent == 0:
                     with suppress(asyncio.QueueFull):
