@@ -7,9 +7,10 @@ import queue
 import sys
 import threading
 import warnings
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from collections.abc import Callable
+from datetime import timedelta
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
@@ -22,7 +23,6 @@ from typing import (
     cast,
 )
 from urllib.parse import urlparse
-from datetime import timedelta
 
 from ..aio import AsyncCurl
 from ..const import CurlHttpVersion, CurlInfo, CurlOpt
@@ -33,7 +33,7 @@ from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
-from .utils import HttpVersionLiteral, NOT_SET, set_curl_options
+from .utils import NOT_SET, HttpVersionLiteral, set_curl_options
 from .websockets import AsyncWebSocket, WebSocket, WebSocketError, WsRetryOnRecvError
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
@@ -169,7 +169,7 @@ class BaseSession(Generic[R]):
         proxy: Optional[str] = None,
         proxy_auth: Optional[tuple[str, str]] = None,
         base_url: Optional[str] = None,
-        params: Optional[dict] = None,
+        params: Optional[dict[str, object]] = None,
         verify: bool = True,
         timeout: Union[float, tuple[float, float]] = 30,
         trust_env: bool = True,
@@ -181,8 +181,8 @@ class BaseSession(Generic[R]):
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
-        curl_options: Optional[dict] = None,
-        curl_infos: Optional[list] = None,
+        curl_options: Optional[dict[CurlOpt, str]] = None,
+        curl_infos: Optional[list[object]] = None,
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
         interface: Optional[str] = None,
@@ -503,8 +503,12 @@ class Session(BaseSession[R]):
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        params: Optional[
+            Union[dict[str, object], list[object], tuple[object, ...]]
+        ] = None,
+        data: Optional[
+            Union[dict[str, str], list[tuple[object, ...]], str, BytesIO, bytes]
+        ] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -519,7 +523,7 @@ class Session(BaseSession[R]):
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
-        content_callback: Optional[Callable] = None,
+        content_callback: Optional[Callable[..., object]] = None,
         impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
@@ -527,7 +531,7 @@ class Session(BaseSession[R]):
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
         quote: Union[str, Literal[False]] = "",
-        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
+        http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
@@ -542,7 +546,7 @@ class Session(BaseSession[R]):
         # clone a new curl instance for streaming response
         if stream:
             c = self.curl.duphandle()
-            self.curl.reset()
+            _ = self.curl.reset()
         else:
             c = self.curl
 
@@ -702,8 +706,8 @@ class AsyncSession(BaseSession[R]):
     def __init__(
         self,
         *,
-        loop=None,
-        async_curl: Optional[AsyncCurl] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        async_curl: AsyncCurl | None = None,
         max_clients: int = 10,
         **kwargs: Unpack[BaseSessionParams[R]],
     ):
@@ -760,13 +764,14 @@ class AsyncSession(BaseSession[R]):
             s = AsyncSession()  # it also works.
         """
         super().__init__(**kwargs)
-        self._loop = loop
-        self._acurl = async_curl
-        self.max_clients = max_clients
+        self._loop: asyncio.AbstractEventLoop | None = loop
+        self._acurl: AsyncCurl | None = async_curl
+        self.max_clients: int = max_clients
         self.init_pool()
 
     @property
-    def loop(self):
+    def loop(self) -> asyncio.AbstractEventLoop:
+        """Returns a reference to event loop."""
         if self._loop is None:
             self._loop = asyncio.get_running_loop()
         return self._loop
@@ -778,15 +783,15 @@ class AsyncSession(BaseSession[R]):
         return self._acurl
 
     def init_pool(self):
-        self.pool = asyncio.LifoQueue(self.max_clients)
+        self.pool: asyncio.LifoQueue[Curl | None] = asyncio.LifoQueue(self.max_clients)
         while True:
             try:
                 self.pool.put_nowait(None)
             except asyncio.QueueFull:
                 break
 
-    async def pop_curl(self):
-        curl = await self.pool.get()
+    async def pop_curl(self) -> Curl:
+        curl: Curl | None = await self.pool.get()
         if curl is None:
             curl = Curl(debug=self.debug)
         return curl
@@ -842,7 +847,7 @@ class AsyncSession(BaseSession[R]):
         url: str,
         autoclose: bool = True,
         params: Optional[
-            Union[dict[object, object], list[object], tuple[object, ...]]
+            Union[dict[str, object], list[object], tuple[object, ...]]
         ] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -937,8 +942,8 @@ class AsyncSession(BaseSession[R]):
 
         self._check_session_closed()
 
-        curl = await self.pop_curl()
-        set_curl_options(
+        curl: Curl = await self.pop_curl()
+        _ = set_curl_options(
             curl=curl,
             method="GET",
             url=url,
@@ -975,11 +980,11 @@ class AsyncSession(BaseSession[R]):
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
-        curl.setopt(CurlOpt.NOSIGNAL, 1)
-        curl.setopt(CurlOpt.TCP_NODELAY, 1)
-        curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
+        _ = curl.setopt(CurlOpt.NOSIGNAL, 1)
+        _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
+        _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
-        await self.loop.run_in_executor(None, curl.perform)
+        _ = await self.loop.run_in_executor(None, curl.perform)
         ws: AsyncWebSocket = AsyncWebSocket(
             cast(AsyncSession[Response], self),
             curl,

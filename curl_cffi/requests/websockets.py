@@ -711,7 +711,7 @@ class AsyncWebSocket(BaseWebSocket):
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
-            recv_yield_mask (int): Set the yield frequency for recieved messages.
+            recv_yield_mask (int): Set the yield frequency for received messages.
             send_yield_mask (int): Set the yield frequency for sent messages.
 
             Yield masks are bitmasks that sets the yield frequency for cooperative
@@ -720,6 +720,10 @@ class AsyncWebSocket(BaseWebSocket):
                 order to carry out efficient bitwise checks. Lower values increase
                 fairness by taking up less event loop time, while higher values
                 increase throughput at the cost of consuming more loop time.
+
+        See also:
+            https://curl.se/libcurl/c/curl_ws_recv.html
+            https://curl.se/libcurl/c/curl_ws_send.html
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -1186,6 +1190,10 @@ class AsyncWebSocket(BaseWebSocket):
         max_retries: int = ws_retry.max_retry_count
         retry_base: float = float(ws_retry.retry_delay_base)
         e_again: CurlECode = CurlECode.AGAIN
+        close_flag = CurlWsFlag.CLOSE
+        cont_flag = CurlWsFlag.CONT
+        ping_flag = CurlWsFlag.PING
+        control_mask: int = ping_flag | close_flag
 
         # Message specific values
         recv_error_retries: int = 0
@@ -1244,30 +1252,46 @@ class AsyncWebSocket(BaseWebSocket):
                 if recv_error_retries > 0:
                     recv_error_retries = 0
 
+                # Data Frames (Text / Binary / Cont)
+                if not (flags & control_mask):
+                    # Collect the chunk
+                    chunks.append(chunk)
+
+                    # If the message is complete, process and dispatch it
+                    if frame.bytesleft <= 0 and (flags & cont_flag) == 0:
+                        message: bytes = (
+                            chunks[0] if len(chunks) == 1 else b"".join(chunks)
+                        )
+                        chunks.clear()
+
+                        try:
+                            queue_put_nowait((message, flags))
+                        except asyncio.QueueFull:
+                            await queue_put((message, flags))
+
+                    msg_counter += 1
+                    if (msg_counter & yield_mask) == 0:
+                        await asyncio.sleep(0)
+                        msg_counter = 0
+
+                    continue
+
+                # Control Frames handled below (Close / Ping)
+                # PONG handled: https://everything.curl.dev/helpers/ws/concept.html
+
                 # If a CLOSE frame is received, the reader is done.
-                if flags & CurlWsFlag.CLOSE:
+                if flags & close_flag:
+                    chunks.clear()
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait((chunk, flags))
                     await self._handle_close_frame(chunk)
                     return
 
-                # Collect the chunk
-                chunks.append(chunk)
-
-                # If the message is complete, process and dispatch it
-                if frame.bytesleft <= 0 and (flags & CurlWsFlag.CONT) == 0:
-                    message: bytes = chunks[0] if len(chunks) == 1 else b"".join(chunks)
-                    chunks.clear()
-
+                if flags & ping_flag:
                     try:
-                        queue_put_nowait((message, flags))
+                        queue_put_nowait((chunk, flags))
                     except asyncio.QueueFull:
-                        await queue_put((message, flags))
-
-                msg_counter += 1
-                if (msg_counter & yield_mask) == 0:
-                    await asyncio.sleep(0)
-                    msg_counter = 0
+                        await queue_put((chunk, flags))
 
         except asyncio.CancelledError:
             pass
@@ -1411,7 +1435,7 @@ class AsyncWebSocket(BaseWebSocket):
 
             # Calculate the size of the current fragment
             chunk: memoryview = view[
-                offset : offset + min(view.nbytes - offset, max_frame_size)
+                offset: offset + min(view.nbytes - offset, max_frame_size)
             ]
             chunk_len = len(chunk)
 
