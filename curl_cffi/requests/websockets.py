@@ -179,11 +179,12 @@ class BaseWebSocket:
                 raise WebSocketError(
                     "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
                 ) from e
-            else:
-                if code == WsCloseCode.UNKNOWN or code < 1000 or code >= 5000:
-                    raise WebSocketError(
-                        f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
-                    )
+
+            if code == WsCloseCode.UNKNOWN or code < 1000 or code >= 5000:
+                raise WebSocketError(
+                    f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
+                )
+
         return code, reason
 
     def terminate(self) -> None:
@@ -865,7 +866,7 @@ class AsyncWebSocket(BaseWebSocket):
         )
 
     async def recv(self, *, timeout: float | None = None) -> tuple[bytes | None, int]:
-        """Receive a frame as bytes.
+        """Receive a WebSocket message as bytes.
 
         This method waits for and returns the next complete data frame from the
         receive queue.
@@ -885,6 +886,10 @@ class AsyncWebSocket(BaseWebSocket):
             tuple[bytes, int]: A tuple with the received payload and flags.
         """
         if self.closed and self._receive_queue.empty():
+            if self._terminated:
+                raise WebSocketError(
+                    "Connection terminated unexpectedly", CurlECode.RECV_ERROR
+                )
             raise WebSocketClosed("WebSocket is closed")
 
         try:
@@ -1057,13 +1062,18 @@ class AsyncWebSocket(BaseWebSocket):
         For more info, see the docstring for :meth:`send()`
         """
 
-        if len(payload) not in range(0, 126):
+        if isinstance(payload, str):
+            payload_bytes = payload.encode("utf-8")
+        else:
+            payload_bytes = bytes(payload)
+
+        if len(payload_bytes) not in range(0, 126):
             raise WebSocketError(
-                f"Ping frame has invalid length: {len(payload)}",
+                f"Ping frame has invalid length: {len(payload_bytes)}",
                 CurlECode.TOO_LARGE,
             )
 
-        return await self.send(payload, CurlWsFlag.PING)
+        return await self.send(payload_bytes, CurlWsFlag.PING)
 
     async def close(
         self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 5.0
@@ -1394,30 +1404,53 @@ class AsyncWebSocket(BaseWebSocket):
         write_ops = 0
 
         # Loop until the entire view is sent
-        while offset < len(view):
+        while offset < view.nbytes or (offset == 0 and view.nbytes == 0):
             if (write_ops & yield_mask) == 0 and write_ops > 0:
                 await asyncio.sleep(0)
                 write_ops = 0
 
             # Calculate the size of the current fragment
-            chunk_len: int = min(len(view) - offset, max_frame_size)
-            chunk: memoryview = view[offset : offset + chunk_len]
+            chunk: memoryview = view[
+                offset : offset + min(view.nbytes - offset, max_frame_size)
+            ]
+            chunk_len = len(chunk)
 
             # Handle frame fragmentation
-            flags = flags if offset == 0 else CurlWsFlag.CONT
-            if (offset + chunk_len) < len(view):
-                flags |= CurlWsFlag.CONT
+            current_flags: CurlWsFlag | int = flags
+            if (offset + chunk_len) < view.nbytes:
+                current_flags |= CurlWsFlag.CONT
 
             try:
                 # libcurl returns the number of bytes actually sent
-                n_sent: int = curl_ws_send(chunk.tobytes(), flags)
+                n_sent: int = curl_ws_send(chunk.tobytes(), current_flags)
 
                 if n_sent == 0:
+                    # Handle sending of empty payloads.
+                    if chunk_len == 0:
+                        return True
+
                     with suppress(asyncio.QueueFull):
                         queue_put_nowait(
                             (
                                 WebSocketError(
                                     "ws_send returned 0 bytes",
+                                    CurlECode.SEND_ERROR,
+                                ),
+                                0,
+                            )
+                        )
+                    return False
+
+                if n_sent < chunk_len:
+                    with suppress(asyncio.QueueFull):
+                        queue_put_nowait(
+                            (
+                                WebSocketError(
+                                    (
+                                        "Partial write detected "
+                                        f"({n_sent}/{chunk_len}). "
+                                        "Connection corrupted."
+                                    ),
                                     CurlECode.SEND_ERROR,
                                 ),
                                 0,

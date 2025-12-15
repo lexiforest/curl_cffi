@@ -121,7 +121,6 @@ async def stream_test_data() -> AsyncGenerator[bytes]:
         for offset in range(0, file_size, config.large_chunk_size):
             chunk: bytes = mm[offset : offset + config.large_chunk_size]
             yield chunk
-            await asyncio.sleep(0)
             if can_madvise and offset - last_drop >= drop_interval:
                 mm.madvise(
                     mmap.MADV_DONTNEED,
@@ -190,6 +189,10 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
                 (offset / (1024**2)) / elapsed_time,
             )
 
+            if offset < config.total_bytes - config.chunk_size:
+                logger.error("Incomplete file receieved, skipping hash check")
+                return
+
             # Calculate and compare hashes
             logger.info("Calculating hash of received data")
             start_time = time.perf_counter()
@@ -247,9 +250,15 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     Returns:
         web.WebSocketResponse: Response object.
     """
-    ws: web.WebSocketResponse = web.WebSocketResponse()
+    ws: web.WebSocketResponse = web.WebSocketResponse(
+        max_msg_size=config.server_max_msg
+    )
     _ = await ws.prepare(request)
-    logger.info("Client connected %s", request.host)
+    logger.info(
+        "Client connected from %s, max message size is %d",
+        request.host,
+        config.server_max_msg,
+    )
 
     if request.query.get("test") == "upload":
         await recv_benchmark_handler(ws)
