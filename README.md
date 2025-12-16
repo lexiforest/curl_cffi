@@ -24,6 +24,12 @@ Python 3.9 is the minimum supported version since v0.10.
 
 If you’re looking for a meeting recording API, consider checking out [Recall.ai](https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi), an API that records Zoom, Google Meet, Microsoft Teams, in-person meetings, and more.
 
+## Residential Proxies
+
+<a href="https://www.thordata.com/?ls=github&lk=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
+
+Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/products/residential-proxies/?ls=github&lk=curl_cffi) and receive 2000 free SERP API calls.
+
 ## Sponsors
 
 Maintenance of this project is made possible by all the <a href="https://github.com/lexiforest/curl_cffi/graphs/contributors">contributors</a> and <a href="https://github.com/sponsors/lexiforest">sponsors</a>. If you'd like to sponsor this project and have your avatar or company logo appear below <a href="https://github.com/sponsors/lexiforest">click here</a>. 💖
