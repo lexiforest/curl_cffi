@@ -155,6 +155,7 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     safari2601 = "safari2601"
     firefox133 = "firefox133"
     firefox135 = "firefox135"
+    firefox144 = "firefox144"
     tor145 = "tor145"
 
     # deprecated aliases
