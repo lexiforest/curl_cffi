@@ -716,6 +716,7 @@ class AsyncWebSocket(BaseWebSocket):
             ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
             recv_yield_mask (int): Set the yield frequency for received messages.
             send_yield_mask (int): Set the yield frequency for sent messages.
+            max_message_size (int): The maximum size of a complete received message.
 
             Yield masks are bitmasks that sets the yield frequency for cooperative
                 multitasking, checked every ``yield_mask + 1`` operations. This value
