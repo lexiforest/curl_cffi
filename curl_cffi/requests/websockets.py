@@ -662,6 +662,8 @@ class AsyncWebSocket(BaseWebSocket):
         "_terminated",
         "_terminated_event",
         "ws_retry",
+        "_transport_exception",
+        "_max_message_size",
     )
 
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
@@ -680,6 +682,7 @@ class AsyncWebSocket(BaseWebSocket):
         ws_retry: WsRetryOnRecvError | None = None,
         recv_yield_mask: int = 31,
         send_yield_mask: int = 15,
+        max_message_size: int = 4 * 1024 * 1024,
     ) -> None:
         """Initializes an Async WebSocket session.
 
@@ -747,6 +750,8 @@ class AsyncWebSocket(BaseWebSocket):
         self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
         self._recv_yield_mask: int = recv_yield_mask
         self._send_yield_mask: int = send_yield_mask
+        self._transport_exception: Exception | None = None
+        self._max_message_size: int = max_message_size
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -826,6 +831,16 @@ class AsyncWebSocket(BaseWebSocket):
         if (msg is None) or (flags & CurlWsFlag.CLOSE):
             raise StopAsyncIteration
         return msg
+
+    def _fail_connection(self, exc: Exception) -> None:
+        """Centralized method to handle connection failure.
+
+        This sets the exception attribute and adds the exception into the receive
+        queue. This is then checked by the public methods to raise errors correctly.
+
+        Args:
+            exc (Exception): The exception object that gets raised.
+        """
 
     def _start_io_tasks(self) -> None:
         """Start the read/write I/O loop tasks.
@@ -1194,11 +1209,17 @@ class AsyncWebSocket(BaseWebSocket):
         cont_flag = CurlWsFlag.CONT
         ping_flag = CurlWsFlag.PING
         control_mask: int = ping_flag | close_flag
+        max_msg_size: int = self._max_message_size
+        errno_11_msgs: tuple[str, ...] = (
+            "errno 11",
+            "resource temporarily unavailable",
+        )
 
         # Message specific values
         recv_error_retries: int = 0
         chunks: list[bytes] = []
         msg_counter = 0
+        current_msg_size: int = 0
 
         try:
             while not self.closed:
@@ -1206,14 +1227,19 @@ class AsyncWebSocket(BaseWebSocket):
                     chunk, frame = curl_ws_recv()
 
                 except CurlError as e:
-                    # Handle EAGAIN / BoringSSL "errno 11" bubbling up as RECV_ERROR
-                    if e.code == e_again or (
-                        e.code == CurlECode.RECV_ERROR
-                        and (
-                            "errno 11" in str(e)
-                            or "Resource temporarily unavailable" in str(e)
-                        )
-                    ):
+                    should_retry: bool = False
+
+                    # Handle normal cURL EAGAINs
+                    if e.code == e_again:
+                        should_retry = True
+
+                    # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
+                    elif e.code == CurlECode.RECV_ERROR:
+                        err_msg: str = str(e).lower()
+                        if any(msg in err_msg for msg in errno_11_msgs):
+                            should_retry = True
+
+                    if should_retry:
                         read_future: asyncio.Future[None] = loop.create_future()
                         try:
                             loop.add_reader(self._sock_fd, read_future.set_result, None)
@@ -1249,6 +1275,15 @@ class AsyncWebSocket(BaseWebSocket):
                     return
 
                 flags: int = frame.flags
+                current_msg_size += len(chunk)
+                if current_msg_size > max_msg_size:
+                    self._fail_connection(
+                        WebSocketError(
+                            "Received message too large", CurlECode.TOO_LARGE
+                        )
+                    )
+                    return
+
                 if recv_error_retries > 0:
                     recv_error_retries = 0
 
@@ -1263,6 +1298,7 @@ class AsyncWebSocket(BaseWebSocket):
                             chunks[0] if len(chunks) == 1 else b"".join(chunks)
                         )
                         chunks.clear()
+                        current_msg_size = 0
 
                         try:
                             queue_put_nowait((message, flags))
@@ -1435,7 +1471,7 @@ class AsyncWebSocket(BaseWebSocket):
 
             # Calculate the size of the current fragment
             chunk: memoryview = view[
-                offset: offset + min(view.nbytes - offset, max_frame_size)
+                offset : offset + min(view.nbytes - offset, max_frame_size)
             ]
             chunk_len = len(chunk)
 
