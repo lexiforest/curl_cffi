@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     ON_ERROR_T = Callable[["WebSocket", CurlError], None]
     ON_OPEN_T = Callable[["WebSocket"], None]
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
-    RECV_MSG_TYPE = Exception | str | bytes | bytearray | memoryview
     RECV_QUEUE_ITEM = tuple[bytes | Exception, int]
     SEND_QUEUE_ITEM = tuple[bytes, CurlWsFlag]
 
@@ -62,11 +61,11 @@ class WsRetryOnRecvError:
     the jitter is ``+-10%`` the result of computed delay value.
 
     retry_on_error: When a WebSocket receive operation fails due to an error,
-        retry the receive attempt (``True``) or fail the connection (``False``).
-    retry_delay_base: The base value in seconds to compute the retry delay from.
+    retry the receive attempt (``True``) or fail the connection (``False``).
+    retry_delay_base: The base value (in seconds) to compute the retry delay from.
     max_retry_count: How many times to retry a receive operation before giving up.
-    retry_error_codes: A user-provided set of ``CurlECode`` values for which
-        the receive operation should be retried. Default is ``CurlECode.RECV_ERROR``.
+    retry_error_codes: Set of ``CurlECode`` values for which the receive operation
+    should be retried. Default is ``CurlECode.RECV_ERROR``.
     """
 
     retry_on_error: bool = False
@@ -992,35 +991,31 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> None:
         """Send a data frame.
 
-        This is a lightweight, non-blocking call that queues the payload for sending;
-        actual network transmission is performed by a background task. To ensure all
-        queued messages have been handed to libcurl, call ``await ws.flush()``
+        This is a lightweight, non-blocking call that queues the payload for sending.
+        Actual network transmission is performed by a background I/O task.
+        To ensure all queued messages have been handed to libcurl,
+        call ``await ws.flush()``.
 
         libcurl supports frames up to ``65536`` bytes. Larger payloads are split into
-        chunks and sent using fragmentation with continuation frames so they arrive as
-        a single logical WebSocket message.
+        continuation frames so they arrive as a single logical WebSocket message.
 
         Args:
-            payload: Data to send.
-            flags: Frame flags. Defaults to ``CurlWsFlag.BINARY``.
-            timeout: Maximum time (in seconds) to wait for the frame to be accepted
-            into the internal send queue; if ``None`` (default), wait indefinitely.
+            payload: Data to send. ``str`` is encoded as ``UTF-8``;
+            ``bytes``, ``bytearray``, and ``memoryview`` are sent as-is.
+            flags: Bitmask of frame flags (text/binary). Defaults to
+            ``CurlWsFlag.BINARY``.
+            timeout: Maximum time in seconds to wait if the send queue is full. If
+            ``None`` (default), waits indefinitely until space is available.
 
         Raises:
-            WebSocketClosed: The WebSocket is closed or the connection terminated
-            while waiting.
-            WebSocketTimeout: If the send queue is full and ``timeout`` expires while
-            waiting to enqueue the frame.
-            (Propagated) transport exception: If a prior transport-level exception
-            has occurred, it will be raised immediately.
+            WebSocketClosed: If the connection is closed or terminating.
+            WebSocketTimeout: If the send queue is full and ``timeout`` expires.
+            Exception: Exceptions from the underlying transport (e.g., connection reset)
+            encountered during prior I/O operations are re-raised immediately.
 
-        NOTE:
-            - This method only enqueues data; network errors that occur while the
-            background sender transmits the queued frame will still surface on
-            subsequent I/O, but any existing transport error will be raised by this
-            call immediately.
-            - If the network is slow and the internal send queue becomes full, this
-            call will block until there is space or until ``timeout`` elapses.
+        Notes:
+            This method does not wait for network acknowledgement. Network errors
+            during transmission will be raised by the next call to ``recv`` or ``send``.
         """
         if self._transport_exception is not None:
             raise self._transport_exception
@@ -1318,7 +1313,13 @@ class AsyncWebSocket(BaseWebSocket):
                     chunks.clear()
                     self._fail_connection(
                         WebSocketError(
-                            "Received message too large", CurlECode.TOO_LARGE
+                            (
+                                f"Message too large: {current_msg_size} bytes "
+                                f"(limit {max_msg_size} bytes). "
+                                "Consider increasing max_message_size or "
+                                "chunking the message."
+                            ),
+                            CurlECode.TOO_LARGE,
                         )
                     )
                     return
