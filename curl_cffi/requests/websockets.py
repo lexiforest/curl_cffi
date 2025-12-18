@@ -843,6 +843,16 @@ class AsyncWebSocket(BaseWebSocket):
             exc (Exception): The exception object that gets raised.
         """
 
+        if self.closed or self._transport_exception:
+            return
+
+        self._transport_exception = exc
+
+        with suppress(asyncio.QueueFull):
+            self._receive_queue.put_nowait((exc, 0))
+
+        self.terminate()
+
     def _start_io_tasks(self) -> None:
         """Start the read/write I/O loop tasks.
 
@@ -978,37 +988,42 @@ class AsyncWebSocket(BaseWebSocket):
         self,
         payload: str | bytes | bytearray | memoryview,
         flags: CurlWsFlag = CurlWsFlag.BINARY,
+        timeout: float | None = None,
     ) -> None:
         """Send a data frame.
 
-        This method is a lightweight, non-blocking call that places the payload
-        into a send queue. The actual network transmission is handled by a
-        background task.
+        This is a lightweight, non-blocking call that queues the payload for sending;
+        actual network transmission is performed by a background task. To ensure all
+        queued messages have been handed to libcurl, call ``await ws.flush()``
 
-        To guarantee all your messages have been sent ``await ws.flush()``.
-
-        The max frame size supported by libcurl is ``65536`` bytes.
-        Larger frames will be broken down and sent in chunks of that size,
-        using fragmentation logic and the CONT flag to send the payload as
-        a single complete WebSocket message.
+        libcurl supports frames up to ``65536`` bytes. Larger payloads are split into
+        chunks and sent using fragmentation with continuation frames so they arrive as
+        a single logical WebSocket message.
 
         Args:
-            payload: data to send.
-            flags: flags for the frame.
+            payload: Data to send.
+            flags: Frame flags. Defaults to ``CurlWsFlag.BINARY``.
+            timeout: Maximum time (in seconds) to wait for the frame to be accepted
+            into the internal send queue; if ``None`` (default), wait indefinitely.
 
         Raises:
-            WebSocketClosed: The WebSocket is closed.
+            WebSocketClosed: The WebSocket is closed or the connection terminated
+            while waiting.
+            WebSocketTimeout: If the send queue is full and ``timeout`` expires while
+            waiting to enqueue the frame.
+            (Propagated) transport exception: If a prior transport-level exception
+            has occurred, it will be raised immediately.
 
         NOTE:
-            Due to the asynchronous nature of this client, network errors
-            (e.g., connection dropped) that occur during the actual transmission
-            will NOT be raised by this method. They will be raised by a
-            subsequent call to ``recv()``. Always ensure you are actively
-            receiving data to handle potential connection errors.
-
-            Also: If the network is slow and the internal send queue becomes full,
-            this method will block until there is space in the queue.
+            - This method only enqueues data; network errors that occur while the
+            background sender transmits the queued frame will still surface on
+            subsequent I/O, but any existing transport error will be raised by this
+            call immediately.
+            - If the network is slow and the internal send queue becomes full, this
+            call will block until there is space or until ``timeout`` elapses.
         """
+        if self._transport_exception is not None:
+            raise self._transport_exception
 
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
@@ -1025,7 +1040,21 @@ class AsyncWebSocket(BaseWebSocket):
             if self._terminated:
                 raise WebSocketClosed("WebSocket connection is terminated") from exc
 
-            await self._send_queue.put((payload, flags))
+            # In case we died during encoding
+            if self._transport_exception is not None:
+                raise self._transport_exception from exc
+
+            if timeout:
+                try:
+                    await asyncio.wait_for(
+                        self._send_queue.put((payload, flags)), timeout
+                    )
+                except asyncio.TimeoutError as e:
+                    raise WebSocketTimeout(
+                        "Send queue full (network slow) - hit timeout enqueuing message"
+                    ) from e
+            else:
+                await self._send_queue.put((payload, flags))
 
     async def send_binary(self, payload: bytes) -> None:
         """Send a binary frame.
@@ -1245,6 +1274,16 @@ class AsyncWebSocket(BaseWebSocket):
                         try:
                             loop.add_reader(self._sock_fd, read_future.set_result, None)
                             await read_future
+
+                        except OSError:
+                            self._fail_connection(
+                                WebSocketError(
+                                    "Socket closed unexpectedly",
+                                    CurlECode.NO_CONNECTION_AVAILABLE,
+                                )
+                            )
+                            return
+
                         finally:
                             if self._sock_fd != -1:
                                 _ = loop.remove_reader(self._sock_fd)
@@ -1270,14 +1309,13 @@ class AsyncWebSocket(BaseWebSocket):
                         continue
 
                     # Fatal error - can't retry
-                    with suppress(asyncio.QueueFull):
-                        queue_put_nowait((e, 0))
-                    self.terminate()
+                    self._fail_connection(e)
                     return
 
                 flags: int = frame.flags
                 current_msg_size += len(chunk)
                 if current_msg_size > max_msg_size:
+                    chunks.clear()
                     self._fail_connection(
                         WebSocketError(
                             "Received message too large", CurlECode.TOO_LARGE
@@ -1335,14 +1373,13 @@ class AsyncWebSocket(BaseWebSocket):
 
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
-            if not self.closed:
-                with suppress(asyncio.QueueFull):
-                    queue_put_nowait((e, 0))
-            self.terminate()
+            self._fail_connection(e)
 
         finally:
-            with suppress(asyncio.QueueFull):
-                queue_put_nowait((WebSocketClosed("Connection closed."), 0))
+            # Enqueue generic closed message as a safety net.
+            if not (self.closed or self._transport_exception):
+                with suppress(asyncio.QueueFull):
+                    queue_put_nowait((WebSocketClosed("Connection closed."), 0))
 
     async def _write_loop(self) -> None:
         """
@@ -1436,9 +1473,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
-            if not self.closed:
-                with suppress(asyncio.QueueFull):
-                    self._receive_queue.put_nowait((e, 0))
+            self._fail_connection(e)
 
         finally:
             # If the loop exits unexpectedly, ensure we terminate the connection.
