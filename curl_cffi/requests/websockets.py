@@ -1551,26 +1551,26 @@ class AsyncWebSocket(BaseWebSocket):
         yield_mask: int = self._send_yield_mask
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
         e_again: CurlECode = CurlECode.AGAIN
+        max_zero_writes: int = 5
 
+        # Message specific values
         view: memoryview = memoryview(payload)
-        total_bytes = view.nbytes
-        offset = 0
-        write_ops = 0
+        total_bytes: int = view.nbytes
+        base_flags: int = flags & ~CurlWsFlag.CONT
+        offset: int = 0
+        write_ops: int = 0
+        zero_write_retries: int = 0
 
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
-            if (write_ops & yield_mask) == 0 and write_ops > 0:
-                await asyncio.sleep(0)
-                write_ops = 0
-
             # Calculate the size of the current fragment
             chunk: memoryview = view[
                 offset: offset + min(total_bytes - offset, max_frame_size)
             ]
-            chunk_len = len(chunk)
+            chunk_len: int = len(chunk)
 
-            # Handle frame fragmentation
-            current_flags: CurlWsFlag | int = flags
+            # Handle frame fragmentation and prevents CONT leakage.
+            current_flags: CurlWsFlag | int = base_flags
             if (offset + chunk_len) < total_bytes:
                 current_flags |= CurlWsFlag.CONT
 
@@ -1585,10 +1585,30 @@ class AsyncWebSocket(BaseWebSocket):
 
                     # Raise AGAIN to jump to the existing wait logic below
                     if chunk_len > 0:
+                        zero_write_retries += 1
+                        if zero_write_retries >= max_zero_writes:
+                            self._fail_connection(
+                                WebSocketError(
+                                    (
+                                        "Writer stalled "
+                                        f"({zero_write_retries} attempts)."
+                                    ),
+                                    CurlECode.WRITE_ERROR,
+                                )
+                            )
+                            return False
+
                         raise CurlError("0 bytes sent", e_again)
 
+                if zero_write_retries > 0:
+                    zero_write_retries = 0
+
                 offset += n_sent
+
+                # Cooperative yield checks
                 write_ops += 1
+                if (write_ops & yield_mask) == 0:
+                    await asyncio.sleep(0)
 
             except CurlError as e:
                 if e.code == e_again:
