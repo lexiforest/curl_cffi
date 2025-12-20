@@ -858,7 +858,7 @@ class AsyncWebSocket(BaseWebSocket):
             exc (Exception): The exception object that gets raised.
         """
 
-        if self.closed or self._transport_exception:
+        if self.closed or self._transport_exception is not None:
             return
 
         self._transport_exception = exc
@@ -1294,6 +1294,17 @@ class AsyncWebSocket(BaseWebSocket):
                         err_msg: str = str(e).lower()
                         if any(msg in err_msg for msg in errno_11_msgs):
                             should_retry = True
+
+                    # Handle Server Disconnect (Empty Reply)
+                    elif e.code == CurlECode.GOT_NOTHING:
+                        final_exc: WebSocketClosed = WebSocketClosed(
+                            "Connection closed unexpectedly by server (EOF)",
+                            WsCloseCode.ABNORMAL_CLOSURE,
+                        )
+                        final_exc.__cause__ = e
+                        final_exc.__suppress_context__ = True
+                        self._fail_connection(final_exc)
+                        return
 
                     if should_retry:
                         read_future: asyncio.Future[None] = loop.create_future()
