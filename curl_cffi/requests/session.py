@@ -936,11 +936,11 @@ class AsyncSession(BaseSession[R]):
                 WebSocket message (default: ``4 MiB``).
 
             Yield masks control the frequency of cooperative multitasking yields
-                in the read/send loop. The loop yields every ``yield_mask + 1``
-                operations. For efficiency, this value must be a power of two minus one
-                (e.g., ``63``, ``127``, ``255``). Lower values yield more often,
-                improving fairness at the cost of throughput. Higher values yield
-                less often, prioritizing throughput.
+            in the read/send loop. The loop yields every ``yield_mask + 1``
+            operations. For efficiency, this value must be a power of two minus one
+            (e.g., ``63``, ``127``, ``255``). Lower values yield more often,
+            improving fairness at the cost of throughput. Higher values yield
+            less often, prioritizing throughput.
         """
 
         self._check_session_closed()
@@ -983,7 +983,6 @@ class AsyncSession(BaseSession[R]):
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
-        _ = curl.setopt(CurlOpt.NOSIGNAL, 1)
         _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
         _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
 
