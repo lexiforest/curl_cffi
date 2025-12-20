@@ -1261,6 +1261,8 @@ class AsyncWebSocket(BaseWebSocket):
         max_retries: int = ws_retry.max_retry_count
         retry_base: float = float(ws_retry.retry_delay_base)
         e_again: CurlECode = CurlECode.AGAIN
+        e_recv_err: CurlECode = CurlECode.RECV_ERROR
+        e_nothing: CurlECode = CurlECode.GOT_NOTHING
         close_flag = CurlWsFlag.CLOSE
         cont_flag = CurlWsFlag.CONT
         ping_flag = CurlWsFlag.PING
@@ -1290,13 +1292,13 @@ class AsyncWebSocket(BaseWebSocket):
                         should_retry = True
 
                     # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
-                    elif e.code == CurlECode.RECV_ERROR:
+                    elif e.code == e_recv_err:
                         err_msg: str = str(e).lower()
                         if any(msg in err_msg for msg in errno_11_msgs):
                             should_retry = True
 
                     # Handle Server Disconnect (Empty Reply)
-                    elif e.code == CurlECode.GOT_NOTHING:
+                    elif e.code == e_nothing:
                         final_exc: WebSocketClosed = WebSocketClosed(
                             "Connection closed unexpectedly by server (EOF)",
                             WsCloseCode.ABNORMAL_CLOSURE,
@@ -1544,9 +1546,6 @@ class AsyncWebSocket(BaseWebSocket):
         """
         # Cache locals to reduce lookup cost
         curl_ws_send: Callable[[bytes, CurlWsFlag | int], int] = self.curl.ws_send
-        queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
-            self._receive_queue.put_nowait
-        )
         loop: asyncio.AbstractEventLoop = self.loop
         sock_fd: int = self._sock_fd
         yield_mask: int = self._send_yield_mask
@@ -1554,24 +1553,25 @@ class AsyncWebSocket(BaseWebSocket):
         e_again: CurlECode = CurlECode.AGAIN
 
         view: memoryview = memoryview(payload)
+        total_bytes = view.nbytes
         offset = 0
         write_ops = 0
 
         # Loop until the entire view is sent
-        while offset < view.nbytes or (offset == 0 and view.nbytes == 0):
+        while offset < total_bytes or (offset == 0 and total_bytes == 0):
             if (write_ops & yield_mask) == 0 and write_ops > 0:
                 await asyncio.sleep(0)
                 write_ops = 0
 
             # Calculate the size of the current fragment
             chunk: memoryview = view[
-                offset : offset + min(view.nbytes - offset, max_frame_size)
+                offset: offset + min(total_bytes - offset, max_frame_size)
             ]
             chunk_len = len(chunk)
 
             # Handle frame fragmentation
             current_flags: CurlWsFlag | int = flags
-            if (offset + chunk_len) < view.nbytes:
+            if (offset + chunk_len) < total_bytes:
                 current_flags |= CurlWsFlag.CONT
 
             try:
@@ -1579,38 +1579,13 @@ class AsyncWebSocket(BaseWebSocket):
                 n_sent: int = curl_ws_send(chunk.tobytes(), current_flags)
 
                 if n_sent == 0:
-                    # Handle sending of empty payloads.
+                    # Handle 0-byte payload (Valid Empty Frame)
                     if chunk_len == 0:
                         return True
 
-                    with suppress(asyncio.QueueFull):
-                        queue_put_nowait(
-                            (
-                                WebSocketError(
-                                    "ws_send returned 0 bytes",
-                                    CurlECode.SEND_ERROR,
-                                ),
-                                0,
-                            )
-                        )
-                    return False
-
-                if n_sent < chunk_len:
-                    with suppress(asyncio.QueueFull):
-                        queue_put_nowait(
-                            (
-                                WebSocketError(
-                                    (
-                                        "Partial write detected "
-                                        f"({n_sent}/{chunk_len}). "
-                                        "Connection corrupted."
-                                    ),
-                                    CurlECode.SEND_ERROR,
-                                ),
-                                0,
-                            )
-                        )
-                    return False
+                    # Raise AGAIN to jump to the existing wait logic below
+                    if chunk_len > 0:
+                        raise CurlError("0 bytes sent", e_again)
 
                 offset += n_sent
                 write_ops += 1
@@ -1623,27 +1598,24 @@ class AsyncWebSocket(BaseWebSocket):
                         loop.add_writer(sock_fd, write_future.set_result, None)
                         await write_future
 
-                    # pylint: disable-next=broad-exception-caught
-                    except Exception as exc:
-                        with suppress(asyncio.QueueFull):
-                            queue_put_nowait(
-                                (
-                                    WebSocketError(
-                                        f"add_writer failed: {exc}",
-                                        CurlECode.NO_CONNECTION_AVAILABLE,
-                                    ),
-                                    0,
-                                )
+                    except OSError as exc:
+                        self._fail_connection(
+                            WebSocketError(
+                                f"Socket closed unexpectedly during write: {exc}",
+                                CurlECode.NO_CONNECTION_AVAILABLE,
                             )
+                        )
                         return False
+
                     finally:
                         if sock_fd != -1:
                             _ = loop.remove_writer(sock_fd)
+
+                    # Retry the exact same chunk
                     continue
 
                 # Fatal Error
-                with suppress(asyncio.QueueFull):
-                    queue_put_nowait((e, 0))
+                self._fail_connection(e)
                 return False
 
         return True
