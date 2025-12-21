@@ -326,9 +326,13 @@ def main() -> None:
         )
 
     elif args.mode == "client" and args.test in client_opts:
-        loop: asyncio.AbstractEventLoop = get_loop()
-        loop.run_until_complete(client_handler(args.test))
-        loop.close()
+        try:
+            # pylint: disable-next=import-outside-toplevel
+            import uvloop
+
+            uvloop.run(client_handler(args.test))
+        except ImportError:
+            asyncio.run(client_handler(args.test))
 
     else:
         parser.print_help()

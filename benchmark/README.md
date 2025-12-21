@@ -37,7 +37,7 @@ Two distinct benchmarks are provided to evaluate the performance of the `AsyncWe
 
     This is a rigorous, end-to-end test. It first generates a multi-gigabyte file of random data and its SHA256 hash. The benchmark then streams this file from disk over the WebSocket connection. The receiving end calculates the hash of the incoming stream and verifies it against the original, ensuring complete data integrity.
 
-    It measures the performance of the entire system pipeline, including Disk I/O speed, CPU hashing speed, and network transfer. On many systems, it is likely to be bottlenecked by the CPU's hashing performance or the disk's read speed. Modern OSes will cache the test file in RAM, hence it is reccomended to repeat this test multiple times to get an average result.
+    It measures the performance of the entire system pipeline, including Disk I/O speed, CPU hashing speed, and network transfer. On many systems, it is likely to be bottlenecked by the CPU's hashing performance or the disk speed. The result of the first run should be discarded as this reflects disk read speed rather than code performance, when the file is not cached in RAM.
 
 Prerequisites
 ------
@@ -154,6 +154,6 @@ Benchmark results can vary significantly based on system-level factors. The foll
     start /affinity 2 python ws_bench_1_client.py
     ```
 
-- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L96) enum. A concurrent test will terminate as soon as the faster of the two directions (usually download) finishes.
+- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L96) enum. A concurrent test completes when both directions finish.
 
 - **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L86) and [`recv_queue`](ws_bench_utils.py#L85) sizes within the [`TestConfig`](ws_bench_utils.py#L76) class to observe the impact on performance and backpressure.

@@ -7,12 +7,12 @@ import asyncio
 import os
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
+from enum import Enum, auto
 from ipaddress import IPv4Address
 from logging import DEBUG, Formatter, Logger, StreamHandler, getLogger
 from pathlib import Path
 from ssl import PROTOCOL_TLS_SERVER, SSLContext
 from typing import TextIO
-from enum import Enum, auto
 
 
 class BenchmarkDirection(Enum):

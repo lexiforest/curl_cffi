@@ -3,23 +3,12 @@
 Websocket client simple benchmark - TLS (WSS)
 """
 import time
-from asyncio import (
-    FIRST_COMPLETED,
-    AbstractEventLoop,
-    CancelledError,
-    Task,
-    sleep,
-    wait,
-)
+from asyncio import AbstractEventLoop, CancelledError, Task, TaskGroup, get_running_loop
+from asyncio import run as run_async
+from asyncio import sleep
 
 from typing_extensions import Never
-from ws_bench_utils import (
-    BenchmarkDirection,
-    binary_data_generator,
-    config,
-    get_loop,
-    logger,
-)
+from ws_bench_utils import BenchmarkDirection, binary_data_generator, config, logger
 
 from curl_cffi import AsyncSession, AsyncWebSocket, Response, WebSocketClosed
 
@@ -106,18 +95,18 @@ async def ws_sender(ws: AsyncWebSocket) -> None:
         logger.debug(exc)
 
     finally:
+        await ws.close(code=1000)
         duration, avg_rate = calculate_stats(start_time, sent_len)
         print("\r\x1b[K", end="")
         logger.info("Sent: %.2f GB in %.2f seconds", sent_len / (1024**3), duration)
         logger.info("Average throughput (send): %.2f Gbps", avg_rate)
 
 
-async def run_benchmark(loop: AbstractEventLoop) -> None:
+async def run_benchmark() -> None:
     """
     Simple client benchmark which sends/receives binary messages using curl-cffi.
     """
     logger.info("Starting curl-cffi WebSocket benchmark")
-    waiters: set[Task[None]] = set[Task[None]]()
     try:
         async with AsyncSession[Response](
             impersonate="chrome", verify=False
@@ -127,66 +116,53 @@ async def run_benchmark(loop: AbstractEventLoop) -> None:
                 config.srv_path,
                 config.benchmark_direction.name,
             )
-            async with await session.ws_connect(
-                config.srv_path,
-                recv_queue_size=config.recv_queue,
-                send_queue_size=config.send_queue,
-            ) as ws:
+            async with (
+                await session.ws_connect(
+                    config.srv_path,
+                    recv_queue_size=config.recv_queue,
+                    send_queue_size=config.send_queue,
+                ) as ws,
+                TaskGroup() as tg,
+            ):
                 match config.benchmark_direction:
                     case BenchmarkDirection.READ_ONLY:
-                        waiters.add(loop.create_task(ws_counter(ws)))
+                        _ = tg.create_task(ws_counter(ws))
 
                     case BenchmarkDirection.SEND_ONLY:
-                        waiters.add(loop.create_task(ws_sender(ws)))
+                        _ = tg.create_task(ws_sender(ws))
 
                     case BenchmarkDirection.CONCURRENT:
-                        waiters.add(loop.create_task(ws_counter(ws)))
-                        waiters.add(loop.create_task(ws_sender(ws)))
-
-                _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
+                        _ = tg.create_task(ws_counter(ws))
+                        _ = tg.create_task(ws_sender(ws))
 
     except Exception:
         logger.exception("curl-cffi benchmark failed")
         raise
 
-    finally:
-        for wait_task in waiters:
-            try:
-                if not wait_task.done():
-                    _ = wait_task.cancel()
-                    await wait_task
 
-            except CancelledError:
-                ...
-
-
-async def main(loop: AbstractEventLoop) -> None:
+async def main() -> None:
     """Entrypoint"""
-    waiters: set[Task[None]] = set[Task[None]]()
-
+    loop: AbstractEventLoop = get_running_loop()
+    health_check_task: Task[Never] = loop.create_task(health_check())
     try:
-        # Create the health check and benchmark tasks
-        waiters.update(
-            {loop.create_task(health_check()), loop.create_task(run_benchmark(loop))}
-        )
-        _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
+        await run_benchmark()
 
     except (KeyboardInterrupt, CancelledError):
         logger.debug("Cancelling benchmark")
 
     finally:
-        for wait_task in waiters:
-            try:
-                if not wait_task.done():
-                    _ = wait_task.cancel()
-                    await wait_task
-            except CancelledError:
-                ...
+        try:
+            _ = health_check_task.cancel()
+            await health_check_task
+        except CancelledError:
+            ...
 
 
 if __name__ == "__main__":
-    evt_loop: AbstractEventLoop = get_loop()
     try:
-        evt_loop.run_until_complete(main(evt_loop))
-    finally:
-        evt_loop.close()
+        # pylint: disable-next=import-outside-toplevel
+        import uvloop
+
+        uvloop.run(main())
+    except ImportError:
+        run_async(main())
