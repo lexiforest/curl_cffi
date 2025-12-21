@@ -861,6 +861,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         This sets the exception attribute and adds the exception into the receive
         queue. This is then checked by the public methods to raise errors correctly.
+        Since this is written only by the event-loop thread, no lock is required as
+        long as asyncio loop affinity is respected.
 
         Args:
             exc (Exception): The exception object that gets raised.
@@ -1165,6 +1167,8 @@ class AsyncWebSocket(BaseWebSocket):
         This method sends a WebSocket close frame to the peer, waits for queued
         outgoing messages to be sent, and then shuts down the connection. This is
         the recommended way to close the session.
+
+        A graceful close is best-effort and may be skipped if termination occurs.
 
         Args:
             code (int, optional): Close code. Defaults to ``WsCloseCode.OK``.
