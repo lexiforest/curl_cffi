@@ -17,7 +17,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
 from select import select
-from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, ClassVar, Final, Literal, TypeVar, cast
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -50,6 +50,14 @@ if TYPE_CHECKING:
 
 # We need a partial for dumps() because a custom function may not accept the parameter
 dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
+
+
+class _TerminationSentinel:
+    __slots__ = ()
+
+
+TERMINATION_SENTINEL: Final[_TerminationSentinel] = _TerminationSentinel()
+# TERMINATION_SENTINEL: Final = object()
 
 
 @dataclass
@@ -704,7 +712,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         ```python
         async with (
-            AsyncSession[Response](...) as session,
+            AsyncSession(...) as session,
             await session.ws_connect(...) as ws,
         ):
             ...
@@ -713,7 +721,7 @@ class AsyncWebSocket(BaseWebSocket):
         Important:
             This WebSocket implementation uses a decoupled I/O model. Network
             operations occur in background tasks. As a result, network-related
-            errors are raised in a subsequent calls to ``send()`` or ``recv()``.
+            errors are raised in subsequent calls to ``send()`` or ``recv()``.
 
         Args:
             session (AsyncSession): An instantiated AsyncSession object.
@@ -881,6 +889,10 @@ class AsyncWebSocket(BaseWebSocket):
         # Return early if already started
         if self._read_task is not None:
             return
+
+        # Return early if terminated before start
+        if self._terminated:
+            raise WebSocketClosed("WebSocket already terminated")
 
         # Check the yield masks are correctly configured
         if (self._recv_yield_mask & (self._recv_yield_mask + 1)) != 0:
@@ -1338,8 +1350,8 @@ class AsyncWebSocket(BaseWebSocket):
                     ):
                         recv_error_retries += 1
                         # Formula: base * (2 ^ (attempt - 1))
-                        retry_delay: float = cast(
-                            float, retry_base * (2 ** (recv_error_retries - 1))
+                        retry_delay: float = (  # pyright: ignore[reportAny]
+                            retry_base * (2 ** (recv_error_retries - 1))
                         )
                         # Add Jitter: +/- 10%
                         jitter: float = retry_delay * 0.1
