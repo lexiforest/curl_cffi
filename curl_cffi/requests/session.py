@@ -879,6 +879,7 @@ class AsyncSession(BaseSession[R]):
         recv_yield_mask: int = 31,
         send_yield_mask: int = 15,
         max_message_size: int = 4 * 1024 * 1024,
+        drain_on_error: bool = False,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -930,10 +931,13 @@ class AsyncSession(BaseSession[R]):
                 to frames and should only be used when the application protocol is
                 designed to handle concatenated data streams. Defaults to ``False``.
             ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
-            recv_yield_mask (int): Set the yield frequency for recieved messages.
-            send_yield_mask (int): Set the yield frequency for sent messages.
-            max_message_size (int): Maximum allowed size for a complete received
+            recv_yield_mask: Set the yield frequency for recieved messages.
+            send_yield_mask: Set the yield frequency for sent messages.
+            max_message_size: Maximum allowed size for a complete received
                 WebSocket message (default: ``4 MiB``).
+            drain_on_error: If ``True``, when a connection error occurs,
+            attempt to consume all the buffered received messages first,
+            before raising the error. Otherwise, raise it immediately (default).
 
             Yield masks control the frequency of cooperative multitasking yields
             in the read/send loop. The loop yields every ``yield_mask + 1``
@@ -999,6 +1003,7 @@ class AsyncSession(BaseSession[R]):
             recv_yield_mask=recv_yield_mask,
             send_yield_mask=send_yield_mask,
             max_message_size=max_message_size,
+            drain_on_error=drain_on_error,
         )
 
         try:
