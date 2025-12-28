@@ -931,7 +931,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv(self, *, timeout: float | None = None) -> tuple[bytes, int]:
         """Receive a WebSocket message.
 
-        This method waits for and returns the next message frame.
+        This method waits for and returns the next complete WebSocket message.
 
         Args:
             timeout: How many seconds to wait for a message before raising
@@ -943,14 +943,17 @@ class AsyncWebSocket(BaseWebSocket):
         Raises:
             WebSocketTimeout: If the timeout expires.
             WebSocketClosed: If the connection is closed.
-            WebSocketError: If a network error occurs.
+            WebSocketError: If a network-level transport error occurs.
 
-        Note:
-            If ``drain_on_error=True`` is set, this method will return all
-            messages that are already buffered in the receive queue at the time
-            ``recv()`` is called, before raising a connection error.
+        Notes:
+            ``WebSocketError`` exceptions may have originated from a prior
+            ``send()`` or ``recv()`` operation, since all operations
+            share the same transport state once a failure occurs.
+
             This method does not wait for additional messages after a transport
-            error is detected.
+            error is detected. If ``drain_on_error=True`` is set, this method
+            will return all messages that are already buffered in the receive
+            queue at the time ``recv()`` is called, before raising a connection error.
 
         """
         # NOTE: recv MUST check _transport_exception before blocking.
@@ -1046,11 +1049,6 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> None:
         """Send a data frame.
 
-        This is a lightweight, non-blocking call that queues the payload for sending.
-        Actual network transmission is performed by a background task.
-        To ensure all queued messages have been handed to libcurl,
-        call ``await ws.flush()``.
-
         libcurl supports frames up to ``65536`` bytes. Larger payloads are split into
         continuation frames so they arrive as a single logical WebSocket message.
 
@@ -1065,17 +1063,22 @@ class AsyncWebSocket(BaseWebSocket):
         Raises:
             WebSocketClosed: If the connection is closed or terminating.
             WebSocketTimeout: If the send queue is full and ``timeout`` expires.
-            WebSocketError: Exceptions from the underlying transport
-            (e.g., connection reset) encountered during I/O operations.
+            WebSocketError: If a network-level transport error occurs.
 
         Notes:
-            This method does not wait for network acknowledgement. Network errors
-            during transmission will be raised by the next call to ``recv`` or ``send``.
+            This is a lightweight, non-blocking call that queues the payload
+            for sending. Actual network transmission is performed by a background
+            task. To ensure all queued messages have been handed to libcurl,
+            call ``await ws.flush()``. This method does not wait for network
+            acknowledgement. Network errors during transmission will be raised
+            by the next call to ``recv()`` or ``send()``.
+
+            ``WebSocketError`` exceptions may have originated from a prior
+            ``send()`` or ``recv()`` operation, since all operations
+            share the same transport state once a failure occurs.
         """
         if self._transport_exception is not None:
-            raise WebSocketError(
-                "Cannot send, connection lost."
-            ) from self._transport_exception
+            raise self._transport_exception
 
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
@@ -1604,7 +1607,7 @@ class AsyncWebSocket(BaseWebSocket):
             ]
             chunk_len: int = len(chunk)
 
-            # Handle frame fragmentation and prevents CONT leakage.
+            # Handle frame fragmentation and prevent CONT leakage.
             current_flags: CurlWsFlag | int = base_flags
             if (offset + chunk_len) < total_bytes:
                 current_flags |= CurlWsFlag.CONT
