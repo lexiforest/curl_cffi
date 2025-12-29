@@ -847,8 +847,8 @@ class AsyncWebSocket(BaseWebSocket):
         - transport errors
 
         After this method is called, no further messages will be delivered
-        and all ``recv()`` calls will fail. No lock is required when asyncio
-        loop affinity is respected.
+        and all ``recv()`` calls will fail. ``_finalize_connection()`` is intended
+        for event-loop context, but ``terminate()`` is thread-safe.
 
         Args:
             exc (Exception): The exception object that gets raised. This does not
@@ -940,6 +940,10 @@ class AsyncWebSocket(BaseWebSocket):
             will return all messages that are already buffered in the receive
             queue at the time ``recv()`` is called, before raising a connection error.
 
+            Unlike some other WebSocket libraries that panic at the sight of
+            concurrent ``recv()`` calls, this method fully supports concurrent
+            invocations — each caller awaits the next available message and
+            receives distinct messages in FIFO order.
         """
         # Fast-fail when transport already errored and we aren't draining.
         if self._transport_exception is not None and not self.drain_on_error:
@@ -963,12 +967,21 @@ class AsyncWebSocket(BaseWebSocket):
             self._receive_queue.get()
         )
 
-        # Wait for the first of: queue_waiter or _read_task
-        done, _ = await asyncio.wait(
-            (queue_waiter, self._read_task),
-            return_when=asyncio.FIRST_COMPLETED,
-            timeout=timeout,
-        )
+        try:
+            # Wait for the first of: queue_waiter or _read_task
+            done, _ = await asyncio.wait(
+                (queue_waiter, self._read_task),
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=timeout,
+            )
+
+        except asyncio.CancelledError:
+            # Caller cancelled — cancel the waiter and re-raise
+            if not queue_waiter.done():
+                _ = queue_waiter.cancel()
+                with suppress(asyncio.CancelledError):
+                    await queue_waiter
+            raise
 
         # Timeout occurred and no message
         if not done:
