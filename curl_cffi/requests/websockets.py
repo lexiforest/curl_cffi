@@ -847,10 +847,8 @@ class AsyncWebSocket(BaseWebSocket):
         - transport errors
 
         After this method is called, no further messages will be delivered
-        and all ``recv()`` calls will fail.
-
-        IMPORTANT: Must only be called from the event loop thread. If ran by the
-        event-loop thread, no lock is required when asyncio loop affinity is respected.
+        and all ``recv()`` calls will fail. No lock is required when asyncio
+        loop affinity is respected.
 
         Args:
             exc (Exception): The exception object that gets raised. This does not
