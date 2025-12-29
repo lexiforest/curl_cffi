@@ -17,7 +17,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
 from select import select
-from typing import TYPE_CHECKING, ClassVar, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -44,16 +44,12 @@ if TYPE_CHECKING:
     ON_ERROR_T = Callable[["WebSocket", CurlError], None]
     ON_OPEN_T = Callable[["WebSocket"], None]
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
-    RECV_QUEUE_ITEM = tuple[bytes, int] | object
+    RECV_QUEUE_ITEM = tuple[bytes, int]
     SEND_QUEUE_ITEM = tuple[bytes, CurlWsFlag]
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
 dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
-
-
-# No more messages can arrive after the sentinel is enqueued.
-TERMINATION_SENTINEL: Final[object] = object()
 
 
 @dataclass
@@ -667,8 +663,6 @@ class AsyncWebSocket(BaseWebSocket):
         "_transport_exception",
         "_max_message_size",
         "drain_on_error",
-        "_sentinels_dispatched",
-        "_recv_waiters",
     )
 
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
@@ -780,8 +774,6 @@ class AsyncWebSocket(BaseWebSocket):
         self._transport_exception: Exception | None = None
         self._max_message_size: int = max_message_size
         self.drain_on_error: bool = drain_on_error
-        self._sentinels_dispatched: bool = False
-        self._recv_waiters: int = 0
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -857,10 +849,6 @@ class AsyncWebSocket(BaseWebSocket):
         After this method is called, no further messages will be delivered
         and all ``recv()`` calls will fail.
 
-        This sets the transport exception and signals termination to receivers
-        via a termination sentinel. The exception itself is not enqueued.
-        The public methods check the transport exception and raise errors accordingly.
-
         IMPORTANT: Must only be called from the event loop thread. If ran by the
         event-loop thread, no lock is required when asyncio loop affinity is respected.
 
@@ -873,13 +861,6 @@ class AsyncWebSocket(BaseWebSocket):
             return
 
         self._transport_exception = exc
-
-        if not self._sentinels_dispatched:
-            self._sentinels_dispatched = True
-            for _ in range(self._recv_waiters):
-                with suppress(asyncio.QueueFull):
-                    self._receive_queue.put_nowait(TERMINATION_SENTINEL)
-
         self.terminate()
 
     def _start_io_tasks(self) -> None:
@@ -956,42 +937,65 @@ class AsyncWebSocket(BaseWebSocket):
             queue at the time ``recv()`` is called, before raising a connection error.
 
         """
-        # NOTE: recv MUST check _transport_exception before blocking.
-        if self._transport_exception is not None and (
-            not self.drain_on_error or self._receive_queue.empty()
-        ):
+        # Fast-fail when transport already errored and we aren't draining.
+        if self._transport_exception is not None and not self.drain_on_error:
             raise self._transport_exception
 
+        # Hot path: immediate buffered item (zero allocation).
         try:
-            item: RECV_QUEUE_ITEM = self._receive_queue.get_nowait()
-        except asyncio.QueueEmpty as exc:
-            # Register as waiter
-            self._recv_waiters += 1
+            return self._receive_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
 
-            try:
-                # Check if exception occurred while we were registering
-                if self._transport_exception is not None:
-                    raise self._transport_exception from exc
+        # Terminal checks when queue is empty.
+        if self._transport_exception is not None:
+            raise self._transport_exception
 
-                # Wait for message, if crash happens now, finalize sees registration.
-                if timeout is None:
-                    item = await self._receive_queue.get()
-                else:
-                    item = await asyncio.wait_for(self._receive_queue.get(), timeout)
-            except asyncio.TimeoutError as e:
-                raise WebSocketTimeout(
-                    "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
-                ) from e
-            finally:
-                self._recv_waiters -= 1
-
-        if item is TERMINATION_SENTINEL:
-            if self._transport_exception is not None:
-                raise self._transport_exception
-
+        if self._read_task is None or self._read_task.done():
             raise WebSocketClosed("WebSocket is closed")
 
-        return cast(tuple[bytes, int], item)
+        # Cold path: wait for data or for the reader task to finish.
+        queue_waiter: asyncio.Task[RECV_QUEUE_ITEM] = asyncio.create_task(
+            self._receive_queue.get()
+        )
+
+        # Wait for the first of: queue_waiter or _read_task
+        done, _ = await asyncio.wait(
+            (queue_waiter, self._read_task),
+            return_when=asyncio.FIRST_COMPLETED,
+            timeout=timeout,
+        )
+
+        # Timeout occurred and no message
+        if not done:
+            _ = queue_waiter.cancel()
+            with suppress(asyncio.CancelledError):
+                await queue_waiter
+            raise WebSocketTimeout(
+                "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
+            )
+
+        # If queue_waiter completed first, return its result.
+        if queue_waiter in done:
+            return await queue_waiter
+
+        # Reader task finished first. Cancel the waiter.
+        _ = queue_waiter.cancel()
+        with suppress(asyncio.CancelledError):
+            await queue_waiter
+
+        # Try to return one buffered item when drain is set
+        if self.drain_on_error:
+            try:
+                return self._receive_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+
+        # Propagate any transport exception or raise closed.
+        if self._transport_exception is not None:
+            raise self._transport_exception
+
+        raise WebSocketClosed("Connection closed")
 
     async def recv_str(self, *, timeout: float | None = None) -> str:
         """Receive a text frame.
@@ -1457,13 +1461,6 @@ class AsyncWebSocket(BaseWebSocket):
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
             self._finalize_connection(e)
-
-        finally:
-            # Enqueue generic closed message as a safety net.
-            if self._transport_exception is None and not self.closed:
-                self._finalize_connection(
-                    WebSocketClosed("WebSocket is closed", code=WsCloseCode.OK)
-                )
 
     async def _write_loop(self) -> None:
         """
