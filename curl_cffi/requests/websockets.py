@@ -940,10 +940,9 @@ class AsyncWebSocket(BaseWebSocket):
             will return all messages that are already buffered in the receive
             queue at the time ``recv()`` is called, before raising a connection error.
 
-            Unlike some other WebSocket libraries that panic at the sight of
-            concurrent ``recv()`` calls, this method fully supports concurrent
-            invocations — each caller awaits the next available message and
-            receives distinct messages in FIFO order.
+            Concurrent calls to ``recv()`` are supported and safe; each caller
+            awaits the next available message and will receive distinct messages
+            in FIFO order.
         """
         # Fast-fail when transport already errored and we aren't draining.
         if self._transport_exception is not None and not self.drain_on_error:
@@ -1268,13 +1267,10 @@ class AsyncWebSocket(BaseWebSocket):
                 if loop is None:
                     raise RuntimeError("Event loop not available")
 
-                # Scheduling from the same thread
-                if loop.is_running() and loop == asyncio.get_running_loop():
-                    _ = loop.create_task(self._terminate_helper())
-
-                else:
-                    # Cross-thread scheduling
-                    _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
+                # Schedule the termination task
+                _ = loop.call_soon_threadsafe(
+                    lambda: loop.create_task(self._terminate_helper())
+                )
 
             except RuntimeError:
                 try:
