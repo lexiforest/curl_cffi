@@ -882,12 +882,18 @@ class AsyncWebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket already terminated")
 
         # Check the yield masks are correctly configured
-        if (self._recv_yield_mask & (self._recv_yield_mask + 1)) != 0:
+        if (
+            self._recv_yield_mask < 1
+            or (self._recv_yield_mask & (self._recv_yield_mask + 1)) != 0
+        ):
             raise WebSocketError(
                 "recv_yield_mask must be a power of two minus one (e.g. 15, 31,63)",
                 code=CurlECode.BAD_FUNCTION_ARGUMENT,
             )
-        if (self._send_yield_mask & (self._send_yield_mask + 1)) != 0:
+        if (
+            self._send_yield_mask < 1
+            or (self._send_yield_mask & (self._send_yield_mask + 1)) != 0
+        ):
             raise WebSocketError(
                 "send_yield_mask must be a power of two minus one (e.g. 7, 15,31)",
                 code=CurlECode.BAD_FUNCTION_ARGUMENT,
@@ -1251,9 +1257,13 @@ class AsyncWebSocket(BaseWebSocket):
                 if loop is None:
                     raise RuntimeError("Event loop not available")
 
-                _ = loop.call_soon_threadsafe(
-                    lambda: loop.create_task(self._terminate_helper())
-                )
+                # Scheduling from the same thread
+                if loop.is_running() and loop == asyncio.get_running_loop():
+                    _ = loop.create_task(self._terminate_helper())
+
+                else:
+                    # Cross-thread scheduling
+                    _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
 
             except RuntimeError:
                 try:
@@ -1355,10 +1365,11 @@ class AsyncWebSocket(BaseWebSocket):
                             loop.add_reader(self._sock_fd, read_future.set_result, None)
                             await read_future
 
-                        except OSError:
+                        # pylint: disable-next=broad-exception-caught
+                        except Exception as exc:
                             self._finalize_connection(
                                 WebSocketError(
-                                    "Socket closed unexpectedly",
+                                    f"Socket closed unexpectedly: {exc}",
                                     CurlECode.NO_CONNECTION_AVAILABLE,
                                 )
                             )
@@ -1366,7 +1377,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                         finally:
                             if self._sock_fd != -1:
-                                _ = loop.remove_reader(self._sock_fd)
+                                with suppress(Exception):
+                                    _ = loop.remove_reader(self._sock_fd)
 
                         # Loop back to the top to try reading again
                         continue
@@ -1443,8 +1455,10 @@ class AsyncWebSocket(BaseWebSocket):
                 # If a CLOSE frame is received, the reader is done.
                 if flags & close_flag:
                     chunks.clear()
-                    with suppress(asyncio.QueueFull):
+                    try:
                         queue_put_nowait((chunk, flags))
+                    except asyncio.QueueFull:
+                        await queue_put((chunk, flags))
                     await self._handle_close_frame(chunk)
                     return
 
@@ -1653,7 +1667,8 @@ class AsyncWebSocket(BaseWebSocket):
                         loop.add_writer(sock_fd, write_future.set_result, None)
                         await write_future
 
-                    except OSError as exc:
+                    # pylint: disable-next=broad-exception-caught
+                    except Exception as exc:
                         self._finalize_connection(
                             WebSocketError(
                                 f"Socket closed unexpectedly during write: {exc}",
@@ -1664,7 +1679,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                     finally:
                         if sock_fd != -1:
-                            _ = loop.remove_writer(sock_fd)
+                            with suppress(Exception):
+                                _ = loop.remove_writer(sock_fd)
 
                     # Retry the exact same chunk
                     continue
