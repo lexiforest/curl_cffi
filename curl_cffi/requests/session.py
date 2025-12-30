@@ -36,7 +36,9 @@ from .models import STREAM_END, Response
 from .utils import HttpVersionLiteral, not_set, set_curl_options
 from .websockets import AsyncWebSocket, WebSocket, WebSocketError
 
-# Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
+
+# -------------------- typing --------------------
+
 if sys.version_info >= (3, 13):
     R = TypeVar("R", bound=Response, default=Response)
 else:
@@ -81,54 +83,13 @@ if TYPE_CHECKING:
         response_class: Optional[type[R]]
         discard_cookies: bool
         raise_for_status: bool
-
-    class StreamRequestParams(TypedDict, total=False):
-        params: Optional[Union[dict, list, tuple]]
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]]
-        json: Optional[dict | list]
-        headers: Optional[HeaderTypes]
-        cookies: Optional[CookieTypes]
-        files: Optional[dict]
-        auth: Optional[tuple[str, str]]
-        timeout: Optional[Union[float, tuple[float, float], object]]
-        allow_redirects: Optional[bool]
-        max_redirects: Optional[int]
-        proxies: Optional[ProxySpec]
-        proxy: Optional[str]
-        proxy_auth: Optional[tuple[str, str]]
-        verify: Optional[bool]
-        referer: Optional[str]
-        accept_encoding: Optional[str]
-        content_callback: Optional[Callable]
-        impersonate: Optional[BrowserTypeLiteral]
-        ja3: Optional[str]
-        akamai: Optional[str]
-        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
-        default_headers: Optional[bool]
-        default_encoding: Union[str, Callable[[bytes], str]]
-        quote: Union[str, Literal[False]]
-        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
-        interface: Optional[str]
-        cert: Optional[Union[str, tuple[str, str]]]
-        max_recv_speed: int
-        multipart: Optional[CurlMime]
-        discard_cookies: bool
-
-    class RequestParams(StreamRequestParams, total=False):
-        stream: Optional[bool]
+        dns: Optional[Union[str, list[str]]]
 
 else:
-
-    class _Unpack:
-        @staticmethod
-        def __getitem__(*args, **kwargs):
-            pass
-
-    Unpack = _Unpack()
-
+    Unpack = TypedDict
     ProxySpec = dict[str, str]
     BaseSessionParams = TypedDict
-    StreamRequestParams, RequestParams = TypedDict, TypedDict
+
 
 ThreadType = Literal["eventlet", "gevent"]
 HttpMethod = Literal[
@@ -136,8 +97,9 @@ HttpMethod = Literal[
 ]
 
 
+# -------------------- helpers --------------------
+
 def _is_absolute_url(url: str) -> bool:
-    """Check if the provided url is an absolute url"""
     parsed_url = urlparse(url)
     return bool(parsed_url.scheme and parsed_url.hostname)
 
@@ -155,6 +117,8 @@ def _peek_aio_queue(q: asyncio.Queue, default=None):
     except IndexError:
         return default
 
+
+# ==================== BASE SESSION ====================
 
 class BaseSession(Generic[R]):
     """Provide common methods for setting curl options and reading info in sessions."""
@@ -190,9 +154,10 @@ class BaseSession(Generic[R]):
         response_class: Optional[type[R]] = None,
         discard_cookies: bool = False,
         raise_for_status: bool = False,
+        dns: Optional[Union[str, list[str]]] = None,
     ):
         self.headers = Headers(headers)
-        self._cookies = Cookies(cookies)  # guarded by @property
+        self._cookies = Cookies(cookies)
         self.auth = auth
         self.base_url = base_url
         self.params = params
@@ -207,18 +172,31 @@ class BaseSession(Generic[R]):
         self.extra_fp = extra_fp
         self.default_headers = default_headers
         self.default_encoding = default_encoding
+
+        # ---------- DNS HANDLING (FINAL, CORRECT) ----------
         self.curl_options = curl_options or {}
+
+        if dns is not None and not isinstance(dns, (str, list, tuple)):
+            raise TypeError("`dns` must be a string or a list/tuple of strings")
+
+        if dns:
+            if isinstance(dns, (list, tuple)):
+                dns = ",".join(dns)
+
+            # Respect explicit curl_options
+            self.curl_options.setdefault(CurlOpt.DNS_SERVERS, dns)
+        # --------------------------------------------------
+
         self.curl_infos = curl_infos or []
         self.http_version = http_version
         self.debug = debug
         self.interface = interface
         self.cert = cert
 
-        if response_class is not None and issubclass(response_class, Response) is False:
+        if response_class is not None and not issubclass(response_class, Response):
             raise TypeError(
                 "`response_class` must be a subclass of "
-                "`curl_cffi.requests.models.Response`, "
-                f"not of type `{response_class}`"
+                "`curl_cffi.requests.models.Response`"
             )
         self.response_class = response_class or Response
         self.discard_cookies = discard_cookies
@@ -235,14 +213,14 @@ class BaseSession(Generic[R]):
             raise ValueError("You need to provide an absolute url for 'base_url'")
 
         self._closed = False
-        # Look for requests environment configuration
-        # and be compatible with cURL.
+
         if self.verify is True or self.verify is None:
             self.verify = (
                 os.environ.get("REQUESTS_CA_BUNDLE")
                 or os.environ.get("CURL_CA_BUNDLE")
                 or self.verify
             )
+
 
     def _parse_response(
         self, curl, buffer, header_buffer, default_encoding, discard_cookies
