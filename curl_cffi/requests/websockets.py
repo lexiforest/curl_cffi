@@ -1453,7 +1453,7 @@ class AsyncWebSocket(BaseWebSocket):
                     chunks.append(chunk)
 
                     # If the message is complete, process and dispatch it
-                    if frame.bytesleft <= 0 and (flags & cont_flag) == 0:
+                    if not (flags & cont_flag or frame.bytesleft):
                         message: bytes = (
                             chunks[0] if len(chunks) == 1 else b"".join(chunks)
                         )
@@ -1466,7 +1466,7 @@ class AsyncWebSocket(BaseWebSocket):
                             await queue_put((message, flags))
 
                     msg_counter += 1
-                    if (msg_counter & yield_mask) == 0:
+                    if not (msg_counter & yield_mask):
                         await asyncio.sleep(0)
                         msg_counter = 0
 
@@ -1531,7 +1531,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Build the rest of the batch without waiting.
                 batch: list[tuple[bytes, CurlWsFlag]] = [(payload, flags)]
-                if not flags & CurlWsFlag.CLOSE:
+                if not (flags & CurlWsFlag.CLOSE):
                     while len(batch) < self._max_send_batch_size:
                         try:
                             payload, frame = queue_get_nowait()
@@ -1557,7 +1557,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                                     # Prevent large batches from starving loop
                                     ops_count += 1
-                                    if (ops_count & yield_mask) == 0:
+                                    if not (ops_count & yield_mask):
                                         await asyncio.sleep(0)
                                         ops_count = 0
 
@@ -1568,7 +1568,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                                 # Yield check on coalesced frames
                                 ops_count += 1
-                                if (ops_count & yield_mask) == 0:
+                                if not (ops_count & yield_mask):
                                     await asyncio.sleep(0)
                                     ops_count = 0
 
@@ -1587,7 +1587,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                             # Yield check when payload is less than max frame size.
                             ops_count += 1
-                            if (ops_count & yield_mask) == 0:
+                            if not (ops_count & yield_mask):
                                 await asyncio.sleep(0)
                                 ops_count = 0
 
@@ -1679,7 +1679,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Cooperative yield checks
                 write_ops += 1
-                if (write_ops & yield_mask) == 0:
+                if not (write_ops & yield_mask):
                     await asyncio.sleep(0)
 
             except CurlError as e:
