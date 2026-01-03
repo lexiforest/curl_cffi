@@ -1143,9 +1143,9 @@ class AsyncWebSocket(BaseWebSocket):
             else:
                 await self._send_queue.put((payload, flags))
 
-                # If we woke up because terminate() drained the queue, fail now.
-                if self._transport_exception is not None:
-                    raise self._transport_exception from exc
+            # If we woke up because terminate() drained the queue, fail now.
+            if self._transport_exception is not None:
+                raise self._transport_exception from exc
 
     async def send_binary(self, payload: bytes) -> None:
         """Send a binary frame.
