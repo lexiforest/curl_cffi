@@ -936,13 +936,17 @@ class AsyncWebSocket(BaseWebSocket):
             share the same transport state once a failure occurs.
 
             This method does not wait for additional messages after a transport
-            error is detected. If ``drain_on_error=True`` is set, this method
-            will return all messages that are already buffered in the receive
-            queue at the time ``recv()`` is called, before raising a connection error.
+            error is detected. If ``drain_on_error=True``, subsequent calls to
+            ``recv()`` will return any messages that were buffered in the receive
+            queue at the time the reader failed, before the connection error is raised.
 
             Concurrent calls to ``recv()`` are supported and safe; each caller
             awaits the next available message and will receive distinct messages
             in FIFO order.
+
+            If this coroutine is cancelled while a message is being received,
+            that message may be dropped. Cancellation is treated as abandoning
+            the receive operation.
         """
         # Fast-fail when transport already errored and we aren't draining.
         if self._transport_exception is not None and not self.drain_on_error:
@@ -974,8 +978,11 @@ class AsyncWebSocket(BaseWebSocket):
                 timeout=timeout,
             )
 
+        # Caller cancelled — cancel the waiter and re-raise
         except asyncio.CancelledError:
-            # Caller cancelled — cancel the waiter and re-raise
+            # We accept that if the queue item arrived exactly now, it is lost.
+            # Preserving it would risk reordering the stream (LIFO vs FIFO).
+            # An internal buffer deque solution may be implemented in future.
             if not queue_waiter.done():
                 _ = queue_waiter.cancel()
                 with suppress(asyncio.CancelledError):
@@ -987,6 +994,11 @@ class AsyncWebSocket(BaseWebSocket):
             _ = queue_waiter.cancel()
             with suppress(asyncio.CancelledError):
                 await queue_waiter
+
+            # Prefer transport error over timeout if both happen
+            if self._transport_exception is not None:
+                raise self._transport_exception
+
             raise WebSocketTimeout(
                 "WebSocket recv() timed out", CurlECode.OPERATION_TIMEDOUT
             )
@@ -1130,6 +1142,10 @@ class AsyncWebSocket(BaseWebSocket):
                     ) from e
             else:
                 await self._send_queue.put((payload, flags))
+
+                # If we woke up because terminate() drained the queue, fail now.
+                if self._transport_exception is not None:
+                    raise self._transport_exception from exc
 
     async def send_binary(self, payload: bytes) -> None:
         """Send a binary frame.
