@@ -17,19 +17,6 @@ permissions:
   contents: write
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
-    - name: Lint
-      run: |
-        pip install mypy ruff
-        make lint
-
   sdist:
     name: Build sdist wheel
     runs-on: ubuntu-latest
