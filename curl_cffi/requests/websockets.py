@@ -105,7 +105,7 @@ class WebSocketError(CurlError):
     def __init__(
         self, message: str, code: WsCloseCode | CurlECode | Literal[0] = 0
     ) -> None:
-        super().__init__(message, code)  # type: ignore
+        super().__init__(message, code)  # pyright: ignore[reportUnknownMemberType]
 
 
 class WebSocketClosed(  # pyright: ignore[reportUnsafeMultipleInheritance]
@@ -1115,6 +1115,10 @@ class AsyncWebSocket(BaseWebSocket):
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
 
+        # Fail fast when writer is done
+        if self._write_task is not None and self._write_task.done():
+            raise WebSocketClosed("WebSocket writer terminated; cannot send")
+
         # cURL expects bytes
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
@@ -1731,19 +1735,45 @@ class AsyncWebSocket(BaseWebSocket):
             WebSocketError: If the writer task has already terminated while unsent
             messages remain in the queue.
         """
-        if (
-            self._write_task
-            and self._write_task.done()
-            and not self._send_queue.empty()
-        ):
-            raise WebSocketError(
-                "Cannot flush, writer task has terminated unexpectedly."
-            )
+        if self._write_task is None:
+            return
+
+        # Create a task for the queue join operation
+        join_task: asyncio.Task[None] = asyncio.create_task(self._send_queue.join())
 
         try:
-            await asyncio.wait_for(self._send_queue.join(), timeout=timeout)
-        except asyncio.TimeoutError as e:
-            raise WebSocketTimeout("Timed out waiting for send queue to flush.") from e
+            done, _ = await asyncio.wait(
+                {join_task, self._write_task},
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=timeout,
+            )
+
+            if not done:
+                raise WebSocketTimeout("Timed out waiting for send queue to flush.")
+
+            # Fast path: queue drained
+            if join_task in done:
+                return
+
+            # Writer finished first
+            if self._write_task in done:
+                try:
+                    self._write_task.result()
+                except Exception as exc:
+                    raise WebSocketError("Writer task crashed while flushing.") from exc
+
+                # If the writer finished gracefully
+                if self._send_queue.empty():
+                    return
+
+                raise WebSocketError("Writer task stopped unexpectedly while flushing.")
+
+        finally:
+            # Cancel join task on early exit to avoid leak.
+            if not join_task.done():
+                _ = join_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await join_task
 
     async def _terminate_helper(self) -> None:
         """Utility method for connection termination"""
