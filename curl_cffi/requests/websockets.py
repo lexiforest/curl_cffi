@@ -593,7 +593,7 @@ class WebSocket(BaseWebSocket):
 
                     if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                         try:
-                            msg = msg.decode()  # type: ignore
+                            emit_msg: str | bytes = msg.decode()
                         except UnicodeDecodeError as e:
                             self._close_code = WsCloseCode.INVALID_DATA
                             self.close(WsCloseCode.INVALID_DATA)
@@ -601,8 +601,11 @@ class WebSocket(BaseWebSocket):
                                 "Invalid UTF-8", WsCloseCode.INVALID_DATA
                             ) from e
 
+                    else:
+                        emit_msg = msg
+
                     if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
-                        self._emit("message", msg)
+                        self._emit("message", emit_msg)
 
                 chunks = []  # Reset chunks for next message
 
@@ -663,6 +666,7 @@ class AsyncWebSocket(BaseWebSocket):
         "_transport_exception",
         "_max_message_size",
         "drain_on_error",
+        "_block_on_recv_queue_full",
     )
 
     _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
@@ -683,6 +687,7 @@ class AsyncWebSocket(BaseWebSocket):
         send_yield_mask: int = 15,
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
+        block_on_recv_queue_full: bool = True,
     ) -> None:
         """Initializes an Async WebSocket session.
 
@@ -713,9 +718,9 @@ class AsyncWebSocket(BaseWebSocket):
         ```
 
         Important:
-            This WebSocket implementation uses a decoupled I/O model. Network
-            operations occur in background tasks. As a result, network-related
-            errors are raised in subsequent calls to ``send()`` or ``recv()``.
+            This WebSocket implementation uses a decoupled I/O model where network
+            operations occur in background tasks and errors are raised in subsequent
+            calls to :meth:`send()` or :meth:`recv()`.
 
         Args:
             session (AsyncSession): An instantiated AsyncSession object.
@@ -723,8 +728,8 @@ class AsyncWebSocket(BaseWebSocket):
             autoclose (bool, optional): Close the WS on receiving a close frame.
             debug (bool, optional): Enable debug messages. Defaults to False.
             recv_queue_size (int, optional): The maximum number of incoming WebSocket
-                messages to buffer internally. This queue stores messages received
-                by the Curl socket that are waiting to be consumed by calling `recv()`
+                messages to buffer internally. This queue stores messages received by
+                the Curl socket that are waiting to be consumed by calling ``recv()``.
             send_queue_size (int, optional): The maximum number of outgoing WebSocket
                 messages to buffer before applying network backpressure. When you call
                 ``send()`` the message is placed in this queue and transmitted when
@@ -736,8 +741,15 @@ class AsyncWebSocket(BaseWebSocket):
             send_yield_mask (int): Set the yield frequency for sent messages.
             max_message_size (int): The maximum size of a complete received message.
             drain_on_error (bool, optional): If ``True``, when a connection error
-            occurs, attempt to consume all the buffered received messages first,
-            before raising the error. Otherwise, raise it immediately (default).
+                occurs, attempt to consume already-received buffered messages first,
+                before raising the error. Otherwise, raise it immediately (default).
+            block_on_recv_queue_full (bool, optional): If ``True``, the reader should
+                block when the receive queue is full. If set to ``False``, the
+                connection will be failed immediately to avoid silent message drops.
+                The message that caused the overflow is not delivered; any messages
+                already buffered may be drained if ``drain_on_error`` is set.
+                Full receive queues can be avoided by consuming messages faster,
+                or increasing the size of the receive queue.
 
             Yield masks are bitmasks that sets the yield frequency for cooperative
             multitasking, checked every ``yield_mask + 1`` operations. This value
@@ -774,6 +786,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._transport_exception: Exception | None = None
         self._max_message_size: int = max_message_size
         self.drain_on_error: bool = drain_on_error
+        self._block_on_recv_queue_full: bool = block_on_recv_queue_full
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -1014,10 +1027,8 @@ class AsyncWebSocket(BaseWebSocket):
 
         # Try to return one buffered item when drain is set
         if self.drain_on_error:
-            try:
+            with suppress(asyncio.QueueEmpty):
                 return self._receive_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
 
         # Propagate any transport exception or raise closed.
         if self._transport_exception is not None:
@@ -1346,9 +1357,13 @@ class AsyncWebSocket(BaseWebSocket):
         ping_flag = CurlWsFlag.PING
         control_mask: int = ping_flag | close_flag
         max_msg_size: int = self._max_message_size
+        block_on_recv: bool = self._block_on_recv_queue_full
         errno_11_msgs: tuple[str, ...] = (
             "errno 11",
             "resource temporarily unavailable",
+        )
+        queue_full_err: str = (
+            "Receive queue full; failing connection to preserve message integrity"
         )
 
         # Message specific values
@@ -1467,6 +1482,13 @@ class AsyncWebSocket(BaseWebSocket):
                         try:
                             queue_put_nowait((message, flags))
                         except asyncio.QueueFull:
+                            if not block_on_recv:
+                                self._finalize_connection(
+                                    WebSocketError(
+                                        queue_full_err, CurlECode.OUT_OF_MEMORY
+                                    )
+                                )
+                                return
                             await queue_put((message, flags))
 
                     msg_counter += 1
@@ -1485,6 +1507,12 @@ class AsyncWebSocket(BaseWebSocket):
                     try:
                         queue_put_nowait((chunk, flags))
                     except asyncio.QueueFull:
+                        if not block_on_recv:
+                            self._finalize_connection(
+                                WebSocketError(queue_full_err, CurlECode.OUT_OF_MEMORY)
+                            )
+                            return
+
                         await queue_put((chunk, flags))
                     await self._handle_close_frame(chunk)
                     return
@@ -1494,6 +1522,12 @@ class AsyncWebSocket(BaseWebSocket):
                     try:
                         queue_put_nowait((chunk, flags))
                     except asyncio.QueueFull:
+                        if not block_on_recv:
+                            self._finalize_connection(
+                                WebSocketError(queue_full_err, CurlECode.OUT_OF_MEMORY)
+                            )
+                            return
+
                         await queue_put((chunk, flags))
 
         except asyncio.CancelledError:
@@ -1651,6 +1685,7 @@ class AsyncWebSocket(BaseWebSocket):
                 current_flags |= CurlWsFlag.CONT
 
             try:
+                # We need to perform a bytes copy to prevent BufferError crash.
                 # libcurl returns the number of bytes actually sent
                 n_sent: int = curl_ws_send(chunk.tobytes(), current_flags)
 
