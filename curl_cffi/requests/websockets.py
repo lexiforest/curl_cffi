@@ -758,6 +758,9 @@ class AsyncWebSocket(BaseWebSocket):
             fairness by taking up less event loop time, while higher values
             increase throughput at the cost of consuming more loop time.
 
+            If ``block_on_recv_queue_full`` is used, the consumer must keep up,
+            or the connection could to drop due to heartbeat timeouts.
+
         See also:
             https://curl.se/libcurl/c/curl_ws_recv.html
             https://curl.se/libcurl/c/curl_ws_send.html
@@ -1560,29 +1563,53 @@ class AsyncWebSocket(BaseWebSocket):
         send_payload: Callable[..., Awaitable[bool]] = self._send_payload
         queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
         queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
+        queue_done: Callable[[], None] = self._send_queue.task_done
         yield_mask: int = self._send_yield_mask
         ops_count = 0
 
         try:
-            while True:
-                payload, flags = await queue_get()
+            # Hoist the branch - decide loop strategy once at start
+            if not self._coalesce_frames:
 
-                # Build the rest of the batch without waiting.
-                batch: list[tuple[bytes, CurlWsFlag]] = [(payload, flags)]
-                if not (flags & CurlWsFlag.CLOSE):
-                    while len(batch) < self._max_send_batch_size:
-                        try:
-                            payload, frame = queue_get_nowait()
-                            batch.append((payload, frame))
-                            if frame & CurlWsFlag.CLOSE:
-                                break
+                # Optimized fast path, no batching overhead
+                while True:
+                    payload, flags = await queue_get()
 
-                        except asyncio.QueueEmpty:
+                    try:
+                        if not await send_payload(payload, flags):
+                            return
+
+                        if flags & CurlWsFlag.CLOSE:
                             break
 
-                try:
-                    # Process the batch depending on the coalescing strategy
-                    if self._coalesce_frames:
+                        # Perform yield checks
+                        ops_count += 1
+                        if not (ops_count & yield_mask):
+                            await asyncio.sleep(0)
+                            ops_count = 0
+
+                    finally:
+                        queue_done()
+
+            else:
+                # Coalescing path: Batch multiple frames to merge payloads
+                while True:
+                    payload, flags = await queue_get()
+
+                    # Build the rest of the batch without waiting.
+                    batch: list[tuple[bytes, CurlWsFlag]] = [(payload, flags)]
+                    if not (flags & CurlWsFlag.CLOSE):
+                        while len(batch) < self._max_send_batch_size:
+                            try:
+                                payload, frame = queue_get_nowait()
+                                batch.append((payload, frame))
+                                if frame & CurlWsFlag.CLOSE:
+                                    break
+
+                            except asyncio.QueueEmpty:
+                                break
+
+                    try:
                         data_to_coalesce: dict[CurlWsFlag, list[bytes]] = {}
                         for payload, frame in batch:
                             if frame & control_frame_flags:
@@ -1617,26 +1644,15 @@ class AsyncWebSocket(BaseWebSocket):
                         for frame_group, payloads in data_to_coalesce.items():
                             if not await send_payload(b"".join(payloads), frame_group):
                                 return
-                    else:
-                        # Send each message in the batch, preserving frame boundaries.
-                        for payload, frame in batch:
-                            if not await send_payload(payload, frame):
-                                return
 
-                            # Yield check when payload is less than max frame size.
-                            ops_count += 1
-                            if not (ops_count & yield_mask):
-                                await asyncio.sleep(0)
-                                ops_count = 0
+                    finally:
+                        # Mark all processed items as done.
+                        for _ in range(len(batch)):
+                            queue_done()
 
-                finally:
-                    # Mark all processed items as done.
-                    for _ in range(len(batch)):
-                        self._send_queue.task_done()
-
-                # Exit cleanly after sending a CLOSE frame.
-                if batch[-1][1] & CurlWsFlag.CLOSE:
-                    break
+                    # Exit cleanly after sending a CLOSE frame.
+                    if batch[-1][1] & CurlWsFlag.CLOSE:
+                        break
 
         except asyncio.CancelledError:
             pass
