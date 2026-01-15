@@ -1440,8 +1440,11 @@ class AsyncWebSocket(BaseWebSocket):
 
                         finally:
                             if self._sock_fd != -1:
-                                with suppress(Exception):
+                                try:  # noqa: SIM105
                                     _ = loop.remove_reader(self._sock_fd)
+                                # pylint: disable-next=broad-exception-caught
+                                except Exception:
+                                    pass
 
                         # Loop back to the top to try reading again
                         continue
@@ -1787,8 +1790,11 @@ class AsyncWebSocket(BaseWebSocket):
 
                     finally:
                         if sock_fd != -1:
-                            with suppress(Exception):
+                            try:  # noqa: SIM105
                                 _ = loop.remove_writer(sock_fd)
+                            # pylint: disable-next=broad-exception-caught
+                            except Exception:
+                                pass
 
                     # Retry the exact same chunk
                     continue
