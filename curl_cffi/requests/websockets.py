@@ -1542,22 +1542,33 @@ class AsyncWebSocket(BaseWebSocket):
 
     async def _write_loop(self) -> None:
         """
-        The high-level send manager. It efficiently gathers pending messages
-        from the send queue and orchestrates their transmission.
+        The background task responsible for consuming the send queue
+        and transmitting frames.
 
-        This method runs a continuous loop that consumes messages from the
-        ``_send_queue``. To improve performance and reduce system call overhead,
-        it implements an adaptive batching strategy. It greedily gathers
-        multiple pending messages from the queue and optionally coalesces the
-        payloads of messages that share the same flags (e.g., all text frames)
-        into a single, larger payload, ONLY if ``coalesce_frames=True`` and the
-        frame is not a CONTROL frame, as the spec requires them to be whole.
+        To maximize performance, this loop hoists the configuration
+        check and enters one of two distinct processing strategies:
 
-        It will batch as many as possible, then iterate over the batch and send
-        the frames, one at a time. This batching and coalescing significantly
-        improves throughput for high volumes of small messages where the message
-        boundaries do not matter. The final, consolidated payloads are then passed
-        to the ``_send_payload`` method for transmission.
+        1. Standard Mode (No Coalescing):
+            The default, low-latency path. Messages are consumed one-by-one
+            from the queue and transmitted immediately. This guarantees that one
+            ``send()`` call results in exactly one WebSocket message, preserving
+            logical message boundaries.
+
+        2. Coalescing Mode:
+            An optimized throughput path for chatty streams. The loop greedily gathers
+            multiple pending messages from the queue (up to ``max_send_batch_size``
+            and merges their payloads into a single transmission if they share the
+            same flags (e.g., multiple text frames). This reduces system call
+            overhead but does not preserve individual message boundaries.
+
+        Features:
+        - Cooperative Multitasking: Yields to the event loop periodically (controlled
+          by ``send_yield_mask``) to prevent the writer from starving the reader task
+          during high-volume transmission.
+        - Control Frame Priority: PING and CLOSE frames are never coalesced; they
+          trigger an immediate flush of any pending batched data before being sent.
+        - Lifecycle Management: Automatically terminates the connection cleanly upon
+          transmitting a CLOSE frame.
         """
         control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING
         send_payload: Callable[..., Awaitable[bool]] = self._send_payload
