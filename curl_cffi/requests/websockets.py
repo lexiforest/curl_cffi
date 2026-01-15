@@ -8,6 +8,7 @@ import asyncio
 import struct
 import threading
 import warnings
+from asyncio import InvalidStateError as _InvalidStateError
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -118,6 +119,22 @@ class WebSocketTimeout(  # pyright: ignore[reportUnsafeMultipleInheritance]
     WebSocketError, Timeout
 ):
     """WebSocket operation timed out."""
+
+
+def _safe_set_result(fut: asyncio.Future[None]) -> None:
+    """
+    Called by the event loop when fd becomes readable/writable.
+
+    We try to set_result() and silently ignore InvalidStateError which is
+    raised if the future was already finished/cancelled concurrently.
+    This avoids spurious 'Exception in callback' traces in uvloop/asyncio.
+
+    Intentionally using try/except since this is frequently called.
+    """
+    try:  # noqa: SIM105
+        fut.set_result(None)
+    except _InvalidStateError:
+        pass
 
 
 class BaseWebSocket:
@@ -1303,7 +1320,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Schedule the termination task
                 _ = loop.call_soon_threadsafe(
-                    lambda: loop.create_task(self._terminate_helper())
+                    loop.create_task, self._terminate_helper()
                 )
 
             except RuntimeError:
@@ -1368,6 +1385,7 @@ class AsyncWebSocket(BaseWebSocket):
         queue_full_err: str = (
             "Receive queue full; failing connection to preserve message integrity"
         )
+        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
 
         # Message specific values
         recv_error_retries: int = 0
@@ -1407,7 +1425,7 @@ class AsyncWebSocket(BaseWebSocket):
                     if should_retry:
                         read_future: asyncio.Future[None] = loop.create_future()
                         try:
-                            loop.add_reader(self._sock_fd, read_future.set_result, None)
+                            loop.add_reader(self._sock_fd, set_fut_result, read_future)
                             await read_future
 
                         # pylint: disable-next=broad-exception-caught
@@ -1697,6 +1715,7 @@ class AsyncWebSocket(BaseWebSocket):
         offset: int = 0
         write_ops: int = 0
         zero_write_retries: int = 0
+        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
 
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
@@ -1753,7 +1772,7 @@ class AsyncWebSocket(BaseWebSocket):
                     # Wait for socket to be writable
                     write_future: asyncio.Future[None] = loop.create_future()
                     try:
-                        loop.add_writer(sock_fd, write_future.set_result, None)
+                        loop.add_writer(sock_fd, set_fut_result, write_future)
                         await write_future
 
                     # pylint: disable-next=broad-exception-caught
