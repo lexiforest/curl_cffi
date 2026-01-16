@@ -615,17 +615,6 @@ def set_curl_options(
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
-    # extra_fp options
-    if extra_fp:
-        if isinstance(extra_fp, dict):
-            extra_fp = ExtraFingerprints(**extra_fp)
-        if impersonate:
-            warnings.warn(
-                "Extra fingerprints was altered after impersonated version was set.",
-                CurlCffiWarning,
-                stacklevel=1,
-            )
-        set_extra_fp(c, extra_fp)
 
     # ja3 string
     if ja3:
@@ -641,6 +630,18 @@ def set_curl_options(
         if isinstance(extra_fp, dict) and extra_fp.get("tls_permute_extensions"):
             permute = True
         set_ja3_options(c, ja3, permute=permute)
+
+    # extra_fp options
+    if extra_fp:
+        if isinstance(extra_fp, dict):
+            extra_fp = ExtraFingerprints(**extra_fp)
+        if impersonate:
+            warnings.warn(
+                "Extra fingerprints was altered after impersonated version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
+        set_extra_fp(c, extra_fp)
 
     # akamai string
     if akamai:
