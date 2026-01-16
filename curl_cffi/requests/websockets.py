@@ -1013,9 +1013,6 @@ class AsyncWebSocket(BaseWebSocket):
 
         # Caller cancelled — cancel the waiter and re-raise
         except asyncio.CancelledError:
-            # We accept that if the queue item arrived exactly now, it is lost.
-            # Preserving it would risk reordering the stream (LIFO vs FIFO).
-            # An internal buffer deque solution may be implemented in future.
             if not queue_waiter.done():
                 _ = queue_waiter.cancel()
                 with suppress(asyncio.CancelledError):
@@ -1318,10 +1315,8 @@ class AsyncWebSocket(BaseWebSocket):
                 if loop is None:
                     raise RuntimeError("Event loop not available")
 
-                # Schedule the termination task
-                _ = loop.call_soon_threadsafe(
-                    loop.create_task, self._terminate_helper()
-                )
+                # Run the termination task
+                _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
 
             except RuntimeError:
                 try:
@@ -1709,12 +1704,13 @@ class AsyncWebSocket(BaseWebSocket):
         yield_mask: int = self._send_yield_mask
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
         e_again: CurlECode = CurlECode.AGAIN
+        cont_flag: CurlWsFlag = CurlWsFlag.CONT
         max_zero_writes: int = 3
 
         # Message specific values
         view: memoryview = memoryview(payload)
         total_bytes: int = view.nbytes
-        base_flags: int = flags & ~CurlWsFlag.CONT
+        base_flags: int = flags & ~cont_flag
         offset: int = 0
         write_ops: int = 0
         zero_write_retries: int = 0
@@ -1731,7 +1727,7 @@ class AsyncWebSocket(BaseWebSocket):
             # Handle frame fragmentation and prevent CONT leakage.
             current_flags: CurlWsFlag | int = base_flags
             if (offset + chunk_len) < total_bytes:
-                current_flags |= CurlWsFlag.CONT
+                current_flags |= cont_flag
 
             try:
                 # We need to perform a bytes copy to prevent BufferError crash.
