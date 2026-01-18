@@ -675,8 +675,8 @@ class AsyncWebSocket(BaseWebSocket):
         "_send_queue",
         "_max_send_batch_size",
         "_coalesce_frames",
-        "_recv_yield_mask",
-        "_send_yield_mask",
+        "_recv_time_slice",
+        "_send_time_slice",
         "_terminated",
         "_terminated_event",
         "ws_retry",
@@ -700,8 +700,8 @@ class AsyncWebSocket(BaseWebSocket):
         max_send_batch_size: int = 64,
         coalesce_frames: bool = False,
         ws_retry: WsRetryOnRecvError | None = None,
-        recv_yield_mask: int = 31,
-        send_yield_mask: int = 15,
+        recv_time_slice: float = 0.005,
+        send_time_slice: float = 0.001,
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
@@ -754,8 +754,12 @@ class AsyncWebSocket(BaseWebSocket):
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
             ws_retry (WsRetryOnRecvError, optional): Retry on failed message receives.
-            recv_yield_mask (int): Set the yield frequency for received messages.
-            send_yield_mask (int): Set the yield frequency for sent messages.
+            recv_time_slice (float): The maximum duration (in seconds) to process
+                incoming messages before yielding to the event loop.
+                Defaults to ``0.005`` (5ms).
+            send_time_slice (float): The maximum duration (in seconds) to process
+                outgoing messages before yielding to the event loop.
+                Defaults to ``0.001`` (1ms).
             max_message_size (int): The maximum size of a complete received message.
             drain_on_error (bool, optional): If ``True``, when a connection error
                 occurs, attempt to consume already-received buffered messages first,
@@ -767,13 +771,6 @@ class AsyncWebSocket(BaseWebSocket):
                 already buffered may be drained if ``drain_on_error`` is set.
                 Full receive queues can be avoided by consuming messages faster,
                 or increasing the size of the receive queue.
-
-            Yield masks are bitmasks that sets the yield frequency for cooperative
-            multitasking, checked every ``yield_mask + 1`` operations. This value
-            must be a power of two minus one (e.g., ``15``, ``31``, ``63``) in
-            order to carry out efficient bitwise checks. Lower values increase
-            fairness by taking up less event loop time, while higher values
-            increase throughput at the cost of consuming more loop time.
 
             If ``block_on_recv_queue_full`` is used, the consumer must keep up,
             or the connection could to drop due to heartbeat timeouts.
@@ -801,8 +798,8 @@ class AsyncWebSocket(BaseWebSocket):
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
         self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
-        self._recv_yield_mask: int = recv_yield_mask
-        self._send_yield_mask: int = send_yield_mask
+        self._recv_time_slice: float = recv_time_slice
+        self._send_time_slice: float = send_time_slice
         self._transport_exception: Exception | None = None
         self._max_message_size: int = max_message_size
         self.drain_on_error: bool = drain_on_error
@@ -911,24 +908,6 @@ class AsyncWebSocket(BaseWebSocket):
         # Return early if terminated before start
         if self._terminated:
             raise WebSocketClosed("WebSocket already terminated")
-
-        # Check the yield masks are correctly configured
-        if (
-            self._recv_yield_mask < 1
-            or (self._recv_yield_mask & (self._recv_yield_mask + 1)) != 0
-        ):
-            raise WebSocketError(
-                "recv_yield_mask must be a power of two minus one (e.g. 15, 31,63)",
-                code=CurlECode.BAD_FUNCTION_ARGUMENT,
-            )
-        if (
-            self._send_yield_mask < 1
-            or (self._send_yield_mask & (self._send_yield_mask + 1)) != 0
-        ):
-            raise WebSocketError(
-                "send_yield_mask must be a power of two minus one (e.g. 7, 15,31)",
-                code=CurlECode.BAD_FUNCTION_ARGUMENT,
-            )
 
         # Get the currently active socket FD
         self._sock_fd = cast(int, self.curl.getinfo(CurlInfo.ACTIVESOCKET))
@@ -1358,7 +1337,9 @@ class AsyncWebSocket(BaseWebSocket):
             self._receive_queue.put
         )
         loop: asyncio.AbstractEventLoop = self.loop
-        yield_mask: int = self._recv_yield_mask
+        loop_time: Callable[[], float] = loop.time
+        time_slice: float = self._recv_time_slice
+        next_yield: float = loop_time() + time_slice
         ws_retry: WsRetryOnRecvError = self.ws_retry
         retry_on_error: bool = ws_retry.retry_on_error
         retry_codes: set[CurlECode] = ws_retry.retry_error_codes
@@ -1385,7 +1366,6 @@ class AsyncWebSocket(BaseWebSocket):
         # Message specific values
         recv_error_retries: int = 0
         chunks: list[bytes] = []
-        msg_counter = 0
         current_msg_size: int = 0
 
         try:
@@ -1510,10 +1490,9 @@ class AsyncWebSocket(BaseWebSocket):
                                 return
                             await queue_put((message, flags))
 
-                    msg_counter += 1
-                    if not (msg_counter & yield_mask):
+                    if (now := loop_time()) >= next_yield:
                         await asyncio.sleep(0)
-                        msg_counter = 0
+                        next_yield = now + time_slice
 
                     continue
 
@@ -1578,9 +1557,8 @@ class AsyncWebSocket(BaseWebSocket):
             overhead but does not preserve individual message boundaries.
 
         Features:
-        - Cooperative Multitasking: Yields to the event loop periodically (controlled
-          by ``send_yield_mask``) to prevent the writer from starving the reader task
-          during high-volume transmission.
+        - Cooperative Multitasking: Yields to the event loop periodically to prevent
+          the writer from starving the reader task during high-volume transmission.
         - Control Frame Priority: PING and CLOSE frames are never coalesced; they
           trigger an immediate flush of any pending batched data before being sent.
         - Lifecycle Management: Automatically terminates the connection cleanly upon
@@ -1591,8 +1569,10 @@ class AsyncWebSocket(BaseWebSocket):
         queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
         queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
         queue_done: Callable[[], None] = self._send_queue.task_done
-        yield_mask: int = self._send_yield_mask
-        ops_count = 0
+        loop: asyncio.AbstractEventLoop = self.loop
+        loop_time: Callable[[], float] = loop.time
+        time_slice: float = self._send_time_slice
+        next_yield: float = loop_time() + time_slice
 
         try:
             # Hoist the branch - decide loop strategy once at start
@@ -1610,10 +1590,9 @@ class AsyncWebSocket(BaseWebSocket):
                             break
 
                         # Perform yield checks
-                        ops_count += 1
-                        if not (ops_count & yield_mask):
+                        if (now := loop_time()) >= next_yield:
                             await asyncio.sleep(0)
-                            ops_count = 0
+                            next_yield = now + time_slice
 
                     finally:
                         queue_done()
@@ -1648,10 +1627,9 @@ class AsyncWebSocket(BaseWebSocket):
                                         return
 
                                     # Prevent large batches from starving loop
-                                    ops_count += 1
-                                    if not (ops_count & yield_mask):
+                                    if (now := loop_time()) >= next_yield:
                                         await asyncio.sleep(0)
-                                        ops_count = 0
+                                        next_yield = now + time_slice
 
                                 data_to_coalesce.clear()
 
@@ -1659,10 +1637,9 @@ class AsyncWebSocket(BaseWebSocket):
                                     return
 
                                 # Yield check on coalesced frames
-                                ops_count += 1
-                                if not (ops_count & yield_mask):
+                                if (now := loop_time()) >= next_yield:
                                     await asyncio.sleep(0)
-                                    ops_count = 0
+                                    next_yield = now + time_slice
 
                             else:
                                 data_to_coalesce.setdefault(frame, []).append(payload)
@@ -1700,8 +1677,10 @@ class AsyncWebSocket(BaseWebSocket):
         # Cache locals to reduce lookup cost
         curl_ws_send: Callable[[bytes, CurlWsFlag | int], int] = self.curl.ws_send
         loop: asyncio.AbstractEventLoop = self.loop
+        loop_time: Callable[[], float] = loop.time
         sock_fd: int = self._sock_fd
-        yield_mask: int = self._send_yield_mask
+        time_slice: float = self._send_time_slice
+        next_yield: float = loop_time() + time_slice
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
         e_again: CurlECode = CurlECode.AGAIN
         cont_flag: CurlWsFlag = CurlWsFlag.CONT
@@ -1712,7 +1691,6 @@ class AsyncWebSocket(BaseWebSocket):
         total_bytes: int = view.nbytes
         base_flags: int = flags & ~cont_flag
         offset: int = 0
-        write_ops: int = 0
         zero_write_retries: int = 0
         set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
 
@@ -1762,9 +1740,9 @@ class AsyncWebSocket(BaseWebSocket):
                 offset += n_sent
 
                 # Cooperative yield checks
-                write_ops += 1
-                if not (write_ops & yield_mask):
+                if (now := loop_time()) >= next_yield:
                     await asyncio.sleep(0)
+                    next_yield = now + time_slice
 
             except CurlError as e:
                 if e.code == e_again:

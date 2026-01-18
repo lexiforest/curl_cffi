@@ -874,8 +874,8 @@ class AsyncSession(BaseSession[R]):
         max_send_batch_size: int = 64,
         coalesce_frames: bool = False,
         ws_retry: WsRetryOnRecvError | None = None,
-        recv_yield_mask: int = 31,
-        send_yield_mask: int = 15,
+        recv_time_slice: float = 0.005,
+        send_time_slice: float = 0.001,
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
@@ -930,8 +930,12 @@ class AsyncSession(BaseSession[R]):
                 to frames and should only be used when the application protocol is
                 designed to handle concatenated data streams. Defaults to ``False``.
             ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
-            recv_yield_mask: Set the yield frequency for received messages.
-            send_yield_mask: Set the yield frequency for sent messages.
+            recv_time_slice: The maximum duration (in seconds) to process incoming
+                messages before yielding to the event loop.
+                Defaults to ``0.005`` (5ms).
+            send_time_slice: The maximum duration (in seconds) to process outgoing
+                messages before yielding to the event loop.
+                Defaults to ``0.001`` (1ms).
             max_message_size: Maximum allowed size for a complete received
                 WebSocket message (default: ``4 MiB``).
             drain_on_error: If ``True``, when a connection error occurs,
@@ -941,13 +945,6 @@ class AsyncSession(BaseSession[R]):
                 is failed immediately when the receive queue is full. The message that
                 caused the overflow is not delivered; any messages already buffered may
                 still be drained if ``drain_on_error=True``.
-
-            Yield masks control the frequency of cooperative multitasking yields
-            in the read/send loop. The loop yields every ``yield_mask + 1``
-            operations. For efficiency, this value must be a power of two minus one
-            (e.g., ``63``, ``127``, ``255``). Lower values yield more often,
-            improving fairness at the cost of throughput. Higher values yield
-            less often, prioritizing throughput.
         """
 
         self._check_session_closed()
@@ -1003,8 +1000,8 @@ class AsyncSession(BaseSession[R]):
             max_send_batch_size=max_send_batch_size,
             coalesce_frames=coalesce_frames,
             ws_retry=ws_retry,
-            recv_yield_mask=recv_yield_mask,
-            send_yield_mask=send_yield_mask,
+            recv_time_slice=recv_time_slice,
+            send_time_slice=send_time_slice,
             max_message_size=max_message_size,
             drain_on_error=drain_on_error,
             block_on_recv_queue_full=block_on_recv_queue_full,
