@@ -587,7 +587,9 @@ def set_curl_options(
 
     # verify
     base_verify, verify = verify_list
-    if verify is False or not base_verify and verify is None:
+    disable_verify = verify is False or not base_verify and verify is None
+    c._skip_cacert = disable_verify  # type: ignore
+    if disable_verify:
         c.setopt(CurlOpt.SSL_VERIFYPEER, 0)
         c.setopt(CurlOpt.SSL_VERIFYHOST, 0)
 

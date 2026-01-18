@@ -162,6 +162,7 @@ class Curl:
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
+        self._skip_cacert = False
         self._write_handle: Any = None
         self._header_handle: Any = None
         self._debug_handle: Any = None
@@ -395,6 +396,8 @@ class Curl:
         )
 
     def _ensure_cacert(self) -> None:
+        if self._skip_cacert:
+            return
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
             self._check_error(ret, "set cacert")
@@ -469,6 +472,7 @@ class Curl:
     def reset(self) -> None:
         """Reset all curl options, wrapper for ``curl_easy_reset``."""
         self._is_cert_set = False
+        self._skip_cacert = False
         if self._curl is not None:
             lib.curl_easy_reset(self._curl)
             self._set_error_buffer()
