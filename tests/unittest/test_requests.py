@@ -7,7 +7,7 @@ import pytest
 from charset_normalizer import detect
 
 import curl_cffi
-from curl_cffi import CurlOpt, requests
+from curl_cffi import Curl, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import HTTPError
@@ -452,6 +452,20 @@ def test_verify(https_server):
 def test_verify_false(https_server):
     r = requests.get(str(https_server.url), verify=False)
     assert r.status_code == 200
+
+
+def test_verify_false_skips_cainfo(https_server, tmp_path):
+    cacert_path = tmp_path / "custom_ca.pem"
+    cacert_path.write_text("", encoding="utf-8")
+    curl = Curl(cacert=str(cacert_path))
+    with requests.Session(
+        curl=curl,
+        verify=False,
+        curl_infos=[CurlInfo.CAINFO],
+    ) as s:
+        r = s.get(str(https_server.url))
+    assert r.status_code == 200
+    assert r.infos[CurlInfo.CAINFO] != str(cacert_path).encode()
 
 
 def test_referer(server):
