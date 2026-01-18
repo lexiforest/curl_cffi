@@ -8,8 +8,7 @@ try:
     import trio
 except ImportError as exc:  # pragma: no cover - imported only when trio is needed.
     raise ImportError(
-        "Trio support requires the 'trio' package. "
-        "Install it with: pip install trio"
+        "Trio support requires the 'trio' package. Install it with: pip install trio"
     ) from exc
 
 from ..const import CurlHttpVersion

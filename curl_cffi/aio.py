@@ -5,12 +5,6 @@ from weakref import WeakKeyDictionary
 
 from .async_base import (
     BaseAsyncCurl,
-    CURL_CSELECT_IN,
-    CURL_CSELECT_OUT,
-    CURL_POLL_IN,
-    CURL_POLL_OUT,
-    CURL_POLL_REMOVE,
-    CURL_SOCKET_TIMEOUT,
 )
 from .utils import CurlCffiWarning
 
@@ -70,7 +64,6 @@ else:
 
     def get_selector(loop: asyncio.AbstractEventLoop) -> asyncio.AbstractEventLoop:
         return loop
-
 
 
 CURLPIPE_NOTHING = 0

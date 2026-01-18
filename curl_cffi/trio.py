@@ -7,8 +7,7 @@ try:
     import trio
 except ImportError as exc:  # pragma: no cover - imported only when trio is needed.
     raise ImportError(
-        "Trio support requires the 'trio' package. "
-        "Install it with: pip install trio"
+        "Trio support requires the 'trio' package. Install it with: pip install trio"
     ) from exc
 
 from .async_base import BaseAsyncCurl
@@ -157,7 +156,7 @@ class TrioAsyncCurl(BaseAsyncCurl):
         super().__init__(cacert=cacert, cancelled_errors=(trio.Cancelled,))
 
     @property
-    def loop(self) -> "TrioAsyncCurl":
+    def loop(self) -> TrioAsyncCurl:
         """Expose a loop-like interface to reuse the existing callbacks."""
         return self
 

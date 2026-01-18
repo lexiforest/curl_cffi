@@ -37,7 +37,6 @@ __all__ = [
 ]
 
 
-
 """
 libcurl provides an event-based system for multiple handles with the following API:
 
@@ -62,6 +61,7 @@ curl_multi_info_read to determine whether a certain `await perform` has finished
 When idle, libcurl will call the timer_function callback, which sets up a later call
 for socket_action to detect events.
 """
+
 
 @ffi.def_extern()
 def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
