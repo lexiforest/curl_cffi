@@ -846,9 +846,7 @@ class AsyncSession(BaseSession[R]):
         self,
         url: str,
         autoclose: bool = True,
-        params: Optional[
-            Union[dict[str, object], list[object], tuple[object, ...]]
-        ] = None,
+        params: dict[str, object] | list[object] | tuple[object, ...] | None = None,
         headers: HeaderTypes | None = None,
         cookies: CookieTypes | None = None,
         auth: tuple[str, str] | None = None,
