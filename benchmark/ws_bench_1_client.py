@@ -2,6 +2,7 @@
 """
 Websocket client simple benchmark - TLS (WSS)
 """
+
 import time
 from asyncio import AbstractEventLoop, CancelledError, Task, TaskGroup, get_running_loop
 from asyncio import run as run_async
@@ -24,7 +25,10 @@ def calculate_stats(start_time: float, total_len: int) -> tuple[float, float]:
     """
     end_time: float = time.perf_counter()
     duration: float = end_time - start_time
-    rate_gbps: float = (total_len * 8) / duration / (1024**3)
+    if duration > 0:
+        rate_gbps: float = (total_len * 8) / duration / (1024**3)
+    else:
+        rate_gbps = 0.0
     return duration, rate_gbps
 
 
@@ -57,11 +61,14 @@ async def ws_counter(ws: AsyncWebSocket) -> None:
         ws (`AsyncWebSocket`): Instantiated Curl CFFI AsyncWebSocket object.
     """
     recvd_len: int = 0
+    expected_bytes: int = config.total_bytes
     start_time: float = time.perf_counter()
-    logger.info("Receiving data from server")
+    logger.info("Receiving data from server, expecting %dGB", config.total_gb)
     try:
         async for msg in ws:
             recvd_len += len(msg)
+            if recvd_len >= expected_bytes:
+                break
 
     except WebSocketClosed as exc:
         logger.debug(exc)
@@ -83,7 +90,7 @@ async def ws_sender(ws: AsyncWebSocket) -> None:
     """
     sent_len: int = 0
     start_time: float = time.perf_counter()
-    logger.info("Sending data to server")
+    logger.info("Sending %dGB of data to server", config.total_gb)
     try:
         async for data_chunk in binary_data_generator(
             total_gb=config.total_gb, chunk_size=config.chunk_size
