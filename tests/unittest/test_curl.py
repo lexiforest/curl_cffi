@@ -331,8 +331,8 @@ def test_reason(server):
 
 def test_resolve(server):
     c = Curl()
-    url = "http://example.com:8000"
-    c.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    url = "http://example.com:8008"
+    c.setopt(CurlOpt.RESOLVE, ["example.com:8008:127.0.0.1"])
     c.setopt(CurlOpt.URL, url)
     c.perform()
 

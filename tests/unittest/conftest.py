@@ -618,7 +618,7 @@ class TestServer(Server):
 
 @pytest.fixture(scope="session")
 def server():
-    config = Config(app=app, lifespan="off", loop="asyncio")
+    config = Config(app=app, lifespan="off", loop="asyncio", port=8008)
     server = TestServer(config=config)
     yield from serve_in_thread(server)
 
