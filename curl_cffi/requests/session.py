@@ -4,12 +4,15 @@ import asyncio
 import http.cookies
 import os
 import queue
+import random
 import sys
 import threading
+import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from collections.abc import Callable
+from dataclasses import dataclass
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
@@ -66,7 +69,7 @@ if TYPE_CHECKING:
         trust_env: bool
         allow_redirects: bool
         max_redirects: int
-        retry: int
+        retry: Union[int, RetryStrategy]
         impersonate: Optional[BrowserTypeLiteral]
         ja3: Optional[str]
         akamai: Optional[str]
@@ -157,6 +160,37 @@ def _peek_aio_queue(q: asyncio.Queue, default=None):
         return default
 
 
+RetryBackoff = Literal["linear", "exponential"]
+
+
+@dataclass
+class RetryStrategy:
+    count: int
+    delay: float = 0.0
+    jitter: float = 0.0
+    backoff: RetryBackoff = "linear"
+
+
+def _normalize_retry(retry: Optional[Union[int, RetryStrategy]]) -> RetryStrategy:
+    if retry is None:
+        retry = 0
+    if isinstance(retry, RetryStrategy):
+        strategy = retry
+    elif isinstance(retry, int):
+        strategy = RetryStrategy(count=retry)
+    else:
+        raise TypeError("retry must be an int or RetryStrategy")
+    if strategy.count < 0:
+        raise ValueError("retry.count must be >= 0")
+    if strategy.delay < 0:
+        raise ValueError("retry.delay must be >= 0")
+    if strategy.jitter < 0:
+        raise ValueError("retry.jitter must be >= 0")
+    if strategy.backoff not in ("linear", "exponential"):
+        raise ValueError("retry.backoff must be 'linear' or 'exponential'")
+    return strategy
+
+
 class BaseSession(Generic[R]):
     """Provide common methods for setting curl options and reading info in sessions."""
 
@@ -176,7 +210,7 @@ class BaseSession(Generic[R]):
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
-        retry: int = 0,
+        retry: Optional[Union[int, RetryStrategy]] = 0,
         impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
@@ -203,11 +237,7 @@ class BaseSession(Generic[R]):
         self.trust_env = trust_env
         self.allow_redirects = allow_redirects
         self.max_redirects = max_redirects
-        if retry is None:
-            retry = 0
-        if retry < 0:
-            raise ValueError("retry must be >= 0")
-        self.retry = retry
+        self.retry = _normalize_retry(retry)
         self.impersonate = impersonate
         self.ja3 = ja3
         self.akamai = akamai
@@ -336,6 +366,16 @@ class BaseSession(Generic[R]):
         if self._closed:
             raise SessionClosed("Session is closed, cannot send request.")
 
+    def _retry_delay(self, attempt: int) -> float:
+        strategy = self.retry
+        if strategy.backoff == "exponential":
+            delay = strategy.delay * (2 ** (attempt - 1))
+        else:
+            delay = strategy.delay * attempt
+        if strategy.jitter:
+            delay += random.uniform(0.0, strategy.jitter)
+        return delay
+
     @property
     def cookies(self) -> Cookies:
         return self._cookies
@@ -383,7 +423,7 @@ class Session(BaseSession[R]):
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
-            retry: number of retries for failed requests.
+            retry: number of retries or ``RetryStrategy`` for failed requests.
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
@@ -712,8 +752,8 @@ class Session(BaseSession[R]):
 
         self._check_session_closed()
 
-        retries = self.retry
-        for attempt in range(retries + 1):
+        strategy = self.retry
+        for attempt in range(strategy.count + 1):
             try:
                 return self._request_once(
                     method=method,
@@ -751,8 +791,11 @@ class Session(BaseSession[R]):
                     discard_cookies=discard_cookies,
                 )
             except RequestException:
-                if attempt == retries:
+                if attempt == strategy.count:
                     raise
+                delay = self._retry_delay(attempt + 1)
+                if delay:
+                    time.sleep(delay)
 
     def head(self, url: str, **kwargs: Unpack[RequestParams]):
         return self.request(method="HEAD", url=url, **kwargs)
@@ -818,7 +861,7 @@ class AsyncSession(BaseSession[R]):
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
-            retry: number of retries for failed requests.
+            retry: number of retries or ``RetryStrategy`` for failed requests.
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
@@ -1282,8 +1325,8 @@ class AsyncSession(BaseSession[R]):
 
         self._check_session_closed()
 
-        retries = self.retry
-        for attempt in range(retries + 1):
+        strategy = self.retry
+        for attempt in range(strategy.count + 1):
             try:
                 return await self._request_once(
                     method=method,
@@ -1321,8 +1364,11 @@ class AsyncSession(BaseSession[R]):
                     discard_cookies=discard_cookies,
                 )
             except RequestException:
-                if attempt == retries:
+                if attempt == strategy.count:
                     raise
+                delay = self._retry_delay(attempt + 1)
+                if delay:
+                    await asyncio.sleep(delay)
 
     async def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return await self.request(method="HEAD", url=url, **kwargs)
