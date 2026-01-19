@@ -1129,7 +1129,7 @@ class AsyncWebSocket(BaseWebSocket):
         # cURL expects bytes
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
-        elif isinstance(payload, (bytearray, memoryview)):
+        elif isinstance(payload, bytearray | memoryview):
             payload = bytes(payload)
 
         try:

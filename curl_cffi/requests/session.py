@@ -8,7 +8,7 @@ import sys
 import threading
 import warnings
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 from contextlib import asynccontextmanager, contextmanager, suppress
 from datetime import timedelta
 from io import BytesIO
@@ -22,6 +22,7 @@ from typing import (
     Union,
     cast,
 )
+from collections.abc import AsyncGenerator, Generator
 from urllib.parse import urlparse
 
 from ..aio import AsyncCurl
@@ -245,7 +246,12 @@ class BaseSession(Generic[R]):
             )
 
     def _parse_response(
-        self, curl, buffer, header_buffer, default_encoding, discard_cookies
+        self,
+        curl: Curl,
+        buffer: BytesIO,
+        header_buffer: BytesIO,
+        default_encoding: Union[str, Callable[[bytes], str]],
+        discard_cookies: bool,
     ) -> R:
         c = curl
         rsp = cast(R, self.response_class(c))
@@ -349,7 +355,7 @@ class Session(BaseSession[R]):
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
         **kwargs: Unpack[BaseSessionParams[R]],
-    ):
+    ) -> None:
         """
         Parameters set in the ``__init__`` method will be overriden by the same
         parameter in request method.
@@ -439,7 +445,7 @@ class Session(BaseSession[R]):
     def __enter__(self):
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         self.close()
 
     def close(self) -> None:
@@ -453,7 +459,7 @@ class Session(BaseSession[R]):
         method: HttpMethod,
         url: str,
         **kwargs: Unpack[StreamRequestParams],
-    ):
+    ) -> Generator[R, None, None]:
         """Equivalent to ``with request(..., stream=True) as r:``"""
         rsp = self.request(method=method, url=url, **kwargs, stream=True)
         try:
@@ -462,7 +468,13 @@ class Session(BaseSession[R]):
             rsp.close()
 
     def ws_connect(
-        self, url, on_message=None, on_error=None, on_open=None, on_close=None, **kwargs
+        self,
+        url: str,
+        on_message=None,
+        on_error=None,
+        on_open=None,
+        on_close=None,
+        **kwargs,
     ) -> WebSocket:
         """Connects to a websocket url.
 
@@ -538,7 +550,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
-    ):
+    ) -> R:
         """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
@@ -612,7 +624,7 @@ class Session(BaseSession[R]):
                         cast(threading.Event, header_recved).set()
                     q.put(STREAM_END)  # type: ignore
 
-            def cleanup(fut):
+            def cleanup(fut: Future[None]):
                 header_parsed.wait()
                 c.reset()
 
@@ -672,31 +684,31 @@ class Session(BaseSession[R]):
             finally:
                 c.reset()
 
-    def head(self, url: str, **kwargs: Unpack[RequestParams]):
+    def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="HEAD", url=url, **kwargs)
 
-    def get(self, url: str, **kwargs: Unpack[RequestParams]):
+    def get(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="GET", url=url, **kwargs)
 
-    def post(self, url: str, **kwargs: Unpack[RequestParams]):
+    def post(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="POST", url=url, **kwargs)
 
-    def put(self, url: str, **kwargs: Unpack[RequestParams]):
+    def put(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="PUT", url=url, **kwargs)
 
-    def patch(self, url: str, **kwargs: Unpack[RequestParams]):
+    def patch(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="PATCH", url=url, **kwargs)
 
-    def delete(self, url: str, **kwargs: Unpack[RequestParams]):
+    def delete(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="DELETE", url=url, **kwargs)
 
-    def options(self, url: str, **kwargs: Unpack[RequestParams]):
+    def options(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="OPTIONS", url=url, **kwargs)
 
-    def trace(self, url: str, **kwargs: Unpack[RequestParams]):
+    def trace(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="TRACE", url=url, **kwargs)
 
-    def query(self, url: str, **kwargs: Unpack[RequestParams]):
+    def query(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="QUERY", url=url, **kwargs)
 
 
@@ -710,7 +722,7 @@ class AsyncSession(BaseSession[R]):
         async_curl: AsyncCurl | None = None,
         max_clients: int = 10,
         **kwargs: Unpack[BaseSessionParams[R]],
-    ):
+    ) -> None:
         """
         Parameters set in the ``__init__`` method will be override by the same parameter
         in request method.
@@ -777,7 +789,7 @@ class AsyncSession(BaseSession[R]):
         return self._loop
 
     @property
-    def acurl(self):
+    def acurl(self) -> AsyncCurl:
         if self._acurl is None:
             self._acurl = AsyncCurl(loop=self.loop)
         return self._acurl
@@ -800,10 +812,10 @@ class AsyncSession(BaseSession[R]):
         with suppress(asyncio.QueueFull):
             self.pool.put_nowait(curl)
 
-    async def __aenter__(self):
+    async def __aenter__(self):  # TODO: -> Self
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args) -> None:
         await self.close()
         return None
 
@@ -819,7 +831,7 @@ class AsyncSession(BaseSession[R]):
             except asyncio.QueueEmpty:
                 break
 
-    def release_curl(self, curl):
+    def release_curl(self, curl: Curl) -> None:
         curl.clean_handles_and_buffers()
         if not self._closed:
             self.acurl.remove_handle(curl)
@@ -834,7 +846,7 @@ class AsyncSession(BaseSession[R]):
         method: HttpMethod,
         url: str,
         **kwargs: Unpack[StreamRequestParams],
-    ):
+    ) -> AsyncGenerator[R, None, None]:
         """Equivalent to ``async with request(..., stream=True) as r:``"""
         rsp = await self.request(method=method, url=url, **kwargs, stream=True)
         try:
@@ -1103,7 +1115,7 @@ class AsyncSession(BaseSession[R]):
         if stream:
             task = self.acurl.add_handle(curl)
 
-            async def perform():
+            async def perform() -> None:
                 try:
                     await task
                 except CurlError as e:
