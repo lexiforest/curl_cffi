@@ -420,7 +420,7 @@ def test_session_retry(server):
     fail_url = str(
         server.url.copy_with(path="/retry_once", query=f"key={fail_key}".encode())
     )
-    with pytest.raises(HTTPError):
+    with pytest.raises(HTTPError):  # noqa: SIM117
         with requests.Session(raise_for_status=True) as s:
             s.get(fail_url)
 
