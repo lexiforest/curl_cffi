@@ -1,11 +1,8 @@
 import os
 import json
 from datetime import datetime
-from enum import Enum
 from typing import Optional, Literal
-from dataclasses import dataclass, field
-
-from .utils import HttpVersionLiteral
+from dataclasses import dataclass, field, fields
 
 from . import requests
 
@@ -30,7 +27,7 @@ Pro config example
 """
 
 
-API_ROOT = "https://api.impersonate.pro/v1"
+DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
 CONFIG_DIR = os.path.expanduser("~/.config/impersonate")
 
 
@@ -52,6 +49,10 @@ def get_config_path():
 
 def get_profile_path():
     return os.path.join(CONFIG_DIR, "profiles.json")
+
+
+def get_api_root() -> str:
+    return os.environ.get("IMPERSONATE_API_ROOT", DEFAULT_API_ROOT)
 
 
 @cache_result
@@ -88,14 +89,22 @@ def enable_pro(api_key: str):
 
 @dataclass
 class Profile:
+    client: str = ""
+    client_version: str = ""
+    os: str = ""
+    os_version: str = ""
+
     http_version: str = "v2"
-    tls_version: int = 721
-    ciphers: list[str] = field(default_factory=list)
-    alpn: bool = False
-    alps: bool = False
-    cert_compression: list[str] = field(default_factory=list)
-    signature_hashes: list[str] = field(default_factory=list)
-    tls_supported_groups: list[str] = field(default_factory=list)
+
+    tls_version: str = "1.2"
+    tls_ciphers: list[str] = field(default_factory=list)
+    # the value is [h2, http/1.1], which will be filled by libcurl
+    tls_alpn: bool = False
+    tls_alps: bool = False
+    tls_cert_compression: list[str] = field(default_factory=list)
+    tls_signature_hashes: list[str] = field(default_factory=list)  # .sig_hash_args
+    tls_key_shares_limit: int = 2  # the default key shares length is 2
+    tls_supported_groups: list[str] = field(default_factory=list)  # .curves
     tls_session_ticket: bool = False
     tls_extension_order: str = ""
     tls_delegated_credentials: list[str] = field(default_factory=list)
@@ -103,18 +112,22 @@ class Profile:
     tls_grease: bool = False
     tls_use_new_alps_codepoint: bool = False
     tls_signed_cert_timestamps: bool = False
-    ech: Optional[str] = "grease"
+    tls_ech: Optional[str] = None
 
     headers: dict[str, str] = field(default_factory=dict)
 
     http2_settings: str = ""
     http2_window_update: int = 0
-    http2_pseudo_headers_order: str = "masp"
+    http2_pseudo_headers_order: str = ""
     http2_stream_weight: Optional[int] = None
     http2_stream_exclusive: Optional[int] = None
     http2_no_priority: bool = False
+    http2_priority_exclusive: Optional[int] = None
 
     http3_settings: str = ""
+    quic_transport_parameters: str = ""
+
+    header_lang: str = ""
 
 
 # fmt: off
@@ -138,32 +151,58 @@ class ProfileSpec:
     strategy: Optional[Literal["uniform", "market_share"]] = "market_share"
 
 
-def update_profiles(api_root=API_ROOT):
-    """Get the latest browser profiles for impersonating"""
-    r = requests.get(api_root + "/profiles")
+def update_profiles(
+    api_root: Optional[str] = None,
+    session_token: Optional[str] = None,
+) -> None:
+    """Get the latest fingerprints for impersonating."""
+    api_root = api_root or get_api_root()
+    token = session_token or os.environ.get("RVSD_SESSION_TOKEN")
+    cookies = {"rvsd.session_token": token} if token else None
+    url = f"{api_root.rstrip('/')}/fingerprints"
+    r = requests.get(url, cookies=cookies)
     data = r.json()
+    items = data.get("items") if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        raise ValueError("Fingerprints API returned unexpected payload.")
 
     profiles = {}
+    for item in items:
+        name = item.get("name") or item.get("target")
+        if not name:
+            continue
+        raw = item.get("data", {})
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(raw, dict):
+            profiles[name] = raw
 
-    for item in data["items"]:
-        profiles[item["target"]] = item["profile"]
-
+    if not os.path.exists(CONFIG_DIR):
+        os.makedirs(CONFIG_DIR)
     with open(get_profile_path(), "w") as wf:
-        wf.write(json.dumps(profiles))
+        json.dump(profiles, wf, indent=2)
 
 
-def update_market_share(api_root=API_ROOT):
+def update_market_share(api_root: Optional[str] = None):
     """Get the latest market share of browsers"""
+    api_root = api_root or get_api_root()
 
 
 @cache_result
 def load_profiles() -> dict[str, Profile]:
     with open(get_profile_path()) as f:
         profiles = json.loads(f.read())
-    for key in profiles:
-        profiles[key] = Profile(**profiles[key])
-
-    return profiles
+    allowed = {item.name for item in fields(Profile)}
+    parsed = {}
+    for key, payload in profiles.items():
+        if not isinstance(payload, dict):
+            continue
+        filtered = {k: v for k, v in payload.items() if k in allowed}
+        parsed[key] = Profile(**filtered)
+    return parsed
 
 
 @cache_result

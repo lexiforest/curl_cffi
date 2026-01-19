@@ -30,7 +30,8 @@ def test_is_pro():
 
 
 def test_update_profiles(api_server):
-    update_profiles(api_server.url)
+    os.environ["IMPERSONATE_API_ROOT"] = api_server.url
+    update_profiles()
     profiles = load_profiles()
     assert len(profiles) > 1
     for key in profiles:
@@ -41,7 +42,7 @@ def test_single_profile(api_server):
     update_profiles(api_server.url)
     profiles = load_profiles()
     testing100 = profiles["testing100"]
-    assert testing100.http2_settings == ""
+    assert testing100.http2_settings == "1:65536;3:1000;4:6291456;6:262144"
 
 
 @pytest.mark.skip()
