@@ -452,6 +452,24 @@ If you want to set a global option in ``Session``, you can use the same paramete
 
 For a complete list, see :doc:`api`
 
+Retries
+~~~~~~~
+
+Use ``retry`` to automatically re-run failed requests.
+
+.. code-block:: python
+
+    from curl_cffi import Session, RetryStrategy
+
+    # Simple count-based retries
+    with Session(retry=2) as s:
+        r = s.get("https://example.com")
+
+    # Custom strategy with delay/backoff/jitter
+    strategy = RetryStrategy(count=3, delay=0.2, jitter=0.1, backoff="exponential")
+    with Session(retry=strategy) as s:
+        r = s.get("https://example.com")
+
 Response vs Session cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

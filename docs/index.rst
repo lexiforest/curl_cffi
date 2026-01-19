@@ -119,6 +119,12 @@ Features
      - ❌
      - ❌
      - ✅
+   * - native retry
+     - ❌
+     - ❌
+     - ❌
+     - ❌
+     - ✅
    * - fingerprints
      - ❌
      - ❌
