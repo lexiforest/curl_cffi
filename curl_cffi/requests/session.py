@@ -66,6 +66,7 @@ if TYPE_CHECKING:
         trust_env: bool
         allow_redirects: bool
         max_redirects: int
+        retry: int
         impersonate: Optional[BrowserTypeLiteral]
         ja3: Optional[str]
         akamai: Optional[str]
@@ -175,6 +176,7 @@ class BaseSession(Generic[R]):
         trust_env: bool = True,
         allow_redirects: bool = True,
         max_redirects: int = 30,
+        retry: int = 0,
         impersonate: Optional[BrowserTypeLiteral] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
@@ -201,6 +203,11 @@ class BaseSession(Generic[R]):
         self.trust_env = trust_env
         self.allow_redirects = allow_redirects
         self.max_redirects = max_redirects
+        if retry is None:
+            retry = 0
+        if retry < 0:
+            raise ValueError("retry must be >= 0")
+        self.retry = retry
         self.impersonate = impersonate
         self.ja3 = ja3
         self.akamai = akamai
@@ -376,6 +383,7 @@ class Session(BaseSession[R]):
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
+            retry: number of retries for failed requests.
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
@@ -499,7 +507,7 @@ class Session(BaseSession[R]):
     def upkeep(self) -> int:
         return self.curl.upkeep()
 
-    def request(
+    def _request_once(
         self,
         method: HttpMethod,
         url: str,
@@ -534,11 +542,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
-    ):
-        """Send the request, see ``requests.request`` for details on parameters."""
-
-        self._check_session_closed()
-
+    ) -> R:
         # clone a new curl instance for streaming response
         if stream:
             c = self.curl.duphandle()
@@ -668,6 +672,88 @@ class Session(BaseSession[R]):
             finally:
                 c.reset()
 
+    def request(
+        self,
+        method: HttpMethod,
+        url: str,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        json: Optional[dict | list] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        allow_redirects: Optional[bool] = None,
+        max_redirects: Optional[int] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
+        verify: Optional[bool] = None,
+        referer: Optional[str] = None,
+        accept_encoding: Optional[str] = "gzip, deflate, br",
+        content_callback: Optional[Callable] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
+        ja3: Optional[str] = None,
+        akamai: Optional[str] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
+        default_headers: Optional[bool] = None,
+        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+        quote: Union[str, Literal[False]] = "",
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
+        interface: Optional[str] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
+        stream: Optional[bool] = None,
+        max_recv_speed: int = 0,
+        multipart: Optional[CurlMime] = None,
+        discard_cookies: bool = False,
+    ):
+        """Send the request, see ``requests.request`` for details on parameters."""
+
+        self._check_session_closed()
+
+        retries = self.retry
+        for attempt in range(retries + 1):
+            try:
+                return self._request_once(
+                    method=method,
+                    url=url,
+                    params=params,
+                    data=data,
+                    json=json,
+                    headers=headers,
+                    cookies=cookies,
+                    files=files,
+                    auth=auth,
+                    timeout=timeout,
+                    allow_redirects=allow_redirects,
+                    max_redirects=max_redirects,
+                    proxies=proxies,
+                    proxy=proxy,
+                    proxy_auth=proxy_auth,
+                    verify=verify,
+                    referer=referer,
+                    accept_encoding=accept_encoding,
+                    content_callback=content_callback,
+                    impersonate=impersonate,
+                    ja3=ja3,
+                    akamai=akamai,
+                    extra_fp=extra_fp,
+                    default_headers=default_headers,
+                    default_encoding=default_encoding,
+                    quote=quote,
+                    http_version=http_version,
+                    interface=interface,
+                    cert=cert,
+                    stream=stream,
+                    max_recv_speed=max_recv_speed,
+                    multipart=multipart,
+                    discard_cookies=discard_cookies,
+                )
+            except RequestException:
+                if attempt == retries:
+                    raise
+
     def head(self, url: str, **kwargs: Unpack[RequestParams]):
         return self.request(method="HEAD", url=url, **kwargs)
 
@@ -732,6 +818,7 @@ class AsyncSession(BaseSession[R]):
             trust_env: use http_proxy/https_proxy and other environments, default True.
             allow_redirects: whether to allow redirection.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
+            retry: number of retries for failed requests.
             impersonate: which browser version to impersonate in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
@@ -1007,7 +1094,7 @@ class AsyncSession(BaseSession[R]):
 
         return ws
 
-    async def request(
+    async def _request_once(
         self,
         method: HttpMethod,
         url: str,
@@ -1043,10 +1130,6 @@ class AsyncSession(BaseSession[R]):
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
-        """Send the request, see ``curl_cffi.requests.request`` for details on args."""
-
-        self._check_session_closed()
-
         curl = await self.pop_curl()
         req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
             curl=curl,
@@ -1158,6 +1241,88 @@ class AsyncSession(BaseSession[R]):
                 return rsp
             finally:
                 self.release_curl(curl)
+
+    async def request(
+        self,
+        method: HttpMethod,
+        url: str,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        json: Optional[dict | list] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        allow_redirects: Optional[bool] = None,
+        max_redirects: Optional[int] = None,
+        proxies: Optional[ProxySpec] = None,
+        proxy: Optional[str] = None,
+        proxy_auth: Optional[tuple[str, str]] = None,
+        verify: Optional[bool] = None,
+        referer: Optional[str] = None,
+        accept_encoding: Optional[str] = "gzip, deflate, br",
+        content_callback: Optional[Callable] = None,
+        impersonate: Optional[BrowserTypeLiteral] = None,
+        ja3: Optional[str] = None,
+        akamai: Optional[str] = None,
+        extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
+        default_headers: Optional[bool] = None,
+        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+        quote: Union[str, Literal[False]] = "",
+        http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
+        interface: Optional[str] = None,
+        cert: Optional[Union[str, tuple[str, str]]] = None,
+        stream: Optional[bool] = None,
+        max_recv_speed: int = 0,
+        multipart: Optional[CurlMime] = None,
+        discard_cookies: bool = False,
+    ) -> R:
+        """Send the request, see ``curl_cffi.requests.request`` for details on args."""
+
+        self._check_session_closed()
+
+        retries = self.retry
+        for attempt in range(retries + 1):
+            try:
+                return await self._request_once(
+                    method=method,
+                    url=url,
+                    params=params,
+                    data=data,
+                    json=json,
+                    headers=headers,
+                    cookies=cookies,
+                    files=files,
+                    auth=auth,
+                    timeout=timeout,
+                    allow_redirects=allow_redirects,
+                    max_redirects=max_redirects,
+                    proxies=proxies,
+                    proxy=proxy,
+                    proxy_auth=proxy_auth,
+                    verify=verify,
+                    referer=referer,
+                    accept_encoding=accept_encoding,
+                    content_callback=content_callback,
+                    impersonate=impersonate,
+                    ja3=ja3,
+                    akamai=akamai,
+                    extra_fp=extra_fp,
+                    default_headers=default_headers,
+                    default_encoding=default_encoding,
+                    quote=quote,
+                    http_version=http_version,
+                    interface=interface,
+                    cert=cert,
+                    stream=stream,
+                    max_recv_speed=max_recv_speed,
+                    multipart=multipart,
+                    discard_cookies=discard_cookies,
+                )
+            except RequestException:
+                if attempt == retries:
+                    raise
 
     async def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return await self.request(method="HEAD", url=url, **kwargs)

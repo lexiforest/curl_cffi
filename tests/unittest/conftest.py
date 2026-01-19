@@ -112,6 +112,8 @@ async def app(scope, receive, send):
         await delete_cookies(scope, receive, send)
     elif scope["path"].startswith("/set_special_cookies"):
         await set_special_cookies(scope, receive, send)
+    elif scope["path"].startswith("/retry_once"):
+        await retry_once(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
         await redirect_301(scope, receive, send)
     elif scope["path"].startswith("/redirect_to"):
@@ -454,6 +456,30 @@ async def set_special_cookies(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": b"Hello, world!"})
+
+
+_retry_once_counts: dict[str, int] = defaultdict(int)
+
+
+async def retry_once(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode(), keep_blank_values=True)
+    key = params.get("key", ["default"])[0]
+    count = _retry_once_counts[key]
+    _retry_once_counts[key] = count + 1
+    if count == 0:
+        status = 500
+        body = b"try again"
+    else:
+        status = 200
+        body = b"ok"
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [[b"content-type", b"text/plain"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
 
 
 async def redirect_301(scope, receive, send):
