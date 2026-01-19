@@ -7,8 +7,8 @@ import queue
 import sys
 import threading
 import warnings
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, Future
+from collections.abc import AsyncGenerator, Callable, Generator
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from datetime import timedelta
 from io import BytesIO
@@ -22,7 +22,6 @@ from typing import (
     Union,
     cast,
 )
-from collections.abc import AsyncGenerator, Generator
 from urllib.parse import urlparse
 
 from ..aio import AsyncCurl

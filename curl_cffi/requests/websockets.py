@@ -772,8 +772,15 @@ class AsyncWebSocket(BaseWebSocket):
                 Full receive queues can be avoided by consuming messages faster,
                 or increasing the size of the receive queue.
 
-            If ``block_on_recv_queue_full`` is used, the consumer must keep up,
-            or the connection could to drop due to heartbeat timeouts.
+            If ``block_on_recv_queue_full`` is enabled, slow consumers may pause
+            the read loop, potentially causing heartbeat timeouts. Ensure consumption
+            keeps pace or increase ``recv_queue_size`` to mitigate this.
+
+            The time slice parameters control cooperative multitasking by defining how
+            long I/O tasks run before yielding. A larger slice allocates more CPU time
+            to that operation, effectively increasing its scheduling priority.
+            The defaults favor reading (5:1 ratio) to compensate for libcurl's higher
+            send overhead; adjust these values to tune prioritization as needed.
 
         See also:
             https://curl.se/libcurl/c/curl_ws_recv.html
