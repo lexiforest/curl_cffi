@@ -109,7 +109,7 @@ Benchmark 2: Verified Streaming Test
 
 3. Run the Client (Choose one):
 
-    > This benchmark **requires enough available RAM** equal to the size of the random data.
+    > This benchmark requires enough available RAM **equal to the size of the random data** (e.g. `10 GiB`).
 
     - To test download speed (server sends, client receives):
 
@@ -154,6 +154,6 @@ Benchmark results can vary significantly based on system-level factors. The foll
     start /affinity 2 python ws_bench_1_client.py
     ```
 
-- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L96) enum. A concurrent test completes when both directions finish.
+- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L100) enum. A concurrent test completes when both directions finish.
 
-- **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L86) and [`recv_queue`](ws_bench_utils.py#L85) sizes within the [`TestConfig`](ws_bench_utils.py#L76) class to observe the impact on performance and backpressure.
+- **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L90) and [`recv_queue`](ws_bench_utils.py#L89) sizes within the [`TestConfig`](ws_bench_utils.py#L76) class to observe the impact on performance and backpressure.
