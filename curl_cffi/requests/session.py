@@ -356,7 +356,7 @@ class Session(BaseSession[R]):
         **kwargs: Unpack[BaseSessionParams[R]],
     ) -> None:
         """
-        Parameters set in the ``__init__`` method will be overriden by the same
+        Parameters set in the ``__init__`` method will be overridden by the same
         parameter in request method.
 
         Args:
@@ -723,7 +723,7 @@ class AsyncSession(BaseSession[R]):
         **kwargs: Unpack[BaseSessionParams[R]],
     ) -> None:
         """
-        Parameters set in the ``__init__`` method will be override by the same parameter
+        Parameters set in the ``__init__`` method are overridden by the same parameter
         in request method.
 
         Parameters:
@@ -890,6 +890,7 @@ class AsyncSession(BaseSession[R]):
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
+        curl_options: dict[CurlOpt, str] | None = None,
     ) -> AsyncWebSocket:
         """Connects to a WebSocket.
 
@@ -922,7 +923,6 @@ class AsyncSession(BaseSession[R]):
                 will be removed from the safe string, thus quoted. If set to False, the
                 url will be kept as is, without any automatic percent-encoding, you must
                 encode the URL yourself.
-            curl_options: extra curl options to use.
             http_version: limiting http version, defaults to http2.
             interface: which interface to use.
             cert: a tuple of (cert, key) filenames for client cert.
@@ -956,6 +956,7 @@ class AsyncSession(BaseSession[R]):
                 is failed immediately when the receive queue is full. The message that
                 caused the overflow is not delivered; any messages already buffered may
                 still be drained if ``drain_on_error=True``.
+            curl_options: extra curl options to use.
         """
 
         self._check_session_closed()
@@ -997,6 +998,7 @@ class AsyncSession(BaseSession[R]):
             cert=cert or self.cert,
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
+            curl_options=curl_options,
         )
         _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
         _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html

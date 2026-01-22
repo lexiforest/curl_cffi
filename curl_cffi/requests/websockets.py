@@ -18,7 +18,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
 from select import select
-from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast, final
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
-dumps_partial: partial[str] = partial[str](json_dumps, separators=(",", ":"))
+dumps_partial: partial[str] = partial(json_dumps, separators=(",", ":"))
 
 
 @dataclass
@@ -367,7 +367,6 @@ class WebSocket(BaseWebSocket):
                 will be removed from the safe string, thus quoted. If set to False, the
                 url will be kept as is, without any automatic percent-encoding, you must
                 encode the URL yourself.
-            curl_options: extra curl options to use.
             http_version: limiting http version, defaults to http2.
             interface: which interface to use.
             cert: a tuple of (cert, key) filenames for client cert.
@@ -658,6 +657,7 @@ class WebSocket(BaseWebSocket):
         self.terminate()
 
 
+@final
 class AsyncWebSocket(BaseWebSocket):
     """
     An asyncio WebSocket implementation using libcurl.
@@ -1565,11 +1565,11 @@ class AsyncWebSocket(BaseWebSocket):
 
         Features:
         - Cooperative Multitasking: Yields to the event loop periodically to prevent
-          the writer from starving the reader task during high-volume transmission.
+            the writer from starving the reader task during high-volume transmission.
         - Control Frame Priority: PING and CLOSE frames are never coalesced; they
-          trigger an immediate flush of any pending batched data before being sent.
+            trigger an immediate flush of any pending batched data before being sent.
         - Lifecycle Management: Automatically terminates the connection cleanly upon
-          transmitting a CLOSE frame.
+            transmitting a CLOSE frame.
         """
         control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING
         send_payload: Callable[..., Awaitable[bool]] = self._send_payload
