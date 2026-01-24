@@ -880,7 +880,7 @@ class AsyncSession(BaseSession[R]):
         interface: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
-        recv_queue_size: int = 128,
+        recv_queue_size: int = 32,
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,

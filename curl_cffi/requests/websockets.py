@@ -695,7 +695,7 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        recv_queue_size: int = 128,
+        recv_queue_size: int = 32,
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,
@@ -1373,7 +1373,9 @@ class AsyncWebSocket(BaseWebSocket):
         # Message specific values
         recv_error_retries: int = 0
         chunks: list[bytes] = []
-        current_msg_size: int = 0
+        remaining_bytes: int = max_msg_size
+        chunks_append: Callable[[bytes], None] = chunks.append
+        chunks_clear: Callable[[], None] = chunks.clear
 
         try:
             while not self.closed:
@@ -1453,37 +1455,39 @@ class AsyncWebSocket(BaseWebSocket):
                     return
 
                 flags: int = frame.flags
-                current_msg_size += len(chunk)
-                if current_msg_size > max_msg_size:
-                    chunks.clear()
-                    self._finalize_connection(
-                        WebSocketError(
-                            (
-                                f"Message too large: {current_msg_size} bytes "
-                                f"(limit {max_msg_size} bytes). "
-                                "Consider increasing max_message_size or "
-                                "chunking the message."
-                            ),
-                            CurlECode.TOO_LARGE,
-                        )
-                    )
-                    return
-
-                if recv_error_retries > 0:
+                if recv_error_retries:
                     recv_error_retries = 0
 
                 # Data Frames (Text / Binary / Cont)
                 if not (flags & control_mask):
+                    # Perform message size checks
+                    remaining_bytes -= len(chunk)
+                    if remaining_bytes < 0:
+                        chunks_clear()
+                        self._finalize_connection(
+                            WebSocketError(
+                                (
+                                    "Message too large: "
+                                    f"{max_msg_size - remaining_bytes} bytes "
+                                    f"(limit {max_msg_size} bytes). "
+                                    "Consider increasing max_message_size or "
+                                    "chunking the message."
+                                ),
+                                CurlECode.TOO_LARGE,
+                            )
+                        )
+                        return
+
                     # Collect the chunk
-                    chunks.append(chunk)
+                    chunks_append(chunk)
 
                     # If the message is complete, process and dispatch it
                     if not (flags & cont_flag or frame.bytesleft):
                         message: bytes = (
                             chunks[0] if len(chunks) == 1 else b"".join(chunks)
                         )
-                        chunks.clear()
-                        current_msg_size = 0
+                        chunks_clear()
+                        remaining_bytes = max_msg_size
 
                         try:
                             queue_put_nowait((message, flags))
@@ -1508,7 +1512,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # If a CLOSE frame is received, the reader is done.
                 if flags & close_flag:
-                    chunks.clear()
+                    chunks_clear()
                     try:
                         queue_put_nowait((chunk, flags))
                     except asyncio.QueueFull:
@@ -1741,7 +1745,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                         raise CurlError("0 bytes sent", e_again)
 
-                if zero_write_retries > 0:
+                if zero_write_retries:
                     zero_write_retries = 0
 
                 offset += n_sent
