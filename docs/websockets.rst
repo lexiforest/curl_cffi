@@ -1,15 +1,41 @@
+WebSockets
+**********
+
+``curl_cffi`` provides WebSocket clients for both synchronous and asynchronous contexts.
+
+.. important::
+
+   **Recommendation: Use Async**
+
+   The asynchronous implementation (``AsyncWebSocket``) is significantly more developed, robust, and feature-rich than the synchronous version. It features a **decoupled I/O model** (background readers/writers), flow control, configurable backpressure, and automatic retries.
+
+   Unless you are strictly bound to a synchronous environment, we strongly recommend using the **Async** API described below for all use cases.
+
 Async WebSockets
-****************
+================
 
-``curl_cffi`` provides a high-performance, asyncio-compatible WebSocket client powered by libcurl.
-It supports standard WebSocket features like text/binary frames, pings, and automatic handling of control frames.
+The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performance asyncio applications. It supports standard features like text/binary frames, pings, and automatic handling of control frames.
 
-The implementation uses a decoupled I/O model: sending puts messages into a queue (non-blocking), and receiving waits on a queue populated by a background task.
+**Architecture**
+
+The implementation uses a **decoupled I/O model**:
+
+1.  **Sending** puts messages into a queue (non-blocking unless the queue is full).
+2.  **Receiving** pulls from a queue populated by a dedicated background task.
+
+This ensures high concurrency and prevents slow processing logic from blocking the underlying network socket (ping/pongs).
 
 Quick Start
 ===========
 
-The recommended way to use WebSockets is via the `AsyncSession` context manager.
+The recommended way to use WebSockets is via the ``AsyncSession``.
+
+.. warning::
+
+   **Syntax**: ``ws_connect`` is an asynchronous factory method.
+   You must ``await`` the connection call *before* entering the context manager.
+
+   **Correct:** ``async with await s.ws_connect(...) as ws:``
 
 .. code-block:: python
 
@@ -18,7 +44,9 @@ The recommended way to use WebSockets is via the `AsyncSession` context manager.
 
     async def main():
         async with AsyncSession() as s:
+            # Note the syntax: await s.ws_connect(...)
             async with await s.ws_connect("wss://echo.websocket.org") as ws:
+
                 # Send a text message
                 await ws.send_str("Hello, World!")
 
@@ -26,12 +54,16 @@ The recommended way to use WebSockets is via the `AsyncSession` context manager.
                 msg = await ws.recv_str()
                 print(f"Received: {msg}")
 
+                # Iterate over messages
+                async for message in ws:
+                    print(f"Stream: {message}")
+
     asyncio.run(main())
 
 Connecting
 ==========
 
-Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same connection parameters as ``request`` (headers, auth, proxies, impersonate, etc.).
+Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same network parameters as standard HTTP requests (headers, auth, proxies, impersonate, etc.).
 
 .. code-block:: python
 
@@ -39,50 +71,37 @@ Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same connec
         async with await s.ws_connect(
             "wss://api.example.com/v1/stream",
             impersonate="chrome",
-            auth=("user", "pass")
+            auth=("user", "pass"),
+            params={"stream_id": "123"}
         ) as ws:
             ...
-
-You must ``await`` the connection first to get the ``ws`` object, then use that object in the context manager, e.g. ``async with await s.ws_connect(...)``.
 
 Sending Data
 ============
 
-There are helper methods for different data types.
-
-Sending Text
-------------
+Methods for sending data place the message into an outgoing queue. They are generally non-blocking unless the ``send_queue_size`` limit is reached.
 
 .. code-block:: python
 
+    # Send text
     await ws.send_str("Hello")
 
-Sending Bytes
--------------
-
-.. code-block:: python
-
+    # Send bytes
     await ws.send_bytes(b"\x00\x01\x02")
 
-Sending JSON
-------------
-
-Automatically serializes a dictionary to a JSON string.
-
-.. code-block:: python
-
+    # Send JSON (automatically serializes dict to JSON string)
     await ws.send_json({"action": "subscribe", "channel": "btc_usd"})
 
+    # Send generic (accepts str, bytes, bytearray, memoryview)
+    await ws.send("Auto-detected payload")
 
-Sending Pings
--------------
+**Pings**
 
-Libcurl handles Pongs automatically, but you can send a manual Ping frame if needed.
+Libcurl handles Pongs automatically, but you can send a manual Ping frame if needed (e.g., application-layer keepalive).
 
 .. code-block:: python
 
     await ws.ping(b"keepalive")
-
 
 Receiving Data
 ==============
@@ -94,21 +113,20 @@ Receive Methods
 
 .. code-block:: python
 
-    # Receive as string
+    # Receive as string (decodes utf-8 automatically)
     msg = await ws.recv_str()
 
     # Receive and parse JSON
     data = await ws.recv_json()
 
     # Receive raw bytes and frame flags
-    # This is useful if you need to inspect frame flags (e.g., CONTINUATION)
+    # Useful for inspecting frame types (e.g., checking for CONTINUATION flags)
     content, flags = await ws.recv()
-
 
 Async Iteration
 ---------------
 
-You can iterate over the WebSocket object.
+The most pythonic way to consume a stream is iteration.
 
 .. note::
 
@@ -119,15 +137,38 @@ You can iterate over the WebSocket object.
     async for chunk in ws:
         print(chunk.decode("utf-8"))
 
+Lifecycle Management
+====================
+
+Closing
+-------
+
+The context manager handles closing automatically. If you need to close manually:
+
+.. code-block:: python
+
+    await ws.close()
+    # Or with a custom code/reason
+    await ws.close(code=1000, message=b"bye")
+
+Flushing
+--------
+
+Because ``send()`` is decoupled from the network, returning from ``await send()`` only means the message is queued. Use ``flush()`` to ensure all queued messages have effectively been written to the socket.
+
+.. code-block:: python
+
+    await ws.send_str("Critical Data")
+    await ws.flush()  # Blocks until the send queue is empty
 
 Error Handling
 ==============
 
-Common exceptions include ``WebSocketClosed`` (connection closed normally or abnormally) and ``WebSocketTimeout``.
+Network errors are raised as ``WebSocketError`` or its subclasses.
 
 .. code-block:: python
 
-    from curl_cffi import WebSocketClosed, WebSocketTimeout
+    from curl_cffi import WebSocketClosed, WebSocketTimeout, WebSocketError
 
     try:
         msg = await ws.recv_str()
@@ -135,59 +176,78 @@ Common exceptions include ``WebSocketClosed`` (connection closed normally or abn
         print(f"Closed: {e.code} - {e.message}")
     except WebSocketTimeout:
         print("Did not receive a message in time.")
+    except WebSocketError as e:
+        print(f"Transport/Network error: {e}")
 
+Advanced Configuration
+======================
 
-Performance & Configuration
-===========================
-
-The ``AsyncWebSocket`` implementation is tuned for high concurrency. You can adjust queue sizes and batching behavior in ``ws_connect``.
+The ``AsyncWebSocket`` implementation allows fine-tuning for high-performance scenarios.
 
 Queue Sizes (Backpressure)
 --------------------------
 
-*   **recv_queue_size** (default: 128): Max number of incoming messages to buffer.
-*   **send_queue_size** (default: 16): Max number of outgoing messages to buffer.
+You can control the internal buffer sizes to manage backpressure.
 
-If the send queue is full, ``await ws.send()`` will block until space is available, creating natural backpressure.
+*   **recv_queue_size** (default: 32): Max incoming messages to buffer.
+*   **send_queue_size** (default: 16): Max outgoing messages to buffer.
+*   **block_on_recv_queue_full** (default: ``True``):
+    *   If ``True``, the background reader pauses when the queue is full (TCP backpressure).
+    *   If ``False``, the connection fails with ``OUT_OF_MEMORY`` to prevent silent message loss or massive latency lag.
 
 .. code-block:: python
 
-    # Increase queues for high-throughput streams
+    # Increase queues for high-throughput streams (e.g., market data)
     ws = await s.ws_connect(
         url,
-        recv_queue_size=1024,
-        send_queue_size=1024
+        recv_queue_size=256,
+        send_queue_size=32
     )
 
-Frame Coalescing
-----------------
+Frame Coalescing (Throughput)
+-----------------------------
 
-For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple pending messages from the send queue into a single TCP packet/WebSocket frame sequence, significantly increasing throughput at the cost of slightly higher latency.
+For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple pending messages from the send queue into a single network packet.
+
+*   **coalesce_frames** (default: ``False``): Enable batching.
+*   **max_send_batch_size** (default: 32): Max messages to merge.
 
 .. code-block:: python
 
-    # Enable for high-throughput uploads
+    # Optimize for throughput over latency
     ws = await s.ws_connect(url, coalesce_frames=True)
 
+Reliability & Retries
+---------------------
 
-Flushing
---------
-
-Since ``send()`` puts messages into a background queue, use ``flush()`` to ensure all queued messages have been written to the socket.
-
-.. code-block:: python
-
-    await ws.send_str("Important Data")
-    await ws.flush()  # Wait until data leaves the client
-
-
-Drain on Error
---------------
-
-By default, if the connection drops, ``recv()`` raises an exception immediately.
-If you set ``drain_on_error=True``, ``recv()`` will continue to yield any buffered messages in the memory queue before raising the connection error.
+*   **drain_on_error** (default: ``False``): If ``True``, when a network error occurs, ``recv()`` will continue to yield any buffered messages in the queue before raising the exception. Crucial for ensuring data integrity on unstable connections.
+*   **ws_retry**: A policy object to configure automatic retries on failed reads.
 
 .. code-block:: python
 
-    # Ensure we process every last message even if the net cuts out
-    ws = await s.ws_connect(url, drain_on_error=True)
+    from curl_cffi import WsRetryOnRecvError
+
+    # Retry transient read errors up to 5 times
+    retry_policy = WsRetryOnRecvError(
+        retry_on_error=True,
+        max_retry_count=5
+    )
+
+    ws = await s.ws_connect(
+        url,
+        drain_on_error=True,
+        ws_retry=retry_policy
+    )
+
+Cooperative Multitasking
+------------------------
+
+To prevent the background I/O tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
+
+*   **recv_time_slice** (default: 0.005s): Max time spent processing incoming packets before yielding.
+*   **send_time_slice** (default: 0.001s): Max time spent writing packets before yielding.
+
+.. code-block:: python
+
+    # Force more frequent yields for lower latency in other async tasks
+    ws = await s.ws_connect(url, recv_time_slice=0.001)
