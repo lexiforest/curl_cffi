@@ -695,7 +695,7 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        recv_queue_size: int = 64,
+        recv_queue_size: int = 32,
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,

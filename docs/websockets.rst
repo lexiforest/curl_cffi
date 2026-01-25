@@ -204,7 +204,7 @@ Queue Sizes (Backpressure)
 
 You can control the internal buffer sizes to manage backpressure.
 
-*   **recv_queue_size** (default: 64): Max incoming messages to buffer.
+*   **recv_queue_size** (default: 32): Max incoming messages to buffer.
 *   **send_queue_size** (default: 16): Max outgoing messages to buffer.
 *   **block_on_recv_queue_full** (default: ``True``):
     *   If ``True``, the background reader pauses when the queue is full (TCP backpressure).
