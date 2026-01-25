@@ -63,16 +63,26 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
 Connecting
 ==========
 
-Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same network parameters as standard HTTP requests (headers, auth, proxies, impersonate, etc.).
+Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same network parameters as standard HTTP requests.
+
+**Key Features:**
+
+*   **Impersonation**: Use ``impersonate="chrome"`` to mimic browser fingerprints.
+*   **Cookies**: Automatically inherits cookies from the ``AsyncSession``, and merges any new cookies passed to the method.
+*   **Proxies**: Supports HTTP/HTTPS/SOCKS proxies.
 
 .. code-block:: python
 
     async with AsyncSession() as s:
+        # Session cookies are automatically included
+        s.cookies.set("session_id", "xyz")
+
         async with await s.ws_connect(
             "wss://api.example.com/v1/stream",
             impersonate="chrome",
             auth=("user", "pass"),
-            params={"stream_id": "123"}
+            params={"stream_id": "123"},
+            timeout=10  # Connection timeout
         ) as ws:
             ...
 
@@ -111,13 +121,18 @@ You can receive individual messages or iterate over the connection.
 Receive Methods
 ---------------
 
+All receive methods support an optional ``timeout`` argument (in seconds).
+
 .. code-block:: python
 
     # Receive as string (decodes utf-8 automatically)
     msg = await ws.recv_str()
 
-    # Receive and parse JSON
-    data = await ws.recv_json()
+    # Receive with a 5-second timeout
+    try:
+        data = await ws.recv_json(timeout=5.0)
+    except WebSocketTimeout:
+        print("No message received in 5 seconds")
 
     # Receive raw bytes and frame flags
     # Useful for inspecting frame types (e.g., checking for CONTINUATION flags)
@@ -189,7 +204,7 @@ Queue Sizes (Backpressure)
 
 You can control the internal buffer sizes to manage backpressure.
 
-*   **recv_queue_size** (default: 32): Max incoming messages to buffer.
+*   **recv_queue_size** (default: 64): Max incoming messages to buffer.
 *   **send_queue_size** (default: 16): Max outgoing messages to buffer.
 *   **block_on_recv_queue_full** (default: ``True``):
     *   If ``True``, the background reader pauses when the queue is full (TCP backpressure).
@@ -203,6 +218,16 @@ You can control the internal buffer sizes to manage backpressure.
         recv_queue_size=256,
         send_queue_size=32
     )
+
+Message Limits
+--------------
+
+*   **max_message_size** (default: 4MB): The maximum allowed size for a single received message. Messages larger than this will raise a ``WebSocketError`` (Too Large) and close the connection.
+
+.. code-block:: python
+
+    # Allow large payloads (e.g. 16MB)
+    ws = await s.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
 Frame Coalescing (Throughput)
 -----------------------------

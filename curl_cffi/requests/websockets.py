@@ -1345,6 +1345,8 @@ class AsyncWebSocket(BaseWebSocket):
         )
         loop: asyncio.AbstractEventLoop = self.loop
         loop_time: Callable[[], float] = loop.time
+        create_future: Callable[[], asyncio.Future[None]] = loop.create_future
+        add_reader: Callable[..., None] = loop.add_reader
         time_slice: float = self._recv_time_slice
         next_yield: float = loop_time() + time_slice
         ws_retry: WsRetryOnRecvError = self.ws_retry
@@ -1407,9 +1409,9 @@ class AsyncWebSocket(BaseWebSocket):
                         return
 
                     if should_retry:
-                        read_future: asyncio.Future[None] = loop.create_future()
+                        read_future: asyncio.Future[None] = create_future()
                         try:
-                            loop.add_reader(self._sock_fd, set_fut_result, read_future)
+                            add_reader(self._sock_fd, set_fut_result, read_future)
                             await read_future
 
                         # pylint: disable-next=broad-exception-caught
@@ -1688,6 +1690,8 @@ class AsyncWebSocket(BaseWebSocket):
         curl_ws_send: Callable[[bytes, CurlWsFlag | int], int] = self.curl.ws_send
         loop: asyncio.AbstractEventLoop = self.loop
         loop_time: Callable[[], float] = loop.time
+        create_future: Callable[[], asyncio.Future[None]] = loop.create_future
+        add_writer: Callable[..., None] = loop.add_writer
         sock_fd: int = self._sock_fd
         time_slice: float = self._send_time_slice
         next_yield: float = loop_time() + time_slice
@@ -1757,9 +1761,9 @@ class AsyncWebSocket(BaseWebSocket):
             except CurlError as e:
                 if e.code == e_again:
                     # Wait for socket to be writable
-                    write_future: asyncio.Future[None] = loop.create_future()
+                    write_future: asyncio.Future[None] = create_future()
                     try:
-                        loop.add_writer(sock_fd, set_fut_result, write_future)
+                        add_writer(sock_fd, set_fut_result, write_future)
                         await write_future
 
                     # pylint: disable-next=broad-exception-caught
