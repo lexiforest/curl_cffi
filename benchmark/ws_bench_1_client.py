@@ -63,7 +63,7 @@ async def ws_counter(ws: AsyncWebSocket) -> None:
     recvd_len: int = 0
     expected_bytes: int = config.total_bytes
     start_time: float = time.perf_counter()
-    logger.info("Receiving data from server, expecting %dGB", config.total_gb)
+    logger.info("Receiving data from server, expecting %d GiB", config.total_gb)
     try:
         async for msg in ws:
             recvd_len += len(msg)
