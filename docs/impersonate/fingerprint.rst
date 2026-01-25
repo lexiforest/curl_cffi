@@ -28,15 +28,15 @@ http/3
 As of http/3, the newest version of http. Basically, it's http/2 reimplemented over QUIC,
 thus it can be fingerprinted in a similar way with http/2.
 
-Http3 fingerprints has not yet been publicly exploited and reported. But given the rapidly increasing
+Http/3 fingerprints has not yet been publicly exploited and reported. But given the rapidly increasing
 marketshare of http/3(35% of internet traffic), it is expected that some strict WAF vendors have begun
 to utilize http/3 fingerprinting.
 
 It has also been noticed by many users, that, for a lot of sites, there is less or even none
 detection when using http/3.
 
-``curl_cffi`` provides TLS and http/2 impersonation in the open source version.
+To check your browser's http3 & quic fingerprints, you can visit our `http/3 & quic fingerprints API <https://fp.impersonate.pro>`_ page.
 
-For http/3 impersonation and http/3 proxy support, please head over to `impersonate.pro <https://impersonate.pro>`_
-for the commercial version of ``curl_cffi``.
+``curl_cffi`` provides TLS and http/2 impersonation and http/3 protocol. Http/3 fingerprints
+support and UDP proxy support will be added in v0.15.
 
