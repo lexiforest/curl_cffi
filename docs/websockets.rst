@@ -229,6 +229,8 @@ Message Limits
     # Allow large payloads (e.g. 16MB)
     ws = await s.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
+There are no limits on the size of the message that can be sent. Messages larger than 64KB are broken into chunks of that size and sent using the ``CONT`` flag which means it arrives as a single logical message on the server.
+
 Frame Coalescing (Throughput)
 -----------------------------
 

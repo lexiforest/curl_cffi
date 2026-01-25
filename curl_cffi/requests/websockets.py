@@ -1095,8 +1095,10 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> None:
         """Send a data frame.
 
-        libcurl supports frames up to ``65536`` bytes. Larger payloads are split into
-        continuation frames so they arrive as a single logical WebSocket message.
+        There are no limits on the size of a message that can be sent.
+
+        Libcurl supports frames up to ``65536`` bytes. Larger payloads are split into
+        continuation frames but they arrive as a single logical WebSocket message.
 
         Args:
             payload: Data to send. ``str`` is encoded as ``UTF-8``;
