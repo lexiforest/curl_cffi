@@ -496,13 +496,23 @@ class Session(BaseSession[R]):
         curl = self.curl.duphandle()
         self.curl.reset()
 
-        ws = WebSocket(
+        ws: WebSocket = WebSocket(
             curl=curl,
             on_message=on_message,
             on_error=on_error,
             on_open=on_open,
             on_close=on_close,
+            debug=self.debug,
         )
+
+        # Fix session cookies being ignored
+        user_cookies = cast(Cookies | None, kwargs.get("cookies"))
+        if user_cookies is not None:
+            merged_cookies = Cookies(self.cookies)
+            merged_cookies.update(user_cookies)
+            kwargs["cookies"] = merged_cookies
+        else:
+            kwargs["cookies"] = self.cookies
 
         ws.connect(url, **kwargs)
         return ws
@@ -880,7 +890,7 @@ class AsyncSession(BaseSession[R]):
         interface: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
-        recv_queue_size: int = 32,
+        recv_queue_size: int = 64,
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,
@@ -919,7 +929,7 @@ class AsyncSession(BaseSession[R]):
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
             quote: Set characters to be quoted, i.e. percent-encoded. Default safe
-                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character
+                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a string, the character
                 will be removed from the safe string, thus quoted. If set to False, the
                 url will be kept as is, without any automatic percent-encoding, you must
                 encode the URL yourself.
@@ -1018,6 +1028,7 @@ class AsyncSession(BaseSession[R]):
             max_message_size=max_message_size,
             drain_on_error=drain_on_error,
             block_on_recv_queue_full=block_on_recv_queue_full,
+            debug=self.debug,
         )
 
         try:

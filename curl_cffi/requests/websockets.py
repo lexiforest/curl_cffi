@@ -695,7 +695,7 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        recv_queue_size: int = 32,
+        recv_queue_size: int = 64,
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,
@@ -1455,29 +1455,28 @@ class AsyncWebSocket(BaseWebSocket):
                     return
 
                 flags: int = frame.flags
+                remaining_bytes -= len(chunk)
+                if remaining_bytes < 0:
+                    chunks_clear()
+                    self._finalize_connection(
+                        WebSocketError(
+                            (
+                                "Message too large: "
+                                f"{max_msg_size - remaining_bytes} bytes "
+                                f"(limit {max_msg_size} bytes). "
+                                "Consider increasing max_message_size or "
+                                "chunking the message."
+                            ),
+                            CurlECode.TOO_LARGE,
+                        )
+                    )
+                    return
+
                 if recv_error_retries:
                     recv_error_retries = 0
 
                 # Data Frames (Text / Binary / Cont)
                 if not (flags & control_mask):
-                    # Perform message size checks
-                    remaining_bytes -= len(chunk)
-                    if remaining_bytes < 0:
-                        chunks_clear()
-                        self._finalize_connection(
-                            WebSocketError(
-                                (
-                                    "Message too large: "
-                                    f"{max_msg_size - remaining_bytes} bytes "
-                                    f"(limit {max_msg_size} bytes). "
-                                    "Consider increasing max_message_size or "
-                                    "chunking the message."
-                                ),
-                                CurlECode.TOO_LARGE,
-                            )
-                        )
-                        return
-
                     # Collect the chunk
                     chunks_append(chunk)
 
