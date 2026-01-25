@@ -122,10 +122,10 @@ async def binary_data_generator(
     bytes_sent = 0
 
     # Create one reusable chunk of random data to avoid calling os.urandom() in a loop.
-    reusable_chunk = os.urandom(chunk_size)
+    reusable_chunk: bytes = os.urandom(chunk_size)
     while bytes_sent < bytes_to_send:
         # Calculate the size of the next chunk to send
-        current_chunk_size = min(chunk_size, bytes_to_send - bytes_sent)
+        current_chunk_size: int = min(chunk_size, bytes_to_send - bytes_sent)
 
         # If it's a full-sized chunk, yield the reusable one. Otherwise, yield a slice.
         if current_chunk_size == chunk_size:
@@ -164,6 +164,6 @@ def generate_random_chunks() -> Generator[bytes]:
     for _ in range(num_chunks):
         yield os.urandom(config.large_chunk_size)
 
-    remaining_size = config.total_bytes % config.large_chunk_size
+    remaining_size: int = config.total_bytes % config.large_chunk_size
     if remaining_size > 0:
         yield os.urandom(remaining_size)
