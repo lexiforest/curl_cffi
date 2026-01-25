@@ -342,9 +342,13 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: list[Union[dict[str, object], list[object], tuple[object, ...], None]] = [],  # noqa: B006
+    params_list: list[
+        Union[dict[str, object], list[object], tuple[object, ...], None]
+    ] = [],  # noqa: B006
     base_url: Optional[str] = None,
-    data: Optional[Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]] = None,
+    data: Optional[
+        Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]
+    ] = None,
     json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
@@ -504,8 +508,12 @@ def set_curl_options(
     # auth
     if auth:
         username, password = auth
-        c.setopt(CurlOpt.USERNAME, username.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
-        c.setopt(CurlOpt.PASSWORD, password.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
+        c.setopt(
+            CurlOpt.USERNAME, username.encode()
+        )  # pyright: ignore [reportPossiblyUnboundVariable=none]
+        c.setopt(
+            CurlOpt.PASSWORD, password.encode()
+        )  # pyright: ignore [reportPossiblyUnboundVariable=none]
 
     # timeout
     if timeout is None:
@@ -624,7 +632,6 @@ def set_curl_options(
         ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
-
 
     # ja3 string
     if ja3:

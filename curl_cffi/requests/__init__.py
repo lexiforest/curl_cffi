@@ -54,7 +54,7 @@ from .websockets import (
     WebSocketError,
     WebSocketTimeout,
     WsCloseCode,
-    WsRetryOnRecvError
+    WsRetryOnRecvError,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +63,7 @@ if TYPE_CHECKING:
         thread: Optional[ThreadType]
         curl_options: Optional[dict]
         debug: Optional[bool]
+
 else:
     SessionRequestParams = TypedDict
 
