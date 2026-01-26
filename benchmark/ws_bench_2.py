@@ -276,7 +276,7 @@ async def client_handler(opt: str) -> None:
     """
     async with (
         AsyncSession[Response](impersonate="chrome", verify=False) as session,
-        await session.ws_connect(
+        session.ws_connect(
             f"{config.srv_path}?test={opt}",
             recv_queue_size=config.recv_queue,
             send_queue_size=config.send_queue,
