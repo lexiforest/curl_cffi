@@ -34,7 +34,12 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
 from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
-from .websockets import AsyncWebSocket, WebSocket, WebSocketError, WsRetryOnRecvError
+from .websockets import (
+    AsyncWebSocket,
+    WebSocket,
+    WebSocketError,
+    WebSocketRetryStrategy,
+)
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
@@ -894,7 +899,7 @@ class AsyncSession(BaseSession[R]):
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,
-        ws_retry: WsRetryOnRecvError | None = None,
+        ws_retry: WebSocketRetryStrategy | None = None,
         recv_time_slice: float = 0.005,
         send_time_slice: float = 0.001,
         max_message_size: int = 4 * 1024 * 1024,
@@ -950,7 +955,7 @@ class AsyncSession(BaseSession[R]):
                 **Warning:** This breaks the one-to-one mapping of ``send()`` calls
                 to frames and should only be used when the application protocol is
                 designed to handle concatenated data streams. Defaults to ``False``.
-            ws_retry (WsRetryOnRecvError, optional): Retry behaviour on failed ``recv``
+            ws_retry (WebSocketRetryStrategy): Retry policy for WebSocket messages.
             recv_time_slice: The maximum duration (in seconds) to process incoming
                 messages before yielding to the event loop.
                 Defaults to ``0.005`` (5ms).

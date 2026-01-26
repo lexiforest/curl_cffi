@@ -22,7 +22,7 @@ __all__ = [
     "WebSocketError",
     "WebSocketClosed",
     "WebSocketTimeout",
-    "WsRetryOnRecvError",
+    "WebSocketRetryStrategy",
     "WsCloseCode",
     "ExtraFingerprints",
     "CookieTypes",
@@ -54,7 +54,7 @@ from .websockets import (
     WebSocketError,
     WebSocketTimeout,
     WsCloseCode,
-    WsRetryOnRecvError,
+    WebSocketRetryStrategy,
 )
 
 if TYPE_CHECKING:

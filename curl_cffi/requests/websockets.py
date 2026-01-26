@@ -54,27 +54,25 @@ dumps_partial: partial[str] = partial(json_dumps, separators=(",", ":"))
 
 
 @dataclass
-class WsRetryOnRecvError:
+class WebSocketRetryStrategy:
     """Configurable WebSocket behaviour for retrying failed message receives.
 
     When enabled, each failed receive attempt will use exponential backoff with
-    jitter, calculated as the ``base * (2 ** (attempt - 1)) +- jitter``, where
-    the jitter is ``+-10%`` the result of computed delay value.
+    jitter.
 
-    retry_on_error: When a WebSocket receive operation fails due to an error,
-    retry the receive attempt (``True``) or fail the connection (``False``).
-    retry_delay_base: The base value (in seconds) to compute the retry delay from.
-    max_retry_count: How many times to retry a receive operation before giving up.
-    retry_error_codes: Set of ``CurlECode`` values for which the receive operation
-    should be retried. Default is ``CurlECode.RECV_ERROR``.
+    Calculation: ``delay * 2^(count - 1) ± 10%``
+
+    retry: Enable or disable WebSocket message receive retries.
+    delay: The base value (seconds) to compute the retry delay from.
+    count: How many times to retry a receive operation before giving up.
+    codes: Set of ``CurlECode`` values for which the receive operation
+        should be retried. Default is ``CurlECode.RECV_ERROR``.
     """
 
-    retry_on_error: bool = False
-    retry_delay_base: float = 0.3
-    max_retry_count: int = 3
-    retry_error_codes: set[CurlECode] = field(
-        default_factory=lambda: {CurlECode.RECV_ERROR}
-    )
+    retry: bool = False
+    delay: float = 0.3
+    count: int = 3
+    codes: set[CurlECode] = field(default_factory=lambda: {CurlECode.RECV_ERROR})
 
 
 class WsCloseCode(IntEnum):
@@ -699,7 +697,7 @@ class AsyncWebSocket(BaseWebSocket):
         send_queue_size: int = 16,
         max_send_batch_size: int = 32,
         coalesce_frames: bool = False,
-        ws_retry: WsRetryOnRecvError | None = None,
+        ws_retry: WebSocketRetryStrategy | None = None,
         recv_time_slice: float = 0.005,
         send_time_slice: float = 0.001,
         max_message_size: int = 4 * 1024 * 1024,
@@ -753,7 +751,7 @@ class AsyncWebSocket(BaseWebSocket):
                 the Curl socket is next available for sending.
             max_send_batch_size (int, optional): The max number of messages per batch.
             coalesce_frames (bool, optional): Combine multiple frames into a batch.
-            ws_retry (WsRetryOnRecvError, optional): Retry on failed message receives.
+            ws_retry (WebSocketRetryStrategy): Retry policy for WebSocket messages.
             recv_time_slice (float): The maximum duration (in seconds) to process
                 incoming messages before yielding to the event loop.
                 Defaults to ``0.005`` (5ms).
@@ -804,7 +802,7 @@ class AsyncWebSocket(BaseWebSocket):
         )
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
-        self.ws_retry: WsRetryOnRecvError = ws_retry or WsRetryOnRecvError()
+        self.ws_retry: WebSocketRetryStrategy = ws_retry or WebSocketRetryStrategy()
         self._recv_time_slice: float = recv_time_slice
         self._send_time_slice: float = send_time_slice
         self._transport_exception: Exception | None = None
@@ -1349,13 +1347,13 @@ class AsyncWebSocket(BaseWebSocket):
         loop_time: Callable[[], float] = loop.time
         create_future: Callable[[], asyncio.Future[None]] = loop.create_future
         add_reader: Callable[..., None] = loop.add_reader
+        remove_reader: Callable[..., bool] = loop.remove_reader
         time_slice: float = self._recv_time_slice
         next_yield: float = loop_time() + time_slice
-        ws_retry: WsRetryOnRecvError = self.ws_retry
-        retry_on_error: bool = ws_retry.retry_on_error
-        retry_codes: set[CurlECode] = ws_retry.retry_error_codes
-        max_retries: int = ws_retry.max_retry_count
-        retry_base: float = float(ws_retry.retry_delay_base)
+        retry_on_error: bool = self.ws_retry.retry
+        retry_codes: set[CurlECode] = self.ws_retry.codes
+        max_retries: int = self.ws_retry.count
+        retry_base: float = float(self.ws_retry.delay)
         e_again: CurlECode = CurlECode.AGAIN
         e_recv_err: CurlECode = CurlECode.RECV_ERROR
         e_nothing: CurlECode = CurlECode.GOT_NOTHING
@@ -1377,7 +1375,7 @@ class AsyncWebSocket(BaseWebSocket):
         # Message specific values
         recv_error_retries: int = 0
         chunks: list[bytes] = []
-        remaining_bytes: int = max_msg_size
+        msg_size: int = 0
         chunks_append: Callable[[bytes], None] = chunks.append
         chunks_clear: Callable[[], None] = chunks.clear
 
@@ -1429,7 +1427,7 @@ class AsyncWebSocket(BaseWebSocket):
                         finally:
                             if self._sock_fd != -1:
                                 try:  # noqa: SIM105
-                                    _ = loop.remove_reader(self._sock_fd)
+                                    _ = remove_reader(self._sock_fd)
                                 # pylint: disable-next=broad-exception-caught
                                 except Exception:
                                     pass
@@ -1459,28 +1457,28 @@ class AsyncWebSocket(BaseWebSocket):
                     return
 
                 flags: int = frame.flags
-                remaining_bytes -= len(chunk)
-                if remaining_bytes < 0:
-                    chunks_clear()
-                    self._finalize_connection(
-                        WebSocketError(
-                            (
-                                "Message too large: "
-                                f"{max_msg_size - remaining_bytes} bytes "
-                                f"(limit {max_msg_size} bytes). "
-                                "Consider increasing max_message_size or "
-                                "chunking the message."
-                            ),
-                            CurlECode.TOO_LARGE,
-                        )
-                    )
-                    return
-
-                if recv_error_retries:
+                if recv_error_retries > 0:
                     recv_error_retries = 0
 
                 # Data Frames (Text / Binary / Cont)
                 if not (flags & control_mask):
+                    # Perform message size checks
+                    msg_size += len(chunk)
+                    if msg_size > max_msg_size:
+                        chunks_clear()
+                        self._finalize_connection(
+                            WebSocketError(
+                                (
+                                    f"Message too large: {msg_size} bytes "
+                                    f"(limit {max_msg_size} bytes). "
+                                    "Consider increasing max_message_size or "
+                                    "chunking the message."
+                                ),
+                                CurlECode.TOO_LARGE,
+                            )
+                        )
+                        return
+
                     # Collect the chunk
                     chunks_append(chunk)
 
@@ -1490,7 +1488,7 @@ class AsyncWebSocket(BaseWebSocket):
                             chunks[0] if len(chunks) == 1 else b"".join(chunks)
                         )
                         chunks_clear()
-                        remaining_bytes = max_msg_size
+                        msg_size = 0
 
                         try:
                             queue_put_nowait((message, flags))
@@ -1694,6 +1692,7 @@ class AsyncWebSocket(BaseWebSocket):
         loop_time: Callable[[], float] = loop.time
         create_future: Callable[[], asyncio.Future[None]] = loop.create_future
         add_writer: Callable[..., None] = loop.add_writer
+        remove_writer: Callable[..., bool] = loop.remove_writer
         sock_fd: int = self._sock_fd
         time_slice: float = self._send_time_slice
         next_yield: float = loop_time() + time_slice
@@ -1781,7 +1780,7 @@ class AsyncWebSocket(BaseWebSocket):
                     finally:
                         if sock_fd != -1:
                             try:  # noqa: SIM105
-                                _ = loop.remove_writer(sock_fd)
+                                _ = remove_writer(sock_fd)
                             # pylint: disable-next=broad-exception-caught
                             except Exception:
                                 pass

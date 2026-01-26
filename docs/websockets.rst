@@ -252,12 +252,12 @@ Reliability & Retries
 
 .. code-block:: python
 
-    from curl_cffi import WsRetryOnRecvError
+    from curl_cffi import WebSocketRetryStrategy
 
     # Retry transient read errors up to 5 times
-    retry_policy = WsRetryOnRecvError(
-        retry_on_error=True,
-        max_retry_count=5
+    retry_policy = WebSocketRetryStrategy(
+        retry=True,
+        count=5
     )
 
     ws = await s.ws_connect(
