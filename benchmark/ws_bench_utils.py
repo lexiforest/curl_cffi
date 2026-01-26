@@ -77,7 +77,7 @@ class TestConfig:
     """
     Configuration values, should be changed as needed.
 
-    NOTE: On Linux madvise requires alignment on freed chunks,
+    NOTE: On Linux madvise requires alignment of free chunks,
     so ``large_chunk_size`` must be a page-aligned value.
     """
 
