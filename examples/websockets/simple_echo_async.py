@@ -8,8 +8,7 @@ async def main() -> None:
     """Test basic echo"""
     async with AsyncSession[Response]() as s:
         print("Connecting to Postman Echo...")
-        # using 'async with await' closes the socket automatically
-        async with await s.ws_connect("wss://ws.postman-echo.com/raw") as ws:
+        async with s.ws_connect("wss://ws.postman-echo.com/raw") as ws:
 
             message = "Hello from curl_cffi!"
             print(f">>> Sending: {message}")

@@ -378,7 +378,7 @@ class TestAsyncWebSocketBasicConnectivity:
         configurable_ws_server: ConfigurableWSServer,
     ) -> None:
         """Test async context manager properly closes connection."""
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             assert ws.is_alive()
         assert ws.closed
 
@@ -474,7 +474,7 @@ class TestAsyncWebSocketMessageTypes:
     ) -> None:
         """Test recv_json raises on empty payload."""
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=[b""])
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             with pytest.raises(WebSocketError) as exc_info:
                 await ws.recv_json()
             assert "empty" in str(exc_info.value).lower()
@@ -491,7 +491,7 @@ class TestAsyncWebSocketTimeouts:
     ) -> None:
         """Test recv timeout when no message arrives."""
         ws_config(behavior=ServerBehavior.SILENT)
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             await ws.send(b"hello")
             with pytest.raises(WebSocketTimeout):
                 _ = await ws.recv(timeout=0.2)
@@ -516,7 +516,7 @@ class TestAsyncWebSocketTimeouts:
     ) -> None:
         """Test send timeout when queue is full."""
         ws_config(behavior=ServerBehavior.SILENT)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             send_queue_size=1,
         ) as ws:
@@ -597,7 +597,7 @@ class TestAsyncWebSocketConcurrency:
         messages: list[str] = [f"broadcast_{i}" for i in range(5)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=10,
         ) as ws:
@@ -661,7 +661,7 @@ class TestAsyncWebSocketConcurrency:
         messages: list[str] = [f"msg_{i}" for i in range(num_messages)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=queue_size,
             block_on_recv_queue_full=True,  # Block rather than fail
@@ -720,7 +720,7 @@ class TestAsyncWebSocketConcurrency:
         # Use echo - we control the message rate
         ws_config(behavior=ServerBehavior.ECHO)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=queue_size,
         ) as ws:
@@ -783,7 +783,7 @@ class TestAsyncWebSocketConcurrency:
             close_code=WsCloseCode.GOING_AWAY,
         )
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=queue_size,
         ) as ws:
@@ -844,7 +844,7 @@ class TestAsyncWebSocketCancellation:
     ) -> None:
         """Test cancelling recv before any message arrives."""
         ws_config(behavior=ServerBehavior.SILENT)
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             task: Task[tuple[bytes, int]] = asyncio.create_task(ws.recv())
             await asyncio.sleep(0.05)
             _ = task.cancel()
@@ -866,7 +866,7 @@ class TestAsyncWebSocketCancellation:
     ) -> None:
         """Test cancelling send while waiting on full queue."""
         ws_config(behavior=ServerBehavior.SILENT)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             send_queue_size=1,
         ) as ws:
@@ -944,7 +944,7 @@ class TestAsyncWebSocketClose:
             close_reason="server shutting down",
         )
 
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             await ws.send(b"trigger_close")
             # Server will close after echoing
             data, _flags = await ws.recv()
@@ -968,7 +968,7 @@ class TestAsyncWebSocketIterator:
         messages: list[bytes] = [b"one", b"two", b"three"]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             received: list[bytes] = []
             count = 0
             async for msg in ws:
@@ -1006,7 +1006,7 @@ class TestAsyncWebSocketQueueBehavior:
         messages: list[str] = [f"msg_{i}" for i in range(10)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=5,
             block_on_recv_queue_full=True,
@@ -1034,7 +1034,7 @@ class TestAsyncWebSocketQueueBehavior:
         """Test send queue applies backpressure when full."""
         ws_config(behavior=ServerBehavior.SILENT)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             send_queue_size=2,
         ) as ws:
@@ -1055,7 +1055,7 @@ class TestAsyncWebSocketQueueBehavior:
         """Test drain_on_error=False raises immediately on transport error."""
         ws_config(behavior=ServerBehavior.CLOSE_IMMEDIATELY)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             drain_on_error=False,
         ) as ws:
@@ -1120,7 +1120,7 @@ class TestAsyncWebSocketFlush:
         """Test flush timeout when messages can't be sent."""
         ws_config(behavior=ServerBehavior.SILENT)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             send_queue_size=100,
         ) as ws:
@@ -1305,7 +1305,7 @@ class TestAsyncWebSocketParameterBoundaries:
     ) -> None:
         """Test recv queue works correctly at various sizes."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=queue_size,
         ) as ws:
@@ -1327,7 +1327,7 @@ class TestAsyncWebSocketParameterBoundaries:
     ) -> None:
         """Test send queue works correctly at various sizes."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             send_queue_size=queue_size,
         ) as ws:
@@ -1350,7 +1350,7 @@ class TestAsyncWebSocketParameterBoundaries:
     ) -> None:
         """Test max_send_batch_size parameter at various values."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             max_send_batch_size=batch_size,
         ) as ws:
@@ -1372,7 +1372,7 @@ class TestAsyncWebSocketParameterBoundaries:
     ) -> None:
         """Test recv_time_slice and send_time_slice parameters."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_time_slice=time_slice,
             send_time_slice=time_slice,
@@ -1395,7 +1395,7 @@ class TestAsyncWebSocketParameterBoundaries:
     ) -> None:
         """Test max_message_size parameter at various values."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             max_message_size=max_size,
         ) as ws:
@@ -1417,7 +1417,7 @@ class TestAsyncWebSocketCoalesceFrames:
     ) -> None:
         """Test with coalesce_frames=True - frames may be batched together."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             coalesce_frames=True,
         ) as ws:
@@ -1446,7 +1446,7 @@ class TestAsyncWebSocketCoalesceFrames:
     ) -> None:
         """Test with coalesce_frames=False (default)."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             coalesce_frames=False,
         ) as ws:
@@ -1463,7 +1463,7 @@ class TestAsyncWebSocketCoalesceFrames:
     ) -> None:
         """Test coalesce mode with send-then-recv pattern."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             coalesce_frames=True,
         ) as ws:
@@ -1554,7 +1554,7 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
         messages: list[str] = [f"full_{i}" for i in range(20)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
-        async with await session.ws_connect(
+        async with session.ws_connect(
             configurable_ws_server.url,
             recv_queue_size=5,
             block_on_recv_queue_full=True,
@@ -1587,7 +1587,7 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
         # With block_on_recv_queue_full=False, the connection fails when queue fills
         # This is the expected behavior to preserve message integrity
         try:
-            async with await session.ws_connect(
+            async with session.ws_connect(
                 configurable_ws_server.url,
                 recv_queue_size=5,
                 block_on_recv_queue_full=False,
@@ -1690,7 +1690,7 @@ class TestAsyncWebSocketCoverageGaps:
     ) -> None:
         """Test recv_str with UTF-8 validation enabled."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             # Send valid UTF-8
             await ws.send_str("Hello 世界 🎉")
             response = await ws.recv_str(timeout=5.0)
@@ -1704,7 +1704,7 @@ class TestAsyncWebSocketCoverageGaps:
     ) -> None:
         """Test explicit send_binary method."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             await ws.send_binary(b"\x00\x01\x02\xff")
             data, flags = await ws.recv(timeout=5.0)
             assert data == b"\x00\x01\x02\xff"
@@ -1718,7 +1718,7 @@ class TestAsyncWebSocketCoverageGaps:
     ) -> None:
         """Test multiple consecutive flush calls."""
         ws_config(behavior=ServerBehavior.ECHO)
-        async with await session.ws_connect(configurable_ws_server.url) as ws:
+        async with session.ws_connect(configurable_ws_server.url) as ws:
             await ws.send(b"msg1")
             await ws.flush(timeout=5.0)
             await ws.flush(timeout=5.0)  # Second flush on empty queue

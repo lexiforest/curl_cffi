@@ -9,7 +9,7 @@ import struct
 import threading
 import warnings
 from asyncio import InvalidStateError as _InvalidStateError
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -717,8 +717,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         ```python
         session = AsyncSession(...)
-        ws = session.ws_connect(...)
-        async with ws:
+        async with session.ws_connect(...) as ws:
             ...
         ```
 
@@ -727,7 +726,7 @@ class AsyncWebSocket(BaseWebSocket):
         ```python
         async with (
             AsyncSession(...) as session,
-            await session.ws_connect(...) as ws,
+            session.ws_connect(...) as ws,
         ):
             ...
         ```
@@ -1914,3 +1913,30 @@ class AsyncWebSocket(BaseWebSocket):
         else:
             # If not sending a reply, we must still terminate the connection.
             self.terminate()
+
+
+@final
+class AsyncWebSocketContext:
+    """Helper to enable simpler context manager usage"""
+
+    __slots__ = ("_coro", "_obj")
+
+    def __init__(self, coro: Awaitable[AsyncWebSocket]) -> None:
+        self._coro: Awaitable[AsyncWebSocket] = coro
+        self._obj: AsyncWebSocket | None = None
+
+    def __await__(self) -> Generator[object, object, AsyncWebSocket]:
+        return self._coro.__await__()
+
+    async def __aenter__(self) -> AsyncWebSocket:
+        self._obj = await self._coro
+        return self._obj
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object | None,
+    ) -> None:
+        if self._obj:
+            await self._obj.close()

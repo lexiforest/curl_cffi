@@ -10,9 +10,7 @@ async def main() -> None:
     async with AsyncSession[Response](impersonate="chrome") as s:
         print("Connecting to Binance Stream...")
 
-        async with await s.ws_connect(
-            "wss://stream.binance.com:9443/ws/btcusdt@trade"
-        ) as ws:
+        async with s.ws_connect("wss://stream.binance.com:9443/ws/btcusdt@trade") as ws:
             print(">>> Connected! Reading first 5 trades...")
 
             # Counter to stop the infinite stream

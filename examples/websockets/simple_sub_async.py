@@ -10,7 +10,7 @@ async def main() -> None:
     async with AsyncSession[Response](impersonate="chrome") as s:
         print("Connecting to Coinbase Pro...")
 
-        async with await s.ws_connect("wss://ws-feed.exchange.coinbase.com") as ws:
+        async with s.ws_connect("wss://ws-feed.exchange.coinbase.com") as ws:
             # Send Subscription Request
             subscribe_msg: dict[str, str | list[str]] = {
                 "type": "subscribe",

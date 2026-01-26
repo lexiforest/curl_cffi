@@ -36,6 +36,7 @@ from .models import STREAM_END, Response
 from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
 from .websockets import (
     AsyncWebSocket,
+    AsyncWebSocketContext,
     WebSocket,
     WebSocketError,
     WebSocketRetryStrategy,
@@ -868,7 +869,7 @@ class AsyncSession(BaseSession[R]):
         finally:
             await rsp.aclose()
 
-    async def ws_connect(
+    def ws_connect(
         self,
         url: str,
         autoclose: bool = True,
@@ -906,7 +907,7 @@ class AsyncSession(BaseSession[R]):
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
         curl_options: dict[CurlOpt, str] | None = None,
-    ) -> AsyncWebSocket:
+    ) -> AsyncWebSocketContext:
         """Connects to a WebSocket.
 
         Args:
@@ -974,75 +975,80 @@ class AsyncSession(BaseSession[R]):
             curl_options: extra curl options to use.
         """
 
-        self._check_session_closed()
+        async def _connect_coro() -> AsyncWebSocket:
+            self._check_session_closed()
 
-        curl: Curl = await self.pop_curl()
-        _ = set_curl_options(
-            curl=curl,
-            method="GET",
-            url=url,
-            base_url=self.base_url,
-            params_list=[self.params, params],
-            headers_list=[self.headers, headers],
-            cookies_list=[self.cookies, cookies],
-            auth=auth or self.auth,
-            timeout=self.timeout if timeout is NOT_SET else timeout,
-            allow_redirects=(
-                self.allow_redirects if allow_redirects is None else allow_redirects
-            ),
-            max_redirects=(
-                self.max_redirects if max_redirects is None else max_redirects
-            ),
-            proxies_list=[self.proxies, proxies],
-            proxy=proxy,
-            proxy_auth=proxy_auth or self.proxy_auth,
-            verify_list=[self.verify, verify],
-            referer=referer,
-            accept_encoding=accept_encoding,
-            impersonate=impersonate or self.impersonate,
-            ja3=ja3 or self.ja3,
-            akamai=akamai or self.akamai,
-            extra_fp=extra_fp or self.extra_fp,
-            default_headers=(
-                self.default_headers if default_headers is None else default_headers
-            ),
-            quote=quote,
-            http_version=http_version or self.http_version,
-            interface=interface or self.interface,
-            max_recv_speed=max_recv_speed,
-            cert=cert or self.cert,
-            queue_class=asyncio.Queue,
-            event_class=asyncio.Event,
-            curl_options=curl_options,
-        )
-        _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
-        _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)  # https://curl.se/docs/websocket.html
+            curl: Curl = await self.pop_curl()
+            _ = set_curl_options(
+                curl=curl,
+                method="GET",
+                url=url,
+                base_url=self.base_url,
+                params_list=[self.params, params],
+                headers_list=[self.headers, headers],
+                cookies_list=[self.cookies, cookies],
+                auth=auth or self.auth,
+                timeout=self.timeout if timeout is NOT_SET else timeout,
+                allow_redirects=(
+                    self.allow_redirects if allow_redirects is None else allow_redirects
+                ),
+                max_redirects=(
+                    self.max_redirects if max_redirects is None else max_redirects
+                ),
+                proxies_list=[self.proxies, proxies],
+                proxy=proxy,
+                proxy_auth=proxy_auth or self.proxy_auth,
+                verify_list=[self.verify, verify],
+                referer=referer,
+                accept_encoding=accept_encoding,
+                impersonate=impersonate or self.impersonate,
+                ja3=ja3 or self.ja3,
+                akamai=akamai or self.akamai,
+                extra_fp=extra_fp or self.extra_fp,
+                default_headers=(
+                    self.default_headers if default_headers is None else default_headers
+                ),
+                quote=quote,
+                http_version=http_version or self.http_version,
+                interface=interface or self.interface,
+                max_recv_speed=max_recv_speed,
+                cert=cert or self.cert,
+                queue_class=asyncio.Queue,
+                event_class=asyncio.Event,
+                curl_options=curl_options,
+            )
+            _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
+            _ = curl.setopt(
+                CurlOpt.CONNECT_ONLY, 2
+            )  # https://curl.se/docs/websocket.html
 
-        _ = await self.loop.run_in_executor(None, curl.perform)
-        ws: AsyncWebSocket = AsyncWebSocket(
-            cast(AsyncSession[Response], self),
-            curl,
-            autoclose=autoclose,
-            recv_queue_size=recv_queue_size,
-            send_queue_size=send_queue_size,
-            max_send_batch_size=max_send_batch_size,
-            coalesce_frames=coalesce_frames,
-            ws_retry=ws_retry,
-            recv_time_slice=recv_time_slice,
-            send_time_slice=send_time_slice,
-            max_message_size=max_message_size,
-            drain_on_error=drain_on_error,
-            block_on_recv_queue_full=block_on_recv_queue_full,
-            debug=self.debug,
-        )
+            _ = await self.loop.run_in_executor(None, curl.perform)
+            ws: AsyncWebSocket = AsyncWebSocket(
+                cast(AsyncSession[Response], self),
+                curl,
+                autoclose=autoclose,
+                recv_queue_size=recv_queue_size,
+                send_queue_size=send_queue_size,
+                max_send_batch_size=max_send_batch_size,
+                coalesce_frames=coalesce_frames,
+                ws_retry=ws_retry,
+                recv_time_slice=recv_time_slice,
+                send_time_slice=send_time_slice,
+                max_message_size=max_message_size,
+                drain_on_error=drain_on_error,
+                block_on_recv_queue_full=block_on_recv_queue_full,
+                debug=self.debug,
+            )
 
-        try:
-            ws._start_io_tasks()
-        except WebSocketError:
-            ws.terminate()
-            raise
+            try:
+                ws._start_io_tasks()
+            except WebSocketError:
+                ws.terminate()
+                raise
 
-        return ws
+            return ws
+
+        return AsyncWebSocketContext(_connect_coro())
 
     async def request(
         self,

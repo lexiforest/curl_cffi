@@ -124,7 +124,7 @@ async def run_benchmark() -> None:
                 config.benchmark_direction.name,
             )
             async with (
-                await session.ws_connect(
+                session.ws_connect(
                     config.srv_path,
                     recv_queue_size=config.recv_queue,
                     send_queue_size=config.send_queue,

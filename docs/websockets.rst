@@ -30,12 +30,11 @@ Quick Start
 
 The recommended way to use WebSockets is via the ``AsyncSession``.
 
-.. warning::
+.. note::
 
-   **Syntax**: ``ws_connect`` is an asynchronous factory method.
-   You must ``await`` the connection call *before* entering the context manager.
+   **Syntax**: The ``ws_connect`` method supports the standard async context manager syntax.
 
-   **Correct:** ``async with await s.ws_connect(...) as ws:``
+   **Recommended:** ``async with s.ws_connect(...) as ws:``
 
 .. code-block:: python
 
@@ -44,8 +43,8 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
 
     async def main():
         async with AsyncSession() as s:
-            # Note the syntax: await s.ws_connect(...)
-            async with await s.ws_connect("wss://echo.websocket.org") as ws:
+            # Connect using the standard context manager syntax
+            async with s.ws_connect("wss://echo.websocket.org") as ws:
 
                 # Send a text message
                 await ws.send_str("Hello, World!")
@@ -77,7 +76,7 @@ Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same networ
         # Session cookies are automatically included
         s.cookies.set("session_id", "xyz")
 
-        async with await s.ws_connect(
+        async with s.ws_connect(
             "wss://api.example.com/v1/stream",
             impersonate="chrome",
             auth=("user", "pass"),
