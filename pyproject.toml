@@ -118,6 +118,8 @@ environment-pass = ["LD_LIBRARY_PATH"]
 
 [tool.cibuildwheel.macos]
 before-all = "gmake preprocess"
+before-build = "pip install setuptools cffi"
+build-frontend = "pip; args: --no-build-isolation"
 
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"

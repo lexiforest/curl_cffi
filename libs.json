@@ -30,7 +30,7 @@
         "system": "Darwin",
         "machine": "x86_64",
         "pointer_size": 64,
-        "libdir": "/Users/runner/work/_temp/install/lib",
+        "libdir": "./libmacos",
         "sysname": "macos",
         "so_name": "libcurl-impersonate.4.dylib",
         "so_arch": "x86_64"
@@ -39,7 +39,7 @@
         "system": "Darwin",
         "machine": "arm64",
         "pointer_size": 64,
-        "libdir": "/Users/runner/work/_temp/install/lib",
+        "libdir": "./libmacos",
         "sysname": "macos",
         "so_name": "libcurl-impersonate.4.dylib",
         "so_arch": "arm64"
