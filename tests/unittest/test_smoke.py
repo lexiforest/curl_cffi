@@ -1,3 +1,5 @@
+import pytest
+
 # Simple smoke test to real world websites
 from curl_cffi import requests
 
@@ -19,6 +21,7 @@ def test_with_impersonate():
         assert r.status_code == 200
 
 
+@pytest.mark.asyncio
 async def test_async():
     async with requests.AsyncSession() as s:
         for url in URLS:

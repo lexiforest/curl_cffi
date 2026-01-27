@@ -96,6 +96,14 @@ Sessions
    .. automethod:: close
    .. automethod:: ws_connect
 
+
+.. autoclass:: curl_cffi.requests.TrioSession
+
+   .. automethod:: __init__
+   .. automethod:: request
+   .. automethod:: stream
+   .. automethod:: close
+
 Headers
 ~~~~~~~
 

@@ -29,6 +29,9 @@ extra = [
     "markdownify>=1.1.0",
     "lxml_html_clean",
 ]
+trio = [
+    "trio>=0.25.0,<1.0",
+]
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
@@ -126,7 +129,8 @@ repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32 -w {dest_di
 
 [tool.pytest.ini_options]
 # pythonpath = [ "." ]
-asyncio_mode = "auto"
+asyncio_mode = "strict"
+trio_mode = false
 
 
 [tool.ruff]

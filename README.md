@@ -64,7 +64,7 @@ No browser automation. Just simple API calls that return the exact cookies and h
 - Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/lexiforest/curl_cffi/tree/main/benchmark).
 - Mimics the requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
-- Supports `asyncio` with proxy rotation on each request.
+- Supports `asyncio` and `trio` with proxy rotation on each request.
 - Supports http 2.0 & 3.0, which requests does not.
 - Supports websocket.
 - MIT licensed.
@@ -235,6 +235,24 @@ async with AsyncSession() as s:
 
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
+
+### Trio
+
+```python
+import trio
+from curl_cffi import TrioSession
+
+async def main():
+    async with TrioSession() as s:
+        r = await s.get("https://example.com")
+
+trio.run(main)
+```
+
+Install with `pip install curl_cffi[trio]` if you don't already have Trio.
+
+Note: Trio WebSocket support is not available yet. Use `AsyncSession` for asyncio
+WebSockets.
 
 
 ### WebSockets

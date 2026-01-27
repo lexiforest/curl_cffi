@@ -1,3 +1,5 @@
+import pytest
+
 from curl_cffi.requests import AsyncSession, WebSocket, Session
 from curl_cffi.requests.websockets import CurlWsFlag
 
@@ -103,6 +105,7 @@ def test_on_data_callback(ws_server):
     ws.close()
 
 
+@pytest.mark.asyncio
 async def test_hello_twice_async(ws_server):
     ws = None
     async with AsyncSession() as s:

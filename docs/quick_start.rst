@@ -517,6 +517,27 @@ The benefit of asyncio is easier way to implement more concurrency:
 
 For detailed asyncio guide, see :doc:`asyncio`.
 
+Trio
+====
+
+``curl_cffi`` also supports Trio via ``TrioSession``.
+
+.. code-block:: python
+
+    import trio
+    from curl_cffi import TrioSession
+
+    async def main():
+        async with TrioSession() as s:
+            r = await s.get("https://example.com")
+
+    trio.run(main)
+
+Install with ``pip install curl_cffi[trio]`` if you don't already have Trio.
+
+Note: Trio WebSocket support is not available yet. Use ``AsyncSession`` for asyncio
+WebSockets.
+
 WebSockets
 ==========
 

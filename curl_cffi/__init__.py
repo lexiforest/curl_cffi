@@ -16,6 +16,7 @@ __all__ = [
     "lib",
     "Session",
     "AsyncSession",
+    "TrioSession",
     "BrowserType",
     "BrowserTypeLiteral",
     "request",
@@ -75,6 +76,7 @@ from .requests import (
     Request,
     Response,
     Session,
+    TrioSession,
     WebSocket,
     WebSocketClosed,
     WebSocketError,
@@ -92,5 +94,8 @@ from .requests import (
 )
 
 from .utils import config_warnings, is_pro
+
+if TrioSession is None:
+    __all__.remove("TrioSession")
 
 config_warnings(on=False)

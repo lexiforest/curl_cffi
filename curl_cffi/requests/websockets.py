@@ -12,7 +12,8 @@ from json import dumps, loads
 from select import select
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, TypeVar, Union
 
-from ..aio import CURL_SOCKET_BAD, get_selector
+from ..async_base import CURL_SOCKET_BAD
+from ..aio import get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
 from ..utils import CurlCffiWarning
