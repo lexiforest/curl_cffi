@@ -1722,9 +1722,8 @@ class AsyncWebSocket(BaseWebSocket):
                 current_flags |= cont_flag
 
             try:
-                # We need to perform a bytes copy to prevent BufferError crash.
                 # libcurl returns the number of bytes actually sent
-                n_sent: int = curl_ws_send(chunk.tobytes(), current_flags)
+                n_sent: int = curl_ws_send(chunk, current_flags)
 
                 if n_sent == 0:
                     # Handle 0-byte payload (Valid Empty Frame)
