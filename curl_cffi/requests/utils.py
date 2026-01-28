@@ -8,9 +8,9 @@ import math
 import queue
 import warnings
 from collections import Counter
+from collections.abc import Callable
 from io import BytesIO
 from json import dumps
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
@@ -52,6 +52,14 @@ class NotSetType:
     """
     Unique single initialized type distinct from ``None``.
     """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "NOT_SET"
+
+    def __reduce__(self) -> Literal["NOT_SET"]:
+        return "NOT_SET"
 
 
 NOT_SET: Final[NotSetType] = NotSetType()

@@ -1686,7 +1686,7 @@ class AsyncWebSocket(BaseWebSocket):
         Optimized low-level sender with fragmentation logic.
         """
         # Cache locals to reduce lookup cost
-        curl_ws_send: Callable[[bytes, CurlWsFlag | int], int] = self.curl.ws_send
+        curl_ws_send: Callable[[memoryview, CurlWsFlag | int], int] = self.curl.ws_send
         loop: asyncio.AbstractEventLoop = self.loop
         loop_time: Callable[[], float] = loop.time
         create_future: Callable[[], asyncio.Future[None]] = loop.create_future

@@ -1019,10 +1019,16 @@ class AsyncSession(BaseSession[R]):
             )
             _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
             _ = curl.setopt(
-                CurlOpt.CONNECT_ONLY, 2
-            )  # https://curl.se/docs/websocket.html
+                CurlOpt.CONNECT_ONLY, 2  # https://curl.se/docs/websocket.html
+            )
 
-            _ = await self.loop.run_in_executor(None, curl.perform)
+            try:
+                _ = await self.loop.run_in_executor(None, curl.perform)
+            except Exception:
+                curl.close()
+                self.push_curl(None)
+                raise
+
             ws: AsyncWebSocket = AsyncWebSocket(
                 cast(AsyncSession[Response], self),
                 curl,

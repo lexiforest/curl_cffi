@@ -561,7 +561,7 @@ class Curl:
         return ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]], frame
 
     def ws_send(
-        self, payload: bytes, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
     ) -> int:
         """Send data to a websocket connection.
 
