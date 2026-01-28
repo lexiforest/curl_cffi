@@ -79,6 +79,12 @@ def download_libcurl():
         for file in glob(os.path.join(arch["libdir"], "bin/*.dll")):
             shutil.move(file, arch["libdir"])
 
+    if arch["system"] == "Darwin":
+        # Fix the install name baked into the upstream dylib so delocate can find it
+        dylib = os.path.join(arch["libdir"], arch["so_name"])
+        abs_dylib = os.path.abspath(dylib)
+        os.system(f"install_name_tool -id {abs_dylib} {dylib}")
+
     print("Files after unpacking")
     print(os.listdir(arch["libdir"]))
 
