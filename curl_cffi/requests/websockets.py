@@ -1267,7 +1267,9 @@ class AsyncWebSocket(BaseWebSocket):
                             self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
                             timeout=timeout,
                         )
-                    with suppress(WebSocketTimeout, WebSocketError):
+                    with suppress(
+                        WebSocketTimeout, WebSocketError, asyncio.CancelledError
+                    ):
                         await self.flush(timeout)
 
             finally:

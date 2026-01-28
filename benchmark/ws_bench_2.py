@@ -190,7 +190,7 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
             )
 
             if offset < config.total_bytes - config.chunk_size:
-                logger.error("Incomplete file receieved, skipping hash check")
+                logger.error("Incomplete file received, skipping hash check")
                 return
 
             # Calculate and compare hashes
