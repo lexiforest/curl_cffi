@@ -5,7 +5,7 @@ authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = { text = "MIT License" }
 dependencies = [
-    "cffi>=1.12.0",
+    "cffi>=2.0.0",
     "certifi>=2024.2.2",
 ]
 readme = "README.md"
@@ -94,6 +94,23 @@ build = [
     "cp310-manylinux_armv7l",
     "cp310-musllinux_x86_64",
     "cp310-musllinux_aarch64",
+    # Free-threaded (PEP 703) wheels
+    "cp313t-macosx_x86_64",
+    "cp313t-macosx_arm64",
+    "cp313t-win_amd64",
+    "cp313t-win_arm64",
+    "cp313t-manylinux_x86_64",
+    "cp313t-manylinux_aarch64",
+    "cp313t-musllinux_x86_64",
+    "cp313t-musllinux_aarch64",
+    "cp314t-macosx_x86_64",
+    "cp314t-macosx_arm64",
+    "cp314t-win_amd64",
+    "cp314t-win_arm64",
+    "cp314t-manylinux_x86_64",
+    "cp314t-manylinux_aarch64",
+    "cp314t-musllinux_x86_64",
+    "cp314t-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
