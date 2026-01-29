@@ -105,12 +105,11 @@ def test_on_data_callback(ws_server):
 
 async def test_hello_twice_async(ws_server):
     ws = None
-    async with AsyncSession() as s:
-        async with s.ws_connect(ws_server.url) as ws:
-            await ws.send(b"Bar")
-            reply, _ = await ws.recv()
+    async with AsyncSession() as s, s.ws_connect(ws_server.url) as ws:
+        await ws.send(b"Bar")
+        reply, _ = await ws.recv()
 
-            for _ in range(10):
-                await ws.send_str("Bar")
-                reply = await ws.recv_str()
-                assert reply == "Bar"
+        for _ in range(10):
+            await ws.send_str("Bar")
+            reply = await ws.recv_str()
+            assert reply == "Bar"
