@@ -13,10 +13,10 @@ print(reply)
 
 async def async_examples():
     async with curl_cffi.AsyncSession() as s:
-        ws = await s.ws_connect(URL)
-        await ws.send(b"Bar")
-        reply = await ws.recv()
-        print(reply)
+        async with s.ws_connect(URL) as ws:
+            await ws.send(b"Bar")
+            reply = await ws.recv()
+            print(reply)
 
 
 asyncio.run(async_examples())

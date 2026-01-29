@@ -541,9 +541,9 @@ WebSockets
     from curl_cffi import AsyncSession
 
     async with AsyncSession() as s:
-        ws = await s.ws_connect("wss://echo.websocket.org")
-        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-        async for message in ws:
-            print(message)
+        async with s.ws_connect("wss://echo.websocket.org") as ws:
+            await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+            async for message in ws:
+                print(message)
 
 For detailed websocket guide, see :doc:`websockets`.
