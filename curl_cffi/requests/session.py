@@ -7,7 +7,7 @@ import queue
 import sys
 import threading
 import warnings
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from collections.abc import Callable
 from io import BytesIO
@@ -604,7 +604,6 @@ class Session(BaseSession[R]):
         )
 
         if stream:
-            header_parsed = threading.Event()
 
             def perform():
                 try:
@@ -620,12 +619,7 @@ class Session(BaseSession[R]):
                         cast(threading.Event, header_recved).set()
                     q.put(STREAM_END)  # type: ignore
 
-            def cleanup(fut: Future[None]):
-                header_parsed.wait()
-                c.reset()
-
             stream_task = self.executor.submit(perform)
-            stream_task.add_done_callback(cleanup)
 
             # Wait for the first chunk
             header_recved.wait()  # type: ignore
@@ -633,12 +627,13 @@ class Session(BaseSession[R]):
                 c, buffer, header_buffer, default_encoding, discard_cookies
             )
 
-            header_parsed.set()
-
             # Raise the exception if something wrong happens when receiving the header.
             first_element = _peek_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
-                c.reset()
+                if quit_now:
+                    quit_now.set()
+                stream_task.result()
+                c.close()
                 raise first_element
 
             rsp.request = req
