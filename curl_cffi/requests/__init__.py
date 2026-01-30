@@ -1,6 +1,7 @@
 __all__ = [
     "Session",
     "AsyncSession",
+    "TrioSession",
     "BrowserType",
     "BrowserTypeLiteral",
     "CurlWsFlag",
@@ -54,6 +55,12 @@ from .websockets import (
     WebSocketTimeout,
     WsCloseCode,
 )
+
+try:
+    from .trio_session import TrioSession
+except ImportError:
+    TrioSession = None  # type: ignore[assignment]
+    __all__.remove("TrioSession")
 
 if TYPE_CHECKING:
 
