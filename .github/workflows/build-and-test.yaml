@@ -21,79 +21,72 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-    - name: Lint
-      run: |
-        pip install mypy ruff
-        make lint
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Lint
+        run: |
+          pip install mypy ruff
+          make lint
 
   sdist:
     name: Build sdist wheel
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: build sdist
-      run: |
-        make preprocess
-        pip install build
-        python -m build --sdist
-        pip install ./dist/*.tar.gz
+      - name: build sdist
+        run: |
+          make preprocess
+          pip install build
+          python -m build --sdist
+          pip install ./dist/*.tar.gz
 
-    - name: upload artifacts
-      uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
-      with:
-        name: curl_cffi-${{ github.sha }}-sdist.zip
-        path: ./dist/*.tar.gz
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4 # https://github.com/actions/upload-artifact/issues/478
+        with:
+          name: curl_cffi-${{ github.sha }}-sdist.zip
+          path: ./dist/*.tar.gz
 
   bdist:
     name: Build bdist wheels and test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-15-intel, macos-14, windows-2022, windows-11-arm]
+        os:
+          [ubuntu-24.04, macos-15-intel, macos-14, windows-2022, windows-11-arm]
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - if: runner.os == 'Linux'
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: all
+      - if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
-    # macOS make is too old
-    - if: runner.os == 'macOS'
-      run: |
-        brew install make automake libtool
+      # macOS make is too old
+      - if: runner.os == 'macOS'
+        run: |
+          brew install make automake libtool
 
-    # When we build all dependencies with the 11.0 target, we can downgrade this back.
-    - if: ${{ matrix.os == 'macos-14' }}
-      run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> "$GITHUB_ENV"
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v3.1.3
 
-    # TODO: fix the target
-    - if: ${{ matrix.os == 'macos-15-intel' }}
-      run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
 
-    - name: Build and test wheels
-      uses: pypa/cibuildwheel@v3.1.3
-
-    # - name: Setup tmate session
-    #   uses: mxschmitt/action-tmate@v3
-
-    - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
-      with:
-        name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
-        path: ./wheelhouse/*.whl
+      - uses: actions/upload-artifact@v4 # https://github.com/actions/upload-artifact/issues/478
+        with:
+          name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
+          path: ./wheelhouse/*.whl
 
   build_latest:
     name: Build bdist on latest OSes
@@ -103,50 +96,46 @@ jobs:
         # For linux, it's built inside a container, no need to test for latest versions.
         os: [macos-latest, windows-latest, windows-11-arm]
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - if: runner.os == 'Linux'
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: all
+      - if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
-    # macOS make is too old
-    - if: runner.os == 'macOS'
-      run: |
-        brew install make automake libtool
+      # macOS make is too old
+      - if: runner.os == 'macOS'
+        run: |
+          brew install make automake libtool
 
-    - if: ${{ matrix.os == 'macos-latest' }}
-      run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
-
-    - name: Build and test wheels
-      uses: pypa/cibuildwheel@v3.1.3
-
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v3.1.3
 
   upload_all:
     needs: [bdist, sdist]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/download-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        pattern: curl_cffi-*
-        merge-multiple: true
-        path: dist
+      - uses: actions/download-artifact@v4.1.7 # https://github.com/actions/upload-artifact/issues/478
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          pattern: curl_cffi-*
+          merge-multiple: true
+          path: dist
 
-    - uses: pypa/gh-action-pypi-publish@v1.12.4
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        password: ${{ secrets.PYPI_TOKEN }}
-        packages-dir: dist/
+      - uses: pypa/gh-action-pypi-publish@v1.12.4
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+          packages-dir: dist/
 
-    - name: Upload release files
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          ./dist/*.whl
-          ./dist/*.tar.gz
+      - name: Upload release files
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./dist/*.whl
+            ./dist/*.tar.gz
