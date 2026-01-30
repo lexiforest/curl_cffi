@@ -11,6 +11,16 @@
     },
     {
         "system": "Windows",
+        "machine": "AMD64",
+        "pointer_size": 32,
+        "libdir": "./lib32",
+        "sysname": "win32",
+        "link_type": "dynamic",
+        "obj_name": "libcurl.dll",
+        "arch": "i686"
+    },
+    {
+        "system": "Windows",
         "machine": "ARM64",
         "pointer_size": 64,
         "libdir": "./libarm64",

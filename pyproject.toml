@@ -53,7 +53,7 @@ build = [
 test = [
     "charset_normalizer>=3.3.2,<4.0",
     "cryptography>=46.0.4,<47.0",
-    "fastapi>=0.110.0,<1.0",
+    "fastapi>=0.118.3,<1.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "proxy.py>=2.4.3,<3.0",
     "pytest>=8.1.1,<9.0",
@@ -121,6 +121,9 @@ build-verbosity = 1
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64", "riscv64", "i686", "armv7l"]
+manylinux-x86_64-image = "manylinux2014"
+manylinux-aarch64-image = "manylinux2014"
+manylinux-i686-image = "manylinux2014"
 environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
 environment-pass = ["LD_LIBRARY_PATH"]
 
@@ -130,7 +133,7 @@ before-all = "gmake preprocess"
 
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
-repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32 -w {dest_dir} {wheel}"
+repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32;./libarm64 -w {dest_dir} {wheel}"
 
 
 [tool.pytest.ini_options]
