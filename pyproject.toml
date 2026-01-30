@@ -86,7 +86,6 @@ build = [
     "cp310-macosx_arm64",
     "cp310-win_amd64",
     "cp310-win_arm64",
-    # "cp310-win32",
     "cp310-manylinux_x86_64",
     "cp310-manylinux_aarch64",
     "cp310-manylinux_riscv64",

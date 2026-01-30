@@ -11,7 +11,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 
 
 def detect_arch():
@@ -86,22 +86,11 @@ def download_libcurl():
 def get_curl_archives():
     print("Files for linking")
     print(os.listdir(arch["libdir"]))
-    if arch["system"] == "Linux" and arch.get("link_type") == "static":
+    if arch.get("link_type") == "static":
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
         return [
             f"{arch['libdir']}/libcurl-impersonate.a",
-            f"{arch['libdir']}/libssl.a",
-            f"{arch['libdir']}/libcrypto.a",
-            f"{arch['libdir']}/libz.a",
-            f"{arch['libdir']}/libzstd.a",
-            f"{arch['libdir']}/libnghttp2.a",
-            f"{arch['libdir']}/libngtcp2.a",
-            f"{arch['libdir']}/libngtcp2_crypto_boringssl.a",
-            f"{arch['libdir']}/libnghttp3.a",
-            f"{arch['libdir']}/libbrotlidec.a",
-            f"{arch['libdir']}/libbrotlienc.a",
-            f"{arch['libdir']}/libbrotlicommon.a",
         ]
     else:
         return []
@@ -128,9 +117,7 @@ def get_curl_libraries():
             "brotlicommon",
             "iphlpapi",
         ]
-    elif arch["system"] == "Darwin" or (
-        arch["system"] == "Linux" and arch.get("link_type") == "dynamic"
-    ):
+    elif arch.get("link_type") == "dynamic":
         return ["curl-impersonate"]
     else:
         return []
