@@ -84,7 +84,7 @@ def download_libcurl():
 
 
 def get_curl_archives():
-    print("Files for linking")
+    print("Files in linking directory:")
     print(os.listdir(arch["libdir"]))
     if arch.get("link_type") == "static":
         # note that the order of libraries matters
@@ -128,6 +128,22 @@ system = platform.system()
 root_dir = Path(__file__).parent.parent
 download_libcurl()
 
+libcurl_a = str(Path(arch["libdir"]) / "libcurl-impersonate.a")
+if system == "Darwin":
+    extra_link_args = [
+        f"-Wl,-force_load,{libcurl_a}",
+        "-lc++",
+    ]
+elif system == "Linux":
+    extra_link_args = [
+        "-Wl,--whole-archive",
+        libcurl_a,
+        "-Wl,--no-whole-archive",
+        "-lstdc++",
+    ]
+else:
+    extra_link_args = []
+
 
 ffibuilder.set_source(
     "curl_cffi._wrapper",
@@ -150,7 +166,7 @@ ffibuilder.set_source(
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
     ),
-    extra_link_args=(["-lstdc++"] if system != "Windows" else []),
+    extra_link_args=extra_link_args,
 )
 
 with open(root_dir / "ffi/cdef.c") as f:
