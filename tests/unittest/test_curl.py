@@ -130,6 +130,26 @@ def test_write_function(server):
     assert buffer.getvalue() == b"foo=bar"
 
 
+def test_read_function(server):
+    c = Curl()
+    url = str(server.url.copy_with(path="/echo_body"))
+    c.setopt(CurlOpt.URL, url.encode())
+    c.setopt(CurlOpt.UPLOAD, 1)
+    data = b"hello world"
+    source = BytesIO(data)
+
+    def read(max_len: int) -> bytes:
+        return source.read(max_len)
+
+    c.setopt(CurlOpt.READFUNCTION, read)
+    c.setopt(CurlOpt.INFILESIZE, len(data))
+
+    buffer = BytesIO()
+    c.setopt(CurlOpt.WRITEDATA, buffer)
+    c.perform()
+    assert buffer.getvalue() == data
+
+
 def test_cookies(server):
     c = Curl()
     url = str(server.url.copy_with(path="/echo_cookies"))
