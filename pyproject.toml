@@ -53,7 +53,7 @@ build = [
 test = [
     "charset_normalizer>=3.3.2,<4.0",
     "cryptography>=46.0.4,<47.0",
-    "fastapi>=0.118.3,<1.0",
+    "litestar>=2.19.0,<3.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "proxy.py>=2.4.3,<3.0",
     "pytest>=8.1.1,<9.0",
