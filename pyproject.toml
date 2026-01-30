@@ -112,6 +112,7 @@ test-extras = ["test"]
 test-skip = [
     "cp310-manylinux_i686",
     "cp310-win_arm64",
+    "cp314t-win_arm64",
     "cp310-manylinux_armv7l",
     "cp310-manylinux_riscv64",
 ]
