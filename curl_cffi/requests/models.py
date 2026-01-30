@@ -102,6 +102,7 @@ class Response:
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
+        self._stream_closed = False
         self.download_size: int = 0
         self.upload_size: int = 0
         self.header_size: int = 0
@@ -223,7 +224,7 @@ class Response:
 
             # re-raise the exception if something wrong happened.
             if isinstance(chunk, RequestException):
-                self.curl.reset()
+                self._finalize_stream()
                 raise chunk
 
             # end of stream.
@@ -231,6 +232,7 @@ class Response:
                 break
 
             yield chunk
+        self._finalize_stream()
 
     def json(self, **kw):
         """return a parsed json object of the content."""
@@ -238,11 +240,20 @@ class Response:
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
+        self._finalize_stream()
 
+    def _finalize_stream(self) -> None:
+        if self._stream_closed:
+            return
+        if self.queue is None and self.stream_task is None and self.quit_now is None:
+            return
+        self._stream_closed = True
         if self.quit_now:
             self.quit_now.set()
         if self.stream_task:
             self.stream_task.result()
+        if self.curl:
+            self.curl.close()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
