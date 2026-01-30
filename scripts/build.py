@@ -33,10 +33,9 @@ def detect_arch():
             and arch["pointer_size"] == pointer_size
             and ("libc" not in arch or arch.get("libc") == libc)
         ):
-            if arch["libdir"]:
+            if arch.get("libdir"):
                 arch["libdir"] = os.path.expanduser(arch["libdir"])
             else:
-                global tmpdir
                 if "CI" in os.environ:
                     tmpdir = "./tmplibdir"
                     os.makedirs(tmpdir, exist_ok=True)
@@ -49,12 +48,17 @@ def detect_arch():
 
 
 arch = detect_arch()
-print(f"Using {arch['libdir']} to store libcurl-impersonate")
+link_type = arch.get("link_type")
+libdir = Path(arch["libdir"])
+is_static = link_type == "static"
+is_dynamic = link_type == "dynamic"
+print(f"Using {libdir} to store libcurl-impersonate")
 
 
 def download_libcurl():
-    if (Path(arch["libdir"]) / arch["so_name"]).exists():
-        print(".so files already downloaded.")
+    expected = libdir / arch["obj_name"]
+    if expected.exists():
+        print(f"libcurl-impersonate: {expected} already downloaded.")
         return
 
     file = "libcurl-impersonate.tar.gz"
@@ -63,34 +67,34 @@ def download_libcurl():
     url = (
         f"https://github.com/lexiforest/curl-impersonate/releases/download/"
         f"v{__version__}/libcurl-impersonate-v{__version__}"
-        f".{arch['so_arch']}-{sysname}.tar.gz"
+        f".{arch['arch']}-{sysname}.tar.gz"
     )
 
     print(f"Downloading libcurl-impersonate from {url}...")
     urlretrieve(url, file)
 
     print("Unpacking downloaded files...")
-    os.makedirs(arch["libdir"], exist_ok=True)
-    shutil.unpack_archive(file, arch["libdir"])
+    os.makedirs(libdir, exist_ok=True)
+    shutil.unpack_archive(file, libdir)
 
     if arch["system"] == "Windows":
-        for file in glob(os.path.join(arch["libdir"], "lib/*.lib")):
-            shutil.move(file, arch["libdir"])
-        for file in glob(os.path.join(arch["libdir"], "bin/*.dll")):
-            shutil.move(file, arch["libdir"])
+        for file in glob(str(libdir / "lib/*.lib")):
+            shutil.move(file, libdir)
+        for file in glob(str(libdir / "bin/*.dll")):
+            shutil.move(file, libdir)
 
-    print("Files after unpacking")
-    print(os.listdir(arch["libdir"]))
+    print("Files after unpacking:")
+    print(os.listdir(libdir))
 
 
 def get_curl_archives():
     print("Files in linking directory:")
-    print(os.listdir(arch["libdir"]))
-    if arch.get("link_type") == "static":
+    print(os.listdir(libdir))
+    if is_static:
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
         return [
-            f"{arch['libdir']}/libcurl-impersonate.a",
+            str(libdir / arch["obj_name"])
         ]
     else:
         return []
@@ -117,7 +121,7 @@ def get_curl_libraries():
             "brotlicommon",
             "iphlpapi",
         ]
-    elif arch.get("link_type") == "dynamic":
+    elif is_dynamic:
         return ["curl-impersonate"]
     else:
         return []
@@ -128,37 +132,38 @@ system = platform.system()
 root_dir = Path(__file__).parent.parent
 download_libcurl()
 
-libcurl_a = str(Path(arch["libdir"]) / "libcurl-impersonate.a")
-if system == "Darwin":
-    extra_link_args = [
-        f"-Wl,-force_load,{libcurl_a}",
-        "-lc++",
-    ]
-elif system == "Linux":
-    extra_link_args = [
-        "-Wl,--whole-archive",
-        libcurl_a,
-        "-Wl,--no-whole-archive",
-        "-lstdc++",
-    ]
-else:
-    extra_link_args = []
+# With mega archive, we only have one to link
+static_libs = get_curl_archives()
+extra_link_args = []
+if is_static:
+    if system == "Darwin":
+        extra_link_args = [
+            f"-Wl,-force_load,{static_libs[0]}",
+            "-lc++",
+        ]
+    elif system == "Linux":
+        extra_link_args = [
+            "-Wl,--whole-archive",
+            static_libs[0],
+            "-Wl,--no-whole-archive",
+            "-lstdc++",
+        ]
 
+libraries = get_curl_libraries()
 
 ffibuilder.set_source(
     "curl_cffi._wrapper",
     """
         #include "shim.h"
     """,
-    # FIXME from `curl-impersonate`
+    library_dirs=[str(libdir)],
     libraries=get_curl_libraries(),
-    extra_objects=get_curl_archives(),
-    library_dirs=[arch["libdir"]],
+    extra_objects=[],  # linked via extra_link_args
     source_extension=".c",
     include_dirs=[
         str(root_dir / "include"),
         str(root_dir / "ffi"),
-        str(Path(arch["libdir"]) / "include"),
+        str(libdir / "include"),
     ],
     sources=[
         str(root_dir / "ffi/shim.c"),
