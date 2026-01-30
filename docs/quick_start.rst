@@ -4,7 +4,7 @@ Quick Start
 Install
 =======
 
-Note: We only support Python 3.9 and above. Python 3.8 has reached its end of life.
+Note: We only support Python 3.10 and above. Python 3.9 has reached its end of life.
 
 Via pip
 -------
@@ -130,20 +130,20 @@ Additional headers can be override with ``headers=...``.
     >>> print(r.text)
     {
       "headers": {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7", 
-        "Accept-Encoding": "gzip, deflate, br, zstd", 
-        "Accept-Language": "en-US,en;q=0.9", 
-        "Host": "httpbin.org", 
-        "Priority": "u=0, i", 
-        "Sec-Ch-Ua": "\"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\", \"Not.A/Brand\";v=\"99\"", 
-        "Sec-Ch-Ua-Mobile": "?0", 
-        "Sec-Ch-Ua-Platform": "\"macOS\"", 
-        "Sec-Fetch-Dest": "document", 
-        "Sec-Fetch-Mode": "navigate", 
-        "Sec-Fetch-Site": "none", 
-        "Sec-Fetch-User": "?1", 
-        "Upgrade-Insecure-Requests": "1", 
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36", 
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Host": "httpbin.org",
+        "Priority": "u=0, i",
+        "Sec-Ch-Ua": "\"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\", \"Not.A/Brand\";v=\"99\"",
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": "\"macOS\"",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
         "X-Amzn-Trace-Id": "Root=1-68452cc9-7287427f222e720c57971297"
       }
     }
@@ -152,9 +152,9 @@ Additional headers can be override with ``headers=...``.
     >>> print(r.text)
     {
       "headers": {
-        "Accept": "*/*", 
-        "Accept-Encoding": "gzip, deflate, br", 
-        "Host": "httpbin.org", 
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Host": "httpbin.org",
         "X-Amzn-Trace-Id": "Root=1-68452d20-2cf4cf00201987301c476c06"
       }
     }
@@ -210,10 +210,10 @@ Use the ``data={...}`` option.
     >>> r = curl_cffi.post("https://httpbin.org/post", data={"name": "Luke"})
     >>> print(r.text)
     {
-      "args": {}, 
+      "args": {},
       "form": {
         "name": "Luke"
-      }, 
+      },
       ...
     }
 
@@ -227,10 +227,10 @@ Still, use the ``data=b"..."`` option.
     >>> r = curl_cffi.post("https://httpbin.org/post", data=b"LukeSkywalker")
     >>> print(r.text)
     {
-      "args": {}, 
-      "data": "LukeSkywalker", 
-      "files": {}, 
-      "form": {}, 
+      "args": {},
+      "data": "LukeSkywalker",
+      "files": {},
+      "form": {},
       ...
     }
 
@@ -248,10 +248,10 @@ Use the ``json=...`` option.
     >>> r = curl_cffi.post("https://httpbin.org/post", json={"name": "Luke"})
     >>> print(r.text)
     {
-      "args": {}, 
-      "data": "{\"name\":\"Luke\"}", 
-      "files": {}, 
-      "form": {}, 
+      "args": {},
+      "data": "{\"name\":\"Luke\"}",
+      "files": {},
+      "form": {},
       ...
     }
 
@@ -347,7 +347,7 @@ But when possible, you should choose the native ``content_callback`` option.
     >>> r = curl_cffi.get("https://httpbin.org/stream/20", stream=True)
     >>> for chunk in r.iter_content():
     ...     print("CHUNK", chunk)
-    ... 
+    ...
     CHUNK b'{"url": "https://httpbin.org/stream/20",...'
     CHUNK b'{"url": "https://httpbin.org/stream/20",...'
 
@@ -370,7 +370,7 @@ For more examples, see the `examples on GitHub <https://github.com/lexiforest/cu
 
     >>> def callback(chunk):
     ...     print("CHUNK", chunk)
-    ... 
+    ...
     >>> r = curl_cffi.get("https://httpbin.org/stream/20", content_callback=callback)
     CHUNK b'{"url": "https://httpbin.org/stream/20"...'
     CHUNK b'{"url": "https://httpbin.org/stream/20"...'
@@ -541,9 +541,9 @@ WebSockets
     from curl_cffi import AsyncSession
 
     async with AsyncSession() as s:
-        ws = await s.ws_connect("wss://echo.websocket.org")
-        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-        async for message in ws:
-            print(message)
+        async with s.ws_connect("wss://echo.websocket.org") as ws:
+            await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+            async for message in ws:
+                print(message)
 
 For detailed websocket guide, see :doc:`websockets`.

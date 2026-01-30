@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.15.0b1"
+version = "0.15.0b2"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = "MIT"
@@ -164,7 +164,7 @@ profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 ignore_missing_imports = true
 #warn_unused_ignores = true
 #strict = true

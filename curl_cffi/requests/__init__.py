@@ -22,6 +22,7 @@ __all__ = [
     "WebSocketError",
     "WebSocketClosed",
     "WebSocketTimeout",
+    "WebSocketRetryStrategy",
     "WsCloseCode",
     "ExtraFingerprints",
     "CookieTypes",
@@ -53,6 +54,7 @@ from .websockets import (
     WebSocketError,
     WebSocketTimeout,
     WsCloseCode,
+    WebSocketRetryStrategy,
 )
 
 if TYPE_CHECKING:
@@ -61,6 +63,7 @@ if TYPE_CHECKING:
         thread: Optional[ThreadType]
         curl_options: Optional[dict]
         debug: Optional[bool]
+
 else:
     SessionRequestParams = TypedDict
 
