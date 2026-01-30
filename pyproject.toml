@@ -3,7 +3,8 @@ name = "curl_cffi"
 version = "0.15.0b1"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
-license = { text = "MIT License" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "cffi>=2.0.0",
     "certifi>=2024.2.2",
@@ -32,7 +33,7 @@ extra = [
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
-    "cryptography>=42.0.5,<43.0",
+    "cryptography>=46.0.4,<47.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "mypy>=1.9.0,<2.0",
     "pytest>=8.1.1,<9.0",
@@ -51,7 +52,7 @@ build = [
 ]
 test = [
     "charset_normalizer>=3.3.2,<4.0",
-    "cryptography>=42.0.5,<43.0",
+    "cryptography>=46.0.4,<47.0",
     "fastapi>=0.110.0,<1.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "proxy.py>=2.4.3,<3.0",
