@@ -108,6 +108,7 @@ jobs:
       uses: pypa/cibuildwheel@v3.1.3
       env:
         CIBW_PLATFORM: android
+        CIBW_BUILD: cp310-android_arm64_v8a cp310-android_x86_64
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
 
     - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
