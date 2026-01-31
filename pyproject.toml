@@ -95,6 +95,8 @@ build = [
     "cp310-manylinux_armv7l",
     "cp310-musllinux_x86_64",
     "cp310-musllinux_aarch64",
+    "cp310-android_arm64_v8a",
+    "cp310-android_x86_64",
     # Free-threaded (PEP 703) wheels
     "cp314t-macosx_x86_64",
     "cp314t-macosx_arm64",
@@ -116,6 +118,7 @@ test-skip = [
     "cp314t-win_arm64",
     "cp310-manylinux_armv7l",
     "cp310-manylinux_riscv64",
+    "*-android_*",
 ]
 build-verbosity = 1
 
@@ -128,6 +131,9 @@ manylinux-aarch64-image = "manylinux2014"
 manylinux-i686-image = "manylinux2014"
 environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
 environment-pass = ["LD_LIBRARY_PATH"]
+
+[tool.cibuildwheel.android]
+archs = ["arm64_v8a", "x86_64"]
 
 
 [tool.cibuildwheel.macos]
