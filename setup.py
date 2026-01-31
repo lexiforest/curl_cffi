@@ -1,3 +1,6 @@
+import os
+import sys
+
 from setuptools import setup
 from wheel.bdist_wheel import bdist_wheel
 
@@ -5,6 +8,9 @@ from wheel.bdist_wheel import bdist_wheel
 class bdist_wheel_abi3(bdist_wheel):
     def get_tag(self):
         python, abi, plat = super().get_tag()
+
+        if sys.platform == "android" or os.environ.get("CIBW_PLATFORM") == "android":
+            return python, abi, plat
 
         if python.startswith("cp") and not (python.endswith("t") or abi.endswith("t")):
             # On CPython, our wheels are abi3 and compatible back to 3.10.

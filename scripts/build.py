@@ -3,6 +3,7 @@ import os
 import platform
 import shutil
 import struct
+import sys
 import tempfile
 from glob import glob
 from pathlib import Path
@@ -24,6 +25,8 @@ def detect_arch():
     libc, _ = platform.libc_ver()
     # https://github.com/python/cpython/issues/87414
     libc = glibc_flavor if libc == "glibc" else "musl"
+    if sys.platform == "android" or os.environ.get("CIBW_PLATFORM") == "android":
+        libc = "android"
     pointer_size = struct.calcsize("P") * 8
 
     for arch in archs:
@@ -52,6 +55,7 @@ link_type = arch.get("link_type")
 libdir = Path(arch["libdir"])
 is_static = link_type == "static"
 is_dynamic = link_type == "dynamic"
+is_android = arch.get("libc") == "android"
 print(f"Using {libdir} to store libcurl-impersonate")
 
 
@@ -142,11 +146,12 @@ if is_static:
             "-lc++",
         ]
     elif system == "Linux":
+        cxx_lib = "-lc++" if is_android else "-lstdc++"
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
-            "-lstdc++",
+            cxx_lib,
         ]
 
 libraries = get_curl_libraries()
