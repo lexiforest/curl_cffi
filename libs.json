@@ -88,6 +88,16 @@
         "arch": "aarch64"
     },
     {
+        "system": "Android",
+        "machine": "aarch64",
+        "pointer_size": 64,
+        "sysname": "linux-android",
+        "link_type": "static",
+        "libc": "android",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "aarch64"
+    },
+    {
         "system": "Linux",
         "machine": "riscv64",
         "pointer_size": 64,
