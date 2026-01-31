@@ -72,7 +72,7 @@ test = [
 curl-cffi = "curl_cffi.cli:main"
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi>=1.12.0"]
+requires = ["wheel", "setuptools", "cffi>=2.0.0"]
 build-backend = "setuptools.build_meta"
 
 

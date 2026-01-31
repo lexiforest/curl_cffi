@@ -88,7 +88,7 @@
         "arch": "aarch64"
     },
     {
-        "system": "Linux",
+        "system": "Android",
         "machine": "aarch64",
         "pointer_size": 64,
         "sysname": "linux-android",
