@@ -108,7 +108,7 @@ jobs:
       uses: pypa/cibuildwheel@v3.3.1
       env:
         CIBW_PLATFORM: android
-        CIBW_BUILD: cp313-android_arm64_v8a cp314-android_arm64_v8a 
+        CIBW_BUILD: cp313-android_arm64_v8a
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         ANDROID_API_LEVEL: 24
 
