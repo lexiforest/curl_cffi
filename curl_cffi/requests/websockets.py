@@ -1056,26 +1056,18 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> None:
         """Send a data frame.
 
-        Large payloads are automatically split into fragments but arrive as a single
-        logical message.
+        Large payloads are automatically split into fragments but arrive as a
+        single logical message.
 
         Args:
-            payload: Data to send. ``str`` is encoded as UTF-8. ``bytes``,
-                ``bytearray``, and ``memoryview`` are sent as-is.
+            payload: Data to send (``str``/``bytes``/``bytearray``/``memoryview``).
             flags: Frame type flags (e.g., ``CurlWsFlag.TEXT``).
-                Defaults to ``CurlWsFlag.BINARY``.
             timeout: Max seconds to wait if the send queue is full.
-                If ``None``, waits indefinitely.
-
-        Raises:
-            WebSocketClosed: If the connection is closed.
-            WebSocketTimeout: If the send queue remains full after ``timeout``.
-            WebSocketError: If a transport error occurred (e.g., broken pipe).
 
         Warning:
-            This method is non-blocking regarding network transmission. It puts the
-            message into a queue. To ensure data has been handed off to the underlying
-            socket, use :meth:`await ws.flush()`.
+            This method is non-blocking. It queues the message for background
+            transmission. Use ``await ws.flush()`` to ensure data is sent to
+            the socket.
         """
         if self._transport_exception is not None:
             raise self._transport_exception
