@@ -15,23 +15,34 @@ from cffi import FFI
 __version__ = "1.4.2"
 
 
+def is_android_env() -> bool:
+    return bool(
+        sys.platform == "android"
+        or os.environ.get("CIBW_PLATFORM") == "android"
+        or os.environ.get("ANDROID_ROOT")
+        or os.environ.get("ANDROID_DATA")
+        or os.environ.get("TERMUX_VERSION")
+    )
+
+
 def detect_arch():
     with open(Path(__file__).parent.parent / "libs.json") as f:
         archs = json.loads(f.read())
 
     uname = platform.uname()
+    uname_system = "Android" if is_android_env() else uname.system
     glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
 
     libc, _ = platform.libc_ver()
     # https://github.com/python/cpython/issues/87414
     libc = glibc_flavor if libc == "glibc" else "musl"
-    if sys.platform == "android" or os.environ.get("CIBW_PLATFORM") == "android":
+    if is_android_env():
         libc = "android"
     pointer_size = struct.calcsize("P") * 8
 
     for arch in archs:
         if (
-            arch["system"] == uname.system
+            arch["system"] == uname_system
             and arch["machine"] == uname.machine
             and arch["pointer_size"] == pointer_size
             and ("libc" not in arch or arch.get("libc") == libc)
