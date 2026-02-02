@@ -728,17 +728,17 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             session (AsyncSession): The parent session object.
             curl (Curl): The underlying Curl handle.
-            autoclose (bool): Close the connection automatically on receiving a close frame.
+            autoclose (bool): Automatically close on receiving a close frame.
             debug (bool): Enable verbose debug logging.
             recv_queue_size (int): Max number of incoming messages to buffer.
             send_queue_size (int): Max number of outgoing messages to buffer.
-            max_send_batch_size (int): Max frames to coalesce into a single transmission.
-            coalesce_frames (bool): If true, combines small frames to improve throughput.
+            max_send_batch_size (int): Max frames to coalesce per transmission.
+            coalesce_frames (bool): Combine small frame payloads to improve throughput.
             ws_retry (WebSocketRetryStrategy): Retry configuration for failed receives.
-            recv_time_slice (float): Max seconds to process incoming messages before yielding.
-            send_time_slice (float): Max seconds to process outgoing messages before yielding.
+            recv_time_slice (float): Max seconds to read messages before yielding.
+            send_time_slice (float): Max seconds to write messages before yielding.
             max_message_size (int): Max size (bytes) of a single received message.
-            drain_on_error (bool): If True, yield buffered messages before raising errors.
+            drain_on_error (bool): Yield buffered messages before raising errors.
             block_on_recv_queue_full (bool): Behavior when the receive queue is full.
                 If True (default), the reader blocks (may cause timeouts).
                 If False, the connection fails immediately to prevent data loss.
