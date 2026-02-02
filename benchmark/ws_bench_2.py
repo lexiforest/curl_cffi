@@ -15,7 +15,7 @@ from typing import cast
 from aiohttp import web
 from ws_bench_utils import config, generate_random_chunks, get_loop, logger
 
-from curl_cffi import AsyncSession, AsyncWebSocket
+from curl_cffi import AsyncSession, AsyncWebSocket, Response
 
 
 def compare_hash(source_hash: str, received_hash: str) -> None:
@@ -121,7 +121,6 @@ async def stream_test_data() -> AsyncGenerator[bytes]:
         for offset in range(0, file_size, config.large_chunk_size):
             chunk: bytes = mm[offset : offset + config.large_chunk_size]
             yield chunk
-            await asyncio.sleep(0)
             if can_madvise and offset - last_drop >= drop_interval:
                 mm.madvise(
                     mmap.MADV_DONTNEED,
@@ -159,64 +158,56 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
     source_hash: str = config.hash_filename.read_text("utf-8").strip()
     logger.info("Loaded hash for '%s': %s", config.data_filename, source_hash)
 
-    # Allocate data buffer ahead of time
-    logger.info("Allocating memory buffer of %d GB", config.total_gb)
-    testdata_buffer: bytearray = bytearray()
     try:
-        start_time: float = time.perf_counter()
-        testdata_buffer = bytearray(config.total_bytes)
-        elapsed_time: float = time.perf_counter() - start_time
-        logger.info(
-            "Allocated %d GB in %.2fs. Speed: %.2f MiB/s ",
-            config.total_gb,
-            elapsed_time,
-            (config.total_bytes / (1024**2)) / elapsed_time,
-        )
-    except MemoryError:
-        logger.exception("Not enough RAM to allocate %d GB", config.total_gb)
-        return
+        with mmap.mmap(-1, config.total_bytes) as testdata_buffer:
+            # Receive the data into the buffer
+            offset: int = 0
+            logger.info("Receiving data from client")
+            start_time = time.perf_counter()
+            if isinstance(ws, web.WebSocketResponse):
+                logger.info("WebSocket type: SERVER")
+                async for msg in ws:
+                    if msg.type is web.WSMsgType.ERROR:
+                        logger.error("WebSocket error: %r", ws.exception())
+                        return
 
-    try:
-        # Receive the data into the buffer
-        offset: int = 0
-        logger.info("Receiving data from client")
-        start_time = time.perf_counter()
-        if isinstance(ws, web.WebSocketResponse):
-            logger.info("WebSocket connection type: SERVER")
-            async for msg in ws:
-                if msg.type == web.WSMsgType.BINARY:
-                    msg_len: int = len(msg.data)
-                    testdata_buffer[offset : offset + msg_len] = msg.data
+                    if msg.type is web.WSMsgType.BINARY:
+                        msg_len: int = len(msg.data)
+                        testdata_buffer[offset : offset + msg_len] = msg.data
+                        offset += msg_len
+            else:
+                async for msg in ws:
+                    msg_len = len(msg)
+                    testdata_buffer[offset : offset + msg_len] = msg
                     offset += msg_len
-        else:
-            async for msg in ws:
-                msg_len = len(msg)
-                testdata_buffer[offset : offset + msg_len] = msg
-                offset += msg_len
 
-        elapsed_time = time.perf_counter() - start_time
-        logger.info(
-            "Received %.2f GB in %.2fs. Speed: %.2f MiB/s ",
-            offset / (1024**3),
-            elapsed_time,
-            (offset / (1024**2)) / elapsed_time,
-        )
+            elapsed_time = time.perf_counter() - start_time
+            logger.info(
+                "Received %.2f GB in %.2fs. Speed: %.2f MiB/s ",
+                offset / (1024**3),
+                elapsed_time,
+                (offset / (1024**2)) / elapsed_time,
+            )
 
-        # Calculate and compare hashes
-        logger.info("Calculating hash of received data")
-        start_time = time.perf_counter()
-        received_hash = hashlib.sha256(testdata_buffer).hexdigest()
-        elapsed_time = time.perf_counter() - start_time
-        logger.info(
-            "Hash calculated in %.2fs. Speed: %.2f MiB/s ",
-            elapsed_time,
-            (offset / (1024**2)) / elapsed_time,
-        )
-        compare_hash(source_hash, received_hash)
+            if offset < config.total_bytes - config.chunk_size:
+                logger.error("Incomplete file received, skipping hash check")
+                return
+
+            # Calculate and compare hashes
+            logger.info("Calculating hash of received data")
+            start_time = time.perf_counter()
+            received_hash = hashlib.sha256(testdata_buffer).hexdigest()
+            elapsed_time = time.perf_counter() - start_time
+            logger.info(
+                "Hash calculated in %.2fs. Speed: %.2f MiB/s ",
+                elapsed_time,
+                (offset / (1024**2)) / elapsed_time,
+            )
+            compare_hash(source_hash, received_hash)
+
+    # pylint: disable-next=broad-exception-caught
     except Exception:
         logger.exception("Failed to receive data from client")
-
-    del testdata_buffer
 
 
 async def send_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> None:
@@ -259,9 +250,15 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     Returns:
         web.WebSocketResponse: Response object.
     """
-    ws: web.WebSocketResponse = web.WebSocketResponse()
+    ws: web.WebSocketResponse = web.WebSocketResponse(
+        max_msg_size=config.server_max_msg
+    )
     _ = await ws.prepare(request)
-    logger.info("Client connected %s", request.host)
+    logger.info(
+        "Client connected from %s, max message size is %d",
+        request.host,
+        config.server_max_msg,
+    )
 
     if request.query.get("test") == "upload":
         await recv_benchmark_handler(ws)
@@ -277,21 +274,23 @@ async def client_handler(opt: str) -> None:
     Args:
         opt (str): The benchmark mode to run.
     """
-    async with AsyncSession(impersonate="chrome", verify=False) as session:
-        ws: AsyncWebSocket = await session.ws_connect(
+    async with (
+        AsyncSession[Response](impersonate="chrome", verify=False) as session,
+        session.ws_connect(
             f"{config.srv_path}?test={opt}",
             recv_queue_size=config.recv_queue,
             send_queue_size=config.send_queue,
-        )
-        try:
-            if opt == "download":
+        ) as ws,
+    ):
+        match opt:
+            case "download":
                 await recv_benchmark_handler(ws)
-                return
 
-            await send_benchmark_handler(ws)
+            case "upload":
+                await send_benchmark_handler(ws)
 
-        finally:
-            await ws.close()
+            case _:
+                ...
 
 
 def main() -> None:
@@ -327,9 +326,13 @@ def main() -> None:
         )
 
     elif args.mode == "client" and args.test in client_opts:
-        loop: asyncio.AbstractEventLoop = get_loop()
-        loop.run_until_complete(client_handler(args.test))
-        loop.close()
+        try:
+            # pylint: disable-next=import-outside-toplevel
+            import uvloop
+
+            uvloop.run(client_handler(args.test))
+        except ImportError:
+            asyncio.run(client_handler(args.test))
 
     else:
         parser.print_help()
