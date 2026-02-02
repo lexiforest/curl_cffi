@@ -557,8 +557,10 @@ class Curl:
         self._check_error(ret, "WS_RECV")
 
         # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
-        frame = self._ws_recv_p_frame[0]
-        return ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]], frame
+        return (
+            ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]],
+            self._ws_recv_p_frame[0],
+        )
 
     def ws_send(
         self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
@@ -578,9 +580,13 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
-        buffer = ffi.from_buffer(payload)
         ret = lib.curl_ws_send(
-            self._curl, buffer, len(payload), self._ws_send_n_sent, 0, flags
+            self._curl,
+            ffi.from_buffer(payload),
+            len(payload),
+            self._ws_send_n_sent,
+            0,
+            flags,
         )
         self._check_error(ret, "WS_SEND")
         return self._ws_send_n_sent[0]
