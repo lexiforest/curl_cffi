@@ -255,8 +255,8 @@ ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 import asyncio
 from curl_cffi import AsyncSession
 
-async with AsyncSession() as s:
-    async with s.ws_connect("wss://echo.websocket.org") as ws:
+async with AsyncSession() as session:
+    async with session.ws_connect("wss://echo.websocket.org") as ws:
         await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
         async for message in ws:
             print(message)

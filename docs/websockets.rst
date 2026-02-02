@@ -34,7 +34,7 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
 
    **Syntax**: The ``ws_connect`` method supports the standard async context manager syntax.
 
-   **Recommended:** ``async with s.ws_connect(...) as ws:``
+   **Recommended:** ``async with session.ws_connect(...) as ws:``
 
 .. code-block:: python
 
@@ -44,7 +44,7 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
     async def main():
         async with AsyncSession() as s:
             # Connect using the standard context manager syntax
-            async with s.ws_connect("wss://echo.websocket.org") as ws:
+            async with session.ws_connect("wss://echo.websocket.org") as ws:
 
                 # Send a text message
                 await ws.send_str("Hello, World!")
@@ -76,7 +76,7 @@ Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same networ
         # Session cookies are automatically included
         s.cookies.set("session_id", "xyz")
 
-        async with s.ws_connect(
+        async with session.ws_connect(
             "wss://api.example.com/v1/stream",
             impersonate="chrome",
             auth=("user", "pass"),
@@ -212,7 +212,7 @@ You can control the internal buffer sizes to manage backpressure.
 .. code-block:: python
 
     # Increase queues for high-throughput streams (e.g., market data)
-    ws = await s.ws_connect(
+    ws = await session.ws_connect(
         url,
         recv_queue_size=256,
         send_queue_size=32
@@ -226,7 +226,7 @@ Message Limits
 .. code-block:: python
 
     # Allow large payloads (e.g. 16MB)
-    ws = await s.ws_connect(url, max_message_size=16 * 1024 * 1024)
+    ws = await session.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
 There are no limits on the size of the message that can be sent. Messages larger than 64KB are broken into chunks of that size and sent using the ``CONT`` flag which means it arrives as a single logical message on the server.
 
@@ -241,7 +241,7 @@ For chatty protocols sending many small messages, you can enable **coalescing**.
 .. code-block:: python
 
     # Optimize for throughput over latency
-    ws = await s.ws_connect(url, coalesce_frames=True)
+    ws = await session.ws_connect(url, coalesce_frames=True)
 
 Reliability & Retries
 ---------------------
@@ -259,7 +259,7 @@ Reliability & Retries
         count=5
     )
 
-    ws = await s.ws_connect(
+    ws = await session.ws_connect(
         url,
         drain_on_error=True,
         ws_retry=retry_policy
@@ -276,4 +276,4 @@ To prevent the background I/O tasks from starving the asyncio event loop during 
 .. code-block:: python
 
     # Force more frequent yields for lower latency in other async tasks
-    ws = await s.ws_connect(url, recv_time_slice=0.001)
+    ws = await session.ws_connect(url, recv_time_slice=0.001)

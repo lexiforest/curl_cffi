@@ -529,8 +529,8 @@ WebSockets
     def on_message(ws: WebSocket, message):
         print(message)
 
-    with Session() as s:
-        ws = s.ws_connect(
+    with Session() as session:
+        ws = session.ws_connect(
             "wss://api.gemini.com/v1/marketdata/BTCUSD",
             on_message=on_message,
         )
@@ -540,8 +540,8 @@ WebSockets
     import asyncio
     from curl_cffi import AsyncSession
 
-    async with AsyncSession() as s:
-        async with s.ws_connect("wss://echo.websocket.org") as ws:
+    async with AsyncSession() as session:
+        async with session.ws_connect("wss://echo.websocket.org") as ws:
             await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
             async for message in ws:
                 print(message)

@@ -831,7 +831,11 @@ class AsyncWebSocket(BaseWebSocket):
         return self
 
     async def __anext__(self) -> bytes:
-        msg, flags = await self.recv()
+        try:
+            msg, flags = await self.recv()
+        except WebSocketClosed:
+            raise StopAsyncIteration from None
+
         if flags & CurlWsFlag.CLOSE:
             raise StopAsyncIteration
         return msg
