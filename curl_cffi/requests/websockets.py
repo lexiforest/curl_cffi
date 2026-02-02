@@ -1184,7 +1184,7 @@ class AsyncWebSocket(BaseWebSocket):
         return await self.send(payload_bytes, CurlWsFlag.PING)
 
     async def close(
-        self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 5.0
+        self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 3.0
     ) -> None:
         """
         Performs a graceful WebSocket closing handshake and terminates the connection.
@@ -1210,21 +1210,29 @@ class AsyncWebSocket(BaseWebSocket):
                     and not self._write_task.done()
                     and self._transport_exception is None
                 ):
+                    # Send Close Frame and wait for queue to empty
                     close_frame: bytes = self._pack_close_frame(code, message)
-                    with suppress(asyncio.TimeoutError):
-                        await asyncio.wait_for(
-                            self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
-                            timeout=timeout,
-                        )
-                    with suppress(
-                        WebSocketTimeout, WebSocketError, asyncio.CancelledError
+                    await asyncio.wait_for(
+                        self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
+                        timeout=timeout,
+                    )
+                    await self.flush(timeout)
+
+                    # Wait for the handshake acknowledgement from the server.
+                    if (
+                        self._read_task
+                        and not self._read_task.done()
+                        and self._read_task is not asyncio.current_task()
                     ):
-                        await self.flush(timeout)
+                        with suppress(asyncio.TimeoutError, asyncio.CancelledError):
+                            await asyncio.wait_for(self._read_task, timeout=timeout)
+
+            except (asyncio.TimeoutError, WebSocketError):
+                pass
 
             finally:
+                # Ensure resources are cleaned up
                 self.terminate()
-
-                # Wait for the termination completion signal
                 with suppress(asyncio.TimeoutError):
                     _ = await asyncio.wait_for(self._terminated_event.wait(), timeout)
 
