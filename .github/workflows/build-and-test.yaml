@@ -110,6 +110,7 @@ jobs:
         CIBW_PLATFORM: android
         CIBW_BUILD: cp313-android_arm64_v8a cp314-android_arm64_v8a 
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+        ANDROID_API_LEVEL: 24
 
     - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
