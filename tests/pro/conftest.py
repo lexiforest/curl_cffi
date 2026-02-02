@@ -6,7 +6,7 @@ import time
 
 import pytest
 import uvicorn
-from fastapi import FastAPI
+from litestar import Litestar, get
 from uvicorn.config import Config
 from uvicorn.main import Server
 from curl_cffi.pro import Profile
@@ -61,10 +61,7 @@ class FileServer(uvicorn.Server):
         return f"http://{self.config.host}:{self.config.port}"
 
 
-app = FastAPI()
-
-
-@app.get("/fingerprints")
+@get("/fingerprints")
 def get_fingerprints():
     profiles = []
     for i in range(10):
@@ -121,9 +118,12 @@ def get_fingerprints():
     return profiles
 
 
-@app.get("/marketshare")
+@get("/marketshare")
 def get_market_share():
     ...
+
+
+app = Litestar(route_handlers=[get_fingerprints, get_market_share])
 
 
 @pytest.fixture(scope="session")
