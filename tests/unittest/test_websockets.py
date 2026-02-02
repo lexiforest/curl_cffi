@@ -1,4 +1,4 @@
-from curl_cffi.requests import AsyncSession, WebSocket, Session
+from curl_cffi.requests import AsyncSession, Session, WebSocket
 from curl_cffi.requests.websockets import CurlWsFlag
 
 
