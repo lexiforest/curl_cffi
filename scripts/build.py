@@ -3,6 +3,7 @@ import os
 import platform
 import shutil
 import struct
+import sys
 import tempfile
 from glob import glob
 from pathlib import Path
@@ -11,7 +12,17 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.4.1"
+__version__ = "1.4.2"
+
+
+def is_android_env() -> bool:
+    return bool(
+        sys.platform == "android"
+        or os.environ.get("CIBW_PLATFORM") == "android"
+        or os.environ.get("ANDROID_ROOT")
+        or os.environ.get("ANDROID_DATA")
+        or os.environ.get("TERMUX_VERSION")
+    )
 
 
 def detect_arch():
@@ -19,16 +30,19 @@ def detect_arch():
         archs = json.loads(f.read())
 
     uname = platform.uname()
+    uname_system = "Android" if is_android_env() else uname.system
     glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
 
     libc, _ = platform.libc_ver()
     # https://github.com/python/cpython/issues/87414
     libc = glibc_flavor if libc == "glibc" else "musl"
+    if is_android_env():
+        libc = "android"
     pointer_size = struct.calcsize("P") * 8
 
     for arch in archs:
         if (
-            arch["system"] == uname.system
+            arch["system"] == uname_system
             and arch["machine"] == uname.machine
             and arch["pointer_size"] == pointer_size
             and ("libc" not in arch or arch.get("libc") == libc)
@@ -52,6 +66,7 @@ link_type = arch.get("link_type")
 libdir = Path(arch["libdir"])
 is_static = link_type == "static"
 is_dynamic = link_type == "dynamic"
+is_android = arch.get("libc") == "android"
 print(f"Using {libdir} to store libcurl-impersonate")
 
 
@@ -141,12 +156,13 @@ if is_static:
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
         ]
-    elif system == "Linux":
+    elif system in ("Linux", "Android"):
+        cxx_lib = "-lc++" if is_android else "-lstdc++"
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
-            "-lstdc++",
+            cxx_lib,
         ]
 
 libraries = get_curl_libraries()

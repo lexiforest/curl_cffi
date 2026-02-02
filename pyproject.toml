@@ -72,7 +72,7 @@ test = [
 curl-cffi = "curl_cffi.cli:main"
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi>=1.12.0"]
+requires = ["wheel", "setuptools", "cffi>=2.0.0"]
 build-backend = "setuptools.build_meta"
 
 
@@ -128,6 +128,9 @@ manylinux-aarch64-image = "manylinux2014"
 manylinux-i686-image = "manylinux2014"
 environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
 environment-pass = ["LD_LIBRARY_PATH"]
+
+[tool.cibuildwheel.android]
+archs = ["arm64_v8a", "x86_64"]
 
 
 [tool.cibuildwheel.macos]
