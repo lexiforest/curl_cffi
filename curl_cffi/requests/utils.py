@@ -18,15 +18,15 @@ from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlp
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from ..utils import CurlCffiWarning, HttpVersionLiteral
-from ..pro import load_profiles
+from ..pro import load_profiles, Profile
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
-from .cipher import cipher_name
 from .impersonate import (
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
     ExtraFingerprints,
+    cipher_name,
     normalize_browser_type,
     toggle_extension,
 )
@@ -273,10 +273,10 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     cipher_names = []
     for cipher in ciphers.split("-"):
         cipher_id = int(cipher)
-        cipher_name = cipher_name.get(cipher_id)
-        if not cipher_name:
+        resolved_cipher_name = cipher_name.get(cipher_id)
+        if not resolved_cipher_name:
             raise ImpersonateError(f"Cipher {hex(cipher_id)} is not found")
-        cipher_names.append(cipher_name)
+        cipher_names.append(resolved_cipher_name)
 
     curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
 
@@ -387,7 +387,7 @@ def _load_profile(target: str):
 
 def _apply_profile(
     curl: Curl,
-    profile: "Profile",
+    profile: Profile,
     header_lines: Optional[list[str]],
     default_headers: bool,
 ) -> None:
@@ -425,14 +425,10 @@ def _apply_profile(
         curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
 
     if profile.tls_signature_hashes:
-        curl.setopt(
-            CurlOpt.SSL_SIG_HASH_ALGS, ",".join(profile.tls_signature_hashes)
-        )
+        curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(profile.tls_signature_hashes))
 
     if profile.tls_supported_groups:
-        curl.setopt(
-            CurlOpt.SSL_EC_CURVES, ":".join(profile.tls_supported_groups)
-        )
+        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(profile.tls_supported_groups))
 
     if profile.tls_extension_order:
         extension_ids = set(int(e) for e in profile.tls_extension_order.split("-"))
@@ -492,7 +488,6 @@ def set_impersonate_target(
         raise ImpersonateError(f"Impersonating {target} is not supported")
 
     _apply_profile(curl, profile, header_lines, default_headers)
-
 
 
 def set_curl_options(
@@ -666,12 +661,8 @@ def set_curl_options(
     # auth
     if auth:
         username, password = auth
-        c.setopt(
-            CurlOpt.USERNAME, username.encode()
-        )  # pyright: ignore [reportPossiblyUnboundVariable=none]
-        c.setopt(
-            CurlOpt.PASSWORD, password.encode()
-        )  # pyright: ignore [reportPossiblyUnboundVariable=none]
+        c.setopt(CurlOpt.USERNAME, username.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
+        c.setopt(CurlOpt.PASSWORD, password.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
 
     # timeout
     if timeout is None:

@@ -125,7 +125,7 @@ def main():
         except FileNotFoundError:
             print("No local fingerprints found. Run `curl-cffi update` first.")
             return
-        for profile in profiles.keys():
+        for profile in profiles:
             print(profile)
         return
 

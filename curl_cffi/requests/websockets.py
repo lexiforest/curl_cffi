@@ -1590,7 +1590,6 @@ class AsyncWebSocket(BaseWebSocket):
         try:
             # Hoist the branch - decide loop strategy once at start
             if not self._coalesce_frames:
-
                 # Optimized fast path, no batching overhead
                 while True:
                     payload, flags = await queue_get()
@@ -1714,7 +1713,7 @@ class AsyncWebSocket(BaseWebSocket):
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
             # Calculate the size of the current fragment
             chunk: memoryview = view[
-                offset: offset + min(total_bytes - offset, max_frame_size)
+                offset : offset + min(total_bytes - offset, max_frame_size)
             ]
             chunk_len: int = len(chunk)
 

@@ -44,8 +44,7 @@ def test_set_impersonate_target_uses_profile(monkeypatch):
     )
 
     assert (
-        seen[CurlOpt.SSLVERSION]
-        == CurlSslVersion.TLSv1_2 | CurlSslVersion.MAX_DEFAULT
+        seen[CurlOpt.SSLVERSION] == CurlSslVersion.TLSv1_2 | CurlSslVersion.MAX_DEFAULT
     )
     assert seen[CurlOpt.SSL_CIPHER_LIST] == "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
     assert seen[CurlOpt.TLS13_CIPHERS] == "TLS_AES_128_GCM_SHA256"

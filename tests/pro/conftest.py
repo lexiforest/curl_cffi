@@ -119,8 +119,7 @@ def get_fingerprints():
 
 
 @get("/marketshare")
-def get_market_share():
-    ...
+def get_market_share(): ...
 
 
 app = Litestar(route_handlers=[get_fingerprints, get_market_share])

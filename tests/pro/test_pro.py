@@ -14,7 +14,6 @@ from curl_cffi.pro import (
 TESTING_API_KEY = "imp_alizee-lyonnet"
 
 
-
 @pytest.fixture(scope="session", autouse=True)
 def setup_pro():
     # login before testing starts
