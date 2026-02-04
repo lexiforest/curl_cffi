@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import uvicorn
 from litestar import Litestar, get
-from curl_cffi.pro import Profile
+from curl_cffi.fingerprints import Fingerprint
 import dataclasses
 
 ENVIRONMENT_VARIABLES = {
@@ -64,7 +64,7 @@ class FileServer(uvicorn.Server):
 def get_fingerprints() -> list[dict[str, Any]]:
     profiles = []
     for i in range(10):
-        profile = Profile(
+        fingerprint = Fingerprint(
             client="testing",
             client_version=str(100 + i),
             os="macos",
@@ -108,7 +108,7 @@ def get_fingerprints() -> list[dict[str, Any]]:
             {
                 "id": i,
                 "name": f"testing{100 + i}",
-                "data": json.dumps(dataclasses.asdict(profile)),
+                "data": json.dumps(dataclasses.asdict(fingerprint)),
                 "min_supported_version": "0.14.0",
                 "updated_at": "2025-08-30T00:00:00",
                 "created_at": "2025-08-30T00:00:00",

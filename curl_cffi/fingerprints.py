@@ -1,20 +1,28 @@
-import os
 import json
+import os
 from datetime import datetime
-from typing import Optional, Literal
 from dataclasses import dataclass, field, fields
+from typing import Literal, Optional
 
 from . import requests
 
 
 __all__ = [
-    "Profile",
+    "Fingerprint",
+    "FingerprintSpec",
     "is_pro",
     "enable_pro",
-    "update_profiles",
-    "load_profiles",
+    "update_fingerprints",
+    "load_fingerprints",
+    "get_fingerprint_path",
     "update_market_share",
     "load_market_share",
+    # Backward-compatible aliases.
+    "Profile",
+    "ProfileSpec",
+    "update_profiles",
+    "load_profiles",
+    "get_profile_path",
 ]
 
 
@@ -53,8 +61,13 @@ def get_config_path():
     return os.path.join(get_config_dir(), "config.json")
 
 
-def get_profile_path():
+def get_fingerprint_path():
     return os.path.join(get_config_dir(), "profiles.json")
+
+
+def get_profile_path():
+    """Backward-compatible alias for get_fingerprint_path()."""
+    return get_fingerprint_path()
 
 
 def get_api_root() -> str:
@@ -95,7 +108,7 @@ def enable_pro(api_key: str):
 
 
 @dataclass
-class Profile:
+class Fingerprint:
     client: str = ""
     client_version: str = ""
     os: str = ""
@@ -152,13 +165,13 @@ PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
 
 
 @dataclass
-class ProfileSpec:
+class FingerprintSpec:
     platform: Optional[str] = None
     client: Optional[ClientLiteral] = None
     strategy: Optional[Literal["uniform", "market_share"]] = "market_share"
 
 
-def update_profiles(
+def update_fingerprints(
     api_root: Optional[str] = None,
     session_token: Optional[str] = None,
 ) -> None:
@@ -173,7 +186,7 @@ def update_profiles(
     if not isinstance(items, list):
         raise ValueError("Fingerprints API returned unexpected payload.")
 
-    profiles = {}
+    fingerprints = {}
     for item in items:
         name = item.get("name") or item.get("target")
         if not name:
@@ -185,13 +198,13 @@ def update_profiles(
             except json.JSONDecodeError:
                 continue
         if isinstance(raw, dict):
-            profiles[name] = raw
+            fingerprints[name] = raw
 
     config_dir = get_config_dir()
     if not os.path.exists(config_dir):
         os.makedirs(config_dir)
-    with open(get_profile_path(), "w") as wf:
-        json.dump(profiles, wf, indent=2)
+    with open(get_fingerprint_path(), "w") as wf:
+        json.dump(fingerprints, wf, indent=2)
 
 
 def update_market_share(api_root: Optional[str] = None):
@@ -200,18 +213,25 @@ def update_market_share(api_root: Optional[str] = None):
 
 
 @cache_result
-def load_profiles() -> dict[str, Profile]:
-    with open(get_profile_path()) as f:
-        profiles = json.loads(f.read())
-    allowed = {item.name for item in fields(Profile)}
+def load_fingerprints() -> dict[str, Fingerprint]:
+    with open(get_fingerprint_path()) as f:
+        fingerprints = json.loads(f.read())
+    allowed = {item.name for item in fields(Fingerprint)}
     parsed = {}
-    for key, payload in profiles.items():
+    for key, payload in fingerprints.items():
         if not isinstance(payload, dict):
             continue
         filtered = {k: v for k, v in payload.items() if k in allowed}
-        parsed[key] = Profile(**filtered)
+        parsed[key] = Fingerprint(**filtered)
     return parsed
 
 
 @cache_result
 def load_market_share(): ...
+
+
+# Backward-compatible aliases.
+Profile = Fingerprint
+ProfileSpec = FingerprintSpec
+update_profiles = update_fingerprints
+load_profiles = load_fingerprints

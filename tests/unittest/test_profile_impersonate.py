@@ -1,9 +1,9 @@
 from curl_cffi import CurlOpt, CurlSslVersion
-from curl_cffi.pro import Profile
+from curl_cffi.fingerprints import Fingerprint
 from curl_cffi.requests import utils
 
 
-def test_set_impersonate_target_uses_profile(monkeypatch):
+def test_set_impersonate_target_uses_fingerprint(monkeypatch):
     seen = {}
 
     class DummyCurl:
@@ -13,7 +13,7 @@ def test_set_impersonate_target_uses_profile(monkeypatch):
         def setopt(self, option, value):
             seen[option] = value
 
-    profile = Profile(
+    fingerprint = Fingerprint(
         tls_version="1.2",
         tls_ciphers=[
             "TLS_AES_128_GCM_SHA256",
@@ -33,7 +33,9 @@ def test_set_impersonate_target_uses_profile(monkeypatch):
         headers={"accept": "text/html"},
     )
 
-    monkeypatch.setattr(utils, "load_profiles", lambda: {"testing100": profile})
+    monkeypatch.setattr(
+        utils, "load_fingerprints", lambda: {"testing100": fingerprint}
+    )
 
     header_lines = ["User-Agent: test"]
     utils.set_impersonate_target(

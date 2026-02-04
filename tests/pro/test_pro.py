@@ -4,11 +4,11 @@ import os
 import pytest
 
 import curl_cffi
-import curl_cffi.pro as pro_module
-from curl_cffi.pro import (
-    load_profiles,
+import curl_cffi.fingerprints as fingerprints_module
+from curl_cffi.fingerprints import (
+    load_fingerprints,
     update_market_share,
-    update_profiles,
+    update_fingerprints,
 )
 
 
@@ -43,32 +43,32 @@ def mock_profiles_api(monkeypatch):
         assert url.endswith("/fingerprints")
         return DummyResponse()
 
-    monkeypatch.setattr(pro_module.requests, "get", fake_get)
+    monkeypatch.setattr(fingerprints_module.requests, "get", fake_get)
 
 
 def test_is_pro():
     assert curl_cffi.is_pro() is True
 
 
-def test_update_profiles(mock_profiles_api):
+def test_update_fingerprints(mock_profiles_api):
     os.environ["IMPERSONATE_API_ROOT"] = "https://api.test"
-    update_profiles()
-    profiles = load_profiles()
-    assert len(profiles) > 1
-    for key in profiles:
+    update_fingerprints()
+    fingerprints = load_fingerprints()
+    assert len(fingerprints) > 1
+    for key in fingerprints:
         assert key.startswith("testing")
 
 
-def test_single_profile(mock_profiles_api):
-    update_profiles("https://api.test")
-    profiles = load_profiles()
-    testing100 = profiles["testing100"]
+def test_single_fingerprint(mock_profiles_api):
+    update_fingerprints("https://api.test")
+    fingerprints = load_fingerprints()
+    testing100 = fingerprints["testing100"]
     assert testing100.http2_settings == "1:65536;3:1000;4:6291456;6:262144"
 
 
 @pytest.mark.skip()
 def test_using_profile():
-    update_profiles("https://api.test")
+    update_fingerprints("https://api.test")
     curl_cffi.get("https://www.google.com", impersonate="testing1024")
 
 

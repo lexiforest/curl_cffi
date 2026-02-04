@@ -5,14 +5,14 @@ import sys
 
 import curl_cffi
 
-from curl_cffi.pro import (
+from curl_cffi.fingerprints import (
     enable_pro,
     get_api_root,
     get_config_path,
-    get_profile_path,
+    get_fingerprint_path,
     is_pro,
-    load_profiles,
-    update_profiles,
+    load_fingerprints,
+    update_fingerprints,
 )
 
 
@@ -70,9 +70,9 @@ def _add_doctor_parser(subparsers):
 
 def _print_doctor():
     config_path = get_config_path()
-    profile_path = get_profile_path()
+    fingerprint_path = get_fingerprint_path()
     config_exists = os.path.exists(config_path)
-    profile_exists = os.path.exists(profile_path)
+    fingerprint_exists = os.path.exists(fingerprint_path)
     token_set = bool(os.environ.get("RVSD_SESSION_TOKEN"))
 
     print("curl-cffi doctor")
@@ -86,17 +86,17 @@ def _print_doctor():
     print(f"config_path: {config_path}")
     print(f"config_present: {config_exists}")
     print(f"api_key_configured: {is_pro()}")
-    print(f"profile_path: {profile_path}")
-    print(f"profile_present: {profile_exists}")
+    print(f"fingerprint_path: {fingerprint_path}")
+    print(f"fingerprint_present: {fingerprint_exists}")
     print(f"rvsd_session_token_set: {token_set}")
     try:
-        profiles = load_profiles()
+        fingerprints = load_fingerprints()
     except FileNotFoundError:
-        print("profile_count: 0")
+        print("fingerprint_count: 0")
     except Exception as exc:
-        print(f"profile_count_error: {type(exc).__name__}")
+        print(f"fingerprint_count_error: {type(exc).__name__}")
     else:
-        print(f"profile_count: {len(profiles)}")
+        print(f"fingerprint_count: {len(fingerprints)}")
 
 
 def main():
@@ -116,17 +116,17 @@ def main():
     args = parser.parse_args()
 
     if args.command == "update":
-        update_profiles()
+        update_fingerprints()
         return
 
     if args.command == "list":
         try:
-            profiles = load_profiles()
+            fingerprints = load_fingerprints()
         except FileNotFoundError:
             print("No local fingerprints found. Run `curl-cffi update` first.")
             return
-        for profile in profiles:
-            print(profile)
+        for fingerprint in fingerprints:
+            print(fingerprint)
         return
 
     if args.command == "config":

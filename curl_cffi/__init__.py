@@ -95,6 +95,6 @@ from .requests import (
 )
 
 from .utils import config_warnings
-from .pro import is_pro, enable_pro
+from .fingerprints import enable_pro, is_pro
 
 config_warnings(on=False)

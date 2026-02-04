@@ -22,6 +22,11 @@ still not fixed, pop up and let me know.
 
 ## Testing
 
+## Documentation
+
+Docs are located in the ./docs folder, whenever a new feature is added, consider
+updating the docs.
+
 ## PR instructions
 - Always run `make test` and `make lint` before committing.
 - Make sure you added a unittest for your PR.

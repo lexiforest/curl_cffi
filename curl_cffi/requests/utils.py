@@ -18,7 +18,7 @@ from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlp
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from ..utils import CurlCffiWarning, HttpVersionLiteral
-from ..pro import load_profiles, Profile
+from ..fingerprints import Fingerprint, load_fingerprints
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
@@ -377,96 +377,101 @@ def _split_tls_ciphers(ciphers: list[str]) -> tuple[list[str], list[str]]:
     return tls12, tls13
 
 
-def _load_profile(target: str):
+def _load_fingerprint(target: str):
     try:
-        profiles = load_profiles()
+        fingerprints = load_fingerprints()
     except (FileNotFoundError, json.JSONDecodeError):
         return None
-    return profiles.get(target)
+    return fingerprints.get(target)
 
 
-def _apply_profile(
+def _apply_fingerprint(
     curl: Curl,
-    profile: Profile,
+    fingerprint: Fingerprint,
     header_lines: Optional[list[str]],
     default_headers: bool,
 ) -> None:
-    if profile.http_version:
-        curl.setopt(CurlOpt.HTTP_VERSION, normalize_http_version(profile.http_version))
+    if fingerprint.http_version:
+        curl.setopt(
+            CurlOpt.HTTP_VERSION, normalize_http_version(fingerprint.http_version)
+        )
 
-    if profile.tls_version:
-        tls_version = _normalize_tls_version(profile.tls_version)
+    if fingerprint.tls_version:
+        tls_version = _normalize_tls_version(fingerprint.tls_version)
         curl.setopt(CurlOpt.SSLVERSION, tls_version | CurlSslVersion.MAX_DEFAULT)
 
-    if profile.tls_ciphers:
-        tls12, tls13 = _split_tls_ciphers(profile.tls_ciphers)
+    if fingerprint.tls_ciphers:
+        tls12, tls13 = _split_tls_ciphers(fingerprint.tls_ciphers)
         if tls12:
             curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(tls12))
         if tls13:
             curl.setopt(CurlOpt.TLS13_CIPHERS, ":".join(tls13))
 
-    curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(profile.tls_alpn))
-    curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(profile.tls_alps))
-    curl.setopt(CurlOpt.SSL_ENABLE_TICKET, int(profile.tls_session_ticket))
-    curl.setopt(CurlOpt.TLS_GREASE, int(profile.tls_grease))
+    curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(fingerprint.tls_alpn))
+    curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(fingerprint.tls_alps))
+    curl.setopt(CurlOpt.SSL_ENABLE_TICKET, int(fingerprint.tls_session_ticket))
+    curl.setopt(CurlOpt.TLS_GREASE, int(fingerprint.tls_grease))
     curl.setopt(
-        CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, int(profile.tls_use_new_alps_codepoint)
+        CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT,
+        int(fingerprint.tls_use_new_alps_codepoint),
     )
     curl.setopt(
-        CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(profile.tls_signed_cert_timestamps)
+        CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(fingerprint.tls_signed_cert_timestamps)
     )
-    curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, profile.tls_key_shares_limit)
+    curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, fingerprint.tls_key_shares_limit)
 
-    if profile.tls_cert_compression:
+    if fingerprint.tls_cert_compression:
         curl.setopt(
-            CurlOpt.SSL_CERT_COMPRESSION, ",".join(profile.tls_cert_compression)
+            CurlOpt.SSL_CERT_COMPRESSION, ",".join(fingerprint.tls_cert_compression)
         )
     else:
         curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
 
-    if profile.tls_signature_hashes:
-        curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(profile.tls_signature_hashes))
+    if fingerprint.tls_signature_hashes:
+        curl.setopt(
+            CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fingerprint.tls_signature_hashes)
+        )
 
-    if profile.tls_supported_groups:
-        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(profile.tls_supported_groups))
+    if fingerprint.tls_supported_groups:
+        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(fingerprint.tls_supported_groups))
 
-    if profile.tls_extension_order:
-        extension_ids = set(int(e) for e in profile.tls_extension_order.split("-"))
+    if fingerprint.tls_extension_order:
+        extension_ids = set(int(e) for e in fingerprint.tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
-        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, profile.tls_extension_order)
+        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, fingerprint.tls_extension_order)
 
-    if profile.tls_delegated_credentials:
+    if fingerprint.tls_delegated_credentials:
         curl.setopt(
             CurlOpt.TLS_DELEGATED_CREDENTIALS,
-            ":".join(profile.tls_delegated_credentials),
+            ":".join(fingerprint.tls_delegated_credentials),
         )
 
-    if profile.tls_record_size_limit is not None:
-        curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, profile.tls_record_size_limit)
+    if fingerprint.tls_record_size_limit is not None:
+        curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fingerprint.tls_record_size_limit)
 
-    if profile.tls_ech is not None:
-        curl.setopt(CurlOpt.ECH, profile.tls_ech)
+    if fingerprint.tls_ech is not None:
+        curl.setopt(CurlOpt.ECH, fingerprint.tls_ech)
 
-    if profile.http2_settings:
-        curl.setopt(CurlOpt.HTTP2_SETTINGS, profile.http2_settings)
-    if profile.http2_window_update:
-        curl.setopt(CurlOpt.HTTP2_WINDOW_UPDATE, int(profile.http2_window_update))
-    if profile.http2_pseudo_headers_order:
+    if fingerprint.http2_settings:
+        curl.setopt(CurlOpt.HTTP2_SETTINGS, fingerprint.http2_settings)
+    if fingerprint.http2_window_update:
+        curl.setopt(CurlOpt.HTTP2_WINDOW_UPDATE, int(fingerprint.http2_window_update))
+    if fingerprint.http2_pseudo_headers_order:
         curl.setopt(
             CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER,
-            profile.http2_pseudo_headers_order.replace(",", ""),
+            fingerprint.http2_pseudo_headers_order.replace(",", ""),
         )
-    if profile.http2_stream_weight is not None:
-        curl.setopt(CurlOpt.STREAM_WEIGHT, profile.http2_stream_weight)
-    if profile.http2_stream_exclusive is not None:
-        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, profile.http2_stream_exclusive)
-    elif profile.http2_priority_exclusive is not None:
-        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, profile.http2_priority_exclusive)
-    if profile.http2_no_priority:
-        curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, int(profile.http2_no_priority))
+    if fingerprint.http2_stream_weight is not None:
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fingerprint.http2_stream_weight)
+    if fingerprint.http2_stream_exclusive is not None:
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fingerprint.http2_stream_exclusive)
+    elif fingerprint.http2_priority_exclusive is not None:
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fingerprint.http2_priority_exclusive)
+    if fingerprint.http2_no_priority:
+        curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, int(fingerprint.http2_no_priority))
 
-    if default_headers and header_lines is not None and profile.headers:
-        for key, value in profile.headers.items():
+    if default_headers and header_lines is not None and fingerprint.headers:
+        for key, value in fingerprint.headers.items():
             update_header_line(header_lines, key, value)
         curl.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
@@ -483,11 +488,11 @@ def set_impersonate_target(
     if ret == 0:
         return
 
-    profile = _load_profile(target) or _load_profile(normalized)
-    if profile is None:
+    fingerprint = _load_fingerprint(target) or _load_fingerprint(normalized)
+    if fingerprint is None:
         raise ImpersonateError(f"Impersonating {target} is not supported")
 
-    _apply_profile(curl, profile, header_lines, default_headers)
+    _apply_fingerprint(curl, fingerprint, header_lines, default_headers)
 
 
 def set_curl_options(
