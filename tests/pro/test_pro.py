@@ -6,7 +6,6 @@ import pytest
 import curl_cffi
 import curl_cffi.pro as pro_module
 from curl_cffi.pro import (
-    load_market_share,
     load_profiles,
     update_market_share,
     update_profiles,
@@ -77,5 +76,4 @@ def test_using_profile():
 def test_update_market_share():
     curl_cffi.get("https://www.google.com", impersonate="testing1024")
     update_market_share(api_root="https://api.test")
-    market_share = load_market_share()
     curl_cffi.get("https://www.google.com", impersonate="real_world")

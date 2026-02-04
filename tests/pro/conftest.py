@@ -8,8 +8,6 @@ from typing import Any
 import pytest
 import uvicorn
 from litestar import Litestar, get
-from uvicorn.config import Config
-from uvicorn.main import Server
 from curl_cffi.pro import Profile
 import dataclasses
 
