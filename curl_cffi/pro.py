@@ -28,7 +28,13 @@ Pro config example
 
 
 DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
-CONFIG_DIR = os.path.expanduser("~/.config/impersonate")
+DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/impersonate")
+# Backward-compatible constant for external imports.
+CONFIG_DIR = DEFAULT_CONFIG_DIR
+
+
+def get_config_dir() -> str:
+    return os.environ.get("IMPERSONATE_CONFIG_DIR", DEFAULT_CONFIG_DIR)
 
 
 def cache_result(func):
@@ -44,11 +50,11 @@ def cache_result(func):
 
 
 def get_config_path():
-    return os.path.join(CONFIG_DIR, "config.json")
+    return os.path.join(get_config_dir(), "config.json")
 
 
 def get_profile_path():
-    return os.path.join(CONFIG_DIR, "profiles.json")
+    return os.path.join(get_config_dir(), "profiles.json")
 
 
 def get_api_root() -> str:
@@ -70,8 +76,9 @@ def is_pro():
 
 def enable_pro(api_key: str):
     """Enable the pro version"""
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
+    config_dir = get_config_dir()
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
     config_file = get_config_path()
     if os.path.exists(config_file):
         with open(config_file) as f:
@@ -180,8 +187,9 @@ def update_profiles(
         if isinstance(raw, dict):
             profiles[name] = raw
 
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
+    config_dir = get_config_dir()
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
     with open(get_profile_path(), "w") as wf:
         json.dump(profiles, wf, indent=2)
 

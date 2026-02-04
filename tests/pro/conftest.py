@@ -3,6 +3,7 @@ import json
 import os
 import threading
 import time
+from typing import Any
 
 import pytest
 import uvicorn
@@ -61,8 +62,8 @@ class FileServer(uvicorn.Server):
         return f"http://{self.config.host}:{self.config.port}"
 
 
-@get("/fingerprints")
-def get_fingerprints():
+@get("/fingerprints", sync_to_thread=False)
+def get_fingerprints() -> list[dict[str, Any]]:
     profiles = []
     for i in range(10):
         profile = Profile(
@@ -118,8 +119,8 @@ def get_fingerprints():
     return profiles
 
 
-@get("/marketshare")
-def get_market_share(): ...
+@get("/marketshare", sync_to_thread=False)
+def get_market_share() -> None: ...
 
 
 app = Litestar(route_handlers=[get_fingerprints, get_market_share])
