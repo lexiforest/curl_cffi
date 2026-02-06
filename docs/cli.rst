@@ -3,12 +3,6 @@ curl-cffi CLI
 
 ``curl_cffi`` ships with a command line interface named ``curl-cffi``.
 
-Install
-=======
-
-.. code-block:: sh
-
-    pip install curl_cffi --upgrade
 
 Usage
 =====
@@ -22,7 +16,8 @@ Show top-level help:
 Fetch URLs
 ==========
 
-Use the ``fetch`` command to request one or more URLs.
+Use the ``fetch`` command to request one or more URLs. This is handy we you want to
+verify if a website can be accessed.
 
 .. code-block:: sh
 

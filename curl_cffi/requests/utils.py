@@ -10,23 +10,22 @@ import warnings
 from collections import Counter
 from collections.abc import Callable
 from io import BytesIO
-import json
-from json import dumps
+from json import dumps, JSONDecodeError
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from ..utils import CurlCffiWarning, HttpVersionLiteral
-from ..fingerprints import Fingerprint, load_fingerprints
+from ..fingerprints import Fingerprint, FingerprintManager
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
 from .impersonate import (
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
+    CipherName,
     ExtraFingerprints,
-    cipher_name,
     normalize_browser_type,
     toggle_extension,
 )
@@ -273,7 +272,7 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     cipher_names = []
     for cipher in ciphers.split("-"):
         cipher_id = int(cipher)
-        resolved_cipher_name = cipher_name.get(cipher_id)
+        resolved_cipher_name = CipherName.get(cipher_id)
         if not resolved_cipher_name:
             raise ImpersonateError(f"Cipher {hex(cipher_id)} is not found")
         cipher_names.append(resolved_cipher_name)
@@ -379,8 +378,8 @@ def _split_tls_ciphers(ciphers: list[str]) -> tuple[list[str], list[str]]:
 
 def _load_fingerprint(target: str):
     try:
-        fingerprints = load_fingerprints()
-    except (FileNotFoundError, json.JSONDecodeError):
+        fingerprints = FingerprintManager.load_fingerprints()
+    except (FileNotFoundError, JSONDecodeError):
         return None
     return fingerprints.get(target)
 

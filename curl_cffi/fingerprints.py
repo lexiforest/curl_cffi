@@ -1,28 +1,17 @@
 import json
 import os
-from datetime import datetime
 from dataclasses import dataclass, field, fields
-from typing import Literal, Optional
-
-from . import requests
-
+from datetime import datetime
+from functools import cache
+from typing import Literal
 
 __all__ = [
     "Fingerprint",
     "FingerprintSpec",
-    "is_pro",
-    "enable_pro",
-    "update_fingerprints",
-    "load_fingerprints",
-    "get_fingerprint_path",
-    "update_market_share",
-    "load_market_share",
+    "FingerprintManager",
     # Backward-compatible aliases.
     "Profile",
     "ProfileSpec",
-    "update_profiles",
-    "load_profiles",
-    "get_profile_path",
 ]
 
 
@@ -39,72 +28,6 @@ DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
 DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/impersonate")
 # Backward-compatible constant for external imports.
 CONFIG_DIR = DEFAULT_CONFIG_DIR
-
-
-def get_config_dir() -> str:
-    return os.environ.get("IMPERSONATE_CONFIG_DIR", DEFAULT_CONFIG_DIR)
-
-
-def cache_result(func):
-    cache = {}
-
-    def wrapper(*args, **kwargs):
-        key = (args, tuple(sorted(kwargs.items())))
-        if key not in cache:
-            cache[key] = func(*args, **kwargs)
-        return cache[key]
-
-    return wrapper
-
-
-def get_config_path():
-    return os.path.join(get_config_dir(), "config.json")
-
-
-def get_fingerprint_path():
-    return os.path.join(get_config_dir(), "profiles.json")
-
-
-def get_profile_path():
-    """Backward-compatible alias for get_fingerprint_path()."""
-    return get_fingerprint_path()
-
-
-def get_api_root() -> str:
-    return os.environ.get("IMPERSONATE_API_ROOT", DEFAULT_API_ROOT)
-
-
-@cache_result
-def is_pro():
-    config_file = get_config_path()
-    if not os.path.exists(config_file):
-        return False
-    with open(config_file) as f:
-        try:
-            config = json.load(f)
-            return config.get("api_key") not in [None, ""]
-        except json.JSONDecodeError:
-            return False
-
-
-def enable_pro(api_key: str):
-    """Enable the pro version"""
-    config_dir = get_config_dir()
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
-    config_file = get_config_path()
-    if os.path.exists(config_file):
-        with open(config_file) as f:
-            try:
-                config = json.load(f)
-            except json.JSONDecodeError:
-                config = {}
-    else:
-        config = {}
-    config["api_key"] = api_key
-    config["update_time"] = datetime.utcnow().isoformat()
-    with open(config_file, "w") as f:
-        json.dump(config, f, indent=4)
 
 
 @dataclass
@@ -128,21 +51,21 @@ class Fingerprint:
     tls_session_ticket: bool = False
     tls_extension_order: str = ""
     tls_delegated_credentials: list[str] = field(default_factory=list)
-    tls_record_size_limit: Optional[int] = None
+    tls_record_size_limit: int | None = None
     tls_grease: bool = False
     tls_use_new_alps_codepoint: bool = False
     tls_signed_cert_timestamps: bool = False
-    tls_ech: Optional[str] = None
+    tls_ech: str | None = None
 
     headers: dict[str, str] = field(default_factory=dict)
 
     http2_settings: str = ""
     http2_window_update: int = 0
     http2_pseudo_headers_order: str = ""
-    http2_stream_weight: Optional[int] = None
-    http2_stream_exclusive: Optional[int] = None
+    http2_stream_weight: int | None = None
+    http2_stream_exclusive: int | None = None
     http2_no_priority: bool = False
-    http2_priority_exclusive: Optional[int] = None
+    http2_priority_exclusive: int | None = None
 
     http3_settings: str = ""
     quic_transport_parameters: str = ""
@@ -166,72 +89,142 @@ PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
 
 @dataclass
 class FingerprintSpec:
-    platform: Optional[str] = None
-    client: Optional[ClientLiteral] = None
-    strategy: Optional[Literal["uniform", "market_share"]] = "market_share"
+    platform: str | None = None
+    client: ClientLiteral | None = None
+    strategy: Literal["uniform", "market_share"] | None = "market_share"
 
 
-def update_fingerprints(
-    api_root: Optional[str] = None,
-    session_token: Optional[str] = None,
-) -> None:
-    """Get the latest fingerprints for impersonating."""
-    api_root = api_root or get_api_root()
-    token = session_token or os.environ.get("RVSD_SESSION_TOKEN")
-    cookies = {"rvsd.session_token": token} if token else None
-    url = f"{api_root.rstrip('/')}/fingerprints"
-    r = requests.get(url, cookies=cookies)
-    data = r.json()
-    items = data.get("items") if isinstance(data, dict) else data
-    if not isinstance(items, list):
-        raise ValueError("Fingerprints API returned unexpected payload.")
+class FingerprintManager:
+    DEFAULT_API_ROOT = DEFAULT_API_ROOT
+    DEFAULT_CONFIG_DIR = DEFAULT_CONFIG_DIR
 
-    fingerprints = {}
-    for item in items:
-        name = item.get("name") or item.get("target")
-        if not name:
-            continue
-        raw = item.get("data", {})
-        if isinstance(raw, str):
+    @classmethod
+    def get_config_dir(cls) -> str:
+        return os.environ.get("IMPERSONATE_CONFIG_DIR", cls.DEFAULT_CONFIG_DIR)
+
+    @classmethod
+    def get_config_path(cls) -> str:
+        return os.path.join(cls.get_config_dir(), "config.json")
+
+    @classmethod
+    def get_fingerprint_path(cls) -> str:
+        return os.path.join(cls.get_config_dir(), "profiles.json")
+
+    @classmethod
+    def get_api_root(cls) -> str:
+        return os.environ.get("IMPERSONATE_API_ROOT", cls.DEFAULT_API_ROOT)
+
+    @staticmethod
+    @cache
+    def _is_pro_cached(config_path: str) -> bool:
+        if not os.path.exists(config_path):
+            return False
+        with open(config_path) as f:
             try:
-                raw = json.loads(raw)
+                config = json.load(f)
             except json.JSONDecodeError:
+                return False
+        return config.get("api_key") not in [None, ""]
+
+    @classmethod
+    def is_pro(cls) -> bool:
+        return cls._is_pro_cached(cls.get_config_path())
+
+    @classmethod
+    def enable_pro(cls, api_key: str) -> None:
+        """Enable the pro version."""
+        config_dir = cls.get_config_dir()
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+        config_file = cls.get_config_path()
+        if os.path.exists(config_file):
+            with open(config_file) as f:
+                try:
+                    config = json.load(f)
+                except json.JSONDecodeError:
+                    config = {}
+        else:
+            config = {}
+        config["api_key"] = api_key
+        config["update_time"] = datetime.utcnow().isoformat()
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=4)
+        cls._is_pro_cached.cache_clear()
+
+    @classmethod
+    def update_fingerprints(
+        cls,
+        api_root: str | None = None,
+        session_token: str | None = None,
+    ) -> None:
+        """Get the latest fingerprints for impersonating."""
+        api_root = api_root or cls.get_api_root()
+        token = session_token or os.environ.get("RVSD_SESSION_TOKEN")
+        cookies = {"rvsd.session_token": token} if token else None
+        requests_module = cls._get_requests_module()
+        url = f"{api_root.rstrip('/')}/fingerprints"
+        r = requests_module.get(url, cookies=cookies)
+        data = r.json()
+        items = data.get("items") if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            raise ValueError("Fingerprints API returned unexpected payload.")
+
+        fingerprints: dict[str, dict] = {}
+        for item in items:
+            name = item.get("name") or item.get("target")
+            if not name:
                 continue
-        if isinstance(raw, dict):
-            fingerprints[name] = raw
+            raw = item.get("data", {})
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+            if isinstance(raw, dict):
+                fingerprints[name] = raw
 
-    config_dir = get_config_dir()
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
-    with open(get_fingerprint_path(), "w") as wf:
-        json.dump(fingerprints, wf, indent=2)
+        config_dir = cls.get_config_dir()
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+        with open(cls.get_fingerprint_path(), "w") as wf:
+            json.dump(fingerprints, wf, indent=2)
+        cls._load_fingerprints_cached.cache_clear()
 
+    @classmethod
+    def update_market_share(cls, api_root: str | None = None):
+        """Get the latest market share of browsers."""
+        api_root = api_root or cls.get_api_root()
 
-def update_market_share(api_root: Optional[str] = None):
-    """Get the latest market share of browsers"""
-    api_root = api_root or get_api_root()
+    @staticmethod
+    @cache
+    def _load_fingerprints_cached(fingerprint_path: str) -> dict[str, Fingerprint]:
+        with open(fingerprint_path) as f:
+            fingerprints = json.loads(f.read())
+        allowed = {item.name for item in fields(Fingerprint)}
+        parsed = {}
+        for key, payload in fingerprints.items():
+            if not isinstance(payload, dict):
+                continue
+            filtered = {k: v for k, v in payload.items() if k in allowed}
+            parsed[key] = Fingerprint(**filtered)
+        return parsed
 
+    @classmethod
+    def load_fingerprints(cls) -> dict[str, Fingerprint]:
+        return cls._load_fingerprints_cached(cls.get_fingerprint_path())
 
-@cache_result
-def load_fingerprints() -> dict[str, Fingerprint]:
-    with open(get_fingerprint_path()) as f:
-        fingerprints = json.loads(f.read())
-    allowed = {item.name for item in fields(Fingerprint)}
-    parsed = {}
-    for key, payload in fingerprints.items():
-        if not isinstance(payload, dict):
-            continue
-        filtered = {k: v for k, v in payload.items() if k in allowed}
-        parsed[key] = Fingerprint(**filtered)
-    return parsed
+    @staticmethod
+    @cache
+    def load_market_share():
+        return ...
 
+    @staticmethod
+    def _get_requests_module():
+        from . import requests
 
-@cache_result
-def load_market_share(): ...
+        return requests
 
 
 # Backward-compatible aliases.
 Profile = Fingerprint
 ProfileSpec = FingerprintSpec
-update_profiles = update_fingerprints
-load_profiles = load_fingerprints

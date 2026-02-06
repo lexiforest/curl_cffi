@@ -37,9 +37,9 @@ or in Python:
 
 .. code-block:: python
 
-    import curl_cffi
+    from curl_cffi.fingerprints import FingerprintManager
 
-    curl_cffi.enable_pro("imp_xxxxxxxx")
+    FingerprintManager.enable_pro("imp_xxxxxxxx")
 
 Update fingerprints
 ===================
@@ -54,18 +54,18 @@ From Python:
 
 .. code-block:: python
 
-    from curl_cffi.fingerprints import update_fingerprints
+    from curl_cffi.fingerprints import FingerprintManager
 
-    update_fingerprints()
+    FingerprintManager.update_fingerprints()
 
 Load local fingerprints
 =======================
 
 .. code-block:: python
 
-    from curl_cffi.fingerprints import load_fingerprints
+    from curl_cffi.fingerprints import FingerprintManager
 
-    fingerprints = load_fingerprints()
+    fingerprints = FingerprintManager.load_fingerprints()
     print(len(fingerprints))
     print(fingerprints["chrome136"])
 

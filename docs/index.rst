@@ -155,9 +155,11 @@ You can first check out :doc:`quick_start`. Then :doc:`impersonate/_index`.
 
 For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websockets`.
 
-If you prefer terminal workflows, see :doc:`cli`.
+Since v0.15, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
 
-If you use commercial fingerprint updates, see :doc:`fingerprints`.
+Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
+
+There is a CLI helper for managing fingerprints and debugging, see :doc:`cli`.
 
 You can also find common use cases in the `examples <https://github.com/lexiforest/curl_cffi/tree/main/examples>`_ directory.
 

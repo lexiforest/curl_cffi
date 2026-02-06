@@ -5,15 +5,7 @@ import sys
 
 import curl_cffi
 
-from curl_cffi.fingerprints import (
-    enable_pro,
-    get_api_root,
-    get_config_path,
-    get_fingerprint_path,
-    is_pro,
-    load_fingerprints,
-    update_fingerprints,
-)
+from curl_cffi.fingerprints import FingerprintManager
 
 
 def _add_fetch_parser(subparsers):
@@ -69,8 +61,8 @@ def _add_doctor_parser(subparsers):
 
 
 def _print_doctor():
-    config_path = get_config_path()
-    fingerprint_path = get_fingerprint_path()
+    config_path = FingerprintManager.get_config_path()
+    fingerprint_path = FingerprintManager.get_fingerprint_path()
     config_exists = os.path.exists(config_path)
     fingerprint_exists = os.path.exists(fingerprint_path)
     token_set = bool(os.environ.get("RVSD_SESSION_TOKEN"))
@@ -82,15 +74,15 @@ def _print_doctor():
     print(f"machine: {platform.machine()}")
     print(f"curl_cffi: {curl_cffi.__version__}")
     print(f"libcurl: {curl_cffi.__curl_version__}")
-    print(f"api_root: {get_api_root()}")
+    print(f"api_root: {FingerprintManager.get_api_root()}")
     print(f"config_path: {config_path}")
     print(f"config_present: {config_exists}")
-    print(f"api_key_configured: {is_pro()}")
+    print(f"api_key_configured: {FingerprintManager.is_pro()}")
     print(f"fingerprint_path: {fingerprint_path}")
     print(f"fingerprint_present: {fingerprint_exists}")
     print(f"rvsd_session_token_set: {token_set}")
     try:
-        fingerprints = load_fingerprints()
+        fingerprints = FingerprintManager.load_fingerprints()
     except FileNotFoundError:
         print("fingerprint_count: 0")
     except Exception as exc:
@@ -116,12 +108,12 @@ def main():
     args = parser.parse_args()
 
     if args.command == "update":
-        update_fingerprints()
+        FingerprintManager.update_fingerprints()
         return
 
     if args.command == "list":
         try:
-            fingerprints = load_fingerprints()
+            fingerprints = FingerprintManager.load_fingerprints()
         except FileNotFoundError:
             print("No local fingerprints found. Run `curl-cffi update` first.")
             return
@@ -130,7 +122,7 @@ def main():
         return
 
     if args.command == "config":
-        enable_pro(args.api_key)
+        FingerprintManager.enable_pro(args.api_key)
         print("API key saved.")
         return
 

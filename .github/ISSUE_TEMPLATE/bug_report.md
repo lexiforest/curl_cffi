@@ -15,10 +15,10 @@ Issues are for bug reports and feature requests, documentation improvements, not
 Please check the following items and answer all the questions when reporting a bug, 
 otherwise it will be closed immediately.
 
-- [ ] I'm not asking you to help bypass a specific site ``curl_cffi``
+- [ ] I'm not asking you to help bypass a specific site with ``curl_cffi``.
 - [ ] A code snippet that can reproduce this bug will be provided, even if it's a one-liner.
 - [ ] Version and environment information will be pasted as below.
-- [ ] `curl-cffi doctor` output will be included.
+- [ ] A `curl-cffi doctor` output will be included.
 
 **Describe the bug**
 A clear and concise description of what the bug is.

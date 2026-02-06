@@ -242,7 +242,6 @@ class CipherName(IntEnum):
             return ""
 
 
-cipher_name = CipherName
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
@@ -381,10 +380,6 @@ TLS_EC_CURVES_MAP = {
     4588: "X25519MLKEM768",
     25497: "X25519Kyber768Draft00",
 }
-
-
-def list_profiles():
-    """List supported profiles, from both open source and pro version"""
 
 
 def toggle_extension(curl, extension_id: int, enable: bool):
