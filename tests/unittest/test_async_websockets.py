@@ -684,9 +684,9 @@ class TestAsyncWebSocketConcurrency:
                 _ = task.cancel()
 
             # All tasks should complete (no deadlock)
-            assert (
-                len(pending) == 0
-            ), f"Deadlock detected: {len(pending)} tasks still pending"
+            assert len(pending) == 0, (
+                f"Deadlock detected: {len(pending)} tasks still pending"
+            )
             assert len(done) == num_consumers
 
             # Collect results - some may be messages or errors if connection closed
@@ -828,9 +828,9 @@ class TestAsyncWebSocketConcurrency:
             # Should have at least 1 message (the echo) and the rest should be
             # close frames or closed errors
             assert messages >= 1, "Expected at least the echo message"
-            assert (
-                timeout_errors == 0
-            ), "No recv() should timeout - connection should close cleanly"
+            assert timeout_errors == 0, (
+                "No recv() should timeout - connection should close cleanly"
+            )
 
 
 class TestAsyncWebSocketCancellation:

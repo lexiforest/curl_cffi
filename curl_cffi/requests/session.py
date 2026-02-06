@@ -1014,7 +1014,8 @@ class AsyncSession(BaseSession[R]):
             )
             _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
             _ = curl.setopt(
-                CurlOpt.CONNECT_ONLY, 2  # https://curl.se/docs/websocket.html
+                CurlOpt.CONNECT_ONLY,
+                2,  # https://curl.se/docs/websocket.html
             )
 
             try:
