@@ -1218,15 +1218,6 @@ class AsyncWebSocket(BaseWebSocket):
                     )
                     await self.flush(timeout)
 
-                    # Wait for the handshake acknowledgement from the server.
-                    if (
-                        self._read_task
-                        and not self._read_task.done()
-                        and self._read_task is not asyncio.current_task()
-                    ):
-                        with suppress(asyncio.TimeoutError, asyncio.CancelledError):
-                            await asyncio.wait_for(self._read_task, timeout=timeout)
-
             except (asyncio.TimeoutError, WebSocketError):
                 pass
 
@@ -1255,14 +1246,27 @@ class AsyncWebSocket(BaseWebSocket):
             self._terminated = True
 
             loop: asyncio.AbstractEventLoop | None = self._loop
+
+            # Get the currently running event loop
+            try:
+                current_loop: asyncio.AbstractEventLoop | None = (
+                    asyncio.get_running_loop()
+                )
+            except RuntimeError:
+                current_loop = None
+
             try:
                 if loop is None:
                     raise RuntimeError("Event loop not available")
 
                 # Run the termination task
-                _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
+                if current_loop is not None and current_loop is loop:
+                    _ = loop.create_task(self._terminate_helper())
+                else:
+                    _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
 
-            except RuntimeError:
+            # pylint: disable-next=broad-exception-caught
+            except Exception:
                 try:
                     super().terminate()
                     if self.session and not self.session._closed:
@@ -1651,6 +1655,7 @@ class AsyncWebSocket(BaseWebSocket):
         create_future: Callable[[], asyncio.Future[None]] = loop.create_future
         add_writer: Callable[..., None] = loop.add_writer
         remove_writer: Callable[..., bool] = loop.remove_writer
+        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
         sock_fd: int = self._sock_fd
         time_slice: float = self._send_time_slice
         next_yield: float = loop_time() + time_slice
@@ -1660,12 +1665,11 @@ class AsyncWebSocket(BaseWebSocket):
         max_zero_writes: int = 3
 
         # Message specific values
-        view: memoryview = memoryview(payload)
-        total_bytes: int = view.nbytes
         base_flags: int = flags & ~cont_flag
+        view: memoryview = memoryview(payload)
+        total_bytes: int = len(view)
         offset: int = 0
-        zero_write_retries: int = 0
-        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
+        write_retries: int = 0
 
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
@@ -1691,14 +1695,11 @@ class AsyncWebSocket(BaseWebSocket):
 
                     # Raise AGAIN to jump to the existing wait logic below
                     if chunk_len > 0:
-                        zero_write_retries += 1
-                        if zero_write_retries >= max_zero_writes:
+                        write_retries += 1
+                        if write_retries >= max_zero_writes:
                             self._finalize_connection(
                                 WebSocketError(
-                                    (
-                                        "Writer stalled "
-                                        f"({zero_write_retries} attempts)."
-                                    ),
+                                    ("Writer stalled " f"({write_retries} attempts)."),
                                     CurlECode.WRITE_ERROR,
                                 )
                             )
@@ -1706,8 +1707,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                         raise CurlError("0 bytes sent", e_again)
 
-                if zero_write_retries:
-                    zero_write_retries = 0
+                if write_retries:
+                    write_retries = 0
 
                 offset += n_sent
 
