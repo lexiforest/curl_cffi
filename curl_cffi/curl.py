@@ -551,7 +551,7 @@ class Curl:
         if ret := lib.curl_ws_recv(
             self._curl,
             self._ws_recv_buffer,
-            131072,  # 128 KiB
+            self._WS_RECV_BUFFER_SIZE,
             self._ws_recv_n_recv,
             self._ws_recv_p_frame,
         ):
