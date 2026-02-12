@@ -12,7 +12,6 @@ import warnings
 from collections.abc import AsyncGenerator, Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
@@ -615,7 +614,6 @@ class Session(BaseSession[R]):
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
-
         # clone a new curl instance for streaming response
         if stream:
             c = self.curl.duphandle()
@@ -1146,7 +1144,8 @@ class AsyncSession(BaseSession[R]):
             )
             _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
             _ = curl.setopt(
-                CurlOpt.CONNECT_ONLY, 2  # https://curl.se/docs/websocket.html
+                CurlOpt.CONNECT_ONLY,
+                2,  # https://curl.se/docs/websocket.html
             )
 
             try:
