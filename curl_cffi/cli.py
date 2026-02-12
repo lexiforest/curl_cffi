@@ -65,7 +65,6 @@ def _print_doctor():
     fingerprint_path = FingerprintManager.get_fingerprint_path()
     config_exists = os.path.exists(config_path)
     fingerprint_exists = os.path.exists(fingerprint_path)
-    token_set = bool(os.environ.get("RVSD_SESSION_TOKEN"))
 
     print("curl-cffi doctor")
     print(f"python: {sys.version.split()[0]}")

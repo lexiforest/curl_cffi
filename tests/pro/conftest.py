@@ -39,7 +39,7 @@ def clean_environ():
     os.environ.update(original_environ)
 
 
-class FileServer(uvicorn.Server):
+class Server(uvicorn.Server):
     def install_signal_handlers(self):
         pass
 
@@ -127,6 +127,6 @@ app = Litestar(route_handlers=[get_fingerprints, get_market_share])
 @pytest.fixture(scope="session")
 def api_server():
     config = uvicorn.Config(app, host="127.0.0.1", port=2952, log_level="info")
-    server = FileServer(config=config)
+    server = Server(config=config)
     with server.run_in_thread():
         yield server

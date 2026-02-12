@@ -69,4 +69,3 @@ Environment variables
 
 - ``IMPERSONATE_API_ROOT``: override API endpoint used by ``update``.
 - ``IMPERSONATE_CONFIG_DIR``: override local config/cache directory.
-- ``RVSD_SESSION_TOKEN``: optional session token sent as cookie on update.

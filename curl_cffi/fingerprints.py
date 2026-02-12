@@ -159,11 +159,9 @@ class FingerprintManager:
     ) -> None:
         """Get the latest fingerprints for impersonating."""
         api_root = api_root or cls.get_api_root()
-        token = session_token or os.environ.get("RVSD_SESSION_TOKEN")
-        cookies = {"rvsd.session_token": token} if token else None
         requests_module = cls._get_requests_module()
         url = f"{api_root.rstrip('/')}/fingerprints"
-        r = requests_module.get(url, cookies=cookies)
+        r = requests_module.get(url)
         data = r.json()
         items = data.get("items") if isinstance(data, dict) else data
         if not isinstance(items, list):

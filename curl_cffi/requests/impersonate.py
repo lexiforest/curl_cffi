@@ -195,6 +195,7 @@ class ExtraFpDict(TypedDict, total=False):
     http2_no_priority: bool
 
 
+# http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 class CipherName(IntEnum):
     TLS_RSA_WITH_3DES_EDE_CBC_SHA = 0x000A
     TLS_RSA_WITH_AES_128_CBC_SHA = 0x002F
@@ -242,8 +243,6 @@ class CipherName(IntEnum):
             return ""
 
 
-
-
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
 # version. As of today, the major version is always 03.
 TLS_VERSION_MAP = {
@@ -253,10 +252,6 @@ TLS_VERSION_MAP = {
     0x0304: CurlSslVersion.TLSv1_3,  # 772
 }
 
-
-# http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-# via BoringSSL
-TLS_CIPHER_NAME_MAP = {cipher.value: cipher.name for cipher in CipherName}
 
 # RFC tls extensions: https://datatracker.ietf.org/doc/html/rfc6066
 # IANA list: https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
