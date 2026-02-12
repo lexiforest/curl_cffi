@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["HttpVersionLiteral", "set_curl_options", "not_set"]
+__all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
 import asyncio
@@ -8,10 +8,10 @@ import math
 import queue
 import warnings
 from collections import Counter
+from collections.abc import Callable
 from io import BytesIO
 from json import dumps
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
@@ -46,7 +46,23 @@ HttpVersionLiteral = Literal["v1", "v2", "v2tls", "v2_prior_knowledge", "v3", "v
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
-not_set: Final[Any] = object()
+
+@final
+class NotSetType:
+    """
+    Unique single initialized type distinct from ``None``.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "NOT_SET"
+
+    def __reduce__(self) -> Literal["NOT_SET"]:
+        return "NOT_SET"
+
+
+NOT_SET: Final[NotSetType] = NotSetType()
 
 
 # ruff: noqa: SIM116
@@ -118,7 +134,7 @@ def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     new_args_counter = Counter(x[0] for x in params)
     for key, value in params:
         # Bool and Dict values should be converted to json-friendly values
-        if isinstance(value, (bool, dict)):
+        if isinstance(value, bool | dict):
             value = dumps(value)
         # 1 to 1 mapping, we have to search and update it.
         if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
@@ -334,15 +350,19 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: list[Union[dict, list, tuple, None]] = [],  # noqa: B006
+    params_list: list[
+        Union[dict[str, object], list[object], tuple[object, ...], None]
+    ] = [],  # noqa: B006
     base_url: Optional[str] = None,
-    data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-    json: Optional[dict | list] = None,
+    data: Optional[
+        Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]
+    ] = None,
+    json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
-    files: Optional[dict] = None,
+    files: Optional[dict[object, object]] = None,
     auth: Optional[tuple[str, str]] = None,
-    timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+    timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
     allow_redirects: Optional[bool] = True,
     max_redirects: Optional[int] = 30,
     proxies_list: list[Optional[ProxySpec]] = [],  # noqa: B006
@@ -351,7 +371,7 @@ def set_curl_options(
     verify_list: list[Union[bool, str, None]] = [],  # noqa: B006
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
-    content_callback: Optional[Callable] = None,
+    content_callback: Optional[Callable[..., object]] = None,
     impersonate: Optional[Union[BrowserTypeLiteral, str]] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
@@ -395,7 +415,7 @@ def set_curl_options(
     c.setopt(CurlOpt.URL, url.encode())
 
     # data/body/json
-    if isinstance(data, (dict, list, tuple)):
+    if isinstance(data, dict | list | tuple):
         body = urlencode(data).encode()
     elif isinstance(data, str):
         body = data.encode()
@@ -455,7 +475,7 @@ def set_curl_options(
         update_header_line(
             header_lines, "Content-Type", "application/x-www-form-urlencoded"
         )
-    if isinstance(data, (str, bytes)) and data:
+    if isinstance(data, str | bytes) and data:
         update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
     # Never send `Expect` header.
@@ -496,8 +516,12 @@ def set_curl_options(
     # auth
     if auth:
         username, password = auth
-        c.setopt(CurlOpt.USERNAME, username.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
-        c.setopt(CurlOpt.PASSWORD, password.encode())  # pyright: ignore [reportPossiblyUnboundVariable=none]
+        c.setopt(
+            CurlOpt.USERNAME, username.encode()
+        )  # pyright: ignore [reportPossiblyUnboundVariable=none]
+        c.setopt(
+            CurlOpt.PASSWORD, password.encode()
+        )  # pyright: ignore [reportPossiblyUnboundVariable=none]
 
     # timeout
     if timeout is None:
@@ -514,7 +538,7 @@ def set_curl_options(
             c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
             c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(all_timeout))
 
-    elif isinstance(timeout, (int, float)):
+    elif isinstance(timeout, int | float):
         if not stream:
             c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))
         else:
@@ -617,18 +641,6 @@ def set_curl_options(
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
-    # extra_fp options
-    if extra_fp:
-        if isinstance(extra_fp, dict):
-            extra_fp = ExtraFingerprints(**extra_fp)
-        if impersonate:
-            warnings.warn(
-                "Extra fingerprints was altered after impersonated version was set.",
-                CurlCffiWarning,
-                stacklevel=1,
-            )
-        set_extra_fp(c, extra_fp)
-
     # ja3 string
     if ja3:
         if impersonate:
@@ -643,6 +655,18 @@ def set_curl_options(
         if isinstance(extra_fp, dict) and extra_fp.get("tls_permute_extensions"):
             permute = True
         set_ja3_options(c, ja3, permute=permute)
+
+    # extra_fp options
+    if extra_fp:
+        if isinstance(extra_fp, dict):
+            extra_fp = ExtraFingerprints(**extra_fp)
+        if impersonate:
+            warnings.warn(
+                "Extra fingerprints was altered after impersonated version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
+        set_extra_fp(c, extra_fp)
 
     # akamai string
     if akamai:

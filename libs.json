@@ -5,8 +5,9 @@
         "pointer_size": 64,
         "libdir": "./lib64",
         "sysname": "win32",
-        "so_name": "libcurl.dll",
-        "so_arch": "x86_64"
+        "link_type": "dynamic",
+        "obj_name": "libcurl.dll",
+        "arch": "x86_64"
     },
     {
         "system": "Windows",
@@ -14,8 +15,9 @@
         "pointer_size": 32,
         "libdir": "./lib32",
         "sysname": "win32",
-        "so_name": "libcurl.dll",
-        "so_arch": "i686"
+        "link_type": "dynamic",
+        "obj_name": "libcurl.dll",
+        "arch": "i686"
     },
     {
         "system": "Windows",
@@ -23,113 +25,116 @@
         "pointer_size": 64,
         "libdir": "./libarm64",
         "sysname": "win32",
-        "so_name": "libcurl.dll",
-        "so_arch": "arm64"
+        "link_type": "dynamic",
+        "obj_name": "libcurl.dll",
+        "arch": "arm64"
     },
     {
         "system": "Darwin",
         "machine": "x86_64",
         "pointer_size": 64,
-        "libdir": "/Users/runner/work/_temp/install/lib",
         "sysname": "macos",
-        "so_name": "libcurl-impersonate.4.dylib",
-        "so_arch": "x86_64"
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86_64"
     },
     {
         "system": "Darwin",
         "machine": "arm64",
         "pointer_size": 64,
-        "libdir": "/Users/runner/work/_temp/install/lib",
         "sysname": "macos",
-        "so_name": "libcurl-impersonate.4.dylib",
-        "so_arch": "arm64"
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "arm64"
     },
     {
         "system": "Linux",
         "machine": "x86_64",
         "pointer_size": 64,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "x86_64"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86_64"
     },
     {
         "system": "Linux",
         "machine": "x86_64",
         "pointer_size": 64,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "musl",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "x86_64"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86_64"
     },
     {
         "system": "Linux",
         "machine": "i686",
         "pointer_size": 32,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "i386"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "i386"
     },
     {
         "system": "Linux",
         "machine": "aarch64",
         "pointer_size": 64,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "aarch64"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "aarch64"
+    },
+    {
+        "system": "Android",
+        "machine": "aarch64",
+        "pointer_size": 64,
+        "sysname": "linux-android",
+        "link_type": "static",
+        "libc": "android",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "aarch64"
     },
     {
         "system": "Linux",
         "machine": "riscv64",
         "pointer_size": 64,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnu",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "riscv64"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "riscv64"
     },
     {
         "system": "Linux",
         "machine": "aarch64",
         "pointer_size": 64,
-        "libdir": "~/.local/lib",
         "sysname": "linux",
-        "link_type": "dynamic",
+        "link_type": "static",
         "libc": "musl",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "aarch64"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "aarch64"
     },
     {
         "system": "Linux",
         "machine": "armv6l",
         "pointer_size": 32,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnueabihf",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "arm"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "arm"
     },
     {
         "system": "Linux",
         "machine": "armv7l",
         "pointer_size": 32,
-        "libdir": "",
         "sysname": "linux",
         "link_type": "static",
         "libc": "gnueabihf",
-        "so_name": "libcurl-impersonate.so",
-        "so_arch": "arm"
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "arm"
     }
 ]

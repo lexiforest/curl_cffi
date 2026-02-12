@@ -1,11 +1,12 @@
 [project]
 name = "curl_cffi"
-version = "0.14.0"
+version = "0.15.0b4"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
-license = { text = "MIT License" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
-    "cffi>=1.12.0",
+    "cffi>=2.0.0",
     "certifi>=2024.2.2",
 ]
 readme = "README.md"
@@ -20,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Free Threading",
 ]
 
 
@@ -32,7 +34,7 @@ extra = [
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
-    "cryptography>=42.0.5,<43.0",
+    "cryptography>=46.0.4,<47.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "mypy>=1.9.0,<2.0",
     "pytest>=8.1.1,<9.0",
@@ -51,8 +53,8 @@ build = [
 ]
 test = [
     "charset_normalizer>=3.3.2,<4.0",
-    "cryptography>=42.0.5,<43.0",
-    "fastapi>=0.110.0,<1.0",
+    "cryptography>=46.0.4,<47.0",
+    "litestar>=2.19.0,<3.0",
     "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "proxy.py>=2.4.3,<3.0",
     "pytest>=8.1.1,<9.0",
@@ -70,7 +72,7 @@ test = [
 curl-cffi = "curl_cffi.cli:main"
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi>=1.12.0"]
+requires = ["wheel", "setuptools", "cffi>=2.0.0"]
 build-backend = "setuptools.build_meta"
 
 
@@ -86,7 +88,6 @@ build = [
     "cp310-macosx_arm64",
     "cp310-win_amd64",
     "cp310-win_arm64",
-    # "cp310-win32",
     "cp310-manylinux_x86_64",
     "cp310-manylinux_aarch64",
     "cp310-manylinux_riscv64",
@@ -94,6 +95,15 @@ build = [
     "cp310-manylinux_armv7l",
     "cp310-musllinux_x86_64",
     "cp310-musllinux_aarch64",
+    # Free-threaded (PEP 703) wheels
+    "cp314t-macosx_x86_64",
+    "cp314t-macosx_arm64",
+    "cp314t-win_amd64",
+    "cp314t-win_arm64",
+    "cp314t-manylinux_x86_64",
+    "cp314t-manylinux_aarch64",
+    "cp314t-musllinux_x86_64",
+    "cp314t-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
@@ -103,6 +113,7 @@ test-extras = ["test"]
 test-skip = [
     "cp310-manylinux_i686",
     "cp310-win_arm64",
+    "cp314t-win_arm64",
     "cp310-manylinux_armv7l",
     "cp310-manylinux_riscv64",
 ]
@@ -112,8 +123,14 @@ build-verbosity = 1
 # configure cibuildwheel to build native archs ('auto'), and some emulated ones
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64", "riscv64", "i686", "armv7l"]
+manylinux-x86_64-image = "manylinux2014"
+manylinux-aarch64-image = "manylinux2014"
+manylinux-i686-image = "manylinux2014"
 environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
 environment-pass = ["LD_LIBRARY_PATH"]
+
+[tool.cibuildwheel.android]
+archs = ["arm64_v8a", "x86_64"]
 
 
 [tool.cibuildwheel.macos]
@@ -121,7 +138,7 @@ before-all = "gmake preprocess"
 
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
-repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32 -w {dest_dir} {wheel}"
+repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32;./libarm64 -w {dest_dir} {wheel}"
 
 
 [tool.pytest.ini_options]
@@ -150,7 +167,7 @@ profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 ignore_missing_imports = true
 #warn_unused_ignores = true
 #strict = true

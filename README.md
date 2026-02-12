@@ -3,7 +3,7 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/curl-cffi/week)](https://pepy.tech/projects/curl-cffi)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
-[![Generic badge](https://img.shields.io/badge/Telegram%20Group-join-blue?logo=telegram)](https://t.me/real_curl_cffi)
+[![Generic badge](https://img.shields.io/badge/Telegram%20Channel-join-blue?logo=telegram)](https://t.me/impersonate_pro)
 [![Generic badge](https://img.shields.io/badge/Discord-join-purple?logo=blue)](https://discord.gg/kJqMHHgdn2)
 
 [Documentation](https://curl-cffi.readthedocs.io)
@@ -16,7 +16,7 @@ python http clients like `httpx` or `requests`, `curl_cffi` can impersonate
 browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Python 3.9 is the minimum supported version since v0.10.
+Python 3.10 is the minimum supported version since v0.14.
 
 ## Recall.ai - API for meeting recordings
 
@@ -42,7 +42,7 @@ Maintenance of this project is made possible by all the <a href="https://github.
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
-to register: https://yescaptcha.com/i/stfnIO
+to register: <https://yescaptcha.com/i/stfnIO>
 
 ------
 
@@ -81,6 +81,7 @@ No browser automation. Just simple API calls that return the exact cookies and h
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
 Notes:
+
 1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
 2. Since v0.11.4.
 
@@ -91,6 +92,10 @@ Notes:
 This should work on Linux, macOS and Windows out of the box.
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
+
+Android support, including Termux, is currently in beta, you can install the beta release for testing.
+For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
+If you are using these OSes, please lend an hand.
 
 To install beta releases:
 
@@ -103,16 +108,11 @@ To install unstable version from GitHub:
     make preprocess
     pip install .
 
-On macOS, you may need to install the following dependencies:
-
-    brew install zstd nghttp2
-
 ## Usage
 
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
 
 ### requests-like
-
 
 ```python
 import curl_cffi
@@ -180,12 +180,12 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>|chrome132, chrome134, chrome135|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142|chrome132, chrome134, chrome135|
 |Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
 |Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
 |Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
-|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144|coming soon|
 |Firefox Android|N/A|firefox135_android|
 |Tor|tor145 <sup>[7]</sup>|coming soon|
 |Edge|edge99, edge101|edge133, edge135|
@@ -194,6 +194,7 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 
 Notes:
+
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
@@ -237,7 +238,6 @@ async with AsyncSession() as s:
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
 
-
 ### WebSockets
 
 ```python
@@ -256,13 +256,11 @@ ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 import asyncio
 from curl_cffi import AsyncSession
 
-async with AsyncSession() as s:
-    ws = await s.ws_connect("wss://echo.websocket.org")
-    await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-    await ws.flush()
-    async for message in ws:
-        print(message)
-    await ws.close()
+async with AsyncSession() as session:
+    async with session.ws_connect("wss://echo.websocket.org") as ws:
+        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+        async for message in ws:
+            print(message)
 ```
 
 ## Ecosystem

@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import inspect
 from dataclasses import dataclass
 import json
 import os
@@ -25,8 +26,9 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     load_pem_private_key,
 )
-from fastapi import FastAPI, Form, UploadFile
 from httpx import URL
+from litestar import Litestar, Request, post
+from litestar.datastructures import UploadFile
 from uvicorn.config import Config
 from uvicorn.main import Server
 
@@ -769,12 +771,68 @@ class FileServer(uvicorn.Server):
         return f"http://{self.config.host}:{self.config.port}"
 
 
-file_app = FastAPI()
+def _form_getlist(form: typing.Any, key: str) -> list[typing.Any]:
+    getlist = getattr(form, "getlist", None)
+    if callable(getlist):
+        values = list(getlist(key))
+        if values:
+            return values
+    multi_items = getattr(form, "multi_items", None)
+    if callable(multi_items):
+        values = [v for k, v in multi_items() if k == key]
+        if values:
+            return values
+    items = getattr(form, "items", None)
+    if callable(items):
+        try:
+            values = [v for k, v in items(multi=True) if k == key]
+            if values:
+                return values
+        except TypeError:
+            pass
+        try:
+            values = [v for k, v in items() if k == key]
+            if values:
+                return values
+        except Exception:
+            pass
+    get = getattr(form, "get", None)
+    if callable(get):
+        value = get(key)
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        return [value]
+    return []
 
 
-@file_app.post("/file")
-def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)):
-    content = image.file.read()
+async def _read_upload(upload: UploadFile) -> bytes:
+    read = getattr(upload, "read", None)
+    if callable(read):
+        data = read()
+        if inspect.isawaitable(data):
+            return await data
+        return data
+    file_obj = getattr(upload, "file", None)
+    if file_obj is not None:
+        return file_obj.read()
+    return b""
+
+
+def _normalize_form_value(value: typing.Any) -> typing.Any:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
+
+
+@post("/file", status_code=200)
+async def upload_single_file(request: Request) -> dict[str, typing.Any]:
+    form = await request.form()
+    image_list = _form_getlist(form, "image")
+    image = image_list[0] if image_list else None
+    foo = _normalize_form_value(getattr(form, "get", lambda _k: None)("foo"))
+    content = await _read_upload(image)
     return {
         "foo": foo,
         "filename": image.filename,
@@ -783,11 +841,13 @@ def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)
     }
 
 
-@file_app.post("/files")
-def upload_multi_files(images: list[UploadFile]):
+@post("/files", status_code=200)
+async def upload_multi_files(request: Request) -> dict[str, typing.Any]:
+    form = await request.form()
+    images = _form_getlist(form, "images")
     files = []
     for image in images:
-        content = image.file.read()
+        content = await _read_upload(image)
         files.append(
             {
                 "filename": image.filename,
@@ -799,17 +859,26 @@ def upload_multi_files(images: list[UploadFile]):
     return {"files": files}
 
 
-@file_app.post("/two-files")
-def upload_two_files(image1: UploadFile, image2: UploadFile):
+@post("/two-files", status_code=200)
+async def upload_two_files(request: Request) -> dict[str, int]:
+    form = await request.form()
+    image1_list = _form_getlist(form, "image1")
+    image2_list = _form_getlist(form, "image2")
+    image1 = image1_list[0] if image1_list else None
+    image2 = image2_list[0] if image2_list else None
     return {
-        "size1": len(image1.file.read()),
-        "size2": len(image2.file.read()),
+        "size1": len(await _read_upload(image1)),
+        "size2": len(await _read_upload(image2)),
     }
+
+
+file_app = Litestar(
+    route_handlers=[upload_single_file, upload_multi_files, upload_two_files]
+)
 
 
 @pytest.fixture(scope="session")
 def file_server():
-    FastAPI()
     config = uvicorn.Config(file_app, host="127.0.0.1", port=2952, log_level="info")
     server = FileServer(config=config)
     with server.run_in_thread():
