@@ -615,9 +615,6 @@ class Session(BaseSession[R]):
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
-        """Send the request, see ``requests.request`` for details on parameters."""
-
-        self._check_session_closed()
 
         # clone a new curl instance for streaming response
         if stream:
@@ -754,7 +751,7 @@ class Session(BaseSession[R]):
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
-        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
@@ -1345,7 +1342,7 @@ class AsyncSession(BaseSession[R]):
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
-        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
