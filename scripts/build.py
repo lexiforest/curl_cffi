@@ -108,9 +108,7 @@ def get_curl_archives():
     if is_static:
         # note that the order of libraries matters
         # https://stackoverflow.com/a/36581865
-        return [
-            str(libdir / arch["obj_name"])
-        ]
+        return [str(libdir / arch["obj_name"])]
     else:
         return []
 
