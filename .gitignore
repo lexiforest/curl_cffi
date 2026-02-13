@@ -24,3 +24,4 @@ include/
 .mypy_cache/
 .ruff_cache/
 .aider*
+docs/_build/
