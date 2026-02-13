@@ -11,20 +11,6 @@ WebSockets
 
    Unless you are strictly bound to a synchronous environment, we strongly recommend using the **Async** API described below for all use cases.
 
-Async WebSockets
-================
-
-The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performance asyncio applications. It supports standard features like text/binary frames, pings, and automatic handling of control frames.
-
-**Architecture**
-
-The implementation uses a **decoupled I/O model**:
-
-1.  **Sending** puts messages into a queue (non-blocking unless the queue is full).
-2.  **Receiving** pulls from a queue populated by a dedicated background task.
-
-This ensures high concurrency and prevents slow processing logic from blocking the underlying network socket (ping/pongs).
-
 Quick Start
 ===========
 
@@ -42,7 +28,7 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
     from curl_cffi import AsyncSession
 
     async def main():
-        async with AsyncSession() as s:
+        async with AsyncSession() as session:
             # Connect using the standard context manager syntax
             async with session.ws_connect("wss://echo.websocket.org") as ws:
 
@@ -59,6 +45,20 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
 
     asyncio.run(main())
 
+Async WebSockets
+================
+
+The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performance asyncio applications. It supports standard features like text/binary frames, pings, and automatic handling of control frames.
+
+**Architecture**
+
+This implementation uses a **decoupled I/O model** to ensure high performance:
+
+1.  **Outgoing**: Messages are queued for delivery (non-blocking unless queue full).
+2.  **Incoming**: A background task continuously reads from the network and populates a receive queue.
+
+This design decouples your application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
+
 Connecting
 ==========
 
@@ -72,9 +72,9 @@ Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same networ
 
 .. code-block:: python
 
-    async with AsyncSession() as s:
+    async with AsyncSession() as session:
         # Session cookies are automatically included
-        s.cookies.set("session_id", "xyz")
+        session.cookies.set("session_id", "xyz")
 
         async with session.ws_connect(
             "wss://api.example.com/v1/stream",
@@ -88,7 +88,7 @@ Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same networ
 Sending Data
 ============
 
-Methods for sending data place the message into an outgoing queue. They are generally non-blocking unless the ``send_queue_size`` limit is reached.
+Methods for sending data place the message into an outgoing queue. They are generally non-blocking unless the send queue size limit is reached.
 
 .. code-block:: python
 
@@ -137,6 +137,8 @@ All receive methods support an optional ``timeout`` argument (in seconds).
     # Useful for inspecting frame types (e.g., checking for CONTINUATION flags)
     content, flags = await ws.recv()
 
+Concurrent calls to receive methods are fully supported. Messages are distributed to waiters in FIFO order, unlike many other libraries that limit consumption to a single task.
+
 Async Iteration
 ---------------
 
@@ -148,8 +150,8 @@ The most pythonic way to consume a stream is iteration.
 
 .. code-block:: python
 
-    async for chunk in ws:
-        print(chunk.decode("utf-8"))
+    async for message in ws:
+        print(message.decode("utf-8"))
 
 Lifecycle Management
 ====================
@@ -165,6 +167,11 @@ The context manager handles closing automatically. If you need to close manually
     # Or with a custom code/reason
     await ws.close(code=1000, message=b"bye")
 
+    # Forcefully terminate the connection
+    ws.terminate()
+
+Both methods are idempotent and safe to call multiple times. While ``close()`` waits for cleanup, ``terminate()`` is thread and task-safe, allowing for immediate disconnection from any thread without waiting for a graceful shutdown.
+
 Flushing
 --------
 
@@ -174,6 +181,8 @@ Because ``send()`` is decoupled from the network, returning from ``await send()`
 
     await ws.send_str("Critical Data")
     await ws.flush()  # Blocks until the send queue is empty
+
+You rarely need to call flush if ``send_queue_size`` is small (the default). Use it only when you must verify all messages are sent before the next step in your code.
 
 Error Handling
 ==============
@@ -205,9 +214,7 @@ You can control the internal buffer sizes to manage backpressure.
 
 *   **recv_queue_size** (default: 32): Max incoming messages to buffer.
 *   **send_queue_size** (default: 16): Max outgoing messages to buffer.
-*   **block_on_recv_queue_full** (default: ``True``):
-    *   If ``True``, the background reader pauses when the queue is full (TCP backpressure).
-    *   If ``False``, the connection fails with ``OUT_OF_MEMORY`` to prevent silent message loss or massive latency lag.
+*   **block_on_recv_queue_full** (default: ``True``): The background reader pauses when the queue is full (TCP backpressure). If ``False``, the connection will fail instead (``OUT_OF_MEMORY``) to avoid stalling the reader.
 
 .. code-block:: python
 
@@ -225,15 +232,15 @@ Message Limits
 
 .. code-block:: python
 
-    # Allow large payloads (e.g. 16MB)
+    # Allow large received payloads (e.g. 16MB)
     ws = await session.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
-There are no limits on the size of the message that can be sent. Messages larger than 64KB are broken into chunks of that size and sent using the ``CONT`` flag which means it arrives as a single logical message on the server.
+There are no limits on the size of the message that can be sent. Messages larger than 64KB are broken into chunks of that size and sent using the `CURLWS_CONT <https://everything.curl.dev/helpers/ws/write.html#curlws_cont>`_ flag which means it arrives as a single logical message on the server.
 
 Frame Coalescing (Throughput)
 -----------------------------
 
-For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple pending messages from the send queue into a single network packet.
+For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple queued message payloads from the send queue into a single message.
 
 *   **coalesce_frames** (default: ``False``): Enable batching.
 *   **max_send_batch_size** (default: 32): Max messages to merge.
@@ -246,8 +253,8 @@ For chatty protocols sending many small messages, you can enable **coalescing**.
 Reliability & Retries
 ---------------------
 
-*   **drain_on_error** (default: ``False``): If ``True``, when a network error occurs, ``recv()`` will continue to yield any buffered messages in the queue before raising the exception. Crucial for ensuring data integrity on unstable connections.
-*   **ws_retry**: A policy object to configure automatic retries on failed reads.
+*   **drain_on_error** (default: ``False``): When a network error occurs, ``recv()`` will continue to yield buffered messages in the queue before raising the exception. Helps ensure data integrity on unstable connections.
+*   **ws_retry**: A policy object to configure automatic retries on failed message receive operations.
 
 .. code-block:: python
 
@@ -270,8 +277,8 @@ Cooperative Multitasking
 
 To prevent the background I/O tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
 
-*   **recv_time_slice** (default: 0.005s): Max time spent processing incoming packets before yielding.
-*   **send_time_slice** (default: 0.001s): Max time spent writing packets before yielding.
+*   **recv_time_slice** (default: 0.005s): Max time spent processing incoming messages before yielding.
+*   **send_time_slice** (default: 0.001s): Max time spent sending messages before yielding.
 
 .. code-block:: python
 
