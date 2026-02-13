@@ -473,6 +473,8 @@ class Curl:
         """Reset all curl options, wrapper for ``curl_easy_reset``."""
         self._is_cert_set = False
         self._skip_cacert = False
+        if self._resolve != ffi.NULL:
+            lib.curl_slist_free_all(self._resolve)
         if self._curl is not None:
             lib.curl_easy_reset(self._curl)
             self._set_error_buffer()
