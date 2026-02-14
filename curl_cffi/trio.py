@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import Any, Optional
+from collections.abc import Coroutine, Callable, Awaitable
+from typing import Any, Optional, Generic, TypeVar
 
 try:
     import trio
@@ -16,13 +17,15 @@ __all__ = ["TrioAsyncCurl"]
 
 _NO_RESULT = object()
 
+_T = TypeVar("_T")
 
-class TrioFuture:
+
+class TrioFuture(Generic[_T]):
     """Trio shim for asyncio.Future, based on trio.Event"""
 
     def __init__(self) -> None:
         self._done = trio.Event()
-        self._result: Any = _NO_RESULT
+        self._result: _T = _NO_RESULT
         self._exception: Optional[BaseException] = None
         self._cancelled = False
 
@@ -38,7 +41,7 @@ class TrioFuture:
     def done(self) -> bool:
         return self._done.is_set()
 
-    def set_result(self, result: Any) -> None:
+    def set_result(self, result: _T) -> None:
         if self._done.is_set():
             return
         self._result = result
@@ -50,7 +53,7 @@ class TrioFuture:
         self._exception = exception
         self._done.set()
 
-    async def _wait(self) -> Any:
+    async def _wait(self) -> _T | None:
         await self._done.wait()
         if self._cancelled:
             raise trio.Cancelled()
@@ -64,16 +67,16 @@ class TrioFuture:
         return self._wait().__await__()
 
 
-class TrioTask:
-    def __init__(self, coro) -> None:
+class TrioTask(Generic[_T]):
+    def __init__(self, coro: Coroutine[Any, Any, _T]) -> None:
         self._cancel_scope = trio.CancelScope()
         self._done = trio.Event()
         self._exception: Optional[BaseException] = None
-        self._result: Any = _NO_RESULT
-        self._callbacks: list[Any] = []
+        self._result: _T = _NO_RESULT
+        self._callbacks: list[Callable[[TrioTask[_T]], None]] = []
         trio.lowlevel.spawn_system_task(self._runner, coro)
 
-    async def _runner(self, coro) -> None:
+    async def _runner(self, coro: Coroutine[Any, Any, _T]) -> None:
         try:
             with self._cancel_scope:
                 self._result = await coro
@@ -88,13 +91,13 @@ class TrioTask:
     def cancel(self) -> None:
         self._cancel_scope.cancel()
 
-    def add_done_callback(self, callback) -> None:
+    def add_done_callback(self, callback: Callable[[TrioTask[_T]], None]) -> None:
         if self._done.is_set():
             callback(self)
             return
         self._callbacks.append(callback)
 
-    async def _wait(self) -> Any:
+    async def _wait(self) -> _T | None:
         await self._done.wait()
         if isinstance(self._exception, trio.Cancelled):
             return None
@@ -108,12 +111,22 @@ class TrioTask:
         return self._wait().__await__()
 
 
-class TrioTimerHandle:
-    def __init__(self, delay: float, callback, *args: Any) -> None:
+class TrioTimerHandle(Generic[_T]):
+    def __init__(
+        self,
+        delay: float,
+        callback: Callable[..., None],
+        *args: Any,
+    ) -> None:
         self._cancel_scope = trio.CancelScope()
         trio.lowlevel.spawn_system_task(self._runner, delay, callback, args)
 
-    async def _runner(self, delay: float, callback, args) -> None:
+    async def _runner(
+        self,
+        delay: float,
+        callback: Callable[..., None],
+        args: tuple[Any, ...],
+    ) -> None:
         with self._cancel_scope, suppress(trio.Cancelled):
             await trio.sleep(delay)
             callback(*args)
@@ -122,12 +135,24 @@ class TrioTimerHandle:
         self._cancel_scope.cancel()
 
 
-class TrioFdWatcher:
-    def __init__(self, wait_fn, fd: int, callback, args: tuple[Any, ...]) -> None:
+class TrioFdWatcher(Generic[_T]):
+    def __init__(
+        self,
+        wait_fn: Callable[[int], Awaitable[None]],
+        fd: int,
+        callback: Callable[..., None],
+        args: tuple[Any, ...],
+    ) -> None:
         self._cancel_scope = trio.CancelScope()
         trio.lowlevel.spawn_system_task(self._runner, wait_fn, fd, callback, args)
 
-    async def _runner(self, wait_fn, fd: int, callback, args) -> None:
+    async def _runner(
+        self,
+        wait_fn: Callable[[int], Awaitable[None]],
+        fd: int,
+        callback: Callable[..., None],
+        args: tuple[Any, ...],
+    ) -> None:
         with self._cancel_scope:
             while True:
                 try:
@@ -160,14 +185,18 @@ class TrioAsyncCurl(BaseAsyncCurl):
         """Expose a loop-like interface to reuse the existing callbacks."""
         return self
 
-    def add_reader(self, fd: int, callback, *args: Any) -> None:
+    def add_reader(
+        self, fd: int, callback: Callable[[int, int], None], *args: Any
+    ) -> None:
         if fd in self._readers:
             self._readers[fd].cancel()
         self._readers[fd] = TrioFdWatcher(
             trio.lowlevel.wait_readable, fd, callback, args
         )
 
-    def add_writer(self, fd: int, callback, *args: Any) -> None:
+    def add_writer(
+        self, fd: int, callback: Callable[[int, int], None], *args: Any
+    ) -> None:
         if fd in self._writers:
             self._writers[fd].cancel()
         self._writers[fd] = TrioFdWatcher(
@@ -184,7 +213,9 @@ class TrioAsyncCurl(BaseAsyncCurl):
         if watcher:
             watcher.cancel()
 
-    def call_later(self, delay: float, callback, *args: Any) -> TrioTimerHandle:
+    def call_later(
+        self, delay: float, callback: Callable[..., Any], *args: Any
+    ) -> TrioTimerHandle:
         return TrioTimerHandle(delay, callback, *args)
 
     def create_task(self, coro) -> TrioTask:
