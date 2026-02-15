@@ -5,6 +5,10 @@ import re
 import struct
 import sys
 import warnings
+import os
+import shutil
+import tempfile
+import atexit
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -15,7 +19,67 @@ from ._wrapper import ffi, lib
 from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 from .utils import CurlCffiWarning
 
-DEFAULT_CACERT = certifi.where()
+# Global variable to store temporary certificate files for cleanup
+_temp_cert_files = []
+
+def _cleanup_temp_certs():
+    """Clean up temporary certificate files on exit."""
+    for temp_file in _temp_cert_files:
+        try:
+            if os.path.exists(temp_file):
+                os.unlink(temp_file)
+        except OSError:
+            pass  # Ignore cleanup errors
+    _temp_cert_files.clear()
+
+# Register cleanup function
+atexit.register(_cleanup_temp_certs)
+
+def _get_safe_cacert_path(cert_path: str) -> str:
+    """
+    Get a safe certificate path that works with curl on Windows.
+    
+    If the path contains non-ASCII characters, create a temporary copy
+    in an ASCII-safe location to work around curl's Unicode path limitations.
+    
+    Args:
+        cert_path: Original certificate path
+        
+    Returns:
+        Safe certificate path that curl can handle
+    """
+    try:
+        # Check if path contains non-ASCII characters
+        cert_path.encode('ascii')
+        return cert_path  # Path is ASCII-safe
+    except UnicodeEncodeError:
+        # Path contains non-ASCII characters, create temporary copy
+        try:
+            # Create temporary file in system temp directory (usually ASCII-safe)
+            temp_dir = tempfile.gettempdir()
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.pem', prefix='curl_cffi_cert_')
+            
+            # Copy certificate content to temporary file
+            with os.fdopen(temp_fd, 'wb') as temp_file:
+                with open(cert_path, 'rb') as orig_file:
+                    shutil.copyfileobj(orig_file, temp_file)
+            
+            # Track for cleanup
+            _temp_cert_files.append(temp_path)
+            
+            return temp_path
+        except (OSError, IOError) as e:
+            # If temporary file creation fails, fall back to original path
+            # This may still fail in curl, but at least we tried
+            warnings.warn(
+                f"Failed to create temporary certificate file: {e}. "
+                f"SSL verification may fail due to non-ASCII characters in path: {cert_path}",
+                CurlCffiWarning,
+                stacklevel=2
+            )
+            return cert_path
+
+DEFAULT_CACERT = _get_safe_cacert_path(certifi.where())
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
 STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
 
@@ -160,7 +224,9 @@ class Curl:
         self._headers = ffi.NULL
         self._proxy_headers = ffi.NULL
         self._resolve = ffi.NULL
-        self._cacert = cacert or DEFAULT_CACERT
+        # Ensure custom cacert paths are also Unicode-safe
+        raw_cacert = cacert or DEFAULT_CACERT
+        self._cacert = _get_safe_cacert_path(raw_cacert) if cacert else DEFAULT_CACERT
         self._is_cert_set = False
         self._skip_cacert = False
         self._write_handle: Any = None
@@ -403,6 +469,7 @@ class Curl:
             self._check_error(ret, "set cacert")
             ret = self.setopt(CurlOpt.PROXY_CAINFO, self._cacert)
             self._check_error(ret, "set proxy cacert")
+            self._is_cert_set = True
 
     def perform(self, clear_headers: bool = True, clear_resolve: bool = True) -> None:
         """Wrapper for ``curl_easy_perform``, performs a curl request.
