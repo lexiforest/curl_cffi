@@ -35,12 +35,26 @@ def clear_queue(q: queue.Queue):
 
 
 class Request:
-    """Representing a sent request."""
+    """Representing a sent request.
 
-    def __init__(self, url: str, headers: Headers, method: str):
+    Attributes:
+        url: request url.
+        headers: request headers.
+        method: request http method.
+        body: request body as bytes, or None if not provided.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        headers: Headers,
+        method: str,
+        body: Optional[bytes] = None,
+    ):
         self.url = url
         self.headers = headers
         self.method = method
+        self.body = body
 
 
 class Response:

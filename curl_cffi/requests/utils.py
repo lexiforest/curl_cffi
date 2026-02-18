@@ -429,6 +429,8 @@ def set_curl_options(
         raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
     if json is not None:
         body = dumps(json, separators=(",", ":")).encode()
+    body_provided = data is not None or json is not None
+    request_body = body if body_provided and multipart is None else None
 
     # Tell libcurl to be aware of bodies and related headers when,
     # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do
@@ -483,7 +485,7 @@ def set_curl_options(
 
     c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
-    req = Request(url, h, method)
+    req = Request(url, h, method, request_body)
 
     # cookies
     c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
