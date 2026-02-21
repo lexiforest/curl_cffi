@@ -160,6 +160,7 @@ class Curl:
         self._headers = ffi.NULL
         self._proxy_headers = ffi.NULL
         self._resolve = ffi.NULL
+        self._connect_to = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
         self._skip_cacert = False
@@ -321,6 +322,12 @@ class Curl:
                     resolve = resolve.encode()
                 self._resolve = lib.curl_slist_append(self._resolve, resolve)
             ret = lib._curl_easy_setopt(self._curl, option, self._resolve)
+        elif option == CurlOpt.CONNECT_TO:
+            for connect_to in value:
+                if isinstance(connect_to, str):
+                    connect_to = connect_to.encode()
+                self._connect_to = lib.curl_slist_append(self._connect_to, connect_to)
+            ret = lib._curl_easy_setopt(self._curl, option, self._connect_to)
         else:
             ret = lib._curl_easy_setopt(self._curl, option, c_value)
         self._check_error(ret, "setopt", option, value)
@@ -404,12 +411,18 @@ class Curl:
             ret = self.setopt(CurlOpt.PROXY_CAINFO, self._cacert)
             self._check_error(ret, "set proxy cacert")
 
-    def perform(self, clear_headers: bool = True, clear_resolve: bool = True) -> None:
+    def perform(
+        self,
+        clear_headers: bool = True,
+        clear_resolve: bool = True,
+        clear_connect_to: bool = True,
+    ) -> None:
         """Wrapper for ``curl_easy_perform``, performs a curl request.
 
         Parameters:
             clear_headers: clear header slist used in this perform
             clear_resolve: clear resolve slist used in this perform
+            clear_connect_to: clear connect_to slist used in this perform
 
         Raises:
             CurlError: if the perform was not successful.
@@ -427,7 +440,9 @@ class Curl:
             self._check_error(ret, "perform")
         finally:
             # cleaning
-            self.clean_handles_and_buffers(clear_headers, clear_resolve)
+            self.clean_handles_and_buffers(
+                clear_headers, clear_resolve, clear_connect_to
+            )
 
     def upkeep(self) -> int:
         if self._curl is None:
@@ -435,7 +450,10 @@ class Curl:
         return lib.curl_easy_upkeep(self._curl)
 
     def clean_handles_and_buffers(
-        self, clear_headers: bool = True, clear_resolve: bool = True
+        self,
+        clear_headers: bool = True,
+        clear_resolve: bool = True,
+        clear_connect_to: bool = True,
     ) -> None:
         """Clean up handles and buffers after ``perform`` and ``close``,
         called at the end of ``perform`` and ``close``."""
@@ -448,6 +466,11 @@ class Curl:
             if self._resolve != ffi.NULL:
                 lib.curl_slist_free_all(self._resolve)
             self._resolve = ffi.NULL
+
+        if clear_connect_to:
+            if self._connect_to != ffi.NULL:
+                lib.curl_slist_free_all(self._connect_to)
+            self._connect_to = ffi.NULL
 
         if clear_headers:
             if self._headers != ffi.NULL:
