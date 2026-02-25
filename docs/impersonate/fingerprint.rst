@@ -38,5 +38,5 @@ detection when using http/3.
 To check your browser's http3 & quic fingerprints, you can visit our `http/3 & quic fingerprints API <https://fp.impersonate.pro>`_ page.
 
 ``curl_cffi`` provides TLS and http/2 impersonation and http/3 protocol. Http/3 fingerprints
-support and UDP proxy support will be added in v0.15.
+support and UDP proxy support has been added in v0.15.
 

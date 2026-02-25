@@ -12,7 +12,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.4.2"
+__version__ = "1.5.0"
 
 
 def is_android_env() -> bool:
@@ -55,8 +55,11 @@ def detect_arch():
                     os.makedirs(tmpdir, exist_ok=True)
                     arch["libdir"] = tmpdir
                 else:
-                    tmpdir = tempfile.TemporaryDirectory()
-                    arch["libdir"] = tmpdir.name
+                    if arch.get("local_libdir"):
+                        arch["libdir"] = os.path.expanduser(arch["local_libdir"])
+                    else:
+                        tmpdir = tempfile.TemporaryDirectory()
+                        arch["libdir"] = tmpdir.name
             return arch
     raise Exception(f"Unsupported arch: {uname}")
 
