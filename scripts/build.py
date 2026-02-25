@@ -123,7 +123,7 @@ def get_curl_libraries():
             "Secur32",
             "wldap32",
             "Normaliz",
-            "libcurl",
+            "libcurl-impersonate",
             "zstd",
             "zlib",
             "ssl",
