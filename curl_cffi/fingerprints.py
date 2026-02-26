@@ -9,9 +9,6 @@ __all__ = [
     "Fingerprint",
     "FingerprintSpec",
     "FingerprintManager",
-    # Backward-compatible aliases.
-    "Profile",
-    "ProfileSpec",
 ]
 
 
@@ -26,8 +23,6 @@ Pro config example
 
 DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
 DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/impersonate")
-# Backward-compatible constant for external imports.
-CONFIG_DIR = DEFAULT_CONFIG_DIR
 
 
 @dataclass
@@ -68,6 +63,8 @@ class Fingerprint:
     http2_priority_exclusive: int | None = None
 
     http3_settings: str = ""
+    http3_pseudo_headers_order: str = ""
+    http3_tls_extension_order: str = ""
     quic_transport_parameters: str = ""
 
     header_lang: str = ""
@@ -75,12 +72,12 @@ class Fingerprint:
 
 # fmt: off
 ClientLiteral = Literal[
-    # browsers,
+    # browsers
     "chrome", "firefox", "edge", "brave", "opera", "brave", "operamini",
     "qihoo", "qq", "quark", "samsung", "sogou", "sogou_ie",
-    # http client,
+    # http client
     "volley", "okhttp", "webview",
-    # app with web view
+    # app with general web view
     "baidu", "wechat", "bing", "duckduckgo", "google", "yandex",
 ]
 # fmt: on
@@ -91,7 +88,7 @@ PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
 class FingerprintSpec:
     platform: str | None = None
     client: ClientLiteral | None = None
-    strategy: Literal["uniform", "market_share"] | None = "market_share"
+    strategy: Literal["uniform"] | None = "uniform"
 
 
 class FingerprintManager:
@@ -188,11 +185,6 @@ class FingerprintManager:
             json.dump(fingerprints, wf, indent=2)
         cls._load_fingerprints_cached.cache_clear()
 
-    @classmethod
-    def update_market_share(cls, api_root: str | None = None):
-        """Get the latest market share of browsers."""
-        api_root = api_root or cls.get_api_root()
-
     @staticmethod
     @cache
     def _load_fingerprints_cached(fingerprint_path: str) -> dict[str, Fingerprint]:
@@ -210,11 +202,6 @@ class FingerprintManager:
     @classmethod
     def load_fingerprints(cls) -> dict[str, Fingerprint]:
         return cls._load_fingerprints_cached(cls.get_fingerprint_path())
-
-    @staticmethod
-    @cache
-    def load_market_share():
-        return ...
 
     @staticmethod
     def _get_requests_module():

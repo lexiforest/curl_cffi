@@ -117,11 +117,7 @@ def get_fingerprints() -> list[dict[str, Any]]:
     return profiles
 
 
-@get("/marketshare", sync_to_thread=False)
-def get_market_share() -> None: ...
-
-
-app = Litestar(route_handlers=[get_fingerprints, get_market_share])
+app = Litestar(route_handlers=[get_fingerprints])
 
 
 @pytest.fixture(scope="session")

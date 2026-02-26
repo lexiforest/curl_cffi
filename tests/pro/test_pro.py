@@ -80,9 +80,3 @@ def test_using_profile():
     FingerprintManager.update_fingerprints("https://api.test")
     curl_cffi.get("https://www.google.com", impersonate="testing1024")
 
-
-@pytest.mark.skip()
-def test_update_market_share():
-    curl_cffi.get("https://www.google.com", impersonate="testing1024")
-    FingerprintManager.update_market_share(api_root="https://api.test")
-    curl_cffi.get("https://www.google.com", impersonate="real_world")
