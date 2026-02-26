@@ -101,7 +101,7 @@ REAL_TARGET_MAP = {
 }
 
 
-def normalize_browser_type(item):
+def normalize_browser_type(item: BrowserTypeLiteral) -> BrowserTypeLiteral:
     if item == "chrome":  # noqa: SIM116
         return DEFAULT_CHROME
     elif item == "edge":
