@@ -26,6 +26,8 @@ to specify your own customized fingerprints. See below for details.
 - chrome131 :sup:`4`
 - chrome133a :sup:`5` :sup:`6`
 - chrome136 :sup:`7`
+- chrome142
+- chrome145 :sup:`9`
 - chrome99_android
 - chrome131_android :sup:`4`
 - edge99
@@ -41,6 +43,9 @@ to specify your own customized fingerprints. See below for details.
 - safari260 :sup:`8`
 - safari260_ios :sup:`8`
 - firefox133 :sup:`5`
+- firefox135 :sup:`7`
+- firefox144
+- firefox147 :sup:`9`
 - tor145 :sup:`7`
 
 Notes:
@@ -53,12 +58,13 @@ Notes:
 6. The version postfix ``-a``(e.g. ``chrome133a``) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
 7. Added in version ``0.11.0``
 8. Added in version ``0.12.0``
+9. ``chrome145`` and ``firefox147`` support http3.
 
 Which target version to use?
 ----------------------------
 
-Generally speaking, you should use the latest Chrome or Safari versions. As of v0.11, they're
-``chrome136``, ``safari184`` and ``safari184_ios``. To always impersonate the latest available
+Generally speaking, you should use the latest Chrome or Safari versions. Currently, they're
+``chrome145``, ``safari260`` and ``safari260_ios``. To always impersonate the latest available
 browser versions, you can simply use ``chrome``, ``firefox``, ``safari`` and ``chrome_android``, ``safari_ios``.
 
 .. code-block:: python

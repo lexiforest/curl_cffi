@@ -443,19 +443,14 @@ def set_curl_options(
 
     # headers
     base_headers, headers = headers_list
+
     # let headers encoding take precedence over base headers encoding
     encoding = headers.encoding if isinstance(headers, Headers) else None
     h = Headers(base_headers, encoding=encoding)
     h.update(headers)
 
-    # remove Host header if it's unnecessary, otherwise curl may get confused.
-    # Host header will be automatically added by curl if it's not present.
-    # https://github.com/lexiforest/curl_cffi/issues/119
-    host_header = h.get("Host")
-    if host_header is not None:
-        u = urlparse(url)
-        if host_header == u.netloc or host_header == u.hostname:
-            h.pop("Host", None)
+    # Previously we removed Host for https://github.com/lexiforest/curl_cffi/issues/119
+    # Since curl-impersonate 1.5.0, curl always use Host parsed from url as cookiehost
 
     # Make curl always include empty headers.
     # See: https://stackoverflow.com/a/32911474/1061155
@@ -630,6 +625,11 @@ def set_curl_options(
             c.setopt(CurlOpt.SSLCERT, cert)
             c.setopt(CurlOpt.SSLKEY, key)
 
+    # http_version, before impersonation, which relies on checking if user wants http/3
+    if http_version:
+        http_version = normalize_http_version(http_version)
+        c.setopt(CurlOpt.HTTP_VERSION, http_version)
+
     # impersonate
     if impersonate:
         impersonate = normalize_browser_type(impersonate)
@@ -673,11 +673,6 @@ def set_curl_options(
                 stacklevel=1,
             )
         set_akamai_options(c, akamai)
-
-    # http_version, after impersonate, which will change this to http2
-    if http_version:
-        http_version = normalize_http_version(http_version)
-        c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
     buffer = None
     q = None
