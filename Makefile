@@ -5,6 +5,12 @@ SHELL := bash
 VERSION := 1.5.1
 CURL_VERSION := curl-8_15_0
 
+ifeq ($(OS),Windows_NT)
+    CURRENT_USER := $(shell echo %USERNAME%)
+else
+    CURRENT_USER := $(shell whoami)
+endif
+
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
 	unzip -q -o curl.zip
@@ -28,7 +34,7 @@ curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
 	touch .preprocessed
 
 local-curl: $(CURL_VERSION)
-	cp /usr/local/lib/libcurl-impersonate* /Users/runner/work/_temp/install/lib/
+	cp /usr/local/lib/libcurl-impersonate* /Users/$(CURRENT_USER)/work/_temp/install/lib/
 	cd $(CURL_VERSION)
 	for p in ../curl-impersonate/patches/curl*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
