@@ -4,6 +4,7 @@ from dataclasses import dataclass, field, fields
 from datetime import datetime
 from functools import cache
 from typing import Literal
+from urllib.request import Request, urlopen
 
 __all__ = [
     "Fingerprint",
@@ -16,7 +17,7 @@ __all__ = [
 Pro config example
 {
     "api_key": "imp_xxxxxx",
-    "updated_at": "2025-08-26 18:01:01" | null
+    "updated_at": "2025-08-26 18:01:01"
 }
 """
 
@@ -92,12 +93,10 @@ class FingerprintSpec:
 
 
 class FingerprintManager:
-    DEFAULT_API_ROOT = DEFAULT_API_ROOT
-    DEFAULT_CONFIG_DIR = DEFAULT_CONFIG_DIR
 
     @classmethod
     def get_config_dir(cls) -> str:
-        return os.environ.get("IMPERSONATE_CONFIG_DIR", cls.DEFAULT_CONFIG_DIR)
+        return os.environ.get("IMPERSONATE_CONFIG_DIR", DEFAULT_CONFIG_DIR)
 
     @classmethod
     def get_config_path(cls) -> str:
@@ -105,27 +104,31 @@ class FingerprintManager:
 
     @classmethod
     def get_fingerprint_path(cls) -> str:
-        return os.path.join(cls.get_config_dir(), "profiles.json")
+        return os.path.join(cls.get_config_dir(), "fingerprints.json")
 
     @classmethod
     def get_api_root(cls) -> str:
-        return os.environ.get("IMPERSONATE_API_ROOT", cls.DEFAULT_API_ROOT)
+        return os.environ.get("IMPERSONATE_API_ROOT", DEFAULT_API_ROOT)
 
-    @staticmethod
-    @cache
-    def _is_pro_cached(config_path: str) -> bool:
+    @classmethod
+    def get_api_key(cls) -> str | None:
+        config_path = cls.get_config_path()
         if not os.path.exists(config_path):
-            return False
+            return None
         with open(config_path) as f:
             try:
                 config = json.load(f)
             except json.JSONDecodeError:
-                return False
-        return config.get("api_key") not in [None, ""]
+                return None
+        api_key = config.get("api_key")
+        if isinstance(api_key, str) and api_key:
+            return api_key
+        return None
 
     @classmethod
+    @cache
     def is_pro(cls) -> bool:
-        return cls._is_pro_cached(cls.get_config_path())
+        return cls.get_api_key() is not None
 
     @classmethod
     def enable_pro(cls, api_key: str) -> None:
@@ -146,20 +149,20 @@ class FingerprintManager:
         config["update_time"] = datetime.utcnow().isoformat()
         with open(config_file, "w") as f:
             json.dump(config, f, indent=4)
-        cls._is_pro_cached.cache_clear()
+        cls.is_pro.cache_clear()
 
     @classmethod
-    def update_fingerprints(
-        cls,
-        api_root: str | None = None,
-        session_token: str | None = None,
-    ) -> None:
+    def update_fingerprints(cls, api_root: str | None = None) -> None:
         """Get the latest fingerprints for impersonating."""
         api_root = api_root or cls.get_api_root()
-        requests_module = cls._get_requests_module()
         url = f"{api_root.rstrip('/')}/fingerprints"
-        r = requests_module.get(url)
-        data = r.json()
+        headers = {}
+        api_key = cls.get_api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        request = Request(url, headers=headers, method="GET")
+        with urlopen(request) as response:
+            data = json.loads(response.read())
         items = data.get("items") if isinstance(data, dict) else data
         if not isinstance(items, list):
             raise ValueError("Fingerprints API returned unexpected payload.")
@@ -183,12 +186,12 @@ class FingerprintManager:
             os.makedirs(config_dir)
         with open(cls.get_fingerprint_path(), "w") as wf:
             json.dump(fingerprints, wf, indent=2)
-        cls._load_fingerprints_cached.cache_clear()
+        cls.load_fingerprints.cache_clear()
 
-    @staticmethod
+    @classmethod
     @cache
-    def _load_fingerprints_cached(fingerprint_path: str) -> dict[str, Fingerprint]:
-        with open(fingerprint_path) as f:
+    def load_fingerprints(cls) -> dict[str, Fingerprint]:
+        with open(cls.get_fingerprint_path()) as f:
             fingerprints = json.loads(f.read())
         allowed = {item.name for item in fields(Fingerprint)}
         parsed = {}
@@ -198,18 +201,3 @@ class FingerprintManager:
             filtered = {k: v for k, v in payload.items() if k in allowed}
             parsed[key] = Fingerprint(**filtered)
         return parsed
-
-    @classmethod
-    def load_fingerprints(cls) -> dict[str, Fingerprint]:
-        return cls._load_fingerprints_cached(cls.get_fingerprint_path())
-
-    @staticmethod
-    def _get_requests_module():
-        from . import requests
-
-        return requests
-
-
-# Backward-compatible aliases.
-Profile = Fingerprint
-ProfileSpec = FingerprintSpec

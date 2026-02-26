@@ -39,20 +39,22 @@ def mock_profiles_api(monkeypatch):
     ]
 
     class DummyResponse:
-        def json(self):
-            return payload
+        def __enter__(self):
+            return self
 
-    class DummyRequests:
-        @staticmethod
-        def get(url, cookies=None):
-            assert url.endswith("/fingerprints")
-            return DummyResponse()
+        def __exit__(self, exc_type, exc, tb):
+            return False
 
-    monkeypatch.setattr(
-        FingerprintManager,
-        "_get_requests_module",
-        staticmethod(lambda: DummyRequests()),
-    )
+        def read(self):
+            return json.dumps(payload).encode()
+
+    def dummy_urlopen(request):
+        assert request.full_url.endswith("/fingerprints")
+        headers = dict(request.header_items())
+        assert headers.get("Authorization") == f"Bearer {TESTING_API_KEY}"
+        return DummyResponse()
+
+    monkeypatch.setattr("curl_cffi.fingerprints.urlopen", dummy_urlopen)
 
 
 def test_is_pro():
@@ -79,4 +81,3 @@ def test_single_fingerprint(mock_profiles_api):
 def test_using_profile():
     FingerprintManager.update_fingerprints("https://api.test")
     curl_cffi.get("https://www.google.com", impersonate="testing1024")
-
