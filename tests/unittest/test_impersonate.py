@@ -16,6 +16,11 @@ def test_impersonate_with_version(server):
     assert r.status_code == 200
 
 
+def test_impersonate_with_version_v1_1_string(server):
+    r = requests.get(str(server.url), impersonate="chrome120", http_version="v1")
+    assert r.status_code == 200
+
+
 def test_impersonate_without_version(server):
     r = requests.get(
         str(server.url), impersonate="chrome", http_version=CurlHttpVersion.V1_1

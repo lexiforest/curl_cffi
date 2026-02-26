@@ -55,18 +55,19 @@ dumps_partial: partial[str] = partial(json_dumps, separators=(",", ":"))
 
 @dataclass
 class WebSocketRetryStrategy:
-    """Configurable WebSocket behaviour for retrying failed message receives.
+    """Configurable WebSocket policy for retrying failed message receives.
 
     When enabled, each failed receive attempt will use exponential backoff with
     jitter.
 
     Calculation: ``delay * 2^(count - 1) ± 10%``
 
-    retry: Enable or disable WebSocket message receive retries.
-    delay: The base value (seconds) to compute the retry delay from.
-    count: How many times to retry a receive operation before giving up.
-    codes: Set of ``CurlECode`` values for which the receive operation
-        should be retried. Default is ``CurlECode.RECV_ERROR``.
+    Args:
+        retry: Enable or disable WebSocket message receive retry policy.
+        delay: The base value (seconds) to compute the retry delay from.
+        count: How many times to retry a receive operation before giving up.
+        codes: Set of ``CurlECode`` values for which the receive operation
+            should be retried. Default is ``CurlECode.RECV_ERROR``.
     """
 
     retry: bool = False
@@ -357,15 +358,13 @@ class WebSocket(BaseWebSocket):
             akamai: akamai string to impersonate.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
-            default_encoding: encoding for decoding response content if charset is not
-                found in headers. Defaults to "utf-8". Can be set to a callable for
-                automatic detection.
-            quote: Set characters to be quoted, i.e. percent-encoded. Default safe
-                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a sting, the character
-                will be removed from the safe string, thus quoted. If set to False, the
-                url will be kept as is, without any automatic percent-encoding, you must
-                encode the URL yourself.
-            http_version: limiting http version, defaults to http2.
+            default_encoding: Encoding for decoding content if charset is not found.
+                Defaults to "utf-8".
+            quote: Set characters to be quoted (percent-encoded). Default safe
+                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a string, the characters
+                will be removed from the safe string. If set to ``False``, the URL
+                is used as-is (you must encode it yourself).
+            http_version: Limiting http version, defaults to http2.
             interface: which interface to use.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
@@ -706,82 +705,47 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> None:
         """Initializes an Async WebSocket session.
 
-        This class should not be instantiated directly. It is intended to be created
-        via the ``AsyncSession.ws_connect()`` method, which correctly handles setup and
-        initialization of the underlying I/O tasks. This object represents a single
-        WebSocket connection. Once closed, it cannot be reopened. A new instance must
-        be created to reconnect.
+        Do not instantiate this class directly. Use ``AsyncSession.ws_connect``.
 
-        This class implements the async context manager for lifecycle management,
-        so you can use it to close the connection automatically on exit:
+        This class implements an async context manager, closing the connection
+        automatically on exit:
 
-        ```python
-        session = AsyncSession(...)
-        async with session.ws_connect(...) as ws:
-            ...
-        ```
+        ::
 
-        Concise example:
+            async with AsyncSession() as session:
+                async with session.ws_connect("wss://api.example.com") as ws:
+                    await ws.send("Hello")
+                    msg = await ws.recv()
 
-        ```python
-        async with (
-            AsyncSession(...) as session,
-            session.ws_connect(...) as ws,
-        ):
-            ...
-        ```
+        Note:
+            Architecture: This uses a decoupled I/O model. Network operations run in
+            background tasks. Errors are raised in subsequent calls to send() or recv().
 
-        Important:
-            This WebSocket implementation uses a decoupled I/O model where network
-            operations occur in background tasks and errors are raised in subsequent
-            calls to :meth:`send()` or :meth:`recv()`.
+            Performance: The time_slice defaults (5ms read / 1ms write) favor reading
+            to compensate for libcurl's overhead. Increase these values to allocate more
+            CPU time to I/O operations at the cost of event loop latency.
 
         Args:
-            session (AsyncSession): An instantiated AsyncSession object.
-            curl (Curl): The underlying Curl to use.
-            autoclose (bool, optional): Close the WS on receiving a close frame.
-            debug (bool, optional): Enable debug messages. Defaults to False.
-            recv_queue_size (int, optional): The maximum number of incoming WebSocket
-                messages to buffer internally. This queue stores messages received by
-                the Curl socket that are waiting to be consumed by calling ``recv()``.
-            send_queue_size (int, optional): The maximum number of outgoing WebSocket
-                messages to buffer before applying network backpressure. When you call
-                ``send()`` the message is placed in this queue and transmitted when
-                the Curl socket is next available for sending.
-            max_send_batch_size (int, optional): The max number of messages per batch.
-            coalesce_frames (bool, optional): Combine multiple frames into a batch.
-            ws_retry (WebSocketRetryStrategy): Retry policy for WebSocket messages.
-            recv_time_slice (float): The maximum duration (in seconds) to process
-                incoming messages before yielding to the event loop.
-                Defaults to ``0.005`` (5ms).
-            send_time_slice (float): The maximum duration (in seconds) to process
-                outgoing messages before yielding to the event loop.
-                Defaults to ``0.001`` (1ms).
-            max_message_size (int): The maximum size of a complete received message.
-            drain_on_error (bool, optional): If ``True``, when a connection error
-                occurs, attempt to consume already-received buffered messages first,
-                before raising the error. Otherwise, raise it immediately (default).
-            block_on_recv_queue_full (bool, optional): If ``True``, the reader should
-                block when the receive queue is full. If set to ``False``, the
-                connection will be failed immediately to avoid silent message drops.
-                The message that caused the overflow is not delivered; any messages
-                already buffered may be drained if ``drain_on_error`` is set.
-                Full receive queues can be avoided by consuming messages faster,
-                or increasing the size of the receive queue.
-
-            If ``block_on_recv_queue_full`` is enabled, slow consumers may pause
-            the read loop, potentially causing heartbeat timeouts. Ensure consumption
-            keeps pace or increase ``recv_queue_size`` to mitigate this.
-
-            The time slice parameters control cooperative multitasking by defining how
-            long I/O tasks run before yielding. A larger slice allocates more CPU time
-            to that operation, effectively increasing its scheduling priority.
-            The defaults favor reading (5:1 ratio) to compensate for libcurl's higher
-            send overhead; adjust these values to tune prioritization as needed.
+            session (AsyncSession): The parent session object.
+            curl (Curl): The underlying Curl handle.
+            autoclose (bool): Automatically close on receiving a close frame.
+            debug (bool): Enable verbose debug logging.
+            recv_queue_size (int): Max number of incoming messages to buffer.
+            send_queue_size (int): Max number of outgoing messages to buffer.
+            max_send_batch_size (int): Max frames to coalesce per transmission.
+            coalesce_frames (bool): Combine small frame payloads to improve throughput.
+            ws_retry (WebSocketRetryStrategy): Retry configuration for failed receives.
+            recv_time_slice (float): Max seconds to read messages before yielding.
+            send_time_slice (float): Max seconds to write messages before yielding.
+            max_message_size (int): Max size (bytes) of a single received message.
+            drain_on_error (bool): Yield buffered messages before raising errors.
+            block_on_recv_queue_full (bool): Behavior when the receive queue is full.
+                If True (default), the reader blocks (may cause timeouts).
+                If False, the connection fails immediately to prevent data loss.
 
         See also:
-            https://curl.se/libcurl/c/curl_ws_recv.html
-            https://curl.se/libcurl/c/curl_ws_send.html
+            - https://curl.se/libcurl/c/curl_ws_recv.html
+            - https://curl.se/libcurl/c/curl_ws_send.html
         """
         super().__init__(curl=curl, autoclose=autoclose, debug=debug)
         self.session: AsyncSession[Response] = session
@@ -867,7 +831,11 @@ class AsyncWebSocket(BaseWebSocket):
         return self
 
     async def __anext__(self) -> bytes:
-        msg, flags = await self.recv()
+        try:
+            msg, flags = await self.recv()
+        except WebSocketClosed:
+            raise StopAsyncIteration from None
+
         if flags & CurlWsFlag.CLOSE:
             raise StopAsyncIteration
         return msg
@@ -1092,35 +1060,18 @@ class AsyncWebSocket(BaseWebSocket):
     ) -> None:
         """Send a data frame.
 
-        There are no limits on the size of a message that can be sent.
-
-        Libcurl supports frames up to ``65536`` bytes. Larger payloads are split into
-        continuation frames but they arrive as a single logical WebSocket message.
+        Large payloads are automatically split into fragments but arrive as a
+        single logical message.
 
         Args:
-            payload: Data to send. ``str`` is encoded as ``UTF-8``;
-            ``bytes``, ``bytearray``, and ``memoryview`` are sent as-is.
-            flags: Bitmask of frame flags (text/binary). Defaults to
-            ``CurlWsFlag.BINARY``.
-            timeout: Maximum time in seconds to wait if the send queue is full. If
-            ``None`` (default), waits indefinitely until space is available.
+            payload: Data to send (``str``/``bytes``/``bytearray``/``memoryview``).
+            flags: Frame type flags (e.g., ``CurlWsFlag.TEXT``).
+            timeout: Max seconds to wait if the send queue is full.
 
-        Raises:
-            WebSocketClosed: If the connection is closed or terminating.
-            WebSocketTimeout: If the send queue is full and ``timeout`` expires.
-            WebSocketError: If a network-level transport error occurs.
-
-        Notes:
-            This is a lightweight, non-blocking call that queues the payload
-            for sending. Actual network transmission is performed by a background
-            task. To ensure all queued messages have been handed to libcurl,
-            call ``await ws.flush()``. This method does not wait for network
-            acknowledgement. Network errors during transmission will be raised
-            by the next call to ``recv()`` or ``send()``.
-
-            ``WebSocketError`` exceptions may have originated from a prior
-            ``send()`` or ``recv()`` operation, since all operations
-            share the same transport state once a failure occurs.
+        Warning:
+            This method is non-blocking. It queues the message for background
+            transmission. Use ``await ws.flush()`` to ensure data is sent to
+            the socket.
         """
         if self._transport_exception is not None:
             raise self._transport_exception
@@ -1233,21 +1184,19 @@ class AsyncWebSocket(BaseWebSocket):
         return await self.send(payload_bytes, CurlWsFlag.PING)
 
     async def close(
-        self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 5.0
+        self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 3.0
     ) -> None:
         """
         Performs a graceful WebSocket closing handshake and terminates the connection.
 
         This method sends a WebSocket close frame to the peer, waits for queued
-        outgoing messages to be sent, and then shuts down the connection. This is
-        the recommended way to close the session.
-
-        A graceful close is best-effort and may be skipped if termination occurs.
+        outgoing messages to be sent, and then shuts down the connection.
 
         Args:
-            code (int, optional): Close code. Defaults to ``WsCloseCode.OK``.
-            message (bytes, optional): Close reason. Defaults to ``b""``.
-            timeout (float, optional): How long in seconds to wait closed.
+            code (int): Close code. Defaults to ``WsCloseCode.OK``.
+            message (bytes): Close reason. Defaults to ``b""``.
+            timeout (float): How long (in seconds) to wait for the connection to close
+                gracefully before force-terminating.
         """
         async with self._close_lock:
             if self.closed:
@@ -1261,21 +1210,20 @@ class AsyncWebSocket(BaseWebSocket):
                     and not self._write_task.done()
                     and self._transport_exception is None
                 ):
+                    # Send Close Frame and wait for queue to empty
                     close_frame: bytes = self._pack_close_frame(code, message)
-                    with suppress(asyncio.TimeoutError):
-                        await asyncio.wait_for(
-                            self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
-                            timeout=timeout,
-                        )
-                    with suppress(
-                        WebSocketTimeout, WebSocketError, asyncio.CancelledError
-                    ):
-                        await self.flush(timeout)
+                    await asyncio.wait_for(
+                        self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
+                        timeout=timeout,
+                    )
+                    await self.flush(timeout)
+
+            except (asyncio.TimeoutError, WebSocketError):
+                pass
 
             finally:
+                # Ensure resources are cleaned up
                 self.terminate()
-
-                # Wait for the termination completion signal
                 with suppress(asyncio.TimeoutError):
                     _ = await asyncio.wait_for(self._terminated_event.wait(), timeout)
 
@@ -1298,14 +1246,27 @@ class AsyncWebSocket(BaseWebSocket):
             self._terminated = True
 
             loop: asyncio.AbstractEventLoop | None = self._loop
+
+            # Get the currently running event loop
+            try:
+                current_loop: asyncio.AbstractEventLoop | None = (
+                    asyncio.get_running_loop()
+                )
+            except RuntimeError:
+                current_loop = None
+
             try:
                 if loop is None:
                     raise RuntimeError("Event loop not available")
 
                 # Run the termination task
-                _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
+                if current_loop is not None and current_loop is loop:
+                    _ = loop.create_task(self._terminate_helper())
+                else:
+                    _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
 
-            except RuntimeError:
+            # pylint: disable-next=broad-exception-caught
+            except Exception:
                 try:
                     super().terminate()
                     if self.session and not self.session._closed:
@@ -1693,6 +1654,7 @@ class AsyncWebSocket(BaseWebSocket):
         create_future: Callable[[], asyncio.Future[None]] = loop.create_future
         add_writer: Callable[..., None] = loop.add_writer
         remove_writer: Callable[..., bool] = loop.remove_writer
+        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
         sock_fd: int = self._sock_fd
         time_slice: float = self._send_time_slice
         next_yield: float = loop_time() + time_slice
@@ -1702,12 +1664,11 @@ class AsyncWebSocket(BaseWebSocket):
         max_zero_writes: int = 3
 
         # Message specific values
-        view: memoryview = memoryview(payload)
-        total_bytes: int = view.nbytes
         base_flags: int = flags & ~cont_flag
+        view: memoryview = memoryview(payload)
+        total_bytes: int = len(view)
         offset: int = 0
-        zero_write_retries: int = 0
-        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
+        write_retries: int = 0
 
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
@@ -1733,14 +1694,11 @@ class AsyncWebSocket(BaseWebSocket):
 
                     # Raise AGAIN to jump to the existing wait logic below
                     if chunk_len > 0:
-                        zero_write_retries += 1
-                        if zero_write_retries >= max_zero_writes:
+                        write_retries += 1
+                        if write_retries >= max_zero_writes:
                             self._finalize_connection(
                                 WebSocketError(
-                                    (
-                                        "Writer stalled "
-                                        f"({zero_write_retries} attempts)."
-                                    ),
+                                    (f"Writer stalled ({write_retries} attempts)."),
                                     CurlECode.WRITE_ERROR,
                                 )
                             )
@@ -1748,8 +1706,8 @@ class AsyncWebSocket(BaseWebSocket):
 
                         raise CurlError("0 bytes sent", e_again)
 
-                if zero_write_retries:
-                    zero_write_retries = 0
+                if write_retries:
+                    write_retries = 0
 
                 offset += n_sent
 

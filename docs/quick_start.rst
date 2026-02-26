@@ -452,6 +452,24 @@ If you want to set a global option in ``Session``, you can use the same paramete
 
 For a complete list, see :doc:`api`
 
+Retries
+~~~~~~~
+
+Use ``retry`` to automatically re-run failed requests.
+
+.. code-block:: python
+
+    from curl_cffi import Session, RetryStrategy
+
+    # Simple count-based retries
+    with Session(retry=2) as s:
+        r = s.get("https://example.com")
+
+    # Custom strategy with delay/backoff/jitter
+    strategy = RetryStrategy(count=3, delay=0.2, jitter=0.1, backoff="exponential")
+    with Session(retry=strategy) as s:
+        r = s.get("https://example.com")
+
 Response vs Session cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -529,8 +547,8 @@ WebSockets
     def on_message(ws: WebSocket, message):
         print(message)
 
-    with Session() as s:
-        ws = s.ws_connect(
+    with Session() as session:
+        ws = session.ws_connect(
             "wss://api.gemini.com/v1/marketdata/BTCUSD",
             on_message=on_message,
         )
@@ -540,8 +558,8 @@ WebSockets
     import asyncio
     from curl_cffi import AsyncSession
 
-    async with AsyncSession() as s:
-        async with s.ws_connect("wss://echo.websocket.org") as ws:
+    async with AsyncSession() as session:
+        async with session.ws_connect("wss://echo.websocket.org") as ws:
             await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
             async for message in ws:
                 print(message)

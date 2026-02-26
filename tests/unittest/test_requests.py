@@ -2,6 +2,7 @@ import base64
 import json
 import time
 from io import BytesIO
+from uuid import uuid4
 
 import pytest
 from charset_normalizer import detect
@@ -412,6 +413,25 @@ def test_session_timeout(server):
         requests.Session(timeout=0.1).get(
             str(server.url.copy_with(path="/slow_response"))
         )
+
+
+def test_session_retry(server):
+    fail_key = uuid4().hex
+    fail_url = str(
+        server.url.copy_with(path="/retry_once", query=f"key={fail_key}".encode())
+    )
+    with pytest.raises(HTTPError):  # noqa: SIM117
+        with requests.Session(raise_for_status=True) as s:
+            s.get(fail_url)
+
+    retry_key = uuid4().hex
+    retry_url = str(
+        server.url.copy_with(path="/retry_once", query=f"key={retry_key}".encode())
+    )
+    with requests.Session(retry=1, raise_for_status=True) as s:
+        r = s.get(retry_url)
+    assert r.status_code == 200
+    assert r.content == b"ok"
 
 
 def test_post_timeout(server):
