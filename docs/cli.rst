@@ -29,8 +29,8 @@ Options:
 
 - ``-i, --impersonate``: browser target, defaults to ``chrome``.
 
-Update and list local fingerprints
-==================================
+Update and list fingerprints
+============================
 
 Download the latest fingerprints:
 
@@ -38,11 +38,17 @@ Download the latest fingerprints:
 
     curl-cffi update
 
-List cached fingerprints:
+List native + cached fingerprints in a table:
 
 .. code-block:: sh
 
     curl-cffi list
+
+Output fingerprints as JSON:
+
+.. code-block:: sh
+
+    curl-cffi list --json
 
 Configure API key
 =================

@@ -14,12 +14,295 @@ __all__ = [
 
 
 """
-Pro config example
+config example
 {
     "api_key": "imp_xxxxxx",
     "updated_at": "2025-08-26 18:01:01"
 }
 """
+
+NATIVE_IMPERSONATE_TARGETS = [
+    {
+        "browser": "Chrome",
+        "version": "99",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome99",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "100",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome100",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "101",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome101",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "104",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome104",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "107",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome107",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "110",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome110",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "116",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "chrome116",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "119",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "chrome119",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "120",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "chrome120",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "123",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "chrome123",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "124",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "chrome124",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "131",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "chrome131",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "133",
+        "os": "macOS",
+        "os_version": "Sequoia",
+        "target_name": "chrome133a",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "136",
+        "os": "macOS",
+        "os_version": "Sequoia",
+        "target_name": "chrome136",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "142",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "chrome142",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "145",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "chrome145",
+        "h3_fingerprints": True,
+    },
+    {
+        "browser": "Chrome",
+        "version": "99",
+        "os": "Android",
+        "os_version": "12",
+        "target_name": "chrome99_android",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Chrome",
+        "version": "131",
+        "os": "Android",
+        "os_version": "14",
+        "target_name": "chrome131_android",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Edge",
+        "version": "99",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "edge99",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Edge",
+        "version": "101",
+        "os": "Windows",
+        "os_version": "10",
+        "target_name": "edge101",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "15.3",
+        "os": "macOS",
+        "os_version": "Big Sur",
+        "target_name": "safari153",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "15.5",
+        "os": "macOS",
+        "os_version": "Monterey",
+        "target_name": "safari155",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "17.0",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "safari170",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "17.2",
+        "os": "iOS",
+        "os_version": "17.2",
+        "target_name": "safari172_ios",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "18.0",
+        "os": "macOS",
+        "os_version": "Sequoia",
+        "target_name": "safari180",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "18.0",
+        "os": "iOS",
+        "os_version": "18.0",
+        "target_name": "safari180_ios",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "18.4",
+        "os": "macOS",
+        "os_version": "Sequoia",
+        "target_name": "safari184",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "18.4",
+        "os": "iOS",
+        "os_version": "18.4",
+        "target_name": "safari184_ios",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "26.0",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "safari260",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
+        "version": "26.0",
+        "os": "iOS",
+        "os_version": "26.0",
+        "target_name": "safari260_ios",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Firefox",
+        "version": "133.0",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "firefox133",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Firefox",
+        "version": "135.0",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "firefox135",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Firefox",
+        "version": "144.0",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "firefox144",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Firefox",
+        "version": "147.0",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "firefox147",
+        "h3_fingerprints": True,
+    },
+    {
+        "browser": "Tor",
+        "version": "14.5",
+        "os": "macOS",
+        "os_version": "Sonoma",
+        "target_name": "tor145",
+        "h3_fingerprints": False,
+    },
+]
 
 
 DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
@@ -188,16 +471,76 @@ class FingerprintManager:
             json.dump(fingerprints, wf, indent=2)
         cls.load_fingerprints.cache_clear()
 
+    @staticmethod
+    def _parse_fingerprints(payload: dict[str, object]) -> dict[str, Fingerprint]:
+        allowed = {item.name for item in fields(Fingerprint)}
+        parsed: dict[str, Fingerprint] = {}
+        for key, value in payload.items():
+            if not isinstance(value, dict):
+                continue
+            filtered = {k: v for k, v in value.items() if k in allowed}
+            parsed[key] = Fingerprint(**filtered)
+        return parsed
+
+    @classmethod
+    def _load_native_fingerprints(cls) -> dict[str, Fingerprint]:
+        native_payload: dict[str, dict[str, str]] = {}
+        for item in NATIVE_IMPERSONATE_TARGETS:
+            target_name = item.get("target_name")
+            if not isinstance(target_name, str) or not target_name:
+                continue
+            browser = item.get("browser")
+            version = item.get("version")
+            os_name = item.get("os")
+            os_version = item.get("os_version")
+            native_payload[target_name] = {
+                "client": browser.lower() if isinstance(browser, str) else "",
+                "client_version": version if isinstance(version, str) else "",
+                "os": os_name if isinstance(os_name, str) else "",
+                "os_version": os_version if isinstance(os_version, str) else "",
+            }
+        return cls._parse_fingerprints(native_payload)
+
     @classmethod
     @cache
     def load_fingerprints(cls) -> dict[str, Fingerprint]:
-        with open(cls.get_fingerprint_path()) as f:
-            fingerprints = json.loads(f.read())
-        allowed = {item.name for item in fields(Fingerprint)}
-        parsed = {}
-        for key, payload in fingerprints.items():
-            if not isinstance(payload, dict):
-                continue
-            filtered = {k: v for k, v in payload.items() if k in allowed}
-            parsed[key] = Fingerprint(**filtered)
+        parsed = cls._load_native_fingerprints()
+        fingerprint_path = cls.get_fingerprint_path()
+        if os.path.exists(fingerprint_path):
+            with open(fingerprint_path) as f:
+                fingerprints = json.loads(f.read())
+            if isinstance(fingerprints, dict):
+                parsed.update(cls._parse_fingerprints(fingerprints))
         return parsed
+
+    @classmethod
+    def list_fingerprints(cls) -> list[dict[str, object]]:
+        native_lookup = {item["target_name"]: item for item in NATIVE_IMPERSONATE_TARGETS}
+        rows: list[dict[str, object]] = []
+        for name, fingerprint in sorted(cls.load_fingerprints().items()):
+            native = native_lookup.get(name)
+            if native:
+                rows.append(
+                    {
+                        "type": "builtin",
+                        "name": name,
+                        "browser": native.get("browser", ""),
+                        "version": native.get("version", ""),
+                        "os": native.get("os", ""),
+                        "os_version": native.get("os_version", ""),
+                        "h3_fingerprints": bool(native.get("h3_fingerprints", False)),
+                    }
+                )
+            else:
+                rows.append(
+                    {
+                        "type": "custom",
+                        "name": name,
+                        "browser": fingerprint.client,
+                        "version": fingerprint.client_version,
+                        "os": fingerprint.os,
+                        "os_version": fingerprint.os_version,
+                        "h3_fingerprints": fingerprint.http_version in ("v3", "v3only"),
+                    }
+                )
+        return rows

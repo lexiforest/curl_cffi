@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import platform
 import sys
@@ -32,10 +33,15 @@ def _add_update_parser(subparsers):
 
 
 def _add_list_parser(subparsers):
-    subparsers.add_parser(
+    list_parser = subparsers.add_parser(
         "list",
-        help="List local fingerprints",
-        description="List fingerprints stored on disk.",
+        help="List local and native fingerprints",
+        description="List local and native fingerprints.",
+    )
+    list_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output fingerprints as JSON.",
     )
 
 
@@ -67,6 +73,7 @@ def _print_doctor():
     fingerprint_exists = os.path.exists(fingerprint_path)
 
     print("curl-cffi doctor")
+    print("----------------")
     print(f"python: {sys.version.split()[0]}")
     print(f"executable: {sys.executable}")
     print(f"platform: {platform.platform()}")
@@ -79,7 +86,6 @@ def _print_doctor():
     print(f"api_key_configured: {FingerprintManager.is_pro()}")
     print(f"fingerprint_path: {fingerprint_path}")
     print(f"fingerprint_present: {fingerprint_exists}")
-    print(f"rvsd_session_token_set: {token_set}")
     try:
         fingerprints = FingerprintManager.load_fingerprints()
     except FileNotFoundError:
@@ -90,11 +96,59 @@ def _print_doctor():
         print(f"fingerprint_count: {len(fingerprints)}")
 
 
+def _format_cell(value):
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list | dict):
+        return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    return str(value)
+
+
+def _print_table(headers: list[str], rows: list[list[str]]):
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(cell))
+
+    def render_row(row_values: list[str]) -> str:
+        return " | ".join(
+            value.ljust(widths[idx]) for idx, value in enumerate(row_values)
+        )
+
+    print(render_row(headers))
+    print("-+-".join("-" * width for width in widths))
+    for row in rows:
+        print(render_row(row))
+
+
+def _print_fingerprints_table(fingerprint_rows: list[dict[str, object]]):
+    headers = [
+        "type",
+        "name",
+        "browser",
+        "version",
+        "os",
+        "os_version",
+        "h3_fingerprints",
+    ]
+    rows: list[list[str]] = []
+    for item in fingerprint_rows:
+        row = [_format_cell(item[header]) for header in headers]
+        rows.append(row)
+    _print_table(headers, rows)
+
+
+def _print_fingerprints_json(rows: list[dict[str, object]]):
+    print(json.dumps(rows, indent=2, ensure_ascii=False))
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="curl-cffi",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description="A curl-like tool using curl-cffi with browser impersonation",
+        description="curl-cffi commandline interface",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -111,13 +165,11 @@ def main():
         return
 
     if args.command == "list":
-        try:
-            fingerprints = FingerprintManager.load_fingerprints()
-        except FileNotFoundError:
-            print("No local fingerprints found. Run `curl-cffi update` first.")
+        rows = FingerprintManager.list_fingerprints()
+        if args.json:
+            _print_fingerprints_json(rows)
             return
-        for fingerprint in fingerprints:
-            print(fingerprint)
+        _print_fingerprints_table(rows)
         return
 
     if args.command == "config":

@@ -65,9 +65,8 @@ def test_update_fingerprints(mock_profiles_api):
     os.environ["IMPERSONATE_API_ROOT"] = "https://api.test"
     FingerprintManager.update_fingerprints()
     fingerprints = FingerprintManager.load_fingerprints()
-    assert len(fingerprints) > 1
-    for key in fingerprints:
-        assert key.startswith("testing")
+    assert "testing100" in fingerprints
+    assert "testing101" in fingerprints
 
 
 def test_single_fingerprint(mock_profiles_api):
