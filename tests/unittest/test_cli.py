@@ -4,7 +4,7 @@ import subprocess
 def test_cli(server):
     """Test that the curl-cffi CLI can perform basic GET requests."""
     result = subprocess.check_output(
-        f"curl-cffi {server.url}",
+        f"curl-cffi fetch {server.url}",
         shell=True,
         text=True,
         timeout=30,

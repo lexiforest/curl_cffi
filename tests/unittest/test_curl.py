@@ -1,12 +1,13 @@
 import base64
 import json
+from importlib import import_module
 from io import BytesIO
 from typing import cast
 
 import pytest
 
-import curl_cffi
-from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt
+from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt, _wrapper
+
 
 #######################################################################################
 # testing setopt
@@ -330,8 +331,8 @@ def test_reason(server):
 
 def test_resolve(server):
     c = Curl()
-    url = "http://example.com:8000"
-    c.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    url = "http://example.com:8008"
+    c.setopt(CurlOpt.RESOLVE, ["example.com:8008:127.0.0.1"])
     c.setopt(CurlOpt.URL, url)
     c.perform()
 
@@ -346,5 +347,24 @@ def test_duphandle(server):
         c.perform()
 
 
-def test_is_pro():
-    assert curl_cffi.is_pro() is False
+def test_resolve_curl_version_does_not_need_easy_handle(monkeypatch):
+    version_module = import_module("curl_cffi.__version__")
+
+    class DummyFFI:
+        @staticmethod
+        def string(value):
+            return value
+
+    class DummyLib:
+        @staticmethod
+        def curl_version():
+            return b"libcurl/fake"
+
+        @staticmethod
+        def curl_easy_init():
+            raise AssertionError("curl_easy_init should not be called")
+
+    monkeypatch.setattr(_wrapper, "ffi", DummyFFI())
+    monkeypatch.setattr(_wrapper, "lib", DummyLib())
+
+    assert version_module._resolve_curl_version() == "libcurl/fake"
