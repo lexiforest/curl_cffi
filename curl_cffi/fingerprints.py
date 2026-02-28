@@ -376,7 +376,6 @@ class FingerprintSpec:
 
 
 class FingerprintManager:
-
     @classmethod
     def get_config_dir(cls) -> str:
         return os.environ.get("IMPERSONATE_CONFIG_DIR", DEFAULT_CONFIG_DIR)
@@ -515,7 +514,9 @@ class FingerprintManager:
 
     @classmethod
     def list_fingerprints(cls) -> list[dict[str, object]]:
-        native_lookup = {item["target_name"]: item for item in NATIVE_IMPERSONATE_TARGETS}
+        native_lookup = {
+            item["target_name"]: item for item in NATIVE_IMPERSONATE_TARGETS
+        }
         rows: list[dict[str, object]] = []
         for name, fingerprint in sorted(cls.load_fingerprints().items()):
             native = native_lookup.get(name)

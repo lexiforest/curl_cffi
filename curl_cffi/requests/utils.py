@@ -327,8 +327,7 @@ def set_akamai_options(curl: Curl, akamai: str):
     curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
 
 
-def set_perk_options(curl: Curl, perk: str):
-    ...
+def set_perk_options(curl: Curl, perk: str): ...
 
 
 def set_extra_fp(curl: Curl, fp: ExtraFingerprints):

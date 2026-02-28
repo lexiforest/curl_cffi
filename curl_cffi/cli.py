@@ -9,6 +9,12 @@ import curl_cffi
 from curl_cffi.fingerprints import FingerprintManager
 
 
+def _validate_api_key(value: str) -> str:
+    if not value.startswith("imp_"):
+        raise argparse.ArgumentTypeError("API key must start with 'imp_'.")
+    return value
+
+
 def _add_fetch_parser(subparsers):
     fetch_parser = subparsers.add_parser(
         "fetch",
@@ -54,6 +60,7 @@ def _add_config_parser(subparsers):
     config_parser.add_argument(
         "--api-key",
         required=True,
+        type=_validate_api_key,
         help="API key for impersonate.pro",
     )
 
@@ -174,7 +181,7 @@ def main():
 
     if args.command == "config":
         FingerprintManager.enable_pro(args.api_key)
-        print("API key saved.")
+        print("API key saved to " + FingerprintManager.get_config_path())
         return
 
     if args.command == "doctor":
