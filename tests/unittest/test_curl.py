@@ -336,6 +336,17 @@ def test_resolve(server):
     c.perform()
 
 
+def test_connect_to(server):
+    c = Curl()
+    url = "http://example.com:8000"
+    c.setopt(
+        CurlOpt.CONNECT_TO,
+        [f"example.com:8000:{server.config.host}:{server.config.port}"],
+    )
+    c.setopt(CurlOpt.URL, url)
+    c.perform()
+
+
 def test_duphandle(server):
     c = Curl()
     c.setopt(CurlOpt.URL, str(server.url.copy_with(path="/redirect_loop")).encode())
