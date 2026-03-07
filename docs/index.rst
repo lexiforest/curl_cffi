@@ -12,6 +12,8 @@ curl_cffi's documentation
    :glob:
 
    quick_start
+   cli
+   fingerprints
    impersonate/_index
    advanced
    vs-requests
@@ -155,9 +157,15 @@ For more details, see :doc:`quick_start`.
 Documentation
 -------------
 
-You can first check out :doc:`quick_start`. Then the :doc:`impersonate`.
+You can first check out :doc:`quick_start`. Then :doc:`impersonate/_index`.
 
 For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websockets`.
+
+Since v0.15, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
+
+Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
+
+There is a CLI helper for managing fingerprints and debugging, see :doc:`cli`.
 
 You can also find common use cases in the `examples <https://github.com/lexiforest/curl_cffi/tree/main/examples>`_ directory.
 

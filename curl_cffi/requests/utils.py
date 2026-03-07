@@ -10,20 +10,21 @@ import warnings
 from collections import Counter
 from collections.abc import Callable
 from io import BytesIO
-from json import dumps
+from json import dumps, JSONDecodeError
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
-from ..utils import CurlCffiWarning
+from ..utils import CurlCffiWarning, HttpVersionLiteral
+from ..fingerprints import Fingerprint, FingerprintManager
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
 from .impersonate import (
-    TLS_CIPHER_NAME_MAP,
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
+    CipherName,
     ExtraFingerprints,
     normalize_browser_type,
     toggle_extension,
@@ -42,7 +43,6 @@ HttpMethod = Literal[
     "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
 ]
 
-HttpVersionLiteral = Literal["v1", "v2", "v2tls", "v2_prior_knowledge", "v3", "v3only"]
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
@@ -272,10 +272,10 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     cipher_names = []
     for cipher in ciphers.split("-"):
         cipher_id = int(cipher)
-        cipher_name = TLS_CIPHER_NAME_MAP.get(cipher_id)
-        if not cipher_name:
+        resolved_cipher_name = CipherName.get(cipher_id)
+        if not resolved_cipher_name:
             raise ImpersonateError(f"Cipher {hex(cipher_id)} is not found")
-        cipher_names.append(cipher_name)
+        cipher_names.append(resolved_cipher_name)
 
     curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(cipher_names))
 
@@ -311,7 +311,7 @@ def set_akamai_options(curl: Curl, akamai: str):
     """
     settings, window_update, streams, header_order = akamai.split("|")
 
-    # For compatiblity with tls.peet.ws
+    # For compatibility with tls.peet.ws
     settings = settings.replace(",", ";")
 
     curl.setopt(CurlOpt.HTTP_VERSION, CurlHttpVersion.V2_0)
@@ -325,6 +325,9 @@ def set_akamai_options(curl: Curl, akamai: str):
     # m,a,s,p -> masp
     # curl-impersonate only accepts masp format, without commas.
     curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
+
+
+def set_perk_options(curl: Curl, perk: str): ...
 
 
 def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
@@ -343,6 +346,155 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fp.tls_record_size_limit)
     if fp.http2_no_priority:
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, fp.http2_no_priority)
+
+
+def _normalize_tls_version(version: str) -> CurlSslVersion:
+    lookup = {
+        "1": CurlSslVersion.TLSv1,
+        "1.0": CurlSslVersion.TLSv1_0,
+        "1.1": CurlSslVersion.TLSv1_1,
+        "1.2": CurlSslVersion.TLSv1_2,
+        "1.3": CurlSslVersion.TLSv1_3,
+        "tlsv1": CurlSslVersion.TLSv1,
+        "tlsv1_0": CurlSslVersion.TLSv1_0,
+        "tlsv1_1": CurlSslVersion.TLSv1_1,
+        "tlsv1_2": CurlSslVersion.TLSv1_2,
+        "tlsv1_3": CurlSslVersion.TLSv1_3,
+    }
+    key = version.strip().lower()
+    if key not in lookup:
+        raise ImpersonateError(f"Unsupported TLS version: {version}")
+    return lookup[key]
+
+
+def _split_tls_ciphers(ciphers: list[str]) -> tuple[list[str], list[str]]:
+    tls13_prefixes = ("TLS_AES_", "TLS_CHACHA20_", "TLS_AES_128_CCM")
+    tls12 = []
+    tls13 = []
+    for cipher in ciphers:
+        if cipher.startswith(tls13_prefixes):
+            tls13.append(cipher)
+        else:
+            tls12.append(cipher)
+    return tls12, tls13
+
+
+def _load_fingerprint(target: str):
+    try:
+        fingerprints = FingerprintManager.load_fingerprints()
+    except (FileNotFoundError, JSONDecodeError):
+        return None
+    return fingerprints.get(target)
+
+
+def _apply_fingerprint(
+    curl: Curl,
+    fingerprint: Fingerprint,
+    header_lines: Optional[list[str]],
+    default_headers: bool,
+) -> None:
+    if fingerprint.http_version:
+        curl.setopt(
+            CurlOpt.HTTP_VERSION, normalize_http_version(fingerprint.http_version)
+        )
+
+    if fingerprint.tls_version:
+        tls_version = _normalize_tls_version(fingerprint.tls_version)
+        curl.setopt(CurlOpt.SSLVERSION, tls_version | CurlSslVersion.MAX_DEFAULT)
+
+    if fingerprint.tls_ciphers:
+        tls12, tls13 = _split_tls_ciphers(fingerprint.tls_ciphers)
+        if tls12:
+            curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(tls12))
+        if tls13:
+            curl.setopt(CurlOpt.TLS13_CIPHERS, ":".join(tls13))
+
+    curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(fingerprint.tls_alpn))
+    curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(fingerprint.tls_alps))
+    curl.setopt(CurlOpt.SSL_ENABLE_TICKET, int(fingerprint.tls_session_ticket))
+    curl.setopt(CurlOpt.TLS_GREASE, int(fingerprint.tls_grease))
+    curl.setopt(
+        CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT,
+        int(fingerprint.tls_use_new_alps_codepoint),
+    )
+    curl.setopt(
+        CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(fingerprint.tls_signed_cert_timestamps)
+    )
+    curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, fingerprint.tls_key_shares_limit)
+
+    if fingerprint.tls_cert_compression:
+        curl.setopt(
+            CurlOpt.SSL_CERT_COMPRESSION, ",".join(fingerprint.tls_cert_compression)
+        )
+    else:
+        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
+
+    if fingerprint.tls_signature_hashes:
+        curl.setopt(
+            CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fingerprint.tls_signature_hashes)
+        )
+
+    if fingerprint.tls_supported_groups:
+        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(fingerprint.tls_supported_groups))
+
+    if fingerprint.tls_extension_order:
+        extension_ids = set(int(e) for e in fingerprint.tls_extension_order.split("-"))
+        toggle_extensions_by_ids(curl, extension_ids)
+        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, fingerprint.tls_extension_order)
+
+    if fingerprint.tls_delegated_credentials:
+        curl.setopt(
+            CurlOpt.TLS_DELEGATED_CREDENTIALS,
+            ":".join(fingerprint.tls_delegated_credentials),
+        )
+
+    if fingerprint.tls_record_size_limit is not None:
+        curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fingerprint.tls_record_size_limit)
+
+    if fingerprint.tls_ech is not None:
+        curl.setopt(CurlOpt.ECH, fingerprint.tls_ech)
+
+    if fingerprint.http2_settings:
+        curl.setopt(CurlOpt.HTTP2_SETTINGS, fingerprint.http2_settings)
+    if fingerprint.http2_window_update:
+        curl.setopt(CurlOpt.HTTP2_WINDOW_UPDATE, int(fingerprint.http2_window_update))
+    if fingerprint.http2_pseudo_headers_order:
+        curl.setopt(
+            CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER,
+            fingerprint.http2_pseudo_headers_order.replace(",", ""),
+        )
+    if fingerprint.http2_stream_weight is not None:
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fingerprint.http2_stream_weight)
+    if fingerprint.http2_stream_exclusive is not None:
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fingerprint.http2_stream_exclusive)
+    elif fingerprint.http2_priority_exclusive is not None:
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fingerprint.http2_priority_exclusive)
+    if fingerprint.http2_no_priority:
+        curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, int(fingerprint.http2_no_priority))
+
+    if default_headers and header_lines is not None and fingerprint.headers:
+        for key, value in fingerprint.headers.items():
+            update_header_line(header_lines, key, value)
+        curl.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
+
+
+def set_impersonate_target(
+    curl: Curl,
+    target: str,
+    *,
+    default_headers: bool = True,
+    header_lines: Optional[list[str]] = None,
+) -> None:
+    normalized = normalize_browser_type(target)
+    ret = curl.impersonate(normalized, default_headers=default_headers)  # type: ignore
+    if ret == 0:
+        return
+
+    fingerprint = _load_fingerprint(target) or _load_fingerprint(normalized)
+    if fingerprint is None:
+        raise ImpersonateError(f"Impersonating {target} is not supported")
+
+    _apply_fingerprint(curl, fingerprint, header_lines, default_headers)
 
 
 def set_curl_options(
@@ -632,10 +784,12 @@ def set_curl_options(
 
     # impersonate
     if impersonate:
-        impersonate = normalize_browser_type(impersonate)
-        ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
-        if ret != 0:
-            raise ImpersonateError(f"Impersonating {impersonate} is not supported")
+        set_impersonate_target(
+            c,
+            target=impersonate,
+            default_headers=default_headers,
+            header_lines=header_lines,
+        )
 
     # ja3 string
     if ja3:
