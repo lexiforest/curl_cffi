@@ -18,6 +18,10 @@ website for no obvious reason, you can give `curl_cffi` a try.
 
 Python 3.10 is the minimum supported version since v0.14.
 
+## Recent highlights
+
+- http/3 fingerprints and UDP socks5 proxy support was added in `v0.15.0b4`!
+
 ## Recall.ai - API for meeting recordings
 
 <a href="https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi" target="_blank"><img src="https://cdn.prod.website-files.com/620d732b1f1f7b244ac89f0e/66b294e51ee15f18dd2b171e_recall-logo.svg" alt="Recall.ai" height="47" width="149"></a>
@@ -65,7 +69,8 @@ No browser automation. Just simple API calls that return the exact cookies and h
 - Mimics the requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
-- Supports http 2.0 & 3.0, which requests does not.
+- Supports http 2.0, which requests does not.
+- Supports http 3.0, with fingerprints and udp proxy.
 - Supports websocket.
 - MIT licensed.
 
@@ -129,6 +134,13 @@ print(r.json())
 # Other similar values are: "safari" and "safari_ios"
 r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
 
+# Use http/3 with impersonation
+r = curl_cffi.get(
+    "https://fp.impersonate.pro/api/http3",
+    http_version="v3",
+    impersonate="chrome"
+)
+
 # Randomly choose a browser version based on current market share in real world
 # from: https://caniuse.com/usage-table
 # NOTE: this is a pro feature.
@@ -180,12 +192,12 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142|chrome132, chrome134, chrome135|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142, chrome145<sup>[9]</sup>|chrome132, chrome134, chrome135|
 |Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
 |Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
 |Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
-|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144, firefox147<sup>[9]</sup>|coming soon|
 |Firefox Android|N/A|firefox135_android|
 |Tor|tor145 <sup>[7]</sup>|coming soon|
 |Edge|edge99, edge101|edge133, edge135|
@@ -205,6 +217,7 @@ Notes:
 6. Added in version `0.11.0`.
 7. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
 8. Added in  `0.12.0`.
+9. `chrome145` and `firefox147` support http3.
 
 ### Asyncio
 
