@@ -442,12 +442,15 @@ class FingerprintManager:
         api_key = cls.get_api_key()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+        print(f"updating fingerprints from {url}")
         request = Request(url, headers=headers, method="GET")
-        with urlopen(request) as response:
-            data = json.loads(response.read())
-        items = data.get("items") if isinstance(data, dict) else data
-        if not isinstance(items, list):
-            raise ValueError("Fingerprints API returned unexpected payload.")
+        try:
+            with urlopen(request) as response:
+                data = json.loads(response.read())
+                items = data.get("items") if isinstance(data, dict) else data
+        except Exception as e:
+            print(f"Failed to access fingerprint endpoint at {url}")
+            return
 
         fingerprints: dict[str, dict] = {}
         for item in items:

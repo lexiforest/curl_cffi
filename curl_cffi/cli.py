@@ -191,7 +191,7 @@ def main():
     if args.command == "fetch":
         for url in args.urls:
             try:
-                response = curl_cffi.requests.get(url, impersonate=args.impersonate)
+                response = curl_cffi.get(url, impersonate=args.impersonate)
                 print(response.text)
             except Exception as e:
                 print(f"Error fetching {url}: {e}", file=sys.stderr)
