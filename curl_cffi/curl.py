@@ -404,12 +404,20 @@ class Curl:
             ret = self.setopt(CurlOpt.PROXY_CAINFO, self._cacert)
             self._check_error(ret, "set proxy cacert")
 
-    def perform(self, clear_headers: bool = True, clear_resolve: bool = True) -> None:
+    def perform(
+        self,
+        clear_headers: bool = True,
+        clear_resolve: bool = True,
+        auto_cleanup: bool = True,
+    ) -> None:
         """Wrapper for ``curl_easy_perform``, performs a curl request.
 
         Parameters:
             clear_headers: clear header slist used in this perform
             clear_resolve: clear resolve slist used in this perform
+            auto_cleanup: if True, automatically clean handles and buffers after
+                perform. Set to False when the caller needs to read response info
+                (e.g. via getinfo) before cleanup.
 
         Raises:
             CurlError: if the perform was not successful.
@@ -426,8 +434,8 @@ class Curl:
         try:
             self._check_error(ret, "perform")
         finally:
-            # cleaning
-            self.clean_handles_and_buffers(clear_headers, clear_resolve)
+            if auto_cleanup:
+                self.clean_handles_and_buffers(clear_headers, clear_resolve)
 
     def upkeep(self) -> int:
         if self._curl is None:
