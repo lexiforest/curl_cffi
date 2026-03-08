@@ -434,7 +434,8 @@ class Session(BaseSession[R]):
             max_pool_size: when set to a positive integer, use a pool of curl handles
                 instead of a single thread-local handle. This enables safe concurrent
                 requests across threads. Each request pops a handle from the pool and
-                returns it when done. Streaming responses hold their handle until closed.
+                returns it when done. 
+                Streaming responses hold their handle until closed.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is

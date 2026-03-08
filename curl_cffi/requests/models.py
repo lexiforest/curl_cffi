@@ -249,7 +249,9 @@ class Response:
         with self._stream_close_lock:
             if self._stream_closed:
                 return
-            if self.queue is None and self.stream_task is None and self.quit_now is None:
+            if self.queue is None and \
+                self.stream_task is None and \
+                self.quit_now is None:
                 return
             self._stream_closed = True
         if self.quit_now:
