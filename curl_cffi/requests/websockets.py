@@ -18,7 +18,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
 from select import select
-from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast, final
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, TypeVar, cast, final
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -40,13 +40,13 @@ if TYPE_CHECKING:
 
     T = TypeVar("T")
 
-    ON_DATA_T = Callable[["WebSocket", bytes, CurlWsFrame], None]
-    ON_MESSAGE_T = Callable[["WebSocket", bytes | str], None]
-    ON_ERROR_T = Callable[["WebSocket", CurlError], None]
-    ON_OPEN_T = Callable[["WebSocket"], None]
-    ON_CLOSE_T = Callable[["WebSocket", int, str], None]
-    RECV_QUEUE_ITEM = tuple[bytes, int]
-    SEND_QUEUE_ITEM = tuple[bytes, CurlWsFlag]
+    ON_DATA_T: TypeAlias = Callable[["WebSocket", bytes, CurlWsFrame], None]
+    ON_MESSAGE_T: TypeAlias = Callable[["WebSocket", bytes | str], None]
+    ON_ERROR_T: TypeAlias = Callable[["WebSocket", CurlError], None]
+    ON_OPEN_T: TypeAlias = Callable[["WebSocket"], None]
+    ON_CLOSE_T: TypeAlias = Callable[["WebSocket", int, str], None]
+    RECV_QUEUE_ITEM: TypeAlias = tuple[bytes, int]
+    SEND_QUEUE_ITEM: TypeAlias = tuple[bytes, CurlWsFlag]
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
@@ -208,9 +208,10 @@ class BaseWebSocket:
         self.curl.close()
 
 
-EventTypeLiteral = Literal["open", "close", "data", "message", "error"]
+EventTypeLiteral: TypeAlias = Literal["open", "close", "data", "message", "error"]
 
 
+@final
 class WebSocket(BaseWebSocket):
     """A WebSocket implementation using libcurl."""
 
@@ -717,14 +718,6 @@ class AsyncWebSocket(BaseWebSocket):
                     await ws.send("Hello")
                     msg = await ws.recv()
 
-        Note:
-            Architecture: This uses a decoupled I/O model. Network operations run in
-            background tasks. Errors are raised in subsequent calls to send() or recv().
-
-            Performance: The time_slice defaults (5ms read / 1ms write) favor reading
-            to compensate for libcurl's overhead. Increase these values to allocate more
-            CPU time to I/O operations at the cost of event loop latency.
-
         Args:
             session (AsyncSession): The parent session object.
             curl (Curl): The underlying Curl handle.
@@ -742,6 +735,14 @@ class AsyncWebSocket(BaseWebSocket):
             block_on_recv_queue_full (bool): Behavior when the receive queue is full.
                 If True (default), the reader blocks (may cause timeouts).
                 If False, the connection fails immediately to prevent data loss.
+
+        Note:
+            Architecture: This uses a decoupled I/O model. Network operations run in
+            background tasks. Errors are raised in subsequent calls to send() or recv().
+
+            Performance: The time_slice defaults (5ms read / 1ms write) favor reading
+            to compensate for libcurl's overhead. Increase these values to allocate more
+            CPU time to I/O operations at the cost of event loop latency.
 
         See also:
             - https://curl.se/libcurl/c/curl_ws_recv.html
@@ -1058,21 +1059,28 @@ class AsyncWebSocket(BaseWebSocket):
         flags: CurlWsFlag = CurlWsFlag.BINARY,
         timeout: float | None = None,
     ) -> None:
-        """Send a data frame.
-
-        Large payloads are automatically split into fragments but arrive as a
-        single logical message.
+        """Send a WebSocket message.
 
         Args:
             payload: Data to send (``str``/``bytes``/``bytearray``/``memoryview``).
             flags: Frame type flags (e.g., ``CurlWsFlag.TEXT``).
             timeout: Max seconds to wait if the send queue is full.
 
+        Raises:
+            CurlError: Exceptions caught by the I/O tasks.
+            WebSocketClosed: The WebSocket has been closed.
+            WebSocketTimeout: The send operation timed out.
+
+        Note:
+            Large payloads are automatically split into fragments of 64KB,
+            but arrive as a single logical message by using the CURLWS_CONT flag.
+
         Warning:
             This method is non-blocking. It queues the message for background
-            transmission. Use ``await ws.flush()`` to ensure data is sent to
-            the socket.
+            transmission. Use ``await ws.flush()`` after sending if you need
+            to guarantee that data is handed off to the underlying Curl socket.
         """
+
         if self._transport_exception is not None:
             raise self._transport_exception
 
@@ -1184,7 +1192,10 @@ class AsyncWebSocket(BaseWebSocket):
         return await self.send(payload_bytes, CurlWsFlag.PING)
 
     async def close(
-        self, code: int = WsCloseCode.OK, message: bytes = b"", timeout: float = 3.0
+        self,
+        code: int = WsCloseCode.OK,
+        message: str | bytes = b"",
+        timeout: float = 3.0,
     ) -> None:
         """
         Performs a graceful WebSocket closing handshake and terminates the connection.
@@ -1210,6 +1221,9 @@ class AsyncWebSocket(BaseWebSocket):
                     and not self._write_task.done()
                     and self._transport_exception is None
                 ):
+                    if isinstance(message, str):
+                        message = message.encode("utf-8")
+
                     # Send Close Frame and wait for queue to empty
                     close_frame: bytes = self._pack_close_frame(code, message)
                     await asyncio.wait_for(
@@ -1227,7 +1241,7 @@ class AsyncWebSocket(BaseWebSocket):
                 with suppress(asyncio.TimeoutError):
                     _ = await asyncio.wait_for(self._terminated_event.wait(), timeout)
 
-    def terminate(self) -> None:
+    def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
         """
         Immediately terminates the connection without a graceful handshake.
 
@@ -1319,10 +1333,11 @@ class AsyncWebSocket(BaseWebSocket):
         e_again: CurlECode = CurlECode.AGAIN
         e_recv_err: CurlECode = CurlECode.RECV_ERROR
         e_nothing: CurlECode = CurlECode.GOT_NOTHING
-        close_flag = CurlWsFlag.CLOSE
-        cont_flag = CurlWsFlag.CONT
-        ping_flag = CurlWsFlag.PING
-        control_mask: int = ping_flag | close_flag
+        close_flag: CurlWsFlag = CurlWsFlag.CLOSE
+        cont_flag: CurlWsFlag = CurlWsFlag.CONT
+        ping_flag: CurlWsFlag = CurlWsFlag.PING
+        pong_flag: CurlWsFlag = CurlWsFlag.PONG
+        control_mask: int = ping_flag | close_flag | pong_flag
         max_msg_size: int = self._max_message_size
         block_on_recv: bool = self._block_on_recv_queue_full
         errno_11_msgs: tuple[str, ...] = (
@@ -1470,9 +1485,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                     continue
 
-                # Control Frames handled below (Close / Ping)
-                # PONG handled: https://everything.curl.dev/helpers/ws/concept.html
-
+                # Control Frames handled below (Close / Ping / Pong)
                 # If a CLOSE frame is received, the reader is done.
                 if flags & close_flag:
                     chunks_clear()
@@ -1489,18 +1502,9 @@ class AsyncWebSocket(BaseWebSocket):
                     await self._handle_close_frame(chunk)
                     return
 
-                # Only applies if CURLWS_RAW_MODE is enabled by the user.
-                if flags & ping_flag:
-                    try:
-                        queue_put_nowait((chunk, flags))
-                    except asyncio.QueueFull:
-                        if not block_on_recv:
-                            self._finalize_connection(
-                                WebSocketError(queue_full_err, CurlECode.OUT_OF_MEMORY)
-                            )
-                            return
-
-                        await queue_put((chunk, flags))
+                # PING and PONG frames
+                if flags & (ping_flag | pong_flag):
+                    continue
 
         except asyncio.CancelledError:
             pass
@@ -1538,7 +1542,7 @@ class AsyncWebSocket(BaseWebSocket):
         - Lifecycle Management: Automatically terminates the connection cleanly upon
             transmitting a CLOSE frame.
         """
-        control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING
+        control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING | CurlWsFlag.PONG
         send_payload: Callable[..., Awaitable[bool]] = self._send_payload
         queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
         queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
