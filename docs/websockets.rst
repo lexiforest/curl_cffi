@@ -7,7 +7,7 @@ WebSockets
 
    The asynchronous implementation (``AsyncWebSocket``) is significantly more developed, robust, and feature-rich than the synchronous version. It features background I/O, flow control, configurable backpressure, and automatic retries.
 
-   Unless you are strictly bound to a synchronous environment, we strongly recommend using the **Async** API described below for all use cases.
+   Unless you are strictly bound to a synchronous environment, we strongly recommend using the asynchronous API described below for all use cases.
 
 Quick Start
 ===========
