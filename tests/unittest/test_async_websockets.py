@@ -58,6 +58,7 @@ class ServerBehavior(Enum):
     SILENT = auto()  # Accept messages but never respond
     LARGE_RESPONSE = auto()  # Respond with large messages
     FRAGMENTED = auto()  # Send fragmented messages
+    SEND_PINGS = auto()  # Send PING control frames
 
 
 @dataclass
@@ -120,6 +121,32 @@ async def broadcast_handler(
         pass
 
 
+async def send_pings_handler(
+    ws: websockets.ServerConnection, _config: ServerConfig
+) -> None:
+    """Sends PING frames mixed with standard messages to test filtering."""
+    try:
+        # Send a PING frame
+        _ = await ws.ping(b"server_ping_1")
+        await asyncio.sleep(0.05)
+
+        # Send a normal DATA frame
+        await ws.send(b"data_1")
+
+        # Send another PING frame
+        _ = await ws.ping(b"server_ping_2")
+        await asyncio.sleep(0.05)
+
+        # Send another DATA frame
+        await ws.send(b"data_2")
+
+        # Keep connection open
+        async for _ in ws:
+            pass
+    except (ConnectionClosedOK, ConnectionClosedError):
+        pass
+
+
 async def close_immediately_handler(
     ws: websockets.ServerConnection, config: ServerConfig
 ) -> None:
@@ -174,6 +201,7 @@ HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.SILENT: silent_handler,
     ServerBehavior.LARGE_RESPONSE: large_response_handler,
     ServerBehavior.DELAYED_ECHO: echo_handler,  # Uses delay from config
+    ServerBehavior.SEND_PINGS: send_pings_handler,
 }
 
 
@@ -479,6 +507,48 @@ class TestAsyncWebSocketMessageTypes:
                 await ws.recv_json()
             assert "empty" in str(exc_info.value).lower()
 
+    async def test_pong_is_silently_consumed(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that server PONG replies are silently consumed and not enqueued."""
+        ws_config(behavior=ServerBehavior.SILENT)
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            # Send a ping. The Python `websockets` server replies with a PONG.
+            await ws.ping(b"heartbeat")
+
+            # Wait a moment to ensure the PONG arrives back at the client
+            await asyncio.sleep(0.1)
+
+            # The queue should be completely empty, proving the PONG was dropped
+            # by the _read_loop and didn't leak into the application data.
+            with pytest.raises(WebSocketTimeout):
+                _ = await ws.recv(timeout=0.2)
+
+    async def test_server_ping_is_silently_consumed(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that server-initiated PING frames are silently consumed."""
+        ws_config(behavior=ServerBehavior.SEND_PINGS)
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            # We expect to sequentially receive the data messages, skipping the PINGs
+            data1, flags1 = await ws.recv(timeout=1.0)
+            assert data1 == b"data_1"
+            assert not (flags1 & CurlWsFlag.PING)
+
+            data2, flags2 = await ws.recv(timeout=1.0)
+            assert data2 == b"data_2"
+            assert not (flags2 & CurlWsFlag.PING)
+
+            # Verify no rogue PING frames are left in the queue
+            with pytest.raises(WebSocketTimeout):
+                _ = await ws.recv(timeout=0.2)
+
 
 class TestAsyncWebSocketTimeouts:
     """Tests for timeout behavior."""
@@ -684,9 +754,9 @@ class TestAsyncWebSocketConcurrency:
                 _ = task.cancel()
 
             # All tasks should complete (no deadlock)
-            assert len(pending) == 0, (
-                f"Deadlock detected: {len(pending)} tasks still pending"
-            )
+            assert (
+                len(pending) == 0
+            ), f"Deadlock detected: {len(pending)} tasks still pending"
             assert len(done) == num_consumers
 
             # Collect results - some may be messages or errors if connection closed
@@ -828,9 +898,9 @@ class TestAsyncWebSocketConcurrency:
             # Should have at least 1 message (the echo) and the rest should be
             # close frames or closed errors
             assert messages >= 1, "Expected at least the echo message"
-            assert timeout_errors == 0, (
-                "No recv() should timeout - connection should close cleanly"
-            )
+            assert (
+                timeout_errors == 0
+            ), "No recv() should timeout - connection should close cleanly"
 
 
 class TestAsyncWebSocketCancellation:
@@ -991,6 +1061,27 @@ class TestAsyncWebSocketIterator:
         with pytest.raises(WebSocketClosed):
             async for _ in ws:
                 pass
+
+    async def test_iterator_skips_control_frames(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that the async iterator cleanly skips ping/pong frames."""
+        ws_config(behavior=ServerBehavior.SEND_PINGS)
+
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            received: list[bytes] = []
+
+            # The iterator should seamlessly step over the PING frames
+            async for msg in ws:
+                received.append(msg)
+                if len(received) == 2:
+                    break
+
+            # We should only get the actual binary data payloads
+            assert received == [b"data_1", b"data_2"]
 
 
 class TestAsyncWebSocketQueueBehavior:
