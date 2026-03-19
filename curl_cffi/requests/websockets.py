@@ -18,7 +18,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
 from select import select
-from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, TypeVar, cast, final
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast, final
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
@@ -40,13 +40,13 @@ if TYPE_CHECKING:
 
     T = TypeVar("T")
 
-    ON_DATA_T: TypeAlias = Callable[["WebSocket", bytes, CurlWsFrame], None]
-    ON_MESSAGE_T: TypeAlias = Callable[["WebSocket", bytes | str], None]
-    ON_ERROR_T: TypeAlias = Callable[["WebSocket", CurlError], None]
-    ON_OPEN_T: TypeAlias = Callable[["WebSocket"], None]
-    ON_CLOSE_T: TypeAlias = Callable[["WebSocket", int, str], None]
-    RECV_QUEUE_ITEM: TypeAlias = tuple[bytes, int]
-    SEND_QUEUE_ITEM: TypeAlias = tuple[bytes, CurlWsFlag]
+    ON_DATA_T = Callable[["WebSocket", bytes, CurlWsFrame], None]
+    ON_MESSAGE_T = Callable[["WebSocket", bytes | str], None]
+    ON_ERROR_T = Callable[["WebSocket", CurlError], None]
+    ON_OPEN_T = Callable[["WebSocket"], None]
+    ON_CLOSE_T = Callable[["WebSocket", int, str], None]
+    RECV_QUEUE_ITEM = tuple[bytes, int]
+    SEND_QUEUE_ITEM = tuple[bytes, CurlWsFlag]
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
@@ -208,7 +208,7 @@ class BaseWebSocket:
         self.curl.close()
 
 
-EventTypeLiteral: TypeAlias = Literal["open", "close", "data", "message", "error"]
+EventTypeLiteral = Literal["open", "close", "data", "message", "error"]
 
 
 @final
@@ -1679,7 +1679,7 @@ class AsyncWebSocket(BaseWebSocket):
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
             # Calculate the size of the current fragment
             chunk: memoryview = view[
-                offset: offset + min(total_bytes - offset, max_frame_size)
+                offset : offset + min(total_bytes - offset, max_frame_size)
             ]
             chunk_len: int = len(chunk)
 
