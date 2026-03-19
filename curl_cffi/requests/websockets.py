@@ -499,7 +499,9 @@ class WebSocket(BaseWebSocket):
         if isinstance(payload, str):
             payload = payload.encode()
 
-        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        sock_fd: bytes | int | float | list[str | int] = self.curl.getinfo(
+            CurlInfo.ACTIVESOCKET
+        )
         if sock_fd == CURL_SOCKET_BAD:
             raise WebSocketError(
                 "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
@@ -864,7 +866,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._transport_exception = exc
         self.terminate()
 
-    def _start_io_tasks(self) -> None:
+    def _start_io_tasks(self) -> None:  # pyright: ignore[reportUnusedFunction]
         """Start the read/write I/O loop tasks.
 
         NOTE: This should be called only once after object creation by the factory.
@@ -893,9 +895,11 @@ class AsyncWebSocket(BaseWebSocket):
         ws_id: str = f"WebSocket-{id(self):#x}"
 
         # Start the I/O loop tasks
-        self._read_task = self.loop.create_task(self._read_loop(), name=f"{ws_id}-read")
+        self._read_task = self.loop.create_task(
+            self._read_loop(), name=f"{ws_id}-reader"
+        )
         self._write_task = self.loop.create_task(
-            self._write_loop(), name=f"{ws_id}-write"
+            self._write_loop(), name=f"{ws_id}-writer"
         )
 
     async def recv(self, *, timeout: float | None = None) -> tuple[bytes, int]:
@@ -1179,7 +1183,7 @@ class AsyncWebSocket(BaseWebSocket):
         """
 
         if isinstance(payload, str):
-            payload_bytes = payload.encode("utf-8")
+            payload_bytes: bytes = payload.encode("utf-8")
         else:
             payload_bytes = bytes(payload)
 
@@ -1283,9 +1287,6 @@ class AsyncWebSocket(BaseWebSocket):
             except Exception:
                 try:
                     super().terminate()
-                    if self.session and not self.session._closed:
-                        # WebSocket curls CANNOT be reused
-                        self.session.push_curl(None)
                 finally:
                     self._terminated_event.set()
 
@@ -1678,7 +1679,7 @@ class AsyncWebSocket(BaseWebSocket):
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
             # Calculate the size of the current fragment
             chunk: memoryview = view[
-                offset : offset + min(total_bytes - offset, max_frame_size)
+                offset: offset + min(total_bytes - offset, max_frame_size)
             ]
             chunk_len: int = len(chunk)
 

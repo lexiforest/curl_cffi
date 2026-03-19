@@ -5,9 +5,7 @@ WebSockets
 
 .. important::
 
-   **Recommendation: Use Async**
-
-   The asynchronous implementation (``AsyncWebSocket``) is significantly more developed, robust, and feature-rich than the synchronous version. It features a **decoupled I/O model** (background readers/writers), flow control, configurable backpressure, and automatic retries.
+   The asynchronous implementation (``AsyncWebSocket``) is significantly more developed, robust, and feature-rich than the synchronous version. It features background I/O, flow control, configurable backpressure, and automatic retries.
 
    Unless you are strictly bound to a synchronous environment, we strongly recommend using the **Async** API described below for all use cases.
 
@@ -106,11 +104,13 @@ Methods for sending data place the message into an outgoing queue. They are gene
 
 **Pings**
 
-Libcurl handles Pongs automatically, but you can send a manual Ping frame if needed (e.g., application-layer keepalive).
+Libcurl handles PONGs automatically, but you can send a manual PING frame if needed (e.g., application-layer keepalive).
 
 .. code-block:: python
 
     await ws.ping(b"keepalive")
+
+PONG frames are consumed internally and are not delivered to user-facing receive methods.
 
 Receiving Data
 ==============
@@ -175,7 +175,7 @@ Both methods are idempotent and safe to call multiple times. While ``close()`` w
 Flushing
 --------
 
-Because ``send()`` is decoupled from the network, returning from ``await send()`` only means the message is queued. Use ``flush()`` to ensure all queued messages have effectively been written to the socket.
+Because ``send()`` is decoupled from the network, returning from ``await send()`` means the message is queued for transmission. Call ``flush()`` after sending to guarantee that all queued messages have been written to the socket.
 
 .. code-block:: python
 
