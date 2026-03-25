@@ -88,12 +88,14 @@ def test_parse_file_upload():
 
 
 def test_parse_multiple_items():
-    result = parse_request_items([
-        "X-Custom:value",
-        "q==search",
-        "name=test",
-        "count:=5",
-    ])
+    result = parse_request_items(
+        [
+            "X-Custom:value",
+            "q==search",
+            "name=test",
+            "count:=5",
+        ]
+    )
     assert result.headers == {"X-Custom": "value"}
     assert result.query_params == [("q", "search")]
     assert result.data_fields == [("name", "test")]
@@ -130,9 +132,14 @@ def test_extract_url_only():
 
 
 def test_extract_method_url_and_items():
-    method, url, items = extract_positionals([
-        "POST", "http://example.com", "name=test", "X-Foo:bar",
-    ])
+    method, url, items = extract_positionals(
+        [
+            "POST",
+            "http://example.com",
+            "name=test",
+            "X-Foo:bar",
+        ]
+    )
     assert method == "POST"
     assert url == "http://example.com"
     assert items == ["name=test", "X-Foo:bar"]

@@ -53,10 +53,10 @@ build: .preprocessed
 	python -m build --wheel
 
 lint:
-	ruff check --exclude issues
+	uv run ruff check --exclude issues
 
 format:
-	ruff format --exclude issues
+	uv run ruff format --exclude issues
 
 test:
 	python -bb -m pytest tests/unittest

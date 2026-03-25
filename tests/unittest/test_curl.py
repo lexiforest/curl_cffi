@@ -5,7 +5,6 @@ from io import BytesIO
 from typing import cast
 from unittest.mock import patch
 
-import certifi
 import pytest
 
 import curl_cffi

@@ -10,13 +10,22 @@ from rich.syntax import Syntax
 from rich.text import Text
 
 SUPPORTED_METHODS = {
-    "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY",
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "OPTIONS",
+    "HEAD",
+    "TRACE",
+    "PATCH",
+    "QUERY",
 }
 
 
 # ---------------------------------------------------------------------------
 # URL processing
 # ---------------------------------------------------------------------------
+
 
 def process_url(url: str) -> str:
     """Normalise a URL: localhost shortcut, default scheme."""
@@ -30,6 +39,7 @@ def process_url(url: str) -> str:
 # ---------------------------------------------------------------------------
 # Request object parsing
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ParsedItems:
@@ -77,6 +87,7 @@ def parse_request_items(items: list[str]) -> ParsedItems:
 # Positional extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_positionals(
     remaining: list[str],
 ) -> tuple[str | None, str, list[str]]:
@@ -97,13 +108,14 @@ def extract_positionals(
         sys.exit(1)
 
     url = remaining[idx]
-    request_items = remaining[idx + 1:]
+    request_items = remaining[idx + 1 :]
     return method, url, request_items
 
 
 # ---------------------------------------------------------------------------
 # Output helpers
 # ---------------------------------------------------------------------------
+
 
 def _http_ver_label(response) -> str:
     from curl_cffi.const import CurlHttpVersion
@@ -219,7 +231,9 @@ def print_output(response, method, url, request_headers, request_body, print_spe
             content_type = response.headers.get("content-type", "")
             if "json" in content_type:
                 try:
-                    formatted = json.dumps(response.json(), indent=2, ensure_ascii=False)
+                    formatted = json.dumps(
+                        response.json(), indent=2, ensure_ascii=False
+                    )
                     print(formatted)
                 except (json.JSONDecodeError, ValueError):
                     print(response.text)
@@ -230,6 +244,7 @@ def print_output(response, method, url, request_headers, request_body, print_spe
 # ---------------------------------------------------------------------------
 # Download
 # ---------------------------------------------------------------------------
+
 
 def handle_download(response, url, output_path=None):
     if output_path is None:
@@ -248,6 +263,7 @@ def handle_download(response, url, output_path=None):
 # Doctor
 # ---------------------------------------------------------------------------
 
+
 def print_doctor():
     print("curl-cffi doctor")
     print("----------------")
@@ -262,6 +278,7 @@ def print_doctor():
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -282,40 +299,57 @@ def build_parser() -> argparse.ArgumentParser:
     # Content type
     content_group = parser.add_mutually_exclusive_group()
     content_group.add_argument(
-        "--json", "-j", action="store_true", dest="json_mode",
+        "--json",
+        "-j",
+        action="store_true",
+        dest="json_mode",
         help="(default) Serialize data items as a JSON object",
     )
     content_group.add_argument(
-        "--form", "-f", action="store_true",
+        "--form",
+        "-f",
+        action="store_true",
         help="Serialize data items as form fields",
     )
     content_group.add_argument(
-        "--multipart", action="store_true",
+        "--multipart",
+        action="store_true",
         help="Force multipart form data",
     )
 
     # Output control
     output_group = parser.add_mutually_exclusive_group()
     output_group.add_argument(
-        "--headers", action="store_true", dest="headers_only",
+        "--headers",
+        action="store_true",
+        dest="headers_only",
         help="Print response headers only",
     )
     output_group.add_argument(
-        "--body", action="store_true", dest="body_only",
+        "--body",
+        action="store_true",
+        dest="body_only",
         help="Print response body only",
     )
     output_group.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
         help="Print request and response headers and body",
     )
     output_group.add_argument(
-        "--print", "-p", dest="print_spec", default=None,
-        help="Fine-grained output control: H(request headers) B(request body) h(response headers) b(response body)",
+        "--print",
+        "-p",
+        dest="print_spec",
+        default=None,
+        help="Fine-grained output control: H(request headers) B(request body) h(response headers) b(response body)",  # noqa: E501
     )
 
     # Download
     parser.add_argument(
-        "--download", "-d", action="store_true",
+        "--download",
+        "-d",
+        action="store_true",
         help="Download response body to file",
     )
     parser.add_argument("--output", "-o", default=None, help="Output file path")
@@ -323,20 +357,30 @@ def build_parser() -> argparse.ArgumentParser:
     # Connection options
     parser.add_argument("--auth", "-a", default=None, help="user:password")
     parser.add_argument(
-        "--verify", action=argparse.BooleanOptionalAction, default=True,
+        "--verify",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="SSL certificate verification",
     )
     parser.add_argument("--proxy", default=None, help="Proxy URL")
-    parser.add_argument("--timeout", type=float, default=None, help="Request timeout in seconds")
     parser.add_argument(
-        "--follow", action=argparse.BooleanOptionalAction, default=True,
+        "--timeout", type=float, default=None, help="Request timeout in seconds"
+    )
+    parser.add_argument(
+        "--follow",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Follow redirects",
     )
-    parser.add_argument("--max-redirects", type=int, default=30, help="Maximum number of redirects")
+    parser.add_argument(
+        "--max-redirects", type=int, default=30, help="Maximum number of redirects"
+    )
 
     # curl-cffi specific
     parser.add_argument(
-        "--impersonate", "-i", default="chrome",
+        "--impersonate",
+        "-i",
+        default="chrome",
         help="Browser to impersonate",
     )
 
@@ -347,13 +391,18 @@ def build_parser() -> argparse.ArgumentParser:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def handle_request(args, remaining):
     method, url, request_items = extract_positionals(remaining)
     parsed = parse_request_items(request_items)
 
     # Auto-detect method
     if method is None:
-        method = "POST" if (parsed.data_fields or parsed.json_fields or parsed.files) else "GET"
+        method = (
+            "POST"
+            if (parsed.data_fields or parsed.json_fields or parsed.files)
+            else "GET"
+        )
 
     url = process_url(url)
 
@@ -382,7 +431,7 @@ def handle_request(args, remaining):
     if parsed.files:
         files = {}
         for field_name, filepath in parsed.files:
-            files[field_name] = open(filepath, "rb")
+            files[field_name] = open(filepath, "rb")  # noqa: SIM115
 
     # Auth
     auth = None
