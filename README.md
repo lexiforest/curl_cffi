@@ -20,7 +20,8 @@ Python 3.10 is the minimum supported version since v0.14.
 
 ## Recent highlights
 
-- http/3 fingerprints and UDP socks5 proxy support was added in `v0.15.0b4`!
+- 💨 http/3 fingerprints and UDP socks5 proxy support was added in `v0.15.0`!
+- 🦞 Added `curl-cffi` CLI and skills for debugging and for claws/agents.
 
 ## Recall.ai - API for meeting recordings
 
@@ -90,6 +91,25 @@ Notes:
 1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
 2. Since v0.11.4.
 
+### curl-cffi CLI(new)
+
+Since v0.15, `curl_cffi` comes with a CLI called `curl-cffi`, you can use it for debugging
+a certain url with the `--impersonate` option. It can also serve as a `web_fetch`
+replacement for "claws" and "agents".
+
+||curl|httpie|curl-cffi|
+|---|---|---|---|
+|http/2|✅|❌|✅|
+|http/3|☑️<sup>1</sup>|❌|✅|
+|human-friendly|☑️<sup>2</sup>|✅|✅|
+|colorful|❌|✅|✅|
+|fingerprints|❌|❌|✅|
+
+Notes:
+
+1. You need an http/3 enabled curl build, it's not enabled by default at leat on my machine.
+2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax.
+
 ## Install
 
     pip install curl_cffi --upgrade
@@ -116,6 +136,19 @@ To install unstable version from GitHub:
 ## Usage
 
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
+`curl_cffi` also bundles with a CLI called `curl-cffi`.
+
+### CLI
+
+```sh
+curl-cffi get tls.browserleaks.com/json
+
+# curl-cffi can be hard to type, use an alias if you want
+alias imp=curl-cffi
+imp get tls.browserleaks.com/json --impersonate chrome
+```
+
+For a complete CLI guide, see [docs](https://curl-cffi.readthedocs.io).
 
 ### requests-like
 

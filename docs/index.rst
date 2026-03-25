@@ -12,6 +12,7 @@ curl_cffi's documentation
    :glob:
 
    quick_start
+   cli
    impersonate/_index
    advanced
    vs-requests

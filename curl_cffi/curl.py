@@ -9,13 +9,34 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+import os
+
 import certifi
 
 from ._wrapper import ffi, lib
 from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 from .utils import CurlCffiWarning
 
-DEFAULT_CACERT = certifi.where()
+
+def _default_cacert() -> str:
+    # 1. Explicit env var overrides
+    for env_var in ("SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE"):
+        path = os.environ.get(env_var)
+        if path and os.path.exists(path):
+            return path
+
+    # 2. System CA bundle (more complete than certifi on most systems)
+    import ssl
+
+    defaults = ssl.get_default_verify_paths()
+    if defaults.cafile and os.path.exists(defaults.cafile):
+        return defaults.cafile
+
+    # 3. Fallback to certifi
+    return certifi.where()
+
+
+DEFAULT_CACERT = _default_cacert()
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
 STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
 
