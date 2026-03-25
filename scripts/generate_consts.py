@@ -95,6 +95,7 @@ class CurlWsFlag(IntEnum):
     CLOSE = 1 << 3
     PING = 1 << 4
     OFFSET = 1 << 5
+    PONG = 1 << 6
 
 
 class CurlSslVersion(IntEnum):

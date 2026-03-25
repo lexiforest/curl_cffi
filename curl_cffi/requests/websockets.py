@@ -1336,9 +1336,7 @@ class AsyncWebSocket(BaseWebSocket):
         e_nothing: CurlECode = CurlECode.GOT_NOTHING
         close_flag: CurlWsFlag = CurlWsFlag.CLOSE
         cont_flag: CurlWsFlag = CurlWsFlag.CONT
-        ping_flag: CurlWsFlag = CurlWsFlag.PING
-        pong_flag: CurlWsFlag = CurlWsFlag.PONG
-        control_mask: int = ping_flag | close_flag | pong_flag
+        control_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
         max_msg_size: int = self._max_message_size
         block_on_recv: bool = self._block_on_recv_queue_full
         errno_11_msgs: tuple[str, ...] = (
@@ -1439,7 +1437,7 @@ class AsyncWebSocket(BaseWebSocket):
                     recv_error_retries = 0
 
                 # Data Frames (Text / Binary / Cont)
-                if not (flags & control_mask):
+                if flags & control_mask:
                     # Perform message size checks
                     msg_size += len(chunk)
                     if msg_size > max_msg_size:
@@ -1486,7 +1484,6 @@ class AsyncWebSocket(BaseWebSocket):
 
                     continue
 
-                # Control Frames handled below (Close / Ping / Pong)
                 # If a CLOSE frame is received, the reader is done.
                 if flags & close_flag:
                     chunks_clear()
@@ -1502,10 +1499,6 @@ class AsyncWebSocket(BaseWebSocket):
                         await queue_put((chunk, flags))
                     await self._handle_close_frame(chunk)
                     return
-
-                # PING and PONG frames
-                if flags & (ping_flag | pong_flag):
-                    continue
 
         except asyncio.CancelledError:
             pass
