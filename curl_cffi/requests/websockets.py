@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     ON_OPEN_T = Callable[["WebSocket"], None]
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
     RECV_QUEUE_ITEM = tuple[bytes, int]
-    SEND_QUEUE_ITEM = tuple[bytes, CurlWsFlag]
+    SEND_QUEUE_ITEM = tuple[bytes | bytearray | memoryview, CurlWsFlag]
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
@@ -826,7 +826,11 @@ class AsyncWebSocket(BaseWebSocket):
         """
         On exiting the context manager, close the WebSocket connection.
         """
-        await self.close()
+        if exc_type is None:
+            await self.close()
+        else:
+            with suppress(CurlError):
+                await self.close()
 
     def __aiter__(self) -> Self:
         if self.closed:
@@ -1098,8 +1102,6 @@ class AsyncWebSocket(BaseWebSocket):
         # cURL expects bytes
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
-        elif isinstance(payload, bytearray | memoryview):
-            payload = bytes(payload)
 
         try:
             self._send_queue.put_nowait((payload, flags))
@@ -1126,6 +1128,11 @@ class AsyncWebSocket(BaseWebSocket):
             # If we woke up because terminate() drained the queue, fail now.
             if self._transport_exception is not None:
                 raise self._transport_exception from exc
+
+            if self.closed or self._terminated:
+                raise WebSocketClosed(
+                    "Connection was terminated while waiting to send"
+                ) from exc
 
     async def send_binary(self, payload: bytes) -> None:
         """Send a binary frame.
@@ -1228,13 +1235,21 @@ class AsyncWebSocket(BaseWebSocket):
                     if isinstance(message, str):
                         message = message.encode("utf-8")
 
+                    # 125 bytes (Spec) - 2 bytes for close code
+                    if len(message) > 123:
+                        message = message[:123]
+
                     # Send Close Frame and wait for queue to empty
                     close_frame: bytes = self._pack_close_frame(code, message)
+                    close_start: float = self.loop.time()
                     await asyncio.wait_for(
                         self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
                         timeout=timeout,
                     )
-                    await self.flush(timeout)
+                    # Subtract time already elapsed when flushing queue
+                    await self.flush(
+                        max(0.0, timeout - (self.loop.time() - close_start))
+                    )
 
             except (asyncio.TimeoutError, WebSocketError):
                 pass
@@ -1478,9 +1493,9 @@ class AsyncWebSocket(BaseWebSocket):
                                 return
                             await queue_put((message, flags))
 
-                    if (now := loop_time()) >= next_yield:
+                    if loop_time() >= next_yield:
                         await asyncio.sleep(0)
-                        next_yield = now + time_slice
+                        next_yield = loop_time() + time_slice
 
                     continue
 
@@ -1561,9 +1576,9 @@ class AsyncWebSocket(BaseWebSocket):
                             break
 
                         # Perform yield checks
-                        if (now := loop_time()) >= next_yield:
+                        if loop_time() >= next_yield:
                             await asyncio.sleep(0)
-                            next_yield = now + time_slice
+                            next_yield = loop_time() + time_slice
 
                     finally:
                         queue_done()
@@ -1574,7 +1589,7 @@ class AsyncWebSocket(BaseWebSocket):
                     payload, flags = await queue_get()
 
                     # Build the rest of the batch without waiting.
-                    batch: list[tuple[bytes, CurlWsFlag]] = [(payload, flags)]
+                    batch: list[SEND_QUEUE_ITEM] = [(payload, flags)]
                     if not (flags & CurlWsFlag.CLOSE):
                         while len(batch) < self._max_send_batch_size:
                             try:
@@ -1587,7 +1602,9 @@ class AsyncWebSocket(BaseWebSocket):
                                 break
 
                     try:
-                        data_to_coalesce: dict[CurlWsFlag, list[bytes]] = {}
+                        data_to_coalesce: dict[
+                            CurlWsFlag, list[bytes | memoryview | bytearray]
+                        ] = {}
                         for payload, frame in batch:
                             if frame & control_frame_flags:
                                 # Flush any pending data before the control frame.
@@ -1598,9 +1615,9 @@ class AsyncWebSocket(BaseWebSocket):
                                         return
 
                                     # Prevent large batches from starving loop
-                                    if (now := loop_time()) >= next_yield:
+                                    if loop_time() >= next_yield:
                                         await asyncio.sleep(0)
-                                        next_yield = now + time_slice
+                                        next_yield = loop_time() + time_slice
 
                                 data_to_coalesce.clear()
 
@@ -1608,9 +1625,9 @@ class AsyncWebSocket(BaseWebSocket):
                                     return
 
                                 # Yield check on coalesced frames
-                                if (now := loop_time()) >= next_yield:
+                                if loop_time() >= next_yield:
                                     await asyncio.sleep(0)
-                                    next_yield = now + time_slice
+                                    next_yield = loop_time() + time_slice
 
                             else:
                                 data_to_coalesce.setdefault(frame, []).append(payload)
@@ -1641,7 +1658,9 @@ class AsyncWebSocket(BaseWebSocket):
             if not self.closed:
                 self.terminate()
 
-    async def _send_payload(self, payload: bytes, flags: CurlWsFlag | int) -> bool:
+    async def _send_payload(
+        self, payload: bytes | memoryview | bytearray, flags: CurlWsFlag | int
+    ) -> bool:
         """
         Optimized low-level sender with fragmentation logic.
         """
@@ -1671,9 +1690,7 @@ class AsyncWebSocket(BaseWebSocket):
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
             # Calculate the size of the current fragment
-            chunk: memoryview = view[
-                offset : offset + min(total_bytes - offset, max_frame_size)
-            ]
+            chunk: memoryview = view[offset : offset + max_frame_size]
             chunk_len: int = len(chunk)
 
             # Handle frame fragmentation and prevent CONT leakage.
@@ -1710,9 +1727,9 @@ class AsyncWebSocket(BaseWebSocket):
                 offset += n_sent
 
                 # Cooperative yield checks
-                if (now := loop_time()) >= next_yield:
+                if loop_time() >= next_yield:
                     await asyncio.sleep(0)
-                    next_yield = now + time_slice
+                    next_yield = loop_time() + time_slice
 
             except CurlError as e:
                 if e.code == e_again:
@@ -1895,4 +1912,8 @@ class AsyncWebSocketContext:
         tb: object | None,
     ) -> None:
         if self._obj:
-            await self._obj.close()
+            if exc_type is None:
+                await self._obj.close()
+            else:
+                with suppress(CurlError):
+                    await self._obj.close()
