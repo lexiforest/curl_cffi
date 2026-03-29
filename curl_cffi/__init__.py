@@ -8,6 +8,7 @@ __all__ = [
     "CurlMOpt",
     "CurlECode",
     "CurlHttpVersion",
+    "CurlFollow",
     "CurlSslVersion",
     "CurlWsFlag",
     "config_warnings",
@@ -53,6 +54,7 @@ from ._wrapper import ffi, lib
 from .aio import AsyncCurl
 from .const import (
     CurlECode,
+    CurlFollow,
     CurlHttpVersion,
     CurlInfo,
     CurlMOpt,

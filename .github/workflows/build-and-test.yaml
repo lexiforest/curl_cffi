@@ -10,6 +10,7 @@ on:
       - feature/*
       - release/*
       - chore/*
+      - security/*
     tags:
       - v*
 
