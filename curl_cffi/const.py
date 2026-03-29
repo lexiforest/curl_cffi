@@ -611,6 +611,7 @@ class CurlIpResolve(IntEnum):
 
 class CurlFollow(IntEnum):
     """``CURLFOLLOW_*`` consts for redirect behavior"""
+
     # /* generic follow redirects
     ALL = 1
 

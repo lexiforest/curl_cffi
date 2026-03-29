@@ -466,6 +466,12 @@ def test_too_many_redirects(server):
 
 def test_safe_redirect_blocks_private_ip(server):
     """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
+    target = str(server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    r = requests.get(url, allow_redirects=True)
+    assert r.status_code == 200
+    assert r.redirect_count == 1
+
     url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
     with pytest.raises(requests.RequestsError, match="SSRF"):
         requests.get(url, allow_redirects=CurlFollow.SAFE)
@@ -476,15 +482,6 @@ def test_safe_redirect_string(server):
     url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
     with pytest.raises(requests.RequestsError, match="SSRF"):
         requests.get(url, allow_redirects="safe")
-
-
-def test_allow_redirects_true_follows_private_ip(server):
-    """allow_redirects=True should follow redirects to private IPs (no SSRF protection)."""
-    target = str(server.url.copy_with(path="/"))
-    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
-    r = requests.get(url, allow_redirects=True)
-    assert r.status_code == 200
-    assert r.redirect_count == 1
 
 
 def test_verify(https_server):
