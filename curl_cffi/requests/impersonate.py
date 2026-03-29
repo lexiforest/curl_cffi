@@ -27,6 +27,7 @@ BrowserTypeLiteral = Literal[
     "chrome136",
     "chrome142",
     "chrome145",
+    "chrome146",
     "chrome99_android",
     "chrome131_android",
     # Safari
@@ -77,7 +78,7 @@ BrowserTypeLiteral = Literal[
 ]
 
 
-DEFAULT_CHROME = "chrome145"
+DEFAULT_CHROME = "chrome146"
 DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari2601"
 DEFAULT_SAFARI_IOS = "safari260_ios"
@@ -89,7 +90,7 @@ DEFAULT_TOR = "tor145"
 
 
 REAL_TARGET_MAP = {
-    "chrome": "chrome145",
+    "chrome": "chrome146",
     "edge": "edge101",
     "safari": "safari2601",
     "safari_ios": "safari260_ios",
@@ -143,6 +144,7 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     chrome136 = "chrome136"
     chrome142 = "chrome142"
     chrome145 = "chrome145"
+    chrome146 = "chrome146"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari153 = "safari153"
