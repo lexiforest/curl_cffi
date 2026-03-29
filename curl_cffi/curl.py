@@ -3,6 +3,7 @@ from __future__ import annotations
 import locale
 import re
 import struct
+import ssl
 import sys
 import warnings
 from http.cookies import SimpleCookie
@@ -25,9 +26,7 @@ def _default_cacert() -> str:
         if path and os.path.exists(path):
             return path
 
-    # 2. System CA bundle (more complete than certifi on most systems)
-    import ssl
-
+    # 2. Python's CA bundle
     defaults = ssl.get_default_verify_paths()
     if defaults.cafile and os.path.exists(defaults.cafile):
         return defaults.cafile
