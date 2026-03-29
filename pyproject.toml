@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.15.0b4"
+version = "0.15.0b5"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = "MIT"
@@ -8,6 +8,7 @@ license-files = ["LICENSE"]
 dependencies = [
     "cffi>=2.0.0",
     "certifi>=2024.2.2",
+    "rich",
 ]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -77,7 +78,7 @@ build-backend = "setuptools.build_meta"
 
 
 [tool.setuptools]
-packages = ["curl_cffi", "curl_cffi.requests"]
+packages = ["curl_cffi", "curl_cffi.cli", "curl_cffi.requests"]
 package-data = { curl_cffi = ["libcurl.dll"] }
 
 

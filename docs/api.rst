@@ -153,7 +153,6 @@ WebSocket
 
    .. automethod:: __init__
    .. automethod:: connect
-   .. automethod:: recv_fragment
    .. automethod:: recv
    .. automethod:: recv_str
    .. automethod:: recv_json
@@ -169,7 +168,6 @@ WebSocket
 .. autoclass:: curl_cffi.requests.AsyncWebSocket
 
    .. automethod:: __init__
-   .. automethod:: recv_fragment
    .. automethod:: recv
    .. automethod:: recv_str
    .. automethod:: recv_json
