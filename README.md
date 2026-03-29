@@ -88,8 +88,8 @@ No browser automation. Just simple API calls that return the exact cookies and h
 
 Notes:
 
-1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
-2. Since v0.11.4.
+1. For pycurl, http/3 is usually disabled at compile time by default.
+2. http/3 support since v0.11.4, http/3 proxy and fingerprints since v0.15.0.
 
 ### curl-cffi CLI(new)
 
@@ -107,8 +107,8 @@ replacement for "claws" and "agents".
 
 Notes:
 
-1. You need an http/3 enabled curl build, it's not enabled by default at leat on my machine.
-2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax.
+1. You need an http/3 enabled curl build, it's not enabled by default, at leat on my machine.
+2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax. If you prefer the curl syntax, you can keep using `curl-impersonate`.
 
 ## Install
 
