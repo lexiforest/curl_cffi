@@ -23,8 +23,16 @@ def test_process_url(url, expected):
 @pytest.mark.parametrize(
     "items, field, expected",
     [
-        (["Content-Type:application/json"], "headers", {"Content-Type": "application/json"}),
-        (["Authorization:Bearer token123"], "headers", {"Authorization": "Bearer token123"}),
+        (
+            ["Content-Type:application/json"],
+            "headers",
+            {"Content-Type": "application/json"},
+        ),
+        (
+            ["Authorization:Bearer token123"],
+            "headers",
+            {"Authorization": "Bearer token123"},
+        ),
         (["Accept:"], "headers_to_remove", ["Accept"]),
         (["page==2"], "query_params", [("page", "2")]),
         (["name=John"], "data_fields", [("name", "John")]),
@@ -34,7 +42,11 @@ def test_process_url(url, expected):
         (['config:={"key":"val"}'], "json_fields", [("config", {"key": "val"})]),
         (["@/path/to/file.txt"], "files", [("file", "/path/to/file.txt")]),
         (["+session=abc123"], "cookies", {"session": "abc123"}),
-        (["+session=abc", "+theme=dark"], "cookies", {"session": "abc", "theme": "dark"}),
+        (
+            ["+session=abc", "+theme=dark"],
+            "cookies",
+            {"session": "abc", "theme": "dark"},
+        ),
     ],
 )
 def test_parse_request_items(items, field, expected):

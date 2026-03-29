@@ -148,7 +148,10 @@ def _add_request_positionals(parser: argparse.ArgumentParser) -> None:
         "items",
         metavar="ITEM",
         nargs="*",
-        help="Request items: Header:Value, param==value, field=value, field:=json, @file, +cookie=value",
+        help=(
+            "Request items: Header:Value, param==value, field=value, field:=json, "
+            "@file, +cookie=value"
+        ),
     )
 
 
@@ -227,7 +230,7 @@ Har file:
   Chrome exported HAR files do not contain cookies and auth headers by default. To include them:
 
   In DevTools settings: Gear Icon -> Preferences -> Network -> select "Allow to generate HAR with sensitive data"
-""",
+""",  # noqa: E501
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub.add_argument("file", metavar="FILE", help="Path to .http or .har file")
@@ -235,7 +238,10 @@ Har file:
         "--session",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Use a single session for all requests, sharing cookies and connections (default: enabled)",
+        help=(
+            "Use a single session for all requests, sharing cookies and connections "
+            "(default: enabled)"
+        ),
     )
     _add_common_flags(sub)
     sub.set_defaults(method=None)
