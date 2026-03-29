@@ -78,7 +78,7 @@ build-backend = "setuptools.build_meta"
 
 
 [tool.setuptools]
-packages = ["curl_cffi", "curl_cffi.requests"]
+packages = ["curl_cffi", "curl_cffi.cli", "curl_cffi.requests"]
 package-data = { curl_cffi = ["libcurl.dll"] }
 
 
