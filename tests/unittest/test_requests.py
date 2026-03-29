@@ -8,7 +8,7 @@ import pytest
 from charset_normalizer import detect
 
 import curl_cffi
-from curl_cffi import Curl, CurlOpt, requests
+from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import HTTPError
@@ -462,6 +462,29 @@ def test_too_many_redirects(server):
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
+
+
+def test_safe_redirect_blocks_private_ip(server):
+    """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
+    with pytest.raises(requests.RequestsError, match="SSRF"):
+        requests.get(url, allow_redirects=CurlFollow.SAFE)
+
+
+def test_safe_redirect_string(server):
+    """The string 'safe' should behave the same as CurlFollow.SAFE."""
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
+    with pytest.raises(requests.RequestsError, match="SSRF"):
+        requests.get(url, allow_redirects="safe")
+
+
+def test_allow_redirects_true_follows_private_ip(server):
+    """allow_redirects=True should follow redirects to private IPs (no SSRF protection)."""
+    target = str(server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    r = requests.get(url, allow_redirects=True)
+    assert r.status_code == 200
+    assert r.redirect_count == 1
 
 
 def test_verify(https_server):
