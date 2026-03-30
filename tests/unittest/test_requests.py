@@ -37,6 +37,20 @@ def test_post_dict(server):
     assert r.content == b"foo=bar"
 
 
+def test_response_request_body(server):
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
+    assert r.request is not None
+    assert r.request.body == b"foo=bar"
+
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
+    assert r.request is not None
+    assert r.request.body == b'{"foo":"bar"}'
+
+    r = requests.get(str(server.url))
+    assert r.request is not None
+    assert r.request.body is None
+
+
 def test_callback(server):
     buffer = BytesIO()
     r = requests.post(
