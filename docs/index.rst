@@ -12,14 +12,15 @@ curl_cffi's documentation
    :glob:
 
    quick_start
-   cli
    fingerprints
+   cli/_index
    impersonate/_index
    advanced
    vs-requests
    cookies
    community
    api
+   security
    faq
    changelog
    dev
@@ -161,7 +162,7 @@ You can first check out :doc:`quick_start`. Then :doc:`impersonate/_index`.
 
 For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websockets`.
 
-Since v0.15, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
+Since v0.15.1, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
 
 Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
 

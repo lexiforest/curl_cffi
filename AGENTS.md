@@ -1,35 +1,35 @@
 # Repository Guidelines
 
+This is the curl_cffi project, a python binding to curl-impersonate. The project is based
+on cffi for interfacing between python and libcurl.
+
 ## Project Structure & Module Organization
-- `curl_cffi/` contains the Python package, including the requests-like API (`curl_cffi/requests/`), async helpers (`aio.py`), and compiled bindings (`_wrapper.*`).
-- `ffi/` and `include/` hold CFFI build inputs and generated headers from libcurl-impersonate.
-- `tests/` is split into `unittest/`, `integration/`, `threads/`, and `pro/` suites.
-- `docs/`, `examples/`, and `benchmark/` host documentation, usage samples, and performance scripts.
-- `scripts/` includes build and maintenance utilities.
+
+`curl_cffi/` contains the Python package, including the low-level bindings in `curl.py` and the higher-level `requests/` API. Tests live under `tests/` and are split by scope: `tests/unittest/`, `tests/integration/`, and `tests/threads/`. Supporting material is kept in `docs/` (Sphinx docs), `examples/`, `benchmark/`, `scripts/`, `ffi/`, and `assets/`.
+
+`curl_cffi/cli` contains the CLI implementation.
 
 ## Build, Test, and Development Commands
-- `make preprocess`: download and patch libcurl-impersonate sources; generates headers in `include/`.
-- `make install-editable`: install the package in editable mode for local iteration.
-- `make build`: build a wheel (runs preprocessing first).
-- `make lint`: run `ruff` checks (excludes `issues/`).
-- `make format`: auto-format with `ruff format` (excludes `issues/`).
-- `make test` or `python -bb -m pytest tests/unittest`: run the unit test suite.
+
+Install editable dependencies with `pip install -e .[test]` and `pip install -e .[dev]`. Use `make preprocess` before source builds; it fetches and patches the bundled libcurl headers. Common commands:
+
+- `make test` runs the unit suite (`python -bb -m pytest tests/unittest`).
+- `python -m pytest tests/integration` runs integration coverage separately.
+- `make lint` runs `ruff check --exclude issues`.
+- `ruff format --exclude issues` formats Python files.
+- `make build` preprocesses and builds a wheel into `dist/`.
 
 ## Coding Style & Naming Conventions
-- Python, 4-space indentation, PEP 8 conventions.
-- Formatting and linting are enforced with `ruff`; line length is 88.
-- Imports follow `isort`’s `black` profile.
-- Module and function names use `snake_case`; tests are named `test_*.py` with `test_*` functions.
+
+Target Python 3.10+ and follow existing Python conventions: 4-space indentation, `snake_case` for functions/modules, `CapWords` for classes, and concise docstrings/comments only where they clarify non-obvious logic. Keep line length at 88 characters to match Ruff. Prefer small, focused changes in `curl_cffi/` and keep public API names consistent with the existing `requests`-style surface.
 
 ## Testing Guidelines
-- Tests use `pytest` with async helpers (`pytest-asyncio`, `pytest-trio`).
-- Install test deps with `pip install -e .[test]` or `pip install -e .[dev]`.
-- Add unit tests under `tests/unittest/` unless the change clearly belongs in `integration/` or `threads/`.
+
+Pytest is the test runner; async coverage uses `pytest-asyncio` and `pytest-trio`. Add or update tests with every behavior change. Name files `test_*.py` and mirror the affected module or feature, for example `tests/unittest/test_websockets.py`. Run the smallest relevant test target locally first, then `make test` before opening a PR.
 
 ## Commit & Pull Request Guidelines
-- Commit messages are short, imperative summaries and often include a PR number, e.g., `Update docs (#705)`.
-- PRs should include a clear description, linked issues when applicable, and the tests/commands run.
-- Include benchmark notes when changing performance-sensitive code (e.g., `curl.py`, `_wrapper` bindings).
+
+Recent history favors short, imperative commit subjects, often with a type or scope prefix, for example `feat: add support for loongarch64` or `ws: fix BufferError crash`. Keep commits focused and easy to review. For pull requests, open from a branch other than `main`, enable "Allow edits by maintainers", describe the user-visible change, link related issues, and note platform-specific build or test impact when relevant.
 
 ## Configuration Notes
 - `make preprocess` and `make build` download upstream sources; ensure network access is available.

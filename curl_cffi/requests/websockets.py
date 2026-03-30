@@ -21,7 +21,7 @@ from select import select
 from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast, final
 
 from ..aio import CURL_SOCKET_BAD, get_selector
-from ..const import CurlECode, CurlInfo, CurlOpt, CurlWsFlag
+from ..const import CurlECode, CurlFollow, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
 from ..utils import CurlCffiWarning
 from .exceptions import SessionClosed, Timeout
@@ -310,7 +310,7 @@ class WebSocket(BaseWebSocket):
         cookies: CookieTypes | None = None,
         auth: tuple[str, str] | None = None,
         timeout: float | tuple[float, float] | object | None = NOT_SET,
-        allow_redirects: bool = True,
+        allow_redirects: bool | CurlFollow | str = True,
         max_redirects: int = 30,
         proxies: ProxySpec | None = None,
         proxy: str | None = None,
@@ -321,6 +321,7 @@ class WebSocket(BaseWebSocket):
         impersonate: BrowserTypeLiteral | None = None,
         ja3: str | None = None,
         akamai: str | None = None,
+        perk: str | None = None,
         extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
         default_headers: bool = True,
         quote: str | Literal[False] = "",
@@ -343,7 +344,8 @@ class WebSocket(BaseWebSocket):
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
                 supported.
             timeout: how many seconds to wait before giving up.
-            allow_redirects: whether to allow redirection.
+            allow_redirects: whether to allow redirection. Can be a bool, a
+                ``CurlFollow`` value, or the string ``"safe"``.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
                 same. format: ``{"http": proxy_url, "https": proxy_url}``.
@@ -356,6 +358,7 @@ class WebSocket(BaseWebSocket):
             impersonate: which browser version to impersonate.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
+            perk: perk string to impersonate.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
             default_encoding: Encoding for decoding content if charset is not found.
@@ -392,6 +395,7 @@ class WebSocket(BaseWebSocket):
             impersonate=impersonate,
             ja3=ja3,
             akamai=akamai,
+            perk=perk,
             extra_fp=extra_fp,
             default_headers=default_headers,
             quote=quote,

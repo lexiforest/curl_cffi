@@ -448,7 +448,7 @@ class FingerprintManager:
             with urlopen(request) as response:
                 data = json.loads(response.read())
                 items = data.get("items") if isinstance(data, dict) else data
-        except Exception as e:
+        except Exception:
             print(f"Failed to access fingerprint endpoint at {url}")
             return
 

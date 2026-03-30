@@ -343,6 +343,8 @@ class CurlOpt(IntEnum):
     HTTP3_PSEUDO_HEADERS_ORDER = 10000 + 1025
     HTTP3_SETTINGS = 10000 + 1026
     QUIC_TRANSPORT_PARAMETERS = 10000 + 1027
+    HTTP3_SIG_HASH_ALGS = 10000 + 1028
+    HTTP3_TLS_EXTENSION_ORDER = 10000 + 1029
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -605,3 +607,21 @@ class CurlIpResolve(IntEnum):
     WHATEVER = 0  # default, uses addresses to all IP versions that your system allows
     V4 = 1  # uses only IPv4 addresses/connections
     V6 = 2  # uses only IPv6 addresses/connections
+
+
+class CurlFollow(IntEnum):
+    """``CURLFOLLOW_*`` consts for redirect behavior"""
+
+    # /* generic follow redirects
+    ALL = 1
+
+    # Do not use the custom method in the follow-up request if the HTTP code
+    # instructs so (301, 302, 303).
+    OBEYCODE = 2
+
+    # Only use the custom method in the first request, always reset in the next
+    FIRSTONLY = 3
+
+    # curl-impersonate: Follow redirects, but reject redirects to
+    # internal/private IP addresses (SSRF protection)
+    SAFE = 4

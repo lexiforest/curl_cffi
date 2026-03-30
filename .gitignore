@@ -25,3 +25,5 @@ include/
 .ruff_cache/
 .aider*
 docs/_build/
+.claude
+uv.lock
