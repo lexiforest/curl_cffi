@@ -10,6 +10,7 @@ on:
       - feature/*
       - release/*
       - chore/*
+      - security/*
     tags:
       - v*
 
@@ -28,7 +29,7 @@ jobs:
     - name: Lint
       run: |
         pip install mypy ruff
-        make lint
+        ruff check --exclude issues
 
   sdist:
     name: Build sdist wheel

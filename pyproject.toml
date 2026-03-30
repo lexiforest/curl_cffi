@@ -1,14 +1,11 @@
 [project]
 name = "curl_cffi"
-version = "0.15.0b5"
+version = "0.15.1"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = [
-    "cffi>=2.0.0",
-    "certifi>=2024.2.2",
-]
+dependencies = ["cffi>=2.0.0", "certifi>=2024.2.2", "rich"]
 readme = "README.md"
 requires-python = ">=3.10"
 urls = { "repository" = "https://github.com/lexiforest/curl_cffi" }
@@ -26,16 +23,12 @@ classifiers = [
 
 
 [project.optional-dependencies]
-extra = [
-    "readability-lxml>=0.8.1",
-    "markdownify>=1.1.0",
-    "lxml_html_clean",
-]
+extra = ["readability-lxml>=0.8.1", "markdownify>=1.1.0", "lxml_html_clean"]
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
     "cryptography>=46.0.4,<47.0",
-    "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
+    "httpx==0.23.1",                  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "mypy>=1.9.0,<2.0",
     "pytest>=8.1.1,<9.0",
     "pytest-asyncio>=0.23.6,<1.0",
@@ -47,15 +40,12 @@ dev = [
     "websockets>=14.0",
     "typing_extensions",
 ]
-build = [
-    "cibuildwheel",
-    "wheel",
-]
+build = ["cibuildwheel", "wheel"]
 test = [
     "charset_normalizer>=3.3.2,<4.0",
     "cryptography>=46.0.4,<47.0",
     "litestar>=2.19.0,<3.0",
-    "httpx==0.23.1",  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
+    "httpx==0.23.1",                  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
     "proxy.py>=2.4.3,<3.0",
     "pytest>=8.1.1,<9.0",
     "pytest-asyncio>=0.23.6,<1.0",
@@ -77,7 +67,7 @@ build-backend = "setuptools.build_meta"
 
 
 [tool.setuptools]
-packages = ["curl_cffi", "curl_cffi.requests"]
+packages = ["curl_cffi", "curl_cffi.cli", "curl_cffi.requests"]
 package-data = { curl_cffi = ["libcurl.dll"] }
 
 
@@ -126,7 +116,7 @@ archs = ["auto", "aarch64", "riscv64", "i686", "armv7l"]
 manylinux-x86_64-image = "manylinux2014"
 manylinux-aarch64-image = "manylinux2014"
 manylinux-i686-image = "manylinux2014"
-environment = { LD_LIBRARY_PATH="$HOME/.local/lib" }
+environment = { LD_LIBRARY_PATH = "$HOME/.local/lib" }
 environment-pass = ["LD_LIBRARY_PATH"]
 
 [tool.cibuildwheel.android]
@@ -151,15 +141,15 @@ line-length = 88
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle
-    "F",  # Pyflakes
+    "E",   # pycodestyle
+    "F",   # Pyflakes
     "UP",  # pyupgrade
-    "B",  # flake8-bugbear
-    "SIM",  # flake8-simplify
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
 ]
 ignore = [
     "UP007",
-    "UP045",  # X | None
+    "UP045", # X | None
 ]
 
 [tool.isort]

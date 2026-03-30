@@ -2,8 +2,14 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 1.5.1
+VERSION := 1.5.2
 CURL_VERSION := curl-8_15_0
+
+ifeq ($(OS),Windows_NT)
+    CURRENT_USER := $(shell echo %USERNAME%)
+else
+    CURRENT_USER := $(shell whoami)
+endif
 
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
@@ -28,7 +34,7 @@ curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
 	touch .preprocessed
 
 local-curl: $(CURL_VERSION)
-	cp /usr/local/lib/libcurl-impersonate* /Users/runner/work/_temp/install/lib/
+	cp /usr/local/lib/libcurl-impersonate* /Users/$(CURRENT_USER)/work/_temp/install/lib/
 	cd $(CURL_VERSION)
 	for p in ../curl-impersonate/patches/curl*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
@@ -39,7 +45,7 @@ local-curl: $(CURL_VERSION)
 	touch .preprocessed
 
 gen-const:
-	python scripts/generate_consts.py $(CURL_VERSION)
+	python3 scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
@@ -53,10 +59,10 @@ build: .preprocessed
 	python -m build --wheel
 
 lint:
-	ruff check --exclude issues
+	uv run ruff check --exclude issues
 
 format:
-	ruff format --exclude issues
+	uv run ruff format --exclude issues
 
 test:
 	python -bb -m pytest tests/unittest

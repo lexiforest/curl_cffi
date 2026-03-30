@@ -8,7 +8,7 @@ import pytest
 from charset_normalizer import detect
 
 import curl_cffi
-from curl_cffi import Curl, CurlOpt, requests
+from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import HTTPError
@@ -35,6 +35,20 @@ def test_post_dict(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
     assert r.status_code == 200
     assert r.content == b"foo=bar"
+
+
+def test_response_request_body(server):
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
+    assert r.request is not None
+    assert r.request.body == b"foo=bar"
+
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
+    assert r.request is not None
+    assert r.request.body == b'{"foo":"bar"}'
+
+    r = requests.get(str(server.url))
+    assert r.request is not None
+    assert r.request.body is None
 
 
 def test_callback(server):
@@ -462,6 +476,26 @@ def test_too_many_redirects(server):
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
+
+
+def test_safe_redirect_blocks_private_ip(server):
+    """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
+    target = str(server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    r = requests.get(url, allow_redirects=True)
+    assert r.status_code == 200
+    assert r.redirect_count == 1
+
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
+    with pytest.raises(requests.RequestsError, match="SSRF"):
+        requests.get(url, allow_redirects=CurlFollow.SAFE)
+
+
+def test_safe_redirect_string(server):
+    """The string 'safe' should behave the same as CurlFollow.SAFE."""
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
+    with pytest.raises(requests.RequestsError, match="SSRF"):
+        requests.get(url, allow_redirects="safe")
 
 
 def test_verify(https_server):
