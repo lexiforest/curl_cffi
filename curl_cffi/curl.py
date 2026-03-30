@@ -146,8 +146,8 @@ def read_buffer_callback(ptr, size, nmemb, userdata):
         return 0
     if len(data) > max_len:
         raise CurlError(
-            f"Read callback returned {len(data)} bytes, but only {max_len} bytes are allowed."
-        )  # noqa: E501
+            f"Read callback returned {len(data)} bytes, but only {max_len} bytes are allowed."  # noqa: E501
+        )
     ffi.memmove(ptr, data, len(data))
     return len(data)
 
@@ -168,8 +168,8 @@ def read_callback(ptr, size, nmemb, userdata):
         return 0
     if len(data) > max_len:
         raise CurlError(
-            f"Read callback returned {len(data)} bytes, but only {max_len} bytes are allowed."
-        )  # noqa: E501
+            f"Read callback returned {len(data)} bytes, but only {max_len} bytes are allowed."  # noqa: E501
+        )
     ffi.memmove(ptr, data, len(data))
     return len(data)
 
