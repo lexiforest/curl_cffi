@@ -39,7 +39,7 @@ local-curl: $(CURL_VERSION)
 	touch .preprocessed
 
 gen-const:
-	python scripts/generate_consts.py $(CURL_VERSION)
+	python3 scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files

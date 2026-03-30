@@ -19,6 +19,7 @@ curl_cffi's documentation
    cookies
    community
    api
+   security
    faq
    changelog
    dev

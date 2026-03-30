@@ -14,7 +14,7 @@ from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
-from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from ..utils import CurlCffiWarning
 from .cookies import Cookies
@@ -363,7 +363,7 @@ def set_curl_options(
     files: Optional[dict[object, object]] = None,
     auth: Optional[tuple[str, str]] = None,
     timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
-    allow_redirects: Optional[bool] = True,
+    allow_redirects: Optional[Union[bool, CurlFollow, str]] = True,
     max_redirects: Optional[int] = 30,
     proxies_list: list[Optional[ProxySpec]] = [],  # noqa: B006
     proxy: Optional[str] = None,
@@ -538,7 +538,12 @@ def set_curl_options(
             c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(timeout))
 
     # allow_redirects
-    c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))  # type: ignore
+    if isinstance(allow_redirects, CurlFollow):
+        c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
+    elif allow_redirects == "safe":
+        c.setopt(CurlOpt.FOLLOWLOCATION, int(CurlFollow.SAFE))
+    else:
+        c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))  # type: ignore
 
     # max_redirects
     c.setopt(CurlOpt.MAXREDIRS, max_redirects)

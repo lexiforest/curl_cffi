@@ -28,7 +28,7 @@ from typing import (
 from urllib.parse import urlparse
 
 from ..aio import AsyncCurl
-from ..const import CurlHttpVersion, CurlInfo, CurlOpt
+from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
 from .cookies import Cookies, CookieTypes, CurlMorsel
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
         verify: bool
         timeout: Union[float, tuple[float, float]]
         trust_env: bool
-        allow_redirects: bool
+        allow_redirects: Union[bool, CurlFollow, str]
         max_redirects: int
         retry: Union[int, RetryStrategy]
         impersonate: Optional[BrowserTypeLiteral]
@@ -101,7 +101,7 @@ if TYPE_CHECKING:
         files: Optional[dict]
         auth: Optional[tuple[str, str]]
         timeout: Optional[Union[float, tuple[float, float], object]]
-        allow_redirects: Optional[bool]
+        allow_redirects: Optional[Union[bool, CurlFollow, str]]
         max_redirects: Optional[int]
         proxies: Optional[ProxySpec]
         proxy: Optional[str]
@@ -214,7 +214,7 @@ class BaseSession(Generic[R]):
         verify: bool = True,
         timeout: Union[float, tuple[float, float]] = 30,
         trust_env: bool = True,
-        allow_redirects: bool = True,
+        allow_redirects: Union[bool, CurlFollow, str] = True,
         max_redirects: int = 30,
         retry: Optional[Union[int, RetryStrategy]] = 0,
         impersonate: Optional[BrowserTypeLiteral] = None,
@@ -432,7 +432,10 @@ class Session(BaseSession[R]):
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
             trust_env: use http_proxy/https_proxy and other environments, default True.
-            allow_redirects: whether to allow redirection.
+            allow_redirects: whether to allow redirection. Can be a bool, a
+                ``CurlFollow`` value, or the string ``"safe"``. Use
+                ``CurlFollow.SAFE`` or ``"safe"`` to reject redirects to
+                internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
             impersonate: which browser version to impersonate in the session.
@@ -590,7 +593,7 @@ class Session(BaseSession[R]):
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
         timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
-        allow_redirects: Optional[bool] = None,
+        allow_redirects: Optional[Union[bool, CurlFollow, str]] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
@@ -750,7 +753,7 @@ class Session(BaseSession[R]):
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
         timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
-        allow_redirects: Optional[bool] = None,
+        allow_redirects: Optional[Union[bool, CurlFollow, str]] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
@@ -885,7 +888,10 @@ class AsyncSession(BaseSession[R]):
             verify: whether to verify https certs.
             timeout: how many seconds to wait before giving up.
             trust_env: use http_proxy/https_proxy and other environments, default True.
-            allow_redirects: whether to allow redirection.
+            allow_redirects: whether to allow redirection. Can be a bool, a
+                ``CurlFollow`` value, or the string ``"safe"``. Use
+                ``CurlFollow.SAFE`` or ``"safe"`` to reject redirects to
+                internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
             impersonate: which browser version to impersonate in the session.
@@ -1003,7 +1009,7 @@ class AsyncSession(BaseSession[R]):
         cookies: CookieTypes | None = None,
         auth: tuple[str, str] | None = None,
         timeout: float | tuple[float, float] | NotSetType | None = NOT_SET,
-        allow_redirects: bool | None = None,
+        allow_redirects: bool | CurlFollow | str | None = None,
         max_redirects: int | None = None,
         proxies: ProxySpec | None = None,
         proxy: str | None = None,
@@ -1044,7 +1050,10 @@ class AsyncSession(BaseSession[R]):
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
                 supported.
             timeout: how many seconds to wait before giving up.
-            allow_redirects: whether to allow redirection.
+            allow_redirects: whether to allow redirection. Can be a bool, a
+                ``CurlFollow`` value, or the string ``"safe"``. Use
+                ``CurlFollow.SAFE`` or ``"safe"`` to reject redirects to
+                internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
                 same. format: ``{"http": proxy_url, "https": proxy_url}``.
@@ -1194,7 +1203,7 @@ class AsyncSession(BaseSession[R]):
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
         timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
-        allow_redirects: Optional[bool] = None,
+        allow_redirects: Optional[Union[bool, CurlFollow, str]] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
@@ -1342,7 +1351,7 @@ class AsyncSession(BaseSession[R]):
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
         timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
-        allow_redirects: Optional[bool] = None,
+        allow_redirects: Optional[Union[bool, CurlFollow, str]] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
         proxy: Optional[str] = None,
