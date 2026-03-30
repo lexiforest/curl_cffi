@@ -2,7 +2,7 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 1.5.1
+VERSION := 1.5.2
 CURL_VERSION := curl-8_15_0
 
 $(CURL_VERSION):
@@ -39,7 +39,7 @@ local-curl: $(CURL_VERSION)
 	touch .preprocessed
 
 gen-const:
-	python scripts/generate_consts.py $(CURL_VERSION)
+	python3 scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
@@ -53,10 +53,10 @@ build: .preprocessed
 	python -m build --wheel
 
 lint:
-	ruff check --exclude issues
+	uv run ruff check --exclude issues
 
 format:
-	ruff format --exclude issues
+	uv run ruff format --exclude issues
 
 test:
 	python -bb -m pytest tests/unittest

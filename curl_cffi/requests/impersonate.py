@@ -27,6 +27,7 @@ BrowserTypeLiteral = Literal[
     "chrome136",
     "chrome142",
     "chrome145",
+    "chrome146",
     "chrome99_android",
     "chrome131_android",
     # Safari
@@ -77,7 +78,7 @@ BrowserTypeLiteral = Literal[
 ]
 
 
-DEFAULT_CHROME = "chrome145"
+DEFAULT_CHROME = "chrome146"
 DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari2601"
 DEFAULT_SAFARI_IOS = "safari260_ios"
@@ -89,7 +90,7 @@ DEFAULT_TOR = "tor145"
 
 
 REAL_TARGET_MAP = {
-    "chrome": "chrome145",
+    "chrome": "chrome146",
     "edge": "edge101",
     "safari": "safari2601",
     "safari_ios": "safari260_ios",
@@ -143,6 +144,7 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     chrome136 = "chrome136"
     chrome142 = "chrome142"
     chrome145 = "chrome145"
+    chrome146 = "chrome146"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari153 = "safari153"
@@ -183,6 +185,10 @@ class ExtraFingerprints:
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
     http2_no_priority: bool = False
+    split_cookies: Optional[bool] = None
+    form_boundary: Optional[bool] = None
+    http3_sig_hash_algs: Optional[str] = None
+    http3_tls_extension_order: Optional[str] = None
 
 
 class ExtraFpDict(TypedDict, total=False):
@@ -196,6 +202,10 @@ class ExtraFpDict(TypedDict, total=False):
     http2_stream_weight: int
     http2_stream_exclusive: int
     http2_no_priority: bool
+    split_cookies: Optional[bool]
+    form_boundary: Optional[bool]
+    http3_sig_hash_algs: Optional[str]
+    http3_tls_extension_order: Optional[str]
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
