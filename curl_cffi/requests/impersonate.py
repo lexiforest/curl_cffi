@@ -185,6 +185,10 @@ class ExtraFingerprints:
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
     http2_no_priority: bool = False
+    split_cookies: Optional[bool] = None
+    form_boundary: Optional[bool] = None
+    http3_sig_hash_algs: Optional[str] = None
+    http3_tls_extension_order: Optional[str] = None
 
 
 class ExtraFpDict(TypedDict, total=False):
@@ -198,6 +202,10 @@ class ExtraFpDict(TypedDict, total=False):
     http2_stream_weight: int
     http2_stream_exclusive: int
     http2_no_priority: bool
+    split_cookies: Optional[bool]
+    form_boundary: Optional[bool]
+    http3_sig_hash_algs: Optional[str]
+    http3_tls_extension_order: Optional[str]
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor

@@ -321,6 +321,7 @@ class WebSocket(BaseWebSocket):
         impersonate: BrowserTypeLiteral | None = None,
         ja3: str | None = None,
         akamai: str | None = None,
+        perk: str | None = None,
         extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
         default_headers: bool = True,
         quote: str | Literal[False] = "",
@@ -357,6 +358,7 @@ class WebSocket(BaseWebSocket):
             impersonate: which browser version to impersonate.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
+            perk: perk string to impersonate.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
             default_encoding: Encoding for decoding content if charset is not found.
@@ -393,6 +395,7 @@ class WebSocket(BaseWebSocket):
             impersonate=impersonate,
             ja3=ja3,
             akamai=akamai,
+            perk=perk,
             extra_fp=extra_fp,
             default_headers=default_headers,
             quote=quote,
