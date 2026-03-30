@@ -18,7 +18,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
 from select import select
-from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast, final
+from typing import TYPE_CHECKING, Final, Literal, TypeVar, cast, final
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlFollow, CurlInfo, CurlOpt, CurlWsFlag
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     ON_OPEN_T = Callable[["WebSocket"], None]
     ON_CLOSE_T = Callable[["WebSocket", int, str], None]
     RECV_QUEUE_ITEM = tuple[bytes, int]
-    SEND_QUEUE_ITEM = tuple[bytes | bytearray | memoryview, CurlWsFlag]
+    SEND_QUEUE_ITEM = tuple[bytes | bytearray | memoryview, CurlWsFlag | int]
 
 
 # We need a partial for dumps() because a custom function may not accept the parameter
@@ -690,7 +690,7 @@ class AsyncWebSocket(BaseWebSocket):
         "_block_on_recv_queue_full",
     )
 
-    _MAX_CURL_FRAME_SIZE: ClassVar[int] = 65536
+    _MAX_CURL_FRAME_SIZE: Final[int] = 65536
 
     def __init__(
         self,
@@ -833,6 +833,7 @@ class AsyncWebSocket(BaseWebSocket):
         if exc_type is None:
             await self.close()
         else:
+            # Don't mask existing exception.
             with suppress(CurlError):
                 await self.close()
 
@@ -1068,7 +1069,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def send(
         self,
         payload: str | bytes | bytearray | memoryview,
-        flags: CurlWsFlag = CurlWsFlag.BINARY,
+        flags: CurlWsFlag | int = CurlWsFlag.BINARY,
         timeout: float | None = None,
     ) -> None:
         """Send a WebSocket message.
@@ -1084,8 +1085,8 @@ class AsyncWebSocket(BaseWebSocket):
             WebSocketTimeout: The send operation timed out.
 
         Note:
-            Large payloads are automatically split into fragments of 64KB,
-            but arrive as a single logical message by using the CURLWS_CONT flag.
+            Large payloads are automatically split into fragments of ``64 KiB``,
+            but arrive as a single logical message by using the ``CURLWS_CONT`` flag.
 
         Warning:
             This method is non-blocking. It queues the message for background
@@ -1607,7 +1608,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                     try:
                         data_to_coalesce: dict[
-                            CurlWsFlag, list[bytes | memoryview | bytearray]
+                            CurlWsFlag | int, list[bytes | memoryview | bytearray]
                         ] = {}
                         for payload, frame in batch:
                             if frame & control_frame_flags:
@@ -1687,43 +1688,45 @@ class AsyncWebSocket(BaseWebSocket):
         # Message specific values
         base_flags: int = flags & ~cont_flag
         view: memoryview = memoryview(payload)
-        total_bytes: int = len(view)
+        total_bytes: int = view.nbytes
         offset: int = 0
         write_retries: int = 0
+        frame_end: int = 0
+        current_flags: CurlWsFlag | int = flags
 
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
-            # Calculate the size of the current fragment
-            chunk: memoryview = view[offset : offset + max_frame_size]
-            chunk_len: int = len(chunk)
 
-            # Handle frame fragmentation and prevent CONT leakage.
-            current_flags: CurlWsFlag | int = base_flags
-            if (offset + chunk_len) < total_bytes:
-                current_flags |= cont_flag
+            # Boundary check: Calculate next fragment ONLY when needed
+            if offset == frame_end:
+                if total_bytes - offset > max_frame_size:
+                    frame_end = offset + max_frame_size
+                    current_flags = base_flags | cont_flag
+                else:
+                    frame_end = total_bytes
+                    current_flags = flags
 
             try:
                 # libcurl returns the number of bytes actually sent
-                n_sent: int = curl_ws_send(chunk, current_flags)
+                n_sent: int = curl_ws_send(view[offset:frame_end], current_flags)
 
                 if n_sent == 0:
                     # Handle 0-byte payload (Valid Empty Frame)
-                    if chunk_len == 0:
+                    if frame_end - offset == 0:
                         return True
 
                     # Raise AGAIN to jump to the existing wait logic below
-                    if chunk_len > 0:
-                        write_retries += 1
-                        if write_retries >= max_zero_writes:
-                            self._finalize_connection(
-                                WebSocketError(
-                                    (f"Writer stalled ({write_retries} attempts)."),
-                                    CurlECode.WRITE_ERROR,
-                                )
+                    write_retries += 1
+                    if write_retries >= max_zero_writes:
+                        self._finalize_connection(
+                            WebSocketError(
+                                f"Writer stalled ({write_retries} attempts).",
+                                CurlECode.WRITE_ERROR,
                             )
-                            return False
+                        )
+                        return False
 
-                        raise CurlError("0 bytes sent", e_again)
+                    raise CurlError("0 bytes sent", e_again)
 
                 if write_retries:
                     write_retries = 0
@@ -1886,7 +1889,12 @@ class AsyncWebSocket(BaseWebSocket):
             self._close_code = e.code
 
         if self.autoclose and not self.closed:
-            await self.close(self._close_code or WsCloseCode.OK)
+            close_code: int | CurlECode | Literal[WsCloseCode.OK] = (
+                WsCloseCode.OK
+                if self._close_code == WsCloseCode.UNKNOWN
+                else (self._close_code or WsCloseCode.OK)
+            )
+            await self.close(close_code)
         else:
             # If not sending a reply, we must still terminate the connection.
             self.terminate()
