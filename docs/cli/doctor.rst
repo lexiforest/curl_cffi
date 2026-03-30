@@ -19,3 +19,10 @@ Example output:
     machine: arm64
     curl_cffi: 0.15.0b4
     libcurl: libcurl/8.15.0
+    api_root: https://api.impersonate.pro
+    config_path: /Users/you/.config/curl_cffi/config.json
+    config_present: False
+    api_key_configured: False
+    fingerprint_path: /Users/you/.config/curl_cffi/fingerprints.json
+    fingerprint_present: False
+    fingerprint_count: 0

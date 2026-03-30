@@ -76,4 +76,5 @@ Quick examples
    options
    run
    doctor
+   pro
    vs_others

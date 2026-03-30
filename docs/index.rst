@@ -166,7 +166,7 @@ Since v0.15.1, you can update fingerprints without updating curl_cffi, see :doc:
 
 Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
 
-There is a CLI helper for managing fingerprints and debugging, see :doc:`cli`.
+There is a CLI helper for managing fingerprints and debugging, see :doc:`cli/_index`.
 
 You can also find common use cases in the `examples <https://github.com/lexiforest/curl_cffi/tree/main/examples>`_ directory.
 
