@@ -617,7 +617,6 @@ def set_curl_options(
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
 
-
     # ja3 string
     if ja3:
         if impersonate:
