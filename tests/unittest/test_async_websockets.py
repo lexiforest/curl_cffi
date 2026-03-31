@@ -1629,7 +1629,7 @@ class TestAsyncWebSocketCoalesceFrames:
             assert msg1 == b"AB"
             assert flags1 & CurlWsFlag.TEXT
 
-            # (The server handles the PING and sends a PONG automatically behind the scenes,
+            # (The server handles the PING and sends a PONG automatically,
             # so the next data frame we see from the echo handler should be "CD")
 
             # Chunk 2: "CD"
