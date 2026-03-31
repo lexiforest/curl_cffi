@@ -1607,40 +1607,29 @@ class AsyncWebSocket(BaseWebSocket):
                                 break
 
                     try:
-                        data_to_coalesce: dict[
-                            CurlWsFlag | int, list[bytes | memoryview | bytearray]
-                        ] = {}
+                        # Group consecutive frames with same flags to preserve order.
+                        # Control frames are strictly isolated and never coalesced.
+                        coalesced: list[
+                            tuple[list[bytes | bytearray | memoryview], int]
+                        ] = []
                         for payload, frame in batch:
                             if frame & control_frame_flags:
-                                # Flush any pending data before the control frame.
-                                for frame_group, payloads in data_to_coalesce.items():
-                                    if not await send_payload(
-                                        b"".join(payloads), frame_group
-                                    ):
-                                        return
-
-                                    # Prevent large batches from starving loop
-                                    if loop_time() >= next_yield:
-                                        await asyncio.sleep(0)
-                                        next_yield = loop_time() + time_slice
-
-                                data_to_coalesce.clear()
-
-                                if not await send_payload(payload, frame):
-                                    return
-
-                                # Yield check on coalesced frames
-                                if loop_time() >= next_yield:
-                                    await asyncio.sleep(0)
-                                    next_yield = loop_time() + time_slice
-
+                                coalesced.append(([payload], frame))
                             else:
-                                data_to_coalesce.setdefault(frame, []).append(payload)
+                                if coalesced and coalesced[-1][1] == frame:
+                                    coalesced[-1][0].append(payload)
+                                else:
+                                    coalesced.append(([payload], frame))
 
-                        # Send any remaining data at the end of the batch.
-                        for frame_group, payloads in data_to_coalesce.items():
+                        # Transmit the coalesced groups in their exact original order
+                        for payloads, frame_group in coalesced:
                             if not await send_payload(b"".join(payloads), frame_group):
                                 return
+
+                            # Perform yield checks
+                            if loop_time() >= next_yield:
+                                await asyncio.sleep(0)
+                                next_yield = loop_time() + time_slice
 
                     finally:
                         # Mark all processed items as done.

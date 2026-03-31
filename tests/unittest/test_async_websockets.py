@@ -1568,6 +1568,75 @@ class TestAsyncWebSocketCoalesceFrames:
                 data, _ = await ws.recv(timeout=5.0)
                 assert f"msg_{i}".encode() in data
 
+    async def test_coalesce_preserves_message_order(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that coalescing does not reorder messages of different types."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            coalesce_frames=True,
+            max_send_batch_size=10,
+        ) as ws:
+            # Synchronously queue 3 different message types so they form a single batch
+            await ws.send_str("text_1")
+            await ws.send_binary(b"binary_1")
+            await ws.send_str("text_2")
+
+            await ws.flush(timeout=2.0)
+
+            # Assert they arrive in the exact order they were queued
+            msg1, flags1 = await ws.recv(timeout=2.0)
+            assert flags1 & CurlWsFlag.TEXT
+            assert msg1 == b"text_1"
+
+            msg2, flags2 = await ws.recv(timeout=2.0)
+            assert flags2 & CurlWsFlag.BINARY
+            assert msg2 == b"binary_1"
+
+            msg3, flags3 = await ws.recv(timeout=2.0)
+            assert flags3 & CurlWsFlag.TEXT
+            assert msg3 == b"text_2"
+
+    async def test_coalesce_control_frame_interleaving(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that control frames split coalescing groups and don't get reordered."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            coalesce_frames=True,
+            max_send_batch_size=10,
+        ) as ws:
+            # Queue 2 text frames, a ping, and 2 more text frames
+            await ws.send_str("A")
+            await ws.send_str("B")
+            await ws.ping(b"heartbeat")
+            await ws.send_str("C")
+            await ws.send_str("D")
+
+            await ws.flush(timeout=2.0)
+
+            # The echo server should return the coalesced chunks separately
+            # Chunk 1: "AB"
+            msg1, flags1 = await ws.recv(timeout=2.0)
+            assert msg1 == b"AB"
+            assert flags1 & CurlWsFlag.TEXT
+
+            # (The server handles the PING and sends a PONG automatically behind the scenes,
+            # so the next data frame we see from the echo handler should be "CD")
+
+            # Chunk 2: "CD"
+            msg2, flags2 = await ws.recv(timeout=2.0)
+            assert msg2 == b"CD"
+            assert flags2 & CurlWsFlag.TEXT
+
 
 class TestAsyncWebSocketFragmentationFix:
     """Tests targeting the payload fragmentation and partial write fixes."""
