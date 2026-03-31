@@ -1230,6 +1230,7 @@ class AsyncWebSocket(BaseWebSocket):
                 return
 
             self.closed = True
+            close_start: float = self.loop.time()
 
             try:
                 if (
@@ -1246,7 +1247,6 @@ class AsyncWebSocket(BaseWebSocket):
 
                     # Send Close Frame and wait for queue to empty
                     close_frame: bytes = self._pack_close_frame(code, message)
-                    close_start: float = self.loop.time()
                     await asyncio.wait_for(
                         self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
                         timeout=timeout,
@@ -1263,7 +1263,10 @@ class AsyncWebSocket(BaseWebSocket):
                 # Ensure resources are cleaned up
                 self.terminate()
                 with suppress(asyncio.TimeoutError):
-                    _ = await asyncio.wait_for(self._terminated_event.wait(), timeout)
+                    _ = await asyncio.wait_for(
+                        self._terminated_event.wait(),
+                        max(0.0, timeout - (self.loop.time() - close_start)),
+                    )
 
     def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
         """
@@ -1356,7 +1359,7 @@ class AsyncWebSocket(BaseWebSocket):
         e_nothing: CurlECode = CurlECode.GOT_NOTHING
         close_flag: CurlWsFlag = CurlWsFlag.CLOSE
         cont_flag: CurlWsFlag = CurlWsFlag.CONT
-        control_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
+        data_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
         max_msg_size: int = self._max_message_size
         block_on_recv: bool = self._block_on_recv_queue_full
         errno_11_msgs: tuple[str, ...] = (
@@ -1457,7 +1460,7 @@ class AsyncWebSocket(BaseWebSocket):
                     recv_error_retries = 0
 
                 # Data Frames (Text / Binary / Cont)
-                if flags & control_mask:
+                if flags & data_mask:
                     # Perform message size checks
                     msg_size += len(chunk)
                     if msg_size > max_msg_size:
