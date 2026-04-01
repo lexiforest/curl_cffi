@@ -452,6 +452,11 @@ class WebSocket(BaseWebSocket):
             try:
                 # Try to receive the first fragment first
                 chunk, frame = self.recv_fragment()
+
+                # Ignore control frames during data assembly
+                if frame.flags & (CurlWsFlag.PING | CurlWsFlag.PONG):
+                    continue
+
                 flags = frame.flags
                 chunks.append(chunk)
                 if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
@@ -987,8 +992,10 @@ class AsyncWebSocket(BaseWebSocket):
         # Timeout occurred and no message
         if not done:
             _ = queue_waiter.cancel()
-            with suppress(asyncio.CancelledError):
-                await queue_waiter
+            try:
+                return await queue_waiter
+            except asyncio.CancelledError:
+                pass
 
             # Prefer transport error over timeout if both happen
             if self._transport_exception is not None:
@@ -1037,7 +1044,7 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv_json(
         self,
         *,
-        loads: Callable[[str | bytes], T] = json_loads,
+        loads: Callable[[str], T] = json_loads,
         timeout: float | None = None,
     ) -> T:
         """Receive a JSON frame.
@@ -1049,7 +1056,7 @@ class AsyncWebSocket(BaseWebSocket):
         Raises:
             WebSocketError: Received frame is invalid or failed to decode JSON.
         """
-        data, _ = await self.recv(timeout=timeout)
+        data: str = await self.recv_str(timeout=timeout)
         if not data:
             raise WebSocketError(
                 "Received empty frame, cannot decode JSON", WsCloseCode.INVALID_DATA
@@ -1379,7 +1386,7 @@ class AsyncWebSocket(BaseWebSocket):
         chunks_clear: Callable[[], None] = chunks.clear
 
         try:
-            while not self.closed:
+            while not self._terminated:
                 try:
                     chunk, frame = curl_ws_recv()
 

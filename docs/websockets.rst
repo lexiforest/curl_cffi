@@ -50,9 +50,9 @@ The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performan
 
 **Architecture**
 
-This implementation uses a **decoupled I/O model** to ensure high performance:
+This implementation uses a **background I/O model** to ensure high performance:
 
-1.  **Outgoing**: Messages are queued for delivery (non-blocking unless queue full).
+1.  **Outgoing**: Messages are queued for delivery (non-blocking unless the queue is full).
 2.  **Incoming**: A background task continuously reads from the network and populates a receive queue.
 
 This design decouples your application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
@@ -104,7 +104,7 @@ Methods for sending data place the message into an outgoing queue. They are gene
 
 **Pings**
 
-Libcurl handles PONGs automatically, but you can send a manual PING frame if needed (e.g., application-layer keepalive).
+Libcurl handles PONGs automatically, but you can send a manual PING frame if needed (e.g., for application-layer keepalives).
 
 .. code-block:: python
 
@@ -124,7 +124,7 @@ All receive methods support an optional ``timeout`` argument (in seconds).
 
 .. code-block:: python
 
-    # Receive as string (decodes utf-8 automatically)
+    # Receive as string (enforces TEXT frame and decodes utf-8 automatically)
     msg = await ws.recv_str()
 
     # Receive with a 5-second timeout
@@ -146,7 +146,7 @@ The most pythonic way to consume a stream is iteration.
 
 .. note::
 
-    Iteration yields ``bytes``. If you expect text, you must decode it yourself.
+    Iteration yields raw ``bytes``. If you expect text, you must decode it yourself.
 
 .. code-block:: python
 
@@ -170,12 +170,12 @@ The context manager handles closing automatically. If you need to close manually
     # Forcefully terminate the connection
     ws.terminate()
 
-Both methods are idempotent and safe to call multiple times. While ``close()`` waits for cleanup, ``terminate()`` is thread and task-safe, allowing for immediate disconnection from any thread without waiting for a graceful shutdown.
+Both methods are idempotent and safe to call multiple times. While ``close()`` initiates a graceful handshake and waits for cleanup, ``terminate()`` is thread-safe and task-safe, allowing for immediate disconnection from any thread without waiting for a graceful shutdown.
 
 Flushing
 --------
 
-Because ``send()`` is decoupled from the network, returning from ``await send()`` means the message is queued for transmission. Call ``flush()`` after sending to guarantee that all queued messages have been written to the socket.
+Because ``send()`` is decoupled from the network, returning from ``await send()`` simply means the message is queued for transmission. Call ``flush()`` after sending to guarantee that all queued messages have been written to the socket.
 
 .. code-block:: python
 
@@ -235,12 +235,34 @@ Message Limits
     # Allow large received payloads (e.g. 16MB)
     ws = await session.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
-There are no limits on the size of the message that can be sent. Messages larger than 64KB are broken into chunks of that size and sent using the `CURLWS_CONT <https://everything.curl.dev/helpers/ws/write.html#curlws_cont>`_ flag which means it arrives as a single logical message on the server.
+There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, appearing as a single logical message to the server.
+
+Manual Fragmentation
+--------------------
+
+If you need to manually fragment a large message, you can send it in chunks by combining the frame type with the ``CURLWS_CONT`` flag.
+The final chunk should drop the ``CONT`` flag to indicate the end of the message.
+
+.. warning::
+    According to the libcurl specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in *every* chunk, alongside the ``CONT`` flag. Do not send ``CONT`` by itself.
+
+.. code-block:: python
+
+    from curl_cffi import CurlWsFlag
+
+    # Send the first chunk
+    await ws.send("Part 1...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+
+    # Send intermediate chunks (Type flag MUST be included)
+    await ws.send("Part 2...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+
+    # Send the final chunk (drops the CONT flag)
+    await ws.send("Final part", flags=CurlWsFlag.TEXT)
 
 Frame Coalescing (Throughput)
 -----------------------------
 
-For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple queued message payloads from the send queue into a single message.
+For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple queued message payloads from the send queue into a single transmission batch to reduce syscall overhead.
 
 *   **coalesce_frames** (default: ``False``): Enable batching.
 *   **max_send_batch_size** (default: 32): Max messages to merge.
