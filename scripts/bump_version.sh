@@ -11,3 +11,6 @@ gsed "s/^version = .*/version = \"${VERSION}\"/g" -i pyproject.toml
 
 # build.py
 gsed "s/^__version__ = .*/__version__ = \"${UPSTREAM_VERSION}\"/g" -i scripts/build.py
+
+# Formula
+gsed "s/^  version \".*\"/  version \"${VERSION}\"/g" -i Formula/curl-cffi.rb
