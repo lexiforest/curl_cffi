@@ -1,19 +1,24 @@
 import asyncio
 import contextlib
+import inspect
+from dataclasses import dataclass
 import json
 import os
+import queue
 import threading
 import time
 import typing
 from asyncio import sleep
 from collections import defaultdict
 from urllib.parse import parse_qs
+from uuid import uuid4
 
 import proxy
 import pytest
 import trustme
 import uvicorn
 import websockets
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import (
     BestAvailableEncryption,
@@ -21,8 +26,9 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     load_pem_private_key,
 )
-from fastapi import FastAPI, Form, UploadFile
 from httpx import URL
+from litestar import Litestar, Request, post
+from litestar.datastructures import UploadFile
 from uvicorn.config import Config
 from uvicorn.main import Server
 
@@ -108,6 +114,8 @@ async def app(scope, receive, send):
         await delete_cookies(scope, receive, send)
     elif scope["path"].startswith("/set_special_cookies"):
         await set_special_cookies(scope, receive, send)
+    elif scope["path"].startswith("/retry_once"):
+        await retry_once(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
         await redirect_301(scope, receive, send)
     elif scope["path"].startswith("/redirect_to"):
@@ -126,6 +134,8 @@ async def app(scope, receive, send):
         await hello_world_gbk(scope, receive, send)
     elif scope["path"].startswith("/windows1251"):
         await hello_world_windows1251(scope, receive, send)
+    elif scope["path"].startswith("/unique_cookie"):
+        await set_cookies_unique(scope, receive, send)
     elif scope["path"].startswith("http://"):
         await http_proxy(scope, receive, send)
     elif scope["method"] == "CONNECT":
@@ -262,7 +272,7 @@ async def echo_path(scope, receive, send):
 
 
 async def echo_params(scope, receive, send):
-    body = {"params": parse_qs(scope["query_string"].decode())}
+    body = {"params": parse_qs(scope["query_string"].decode(), keep_blank_values=True)}
     await send(
         {
             "type": "http.response.start",
@@ -420,6 +430,22 @@ async def delete_cookies(scope, receive, send):
     await send({"type": "http.response.body", "body": b"Hello, world!"})
 
 
+async def set_cookies_unique(scope, receive, send):
+    t = f"foo={str(uuid4())}"
+    print("Sending unique cookie:", t)
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/plain"],
+                [b"set-cookie", t.encode()],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Hello, world!"})
+
+
 async def set_special_cookies(scope, receive, send):
     await send(
         {
@@ -434,8 +460,34 @@ async def set_special_cookies(scope, receive, send):
     await send({"type": "http.response.body", "body": b"Hello, world!"})
 
 
+_retry_once_counts: dict[str, int] = defaultdict(int)
+
+
+async def retry_once(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode(), keep_blank_values=True)
+    key = params.get("key", ["default"])[0]
+    count = _retry_once_counts[key]
+    _retry_once_counts[key] = count + 1
+    if count == 0:
+        status = 500
+        body = b"try again"
+    else:
+        status = 200
+        body = b"ok"
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [[b"content-type", b"text/plain"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
 async def redirect_301(scope, receive, send):
-    await send({"type": "http.response.start", "status": 301, "headers": [[b"location", b"/"]]})
+    await send(
+        {"type": "http.response.start", "status": 301, "headers": [[b"location", b"/"]]}
+    )
     await send({"type": "http.response.body", "body": b"Redirecting..."})
 
 
@@ -592,27 +644,11 @@ class TestServer(Server):
             await self.startup()
 
 
-async def echo(websocket):
-    while True:
-        name = (await websocket.recv()).decode()
-        # print(f"<<< {name}")
-
-        await websocket.send(name)
-        # print(f">>> {name}")
-
-
-class TestWebsocketServer:
-    def __init__(self, port):
-        self.url = f"ws://127.0.0.1:{port}"
-        self.port = port
-
-    def run(self):
-        async def serve(port):
-            # GitHub actions only likes 127, not localhost, wtf...
-            async with websockets.serve(echo, "127.0.0.1", port):  # pyright: ignore
-                await asyncio.Future()  # run forever
-
-        asyncio.run(serve(self.port))
+@pytest.fixture(scope="session")
+def server():
+    config = Config(app=app, lifespan="off", loop="asyncio")
+    server = TestServer(config=config)
+    yield from serve_in_thread(server)
 
 
 def serve_in_thread(server: Server):
@@ -628,26 +664,6 @@ def serve_in_thread(server: Server):
 
 
 @pytest.fixture(scope="session")
-def ws_server():
-    server = TestWebsocketServer(port=8964)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    try:
-        time.sleep(2)  # FIXME find a reliable way to check the server is up
-        yield server
-    finally:
-        pass
-        # thread.join()
-
-
-@pytest.fixture(scope="session")
-def server():
-    config = Config(app=app, lifespan="off", loop="asyncio")
-    server = TestServer(config=config)
-    yield from serve_in_thread(server)
-
-
-@pytest.fixture(scope="session")
 def https_server(cert_pem_file, cert_private_key_file):
     config = Config(
         app=app,
@@ -659,6 +675,72 @@ def https_server(cert_pem_file, cert_private_key_file):
     )
     server = TestServer(config=config)
     yield from serve_in_thread(server)
+
+
+async def echo(ws):
+    try:
+        async for msg in ws:
+            await ws.send(msg)
+    except (ConnectionClosedOK, ConnectionClosedError):
+        # Normal / abnormal close — nothing extra to do.
+        pass
+
+
+def start_ws_server(port: int = 8964):
+    """
+    Start a websockets server on 127.0.0.1:port in a background thread.
+    Returns (url, stop) where stop() shuts it down.
+    """
+    ready = threading.Event()
+    stop_callable_q: queue.Queue[typing.Callable] = queue.Queue()
+
+    def _thread_target():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        stop_async = asyncio.Event()
+
+        def _stop():
+            # can be called from main thread
+            loop.call_soon_threadsafe(stop_async.set)
+
+        async def _run():
+            async with websockets.serve(echo, "127.0.0.1", port) as _:
+                stop_callable_q.put(_stop)
+                ready.set()
+                await stop_async.wait()
+
+        try:
+            loop.run_until_complete(_run())
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+
+    t = threading.Thread(target=_thread_target, daemon=True)
+    t.start()
+
+    # Wait until server is really listening and we have a stop() handle
+    stop = stop_callable_q.get()  # blocks until put()
+    ready.wait()  # the socket is bound now
+
+    url = f"ws://127.0.0.1:{port}"
+    return url, stop, t
+
+
+@dataclass
+class WSServer:
+    url: str
+    stop: typing.Callable
+
+
+@pytest.fixture(scope="session")
+def ws_server():
+    url, stop, thread = start_ws_server(port=8964)
+    try:
+        yield WSServer(url=url, stop=stop)
+    finally:
+        stop()  # trigger graceful shutdown
+        thread.join(5)  # optional: wait up to 5s for thread to exit
 
 
 @pytest.fixture(scope="session")
@@ -689,12 +771,68 @@ class FileServer(uvicorn.Server):
         return f"http://{self.config.host}:{self.config.port}"
 
 
-file_app = FastAPI()
+def _form_getlist(form: typing.Any, key: str) -> list[typing.Any]:
+    getlist = getattr(form, "getlist", None)
+    if callable(getlist):
+        values = list(getlist(key))
+        if values:
+            return values
+    multi_items = getattr(form, "multi_items", None)
+    if callable(multi_items):
+        values = [v for k, v in multi_items() if k == key]
+        if values:
+            return values
+    items = getattr(form, "items", None)
+    if callable(items):
+        try:
+            values = [v for k, v in items(multi=True) if k == key]
+            if values:
+                return values
+        except TypeError:
+            pass
+        try:
+            values = [v for k, v in items() if k == key]
+            if values:
+                return values
+        except Exception:
+            pass
+    get = getattr(form, "get", None)
+    if callable(get):
+        value = get(key)
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        return [value]
+    return []
 
 
-@file_app.post("/file")
-def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)):
-    content = image.file.read()
+async def _read_upload(upload: UploadFile) -> bytes:
+    read = getattr(upload, "read", None)
+    if callable(read):
+        data = read()
+        if inspect.isawaitable(data):
+            return await data
+        return data
+    file_obj = getattr(upload, "file", None)
+    if file_obj is not None:
+        return file_obj.read()
+    return b""
+
+
+def _normalize_form_value(value: typing.Any) -> typing.Any:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
+
+
+@post("/file", status_code=200)
+async def upload_single_file(request: Request) -> dict[str, typing.Any]:
+    form = await request.form()
+    image_list = _form_getlist(form, "image")
+    image = image_list[0] if image_list else None
+    foo = _normalize_form_value(getattr(form, "get", lambda _k: None)("foo"))
+    content = await _read_upload(image)
     return {
         "foo": foo,
         "filename": image.filename,
@@ -703,11 +841,13 @@ def upload_single_file(image: UploadFile, foo: typing.Optional[str] = Form(None)
     }
 
 
-@file_app.post("/files")
-def upload_multi_files(images: typing.List[UploadFile]):
+@post("/files", status_code=200)
+async def upload_multi_files(request: Request) -> dict[str, typing.Any]:
+    form = await request.form()
+    images = _form_getlist(form, "images")
     files = []
     for image in images:
-        content = image.file.read()
+        content = await _read_upload(image)
         files.append(
             {
                 "filename": image.filename,
@@ -719,17 +859,26 @@ def upload_multi_files(images: typing.List[UploadFile]):
     return {"files": files}
 
 
-@file_app.post("/two-files")
-def upload_two_files(image1: UploadFile, image2: UploadFile):
+@post("/two-files", status_code=200)
+async def upload_two_files(request: Request) -> dict[str, int]:
+    form = await request.form()
+    image1_list = _form_getlist(form, "image1")
+    image2_list = _form_getlist(form, "image2")
+    image1 = image1_list[0] if image1_list else None
+    image2 = image2_list[0] if image2_list else None
     return {
-        "size1": len(image1.file.read()),
-        "size2": len(image2.file.read()),
+        "size1": len(await _read_upload(image1)),
+        "size2": len(await _read_upload(image2)),
     }
+
+
+file_app = Litestar(
+    route_handlers=[upload_single_file, upload_multi_files, upload_two_files]
+)
 
 
 @pytest.fixture(scope="session")
 def file_server():
-    FastAPI()
     config = uvicorn.Config(file_app, host="127.0.0.1", port=2952, log_level="info")
     server = FileServer(config=config)
     with server.run_in_thread():

@@ -2,33 +2,41 @@
 SHELL := bash
 
 # this is the upstream libcurl-impersonate version
-VERSION := 0.7.0
-CURL_VERSION := curl-8_7_1
+VERSION := 1.5.2
+CURL_VERSION := curl-8_15_0
+
+ifeq ($(OS),Windows_NT)
+    CURRENT_USER := $(shell echo %USERNAME%)
+else
+    CURRENT_USER := $(shell whoami)
+endif
 
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
 	unzip -q -o curl.zip
 	mv curl-$(CURL_VERSION) $(CURL_VERSION)
 
-curl-impersonate-$(VERSION)/chrome/patches: $(CURL_VERSION)
-	curl -L "https://github.com/yifeikong/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
+curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
+	curl -L "https://github.com/lexiforest/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
-.preprocessed: curl-impersonate-$(VERSION)/chrome/patches
+.preprocessed: curl-impersonate-$(VERSION)/patches
 	cd $(CURL_VERSION)
-	for p in $</curl-*.patch; do patch -p1 < ../$$p; done
+	# for p in $</curl*.patch; do patch -p1 < ../$$p; done
+	patch -p1 < ../$</curl.patch
 	# Re-generate the configure script
 	autoreconf -fi
 	mkdir -p ../include/curl
 	cp -R include/curl/* ../include/curl/
 	# Sentinel files: https://tech.davis-hansson.com/p/make/
+	cd ..
 	touch .preprocessed
 
 local-curl: $(CURL_VERSION)
-	cp /usr/local/lib/libcurl-impersonate-chrome* /Users/runner/work/_temp/install/lib/
+	cp /usr/local/lib/libcurl-impersonate* /Users/$(CURRENT_USER)/work/_temp/install/lib/
 	cd $(CURL_VERSION)
-	for p in ../curl-impersonate/chrome/patches/curl-*.patch; do patch -p1 < ../$$p; done
+	for p in ../curl-impersonate/patches/curl*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
 	autoreconf -fi
 	mkdir -p ../include/curl
@@ -36,13 +44,13 @@ local-curl: $(CURL_VERSION)
 	# Sentinel files: https://tech.davis-hansson.com/p/make/
 	touch .preprocessed
 
-gen-const: .preprocessed
-	python scripts/generate_consts.py $(CURL_VERSION)
+gen-const:
+	python3 scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
 
-install-editable: .preprocessed
+install-editable:
 	pip install -e .
 
 build: .preprocessed
@@ -51,13 +59,10 @@ build: .preprocessed
 	python -m build --wheel
 
 lint:
-	ruff check
-	ruff format --diff
-	mypy --install-types --non-interactive .
+	uv run ruff check --exclude issues
 
 format:
-	ruff check --fix
-	ruff format
+	uv run ruff format --exclude issues
 
 test:
 	python -bb -m pytest tests/unittest

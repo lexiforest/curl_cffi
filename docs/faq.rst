@@ -1,6 +1,20 @@
 FAQ
 ==========================
 
+What does the pro version offer? Is the open source project still maintained?
+----------------------------------------------------------------------------
+
+Yes, the open source project is maintained as before.
+
+In the `pro version <https://impersonate.pro>`_, we provide:
+
+- weekly update of targets
+- profiles for mobile browsers and apps
+- some private detection fields
+- http/3 fingerprints and proxy support
+
+And, a better financial situation will help the open source version better maintained.
+
 Why does the JA3 fingerprints change for Chrome 110+ impersonation?
 ------
 
@@ -37,7 +51,6 @@ a better proxy IP provider and use browser automation tools like playwright.
 If you are in a hurry or just want the professionals to take care of the hard parts,
 you can consider the commercial solutions from our sponsors:
 
-- `Scrapfly <https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi>`_, Cloud-based scraping platform.
 - `Yescaptcha <https://yescaptcha.com/i/stfnIO>`_, captcha resolver and proxy service for bypassing Cloudflare.
 - `ScrapeNinja <https://scrapeninja.net/?utm_source=github&utm_medium=banner&utm_campaign=cffi>`_, Managed web scraping API.
 
@@ -51,15 +64,17 @@ The simplest way is to turn off cert verification by ``verify=False``:
 
 .. code-block:: python
 
-    r = requests.get("https://example.com", verify=False)
+    r = curl_cffi.get("https://example.com", verify=False)
 
 
 ErrCode: 77, Reason: error setting certificate verify locations
 ------
 
-Install ``curl_cffi`` and its dependencies in a pure-ASCII path, i.e. no Chinese or any
-other characters out of the ASCII table in the path.
-
+On Windows, if your Python environment or CA bundle path contains non-ASCII characters
+(e.g. accents), libcurl may fail to open the CA file when passed as a narrow ``char*``.
+``curl_cffi`` now encodes file-path options (e.g. ``CAINFO``, ``PROXY_CAINFO``,
+``SSLCERT``) using the system's preferred ANSI code page on Windows to ensure correct
+file access. This fixes most occurrences of error 77.
 
 How to use with fiddler/charles to intercept content
 ------
@@ -90,16 +105,16 @@ To force curl to use http 1.1 only.
 
 .. code-block:: python
 
-    from curl_cffi import requests, CurlHttpVersion
+    import curl_cffi
 
-    r = requests.get("https://postman-echo.com", http_version=CurlHttpVersion.V1_1)
+    r = curl_cffi.get("https://postman-echo.com", http_version=curl_cffi.CurlHttpVersion.V1_1)
 
 Related issues:
 
-- `#19 <https://github.com/yifeikong/curl_cffi/issues/19>`_, 
-- `#42 <https://github.com/yifeikong/curl_cffi/issues/42>`_, 
-- `#79 <https://github.com/yifeikong/curl_cffi/issues/79>`_, 
-- `#165 <https://github.com/yifeikong/curl_cffi/issues/165>`_, 
+- `#19 <https://github.com/lexiforest/curl_cffi/issues/19>`_, 
+- `#42 <https://github.com/lexiforest/curl_cffi/issues/42>`_, 
+- `#79 <https://github.com/lexiforest/curl_cffi/issues/79>`_, 
+- `#165 <https://github.com/lexiforest/curl_cffi/issues/165>`_, 
 
 
 Packaging with PyInstaller
@@ -127,25 +142,8 @@ Add other paths:
 
 See also: 
 
-- `#5 <https://github.com/yifeikong/curl_cffi/issues/5>`_
-- `#48 <https://github.com/yifeikong/curl_cffi/issues/48>`_
-
-How to set proxy?
-------
-
-You can use the ``proxy`` parameter:
-
-.. code-block:: python
-
-    from curl_cffi import requests
-
-    requests.get(url, proxy="http://user:pass@example.com:3128")
-
-You can also use the ``http_proxy``, ``https_proxy``, and ``ws_proxy``, ``wss_proxy``
-environment variables, respectively.
-
-For explanation of differences between ``http_proxy`` and ``https_proxy``, please see
-`#6 <https://github.com/yifeikong/curl_cffi/issues/6>`_.
+- `#5 <https://github.com/lexiforest/curl_cffi/issues/5>`_
+- `#48 <https://github.com/lexiforest/curl_cffi/issues/48>`_
 
 
 How to change the order of headers?
@@ -161,13 +159,14 @@ your own headers.
 
 
 How to deal with encoding/decoding errors?
+------------------------------------------
 
 Use ``chardet`` or ``cchardet``
 
 .. code-block::
 
-    >>> from curl_cffi import requests
-    >>> r = requests.get("https://example.com/messy_codec.html")
+    >>> import curl_cffi
+    >>> r = curl_cffi.get("https://example.com/messy_codec.html")
     >>> import chardet
     >>> chardet.detect(r.content)
     {'encoding': 'GB2312', 'confidence': 0.99, 'language': 'Chinese'}

@@ -53,3 +53,15 @@ def test_get_dict():
     assert d["foo"] == "bar"
     assert d["hello"] == "world"
     assert d["a"] == "b"
+
+    c = Cookies()
+    c.set("foo", "bar", domain="example.com")
+    c.set("hello", "world", domain="example.com")
+    c.set("foo", "bar", domain="test.local")
+    d_example = c.get_dict("example.com")
+    d_test = c.get_dict("test.local")
+    assert len(d_example) == 2
+    assert d_example["foo"] == "bar"
+    assert d_example["hello"] == "world"
+    assert len(d_test) == 1
+    assert d_test["foo"] == "bar"

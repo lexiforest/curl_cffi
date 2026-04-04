@@ -1,9 +1,10 @@
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict
 
 from ..const import CurlOpt, CurlSslVersion
+from ..utils import CurlCffiWarning
 
 BrowserTypeLiteral = Literal[
     # Edge
@@ -21,25 +22,84 @@ BrowserTypeLiteral = Literal[
     "chrome120",
     "chrome123",
     "chrome124",
+    "chrome131",
+    "chrome133a",
+    "chrome136",
+    "chrome142",
+    "chrome145",
+    "chrome146",
     "chrome99_android",
+    "chrome131_android",
     # Safari
-    "safari15_3",
-    "safari15_5",
-    "safari17_0",
-    "safari17_2_ios",
+    "safari153",
+    "safari155",
+    "safari170",
+    "safari172_ios",
+    "safari180",
+    "safari180_ios",
+    "safari184",
+    "safari184_ios",
+    "safari260",
+    "safari2601",
+    "safari260_ios",
+    # Firefox
+    "firefox133",
+    "firefox135",
+    "firefox144",
+    "firefox147",
+    "tor145",
     # alias
     "chrome",
     "edge",
     "safari",
     "safari_ios",
+    "safari_beta",
+    "safari_ios_beta",
     "chrome_android",
+    "firefox",
+    # deprecated aliases
+    "safari15_3",
+    "safari15_5",
+    "safari17_0",
+    "safari17_2_ios",
+    "safari18_0",
+    "safari18_0_ios",
+    "safari18_4",
+    "safari18_4_ios",
+    # Canonical names
+    # "edge_99",
+    # "edge_101",
+    # "safari_15.3_macos",
+    # "safari_15.5_macos",
+    # "safari_17.2_ios",
+    # "safari_17.0_macos",
+    # "safari_18.0_ios",
+    # "safari_18.0_macos",
 ]
 
-DEFAULT_CHROME = "chrome124"
+
+DEFAULT_CHROME = "chrome146"
 DEFAULT_EDGE = "edge101"
-DEFAULT_SAFARI = "safari17_0"
-DEFAULT_SAFARI_IOS = "safari17_2_ios"
-DEFAULT_CHROME_ANDROID = "chrome99_android"
+DEFAULT_SAFARI = "safari2601"
+DEFAULT_SAFARI_IOS = "safari260_ios"
+DEFAULT_SAFARI_BETA = "safari2601"
+DEFAULT_SAFARI_IOS_BETA = "safari260_ios"
+DEFAULT_CHROME_ANDROID = "chrome131_android"
+DEFAULT_FIREFOX = "firefox147"
+DEFAULT_TOR = "tor145"
+
+
+REAL_TARGET_MAP = {
+    "chrome": "chrome146",
+    "edge": "edge101",
+    "safari": "safari2601",
+    "safari_ios": "safari260_ios",
+    "safari_beta": "safari2601",
+    "safari_ios_beta": "safari260_ios",
+    "chrome_android": "chrome131_android",
+    "firefox": "firefox147",
+    "tor": "tor145",
+}
 
 
 def normalize_browser_type(item):
@@ -51,13 +111,21 @@ def normalize_browser_type(item):
         return DEFAULT_SAFARI
     elif item == "safari_ios":
         return DEFAULT_SAFARI_IOS
+    elif item == "safari_beta":
+        return DEFAULT_SAFARI_BETA
+    elif item == "safari_ios_beta":
+        return DEFAULT_SAFARI_IOS_BETA
     elif item == "chrome_android":
         return DEFAULT_CHROME_ANDROID
+    elif item == "firefox":
+        return DEFAULT_FIREFOX
+    elif item == "tor":
+        return DEFAULT_TOR
     else:
         return item
 
 
-class BrowserType(str, Enum):  # todo: remove in version 1.x
+class BrowserType(str, Enum):  # TODO: remove in version 1.x
     edge99 = "edge99"
     edge101 = "edge101"
     chrome99 = "chrome99"
@@ -71,11 +139,38 @@ class BrowserType(str, Enum):  # todo: remove in version 1.x
     chrome120 = "chrome120"
     chrome123 = "chrome123"
     chrome124 = "chrome124"
+    chrome131 = "chrome131"
+    chrome133a = "chrome133a"
+    chrome136 = "chrome136"
+    chrome142 = "chrome142"
+    chrome145 = "chrome145"
+    chrome146 = "chrome146"
     chrome99_android = "chrome99_android"
+    chrome131_android = "chrome131_android"
+    safari153 = "safari153"
+    safari155 = "safari155"
+    safari170 = "safari170"
+    safari172_ios = "safari172_ios"
+    safari180 = "safari180"
+    safari180_ios = "safari180_ios"
+    safari184 = "safari184"
+    safari184_ios = "safari184_ios"
+    safari260 = "safari260"
+    safari260_ios = "safari260_ios"
+    safari2601 = "safari2601"
+    firefox133 = "firefox133"
+    firefox135 = "firefox135"
+    firefox144 = "firefox144"
+    firefox147 = "firefox147"
+    tor145 = "tor145"
+
+    # deprecated aliases
     safari15_3 = "safari15_3"
     safari15_5 = "safari15_5"
     safari17_0 = "safari17_0"
     safari17_2_ios = "safari17_2_ios"
+    safari18_0 = "safari18_0"
+    safari18_0_ios = "safari18_0_ios"
 
 
 @dataclass
@@ -84,9 +179,16 @@ class ExtraFingerprints:
     tls_grease: bool = False
     tls_permute_extensions: bool = False
     tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
-    tls_signature_algorithms: Optional[List[str]] = None
+    tls_signature_algorithms: Optional[list[str]] = None
+    tls_delegated_credential: str = ""
+    tls_record_size_limit: int = 0
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
+    http2_no_priority: bool = False
+    split_cookies: Optional[bool] = None
+    form_boundary: Optional[bool] = None
+    http3_sig_hash_algs: Optional[str] = None
+    http3_tls_extension_order: Optional[str] = None
 
 
 class ExtraFpDict(TypedDict, total=False):
@@ -94,9 +196,16 @@ class ExtraFpDict(TypedDict, total=False):
     tls_grease: bool
     tls_permute_extensions: bool
     tls_cert_compression: Literal["zlib", "brotli"]
-    tls_signature_algorithms: Optional[List[str]]
+    tls_signature_algorithms: Optional[list[str]]
+    tls_delegated_credential: str
+    tls_record_size_limit: int
     http2_stream_weight: int
     http2_stream_exclusive: int
+    http2_no_priority: bool
+    split_cookies: Optional[bool]
+    form_boundary: Optional[bool]
+    http3_sig_hash_algs: Optional[str]
+    http3_tls_extension_order: Optional[str]
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
@@ -114,13 +223,22 @@ TLS_VERSION_MAP = {
 TLS_CIPHER_NAME_MAP = {
     0x000A: "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
     0x002F: "TLS_RSA_WITH_AES_128_CBC_SHA",
+    0x0033: "TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
     0x0035: "TLS_RSA_WITH_AES_256_CBC_SHA",
+    0x0039: "TLS_DHE_RSA_WITH_AES_256_CBC_SHA",
     0x003C: "TLS_RSA_WITH_AES_128_CBC_SHA256",
     0x003D: "TLS_RSA_WITH_AES_256_CBC_SHA256",
+    0x0067: "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256",
+    0x006B: "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256",
     0x008C: "TLS_PSK_WITH_AES_128_CBC_SHA",
     0x008D: "TLS_PSK_WITH_AES_256_CBC_SHA",
     0x009C: "TLS_RSA_WITH_AES_128_GCM_SHA256",
     0x009D: "TLS_RSA_WITH_AES_256_GCM_SHA384",
+    0x009E: "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
+    0x009F: "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+    0x1301: "TLS_AES_128_GCM_SHA256",
+    0x1302: "TLS_AES_256_GCM_SHA384",
+    0x1303: "TLS_CHACHA20_POLY1305_SHA256",
     0xC008: "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
     0xC009: "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
     0xC00A: "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
@@ -140,9 +258,6 @@ TLS_CIPHER_NAME_MAP = {
     0xCCA8: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
     0xCCA9: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
     0xCCAC: "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256",
-    0x1301: "TLS_AES_128_GCM_SHA256",
-    0x1302: "TLS_AES_256_GCM_SHA384",
-    0x1303: "TLS_CHACHA20_POLY1305_SHA256",
 }
 
 
@@ -212,6 +327,7 @@ TLS_EXTENSION_NAME_MAP = {
     60: "sequence_number_encryption_algorithms",
     61: "rrc",
     17513: "application_settings",  # BoringSSL private usage
+    17613: "application_settings new",  # BoringSSL private usage
     # 62-2569:"Unassigned
     # 2570:"Reserved
     # 2571-6681:"Unassigned
@@ -262,6 +378,9 @@ TLS_EC_CURVES_MAP = {
     24: "P-384",
     25: "P-521",
     29: "X25519",
+    256: "ffdhe2048",
+    257: "ffdhe3072",
+    4588: "X25519MLKEM768",
     25497: "X25519Kyber768Draft00",
 }
 
@@ -270,7 +389,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     # ECH
     if extension_id == 65037:
         if enable:
-            curl.setopt(CurlOpt.ECH, "GREASE")
+            curl.setopt(CurlOpt.ECH, "grease")
         else:
             curl.setopt(CurlOpt.ECH, "")
     # compress certificate
@@ -279,6 +398,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             warnings.warn(
                 "Cert compression setting to brotli, "
                 "you had better specify which to use: zlib/brotli",
+                CurlCffiWarning,
                 stacklevel=1,
             )
             curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "brotli")
@@ -290,12 +410,24 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
         else:
             curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+    elif extension_id == 17613:
+        if enable:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
+            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 1)
+        else:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
+            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 0)
     # server_name
     elif extension_id == 0:
-        raise NotImplementedError("It's unlikely that the server_name(0) extension being changed.")
+        raise NotImplementedError(
+            "It's unlikely that the server_name(0) extension being changed."
+        )
     # ALPN
     elif extension_id == 16:
-        raise NotImplementedError("It's unlikely that the ALPN(16) extension being changed.")
+        if enable:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPN, 1)
+        else:
+            curl.setopt(CurlOpt.SSL_ENABLE_ALPN, 0)
     # status_request
     elif extension_id == 5:
         if enable:
@@ -310,10 +442,14 @@ def toggle_extension(curl, extension_id: int, enable: bool):
             curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 1)
         else:
             curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 0)
-    # padding
+    # padding, should be ignored
     elif extension_id == 21:
+        pass  # type: ignore
+    # firefox extension, toggled by extra_fp
+    elif extension_id in [34, 28]:
         pass
     else:
         raise NotImplementedError(
-            f"This extension({extension_id}) can not be toggled for now, it may be updated later."
+            f"This extension({extension_id}) can not be toggled for now, it may be "
+            "updated later."
         )

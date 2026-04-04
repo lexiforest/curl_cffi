@@ -1,21 +1,20 @@
 import asyncio
 
-from curl_cffi import requests
+import curl_cffi
 
 URL = "ws://echo.websocket.events"
 
-with requests.Session() as s:
-    w = s.ws_connect(URL)
-    w.send(b"Foo")
-    reply = w.recv()
-    print(reply)
+
+ws = curl_cffi.WebSocket().connect(URL)
+ws.send(b"Foo")
+reply = ws.recv()
+print(reply)
 
 
 async def async_examples():
-    async with requests.AsyncSession() as s:
-        w = await s.ws_connect(URL)
-        await w.asend(b"Bar")
-        reply = await w.arecv()
+    async with curl_cffi.AsyncSession() as s, s.ws_connect(URL) as ws:
+        await ws.send(b"Bar")
+        reply = await ws.recv()
         print(reply)
 
 

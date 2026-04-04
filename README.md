@@ -1,59 +1,114 @@
 # curl_cffi
 
-![PyPI - Downloads](https://img.shields.io/pypi/dm/curl-cffi)
+[![PyPI Downloads](https://static.pepy.tech/badge/curl-cffi/week)](https://pepy.tech/projects/curl-cffi)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
-[![Generic badge](https://img.shields.io/badge/Telegram%20Group-join-blue?logo=telegram)](https://t.me/+lL9n33eZp480MGM1)
+[![Generic badge](https://img.shields.io/badge/Telegram%20Channel-join-blue?logo=telegram)](https://t.me/impersonate_pro)
+[![Generic badge](https://img.shields.io/badge/Discord-join-purple?logo=blue)](https://discord.gg/kJqMHHgdn2)
 
 [Documentation](https://curl-cffi.readthedocs.io)
 
-Python binding for [curl-impersonate](https://github.com/lwthiker/curl-impersonate)
-via [cffi](https://cffi.readthedocs.io/en/latest/).
+Python binding for [curl-impersonate fork](https://github.com/lexiforest/curl-impersonate)
+via [cffi](https://cffi.readthedocs.io/en/latest/). For commercial support, visit [impersonate.pro](https://impersonate.pro).
 
-Unlike other pure python http clients like `httpx` or `requests`, `curl_cffi` can
-impersonate browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
+`curl_cffi` is the most popular Python binding for `curl`. Unlike other pure
+python http clients like `httpx` or `requests`, `curl_cffi` can impersonate
+browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-The fingerprints in 0.6 on Windows are all wrong, you should update to 0.7 if you are on
-Windows. Sorry for the inconvenience.
+Python 3.10 is the minimum supported version since v0.14.
 
-Only Python 3.8 and above are supported. Python 3.7 has reached its end of life.
+## Recent highlights
+
+- 💨 http/3 fingerprints and UDP socks5 proxy support was added in `v0.15.0`!
+- 🦞 Added `curl-cffi` CLI and skills for debugging and for claws/agents.
+
+## Recall.ai - API for meeting recordings
+
+<a href="https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi" target="_blank"><img src="https://cdn.prod.website-files.com/620d732b1f1f7b244ac89f0e/66b294e51ee15f18dd2b171e_recall-logo.svg" alt="Recall.ai" height="47" width="149"></a>
+
+If you’re looking for a meeting recording API, consider checking out [Recall.ai](https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi), an API that records Zoom, Google Meet, Microsoft Teams, in-person meetings, and more.
+
+## Residential Proxies
+
+<a href="https://www.thordata.com/?ls=github&lk=curl_" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
+
+Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/?ls=github&lk=curl_) and receive 2000 free SERP API calls.
+
+## Sponsors
+
+Maintenance of this project is made possible by all the <a href="https://github.com/lexiforest/curl_cffi/graphs/contributors">contributors</a> and <a href="https://github.com/sponsors/lexiforest">sponsors</a>. If you'd like to sponsor this project and have your avatar or company logo appear below <a href="https://github.com/sponsors/lexiforest">click here</a>. 💖
 
 ------
 
-<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/yifeikong/curl_cffi/main/assets/scrapfly.png" alt="Scrapfly.io" width="149"></a>
+### Bypass Cloudflare with API
 
-[Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=curl_cffi)
-is an enterprise-grade solution providing Web Scraping API that aims to simplify the
-scraping process by managing everything: real browser rendering, rotating proxies, and
-fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the
-observability by providing an analytical dashboard and measuring the success rate/block
-rate in detail.
+<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
 
-Scrapfly is a good solution if you are looking for a cloud-managed solution for `curl_cffi`.
-If you are managing TLS/HTTP fingerprint by yourself with `curl_cffi`, they also maintain a
-[curl to python converter](https://scrapfly.io/web-scraping-tools/curl-python/curl_cffi).
+Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
+obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
+to register: <https://yescaptcha.com/i/stfnIO>
+
+------
+
+<a href="https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/hypersolutions.png" height="47" width="149"></a>
+
+TLS fingerprinting alone isn't enough for modern bot protection. [Hyper Solutions](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi) provides the missing piece - API endpoints that generate valid antibot tokens for:
+
+Akamai • DataDome • Kasada • Incapsula
+
+No browser automation. Just simple API calls that return the exact cookies and headers these systems require.
+
+🚀 [Get Your API Key](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi) | 📖 [Docs](https://docs.justhyped.dev) | 💬 [Discord](https://discord.gg/akamai)
 
 ------
 
 ## Features
 
-- Supports JA3/TLS and http2 fingerprints impersonation, inlucding recent browsers and custome fingerprints.
-- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/yifeikong/curl_cffi/tree/main/benchmark).
-- Mimics requests API, no need to learn another one.
+- Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custom fingerprints.
+- Much faster than requests/httpx, on par with aiohttp/pycurl, see [benchmarks](https://github.com/lexiforest/curl_cffi/tree/main/benchmark).
+- Mimics the requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` with proxy rotation on each request.
 - Supports http 2.0, which requests does not.
+- Supports http 3.0, with fingerprints and udp proxy.
 - Supports websocket.
+- MIT licensed.
 
 ||requests|aiohttp|httpx|pycurl|curl_cffi|
 |---|---|---|---|---|---|
-|http2|❌|❌|✅|✅|✅|
+|http/2|❌|❌|✅|✅|✅|
+|http/3|❌|❌|❌|☑️<sup>1</sup>|✅<sup>2</sup>|
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
 |websocket|❌|✅|❌|❌|✅|
+|native retry|❌|❌|❌|❌|✅|
 |fingerprints|❌|❌|❌|❌|✅|
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
+
+Notes:
+
+1. For pycurl, http/3 is usually disabled at compile time by default.
+2. http/3 support since v0.11.4, http/3 proxy and fingerprints since v0.15.0.
+
+### curl-cffi CLI(new)
+
+Since v0.15, `curl_cffi` comes with a CLI called `curl-cffi`, you can use it for debugging
+a certain url with the `--impersonate` option. It can also serve as a `web_fetch`
+replacement for "claws" and "agents".
+
+||curl|httpie|curl-cffi|
+|---|---|---|---|
+|http/2|✅|❌|✅|
+|http/3|☑️<sup>1</sup>|❌|✅|
+|human-friendly|☑️<sup>2</sup>|✅|✅|
+|colorful|❌|✅|✅|
+|fingerprints|❌|❌|✅|
+
+Notes:
+
+1. You need an http/3 enabled curl build, it's not enabled by default, at leat on my machine.
+2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax. If you prefer the curl syntax, you can keep using `curl-impersonate`.
 
 ## Install
 
@@ -63,13 +118,17 @@ This should work on Linux, macOS and Windows out of the box.
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
 
+Android support, including Termux, is currently in beta, you can install the beta release for testing.
+For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
+If you are using these OSes, please lend an hand.
+
 To install beta releases:
 
     pip install curl_cffi --upgrade --pre
 
 To install unstable version from GitHub:
 
-    git clone https://github.com/yifeikong/curl_cffi/
+    git clone https://github.com/lexiforest/curl_cffi/
     cd curl_cffi
     make preprocess
     pip install .
@@ -77,14 +136,27 @@ To install unstable version from GitHub:
 ## Usage
 
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
+`curl_cffi` also bundles with a CLI called `curl-cffi`.
+
+### CLI
+
+```sh
+curl-cffi get tls.browserleaks.com/json
+
+# curl-cffi can be hard to type, use an alias if you want
+alias imp=curl-cffi
+imp get tls.browserleaks.com/json --impersonate chrome
+```
+
+For a complete CLI guide, see [docs](https://curl-cffi.readthedocs.io).
 
 ### requests-like
 
 ```python
-from curl_cffi import requests
+import curl_cffi
 
 # Notice the impersonate parameter
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -93,27 +165,39 @@ print(r.json())
 # To keep using the latest browser version as `curl_cffi` updates,
 # simply set impersonate="chrome" without specifying a version.
 # Other similar values are: "safari" and "safari_ios"
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome")
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
+
+# Use http/3 with impersonation
+r = curl_cffi.get(
+    "https://fp.impersonate.pro/api/http3",
+    http_version="v3",
+    impersonate="chrome"
+)
+
+# Randomly choose a browser version based on current market share in real world
+# from: https://caniuse.com/usage-table
+# NOTE: this is a pro feature.
+r = curl_cffi.get("https://example.com", impersonate="realworld")
 
 # To pin a specific version, use version numbers together.
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome124")
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome124")
 
 # To impersonate other than browsers, bring your own ja3/akamai strings
 # See examples directory for details.
-r = requests.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
+r = curl_cffi.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
 
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = requests.get("https://tools.scrapfly.io/api/fp/ja3", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", proxies=proxies)
 ```
 
 ### Sessions
 
 ```python
-s = requests.Session()
+s = curl_cffi.Session()
 
 # httpbin is a http test website, this endpoint makes the server set cookies
 s.get("https://httpbin.org/cookies/set/foo/bar")
@@ -126,44 +210,52 @@ print(r.json())
 # {'cookies': {'foo': 'bar'}}
 ```
 
-`curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/yifeikong/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+### Supported impersonate browsers
 
-However, only Chrome-like browsers are supported. Firefox support is tracked in [#59](https://github.com/yifeikong/curl_cffi/issues/59).
+`curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
-chrome122, were skipped, you can simply impersonate it with your own headers and the previous version.
+Open source version of curl_cffi includes versions whose fingerprints differ from previous versions.
+If you see a version, e.g. `chrome135`, were skipped, you can simply impersonate it with your own headers and the previous version.
+
+If you don't want to look up the headers etc, by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro),
+we have comprehensive browser fingerprints database for almost all the browser versions on various platforms.
 
 If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
-to specify your own customized fingerprints. See the [docs on impersonatation](https://curl-cffi.readthedocs.io/en/latest/impersonate.html) for details.
+to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate/_index.html) for details.
 
-- chrome99
-- chrome100
-- chrome101
-- chrome104
-- chrome107
-- chrome110
-- chrome116 <sup>[1]</sup>
-- chrome119 <sup>[1]</sup>
-- chrome120 <sup>[1]</sup>
-- chrome123 <sup>[3]</sup>
-- chrome124 <sup>[3]</sup>
-- chrome99_android
-- edge99
-- edge101
-- safari15_3 <sup>[2]</sup>
-- safari15_5 <sup>[2]</sup>
-- safari17_0 <sup>[1]</sup>
-- safari17_2_ios <sup>[1]</sup>
+|Browser|Open Source| Pro version|
+|---|---|---|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142, chrome145<sup>[9]</sup>, chrome146<sup>[9]</sup>|chrome132, chrome134, chrome135|
+|Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
+|Chrome iOS|N/A|coming soon|
+|Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
+|Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144, firefox147<sup>[9]</sup>|coming soon|
+|Firefox Android|N/A|firefox135_android|
+|Tor|tor145 <sup>[7]</sup>|coming soon|
+|Edge|edge99, edge101|edge133, edge135|
+|Opera|N/A|coming soon|
+|Brave|N/A|coming soon|
+
 
 Notes:
+
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
+4. Added in version `0.8.0`.
+5. Added in version `0.9.0`.
+6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
+5. Added in version `0.10.0`.
+6. Added in version `0.11.0`.
+7. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
+8. Added in  `0.12.0`.
+9. http3 support included.
 
-### asyncio
+### Asyncio
 
 ```python
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 async with AsyncSession() as s:
     r = await s.get("https://example.com")
@@ -173,7 +265,7 @@ More concurrency:
 
 ```python
 import asyncio
-from curl_cffi.requests import AsyncSession
+from curl_cffi import AsyncSession
 
 urls = [
     "https://google.com/",
@@ -189,49 +281,62 @@ async with AsyncSession() as s:
     results = await asyncio.gather(*tasks)
 ```
 
+For low-level APIs, Scrapy integration and other advanced topics, see the
+[docs](https://curl-cffi.readthedocs.io) for more details.
+
 ### WebSockets
 
 ```python
-from curl_cffi.requests import Session, WebSocket
+from curl_cffi import WebSocket
 
-def on_message(ws: WebSocket, message):
+def on_message(ws: WebSocket, message: str | bytes):
     print(message)
 
-with Session() as s:
-    ws = s.ws_connect(
-        "wss://api.gemini.com/v1/marketdata/BTCUSD",
-        on_message=on_message,
-    )
-    ws.run_forever()
+ws = WebSocket(on_message=on_message)
+ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 ```
 
-For low-level APIs, Scrapy integration and other advanced topics, see the
-[docs](https://curl-cffi.readthedocs.io) for more details.
+### Asyncio WebSockets
+
+```python
+import asyncio
+from curl_cffi import AsyncSession
+
+async with AsyncSession() as session:
+    async with session.ws_connect("wss://echo.websocket.org") as ws:
+        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+        async for message in ws:
+            print(message)
+```
+
+## Ecosystem
+
+- Integrating with Scrapy: [divtiply/scrapy-curl-cffi](https://github.com/divtiply/scrapy-curl-cffi), [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate) and [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint).
+- Integrating with [requests](https://github.com/el1s7/curl-adapter), [httpx](https://github.com/vgavro/httpx-curl-cffi) as adapter.
+- Integrating with captcha resolvers: [YesCaptcha](https://yescaptcha.atlassian.net/wiki/spaces/YESCAPTCHA/overview). Please see the head area for promo code and link.
 
 ## Acknowledgement
 
 - Originally forked from [multippt/python_curl_cffi](https://github.com/multippt/python_curl_cffi), which is under the MIT license.
 - Headers/Cookies files are copied from [httpx](https://github.com/encode/httpx/blob/master/httpx/_models.py), which is under the BSD license.
 - Asyncio support is inspired by Tornado's curl http client.
-- The WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
+- The synchronous WebSocket API is inspired by [websocket_client](https://github.com/websocket-client/websocket-client).
+- The asynchronous WebSocket API is inspired by [aiohttp](https://github.com/aio-libs/aiohttp).
 
-## [Sponsor] Bypass Cloudflare with API
+## Contributing
 
-<a href="https://yescaptcha.com/i/stfnIO" target="_blank"><img src="assets/yescaptcha.png" alt="Yes Captcha!" height="47" width="149"></a>
+When submitting an PR, please use a different branch other than `main` and check the
+"Allow edits by maintainers" box, so I can update your PR with lint or style fixes. Thanks!
 
-Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO) to register: https://yescaptcha.com/i/stfnIO
+### AI Policy
 
-## [Sponsor] ScrapeNinja
+- Using AI is neither encouraged nor discouraged, use it by your own choice.
+- The bottom line here is that every line of code should be **reviewed by human**, and should be [proven to work](https://simonwillison.net/2025/Dec/18/code-proven-to-work/).
+- It's not guaranteed that AI will come up with the cleanest solution, you are responsible to guide it to the right way you know.
+- Fix any lint errors, make sure your code follows the established convention in this project.
+- LLM tends to generate extensive or none comments, revise the comments and make sure they are concise and helpful.
+- It's absolutely **not acceptable** to generate the entire PR summary by LLM. To communicate with other human, use words from a human.
+- The only acceptable exception is to fix grammar issues if you are not a native English speaker.
+- The essence here is to keep [Human in the loop](https://discourse.llvm.org/t/rfc-llvm-ai-tool-policy-human-in-the-loop/89159)
 
-<a href="https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi" target="_blank"><img src="https://scrapeninja.net/img/logo_with_text_new5.svg" alt="Scrape Ninja" width="149"></a>
-
-[ScrapeNinja](https://scrapeninja.net?utm_source=github&utm_medium=banner&utm_campaign=cffi) is a web scraping API with two engines: fast, with high performance and TLS
-fingerprint; and slower with a real browser under the hood.
-
-ScrapeNinja handles headless browsers, proxies, timeouts, retries, and helps with data
-extraction, so you can just get the data in JSON. Rotating proxies are available out of
-the box on all subscription plans.
-
-## Sponsor
-
-<a href="https://buymeacoffee.com/yifei" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+You can even feed the policy above to your "copilot" to let it adjust the style for you. :P

@@ -2,8 +2,8 @@
 from curl_cffi import requests
 
 URLS = [
-    "https://www.baidu.com",
-    "https://www.qq.com",
+    "https://www.google.com",
+    "https://www.apple.com",
 ]
 
 

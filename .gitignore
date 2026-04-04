@@ -23,3 +23,6 @@ include/
 
 .mypy_cache/
 .ruff_cache/
+.aider*
+.claude
+uv.lock

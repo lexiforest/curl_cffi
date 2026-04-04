@@ -2,15 +2,18 @@ import base64
 import json
 import time
 from io import BytesIO
+from uuid import uuid4
 
 import pytest
 from charset_normalizer import detect
 
-from curl_cffi import CurlOpt, requests
+import curl_cffi
+from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
+from curl_cffi.requests.exceptions import HTTPError
 from curl_cffi.requests.models import Response
-from curl_cffi.requests.session import _update_url_params
+from curl_cffi.utils import CurlCffiWarning
 
 
 def test_head(server):
@@ -23,10 +26,29 @@ def test_get(server):
     assert r.status_code == 200
 
 
+def test_direct_import(server):
+    r = curl_cffi.get(str(server.url))
+    assert r.status_code == 200
+
+
 def test_post_dict(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
     assert r.status_code == 200
     assert r.content == b"foo=bar"
+
+
+def test_response_request_body(server):
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"})
+    assert r.request is not None
+    assert r.request.body == b"foo=bar"
+
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"})
+    assert r.request is not None
+    assert r.request.body == b'{"foo":"bar"}'
+
+    r = requests.get(str(server.url))
+    assert r.request is not None
+    assert r.request.body is None
 
 
 def test_callback(server):
@@ -48,7 +70,9 @@ def test_post_large_body(server):
 
 
 def test_post_str(server):
-    r = requests.post(str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}')
+    r = requests.post(
+        str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}'
+    )
     assert r.status_code == 200
     assert r.content == b'{"foo": "bar"}'
 
@@ -118,87 +142,179 @@ def test_options(server):
     assert r.status_code == 200
 
 
-def test_update_url_params():
-    # should be quoted
-    url = "https://example.com/post.json?limit=1&tags=id:<1000&page=0"
-    quoted = "https://example.com/post.json?limit=1&tags=id%3A%3C1000&page=0"
-    assert _update_url_params(url) == quoted
-
-    # should not change
-    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
-    assert _update_url_params(url) == url
-
-    # update url params
-    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
-    params = {"tags": "bar"}
-    updated_url = "https://example.com/post.json?limit=1&tags=bar&page=0"
-    assert _update_url_params(url, params) == updated_url
-
-    # append url params
-    url = "https://example.com/post.json?limit=1&tags=foo&tags=a"
-    params = {"tags": "bar"}
-    updated_url = "https://example.com/post.json?limit=1&tags=foo&tags=a&tags=bar"
-    assert _update_url_params(url, params) == updated_url
-
-    # update url params in a row
-    url = "https://example.com/post.json?limit=1&tags=foo&page=0"
-    session_params = {"tags": "a"}
-    request_params = {"tags": "bar"}
-    updated_url = "https://example.com/post.json?limit=1&tags=bar&page=0"
-    assert _update_url_params(url, session_params, request_params) == updated_url
-
-
 def test_params(server):
-    r = requests.get(str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"}
+    )
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
 
 def test_update_params(server):
     # The param is new, just append it
-    r = requests.get(str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"}
+    )
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
     # The old param is already multiple, append it, too
-    r = requests.get(str(server.url.copy_with(path="/echo_params?foo=1&foo=2")), params={"foo": 3})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params", query=b"foo=1&foo=2")),
+        params={"foo": 3},
+    )
     assert r.content == b'{"params": {"foo": ["1", "2", "3"]}}'
 
     # 1 to 1 mapping, we have to update it.
-    r = requests.get(str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params", query=b"foo=z")),
+        params={"foo": "bar"},
+    )
     assert r.content == b'{"params": {"foo": ["bar"]}}'
 
     # does not break old ones
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=1&a=2&foo=z")),
         params={"foo": "bar"},
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["bar"]}}'
 
     r = requests.get(
-        str(server.url.copy_with(path="/echo_params?a=1&a=2&foo=z")),
+        str(server.url.copy_with(path="/echo_params", query=b"a=1&a=2&foo=z")),
         params=[("foo", "1"), ("foo", "2")],
     )
     assert r.content == b'{"params": {"a": ["1", "2"], "foo": ["z", "1", "2"]}}'
 
+    # empty values should be kept
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_params", query=b"a=")),
+        params=[("foo", "1"), ("foo", "2")],
+    )
+    assert r.content == b'{"params": {"a": [""], "foo": ["1", "2"]}}'
+
+
+def test_url_encode(server):
+    # https://github.com/lexiforest/curl_cffi/issues/394
+
+    # FIXME: should use server.url, but it always encode
+
+    # should not change
+    url = "http://127.0.0.1:8000/%2f%2f%2f"
+    r = requests.get(url)
+    assert r.url == url
+
+    url = "http://127.0.0.1:8000/imaginary-pagination:7"
+    r = requests.get(str(url))
+    assert r.url == url
+
+    url = "http://127.0.0.1:8000/post.json?limit=1&tags=foo&page=0"
+    r = requests.get(str(url))
+    assert r.url == url
+
+    # Non-ASCII URL should be percent encoded as UTF-8 sequence
+    non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
+    encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
+
+    r = requests.get(non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
+    r = requests.get(encoded_non_ascii_url)
+    assert r.url == encoded_non_ascii_url
+
+    # should be quoted
+    url = "http://127.0.0.1:8000/e x a m p l e"
+    quoted = "http://127.0.0.1:8000/e%20x%20a%20m%20p%20l%20e"
+    r = requests.get(str(url))
+    assert r.url == quoted
+
+    # I have seen discussions that ask how to prevent requests from quoting unwanted
+    # parts, like `:`. So, let's make it explicit that you want to quote some chars.
+    #
+    # See:
+    # 1. https://stackoverflow.com/q/57365497/1061155
+    # 2. https://stackoverflow.com/q/23496750/1061155
+
+    url = "http://127.0.0.1:8000/imaginary-pagination:7"
+    quoted = "http://127.0.0.1:8000/imaginary-pagination%3A7"
+    r = requests.get(url, quote=":")
+    assert r.url == quoted
+
+    url = "http://127.0.0.1:8000/post.json?limit=1&tags=id:<1000&page=0"
+    quoted = "http://127.0.0.1:8000/post.json?limit=1&tags=id%3A%3C1000&page=0"
+    r = requests.get(url, quote=":")
+    assert r.url == quoted
+
+    # Do not quote at all
+    url = "http://127.0.0.1:8000/query={}"
+    quoted = "http://127.0.0.1:8000/query=%7B%7D"
+    r = requests.get(url)
+    assert r.url == quoted
+    r = requests.get(url, quote=False)
+    assert r.url == url
+
+    # Do not unquote
+    url = "http://127.0.0.1:8000/path?token=example%7C2024-10-20T10%3A00%3A00Z"
+    r = requests.get(url)
+    print(r.url)
+    assert r.url == url
+
+    # empty values should be kept
+    url = "http://127.0.0.1:8000/api?param1=value1&param2=&param3=value3"
+    r = requests.get(url)
+    assert r.url == url
+
+    # path should not be unquoted when params supplied
+    url = "http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
+    r = requests.get(url)
+    assert r.url == url
+    params = {"foo": "bar"}
+    r = requests.get(url, params=params)
+    assert r.url == url + "?foo=bar"
+
 
 def test_headers(server):
-    r = requests.get(str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar"})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar"}
+    )
     headers = r.json()
     assert headers["Foo"][0] == "bar"
 
 
 def test_empty_header_included(server):
     r = requests.get(
-        str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar", "xxx": ""}
+        str(server.url.copy_with(path="/echo_headers")),
+        headers={"foo": "bar", "xxx": ""},
     )
     headers = r.json()
     assert headers["Foo"][0] == "bar"
     assert headers["Xxx"][0] == ""
 
 
+def test_explict_remove_header(server):
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")), json={"foo": "bar"}
+    )
+    headers = r.json()
+    assert headers["Content-type"][0] == "application/json"
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")),
+        json={"foo": "bar"},
+        headers={"Content-Type": None},
+    )
+    headers = r.json()
+    assert "Content-type" not in headers
+
+
 def test_expect_header_omitted(server):
-    r = requests.get(str(server.url.copy_with(path="/echo_headers")), headers={"expect": "100"})
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")), headers={"expect": "100"}
+    )
     headers = r.json()
     assert "Expect" not in headers
+
+
+def test_accept_header_not_added(server):
+    r = requests.get(str(server.url.copy_with(path="/echo_headers")))
+    headers = r.json()
+    assert "Accept" not in headers
 
 
 def test_charset_parse(server):
@@ -217,7 +333,9 @@ def test_charset_default_encoding_autodetect(server):
     def autodetect(content):
         return detect(content).get("encoding")
 
-    r = requests.get(str(server.url.copy_with(path="/windows1251")), default_encoding=autodetect)
+    r = requests.get(
+        str(server.url.copy_with(path="/windows1251")), default_encoding=autodetect
+    )
     assert r.encoding == "windows-1251"
 
 
@@ -251,8 +369,35 @@ def test_cookies(server):
     assert cookies["foo"] == "bar"
 
 
+def test_cookies_update_disabled(server):
+    s = requests.Session()
+
+    set_url = str(server.url.copy_with(path="/unique_cookie"))
+
+    r = s.get(set_url)
+    assert r.cookies["foo"] == s.cookies["foo"]
+    old_cookie = r.cookies["foo"]
+
+    # Let's start discarding cookies
+    s.discard_cookies = True
+    r = s.get(set_url)
+    assert r.cookies["foo"] != s.cookies["foo"]
+    assert old_cookie == s.cookies["foo"]
+
+    # The behavior can be reverted
+    s.discard_cookies = False
+    r = s.get(set_url)
+    assert r.cookies["foo"] == s.cookies["foo"]
+    old_cookie = r.cookies["foo"]
+
+    # Also works as request parameter
+    r = s.get(set_url, discard_cookies=True)
+    assert r.cookies["foo"] != s.cookies["foo"]
+    assert old_cookie == s.cookies["foo"]
+
+
 def test_secure_cookies(server):
-    with pytest.warns(UserWarning, match="changed"):
+    with pytest.warns(CurlCffiWarning, match="changed"):
         r = requests.get(
             str(server.url.copy_with(path="/echo_cookies")),
             cookies={"__Secure-foo": "bar", "__Host-hello": "world"},
@@ -263,9 +408,13 @@ def test_secure_cookies(server):
 
 
 def test_auth(server):
-    r = requests.get(str(server.url.copy_with(path="/echo_headers")), auth=("foo", "bar"))
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")), auth=("foo", "bar")
+    )
     assert r.status_code == 200
-    assert r.json()["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    assert (
+        r.json()["Authorization"][0] == f"Basic {base64.b64encode(b'foo:bar').decode()}"
+    )
 
 
 def test_timeout(server):
@@ -275,7 +424,28 @@ def test_timeout(server):
 
 def test_session_timeout(server):
     with pytest.raises(requests.RequestsError):
-        requests.Session(timeout=0.1).get(str(server.url.copy_with(path="/slow_response")))
+        requests.Session(timeout=0.1).get(
+            str(server.url.copy_with(path="/slow_response"))
+        )
+
+
+def test_session_retry(server):
+    fail_key = uuid4().hex
+    fail_url = str(
+        server.url.copy_with(path="/retry_once", query=f"key={fail_key}".encode())
+    )
+    with pytest.raises(HTTPError):  # noqa: SIM117
+        with requests.Session(raise_for_status=True) as s:
+            s.get(fail_url)
+
+    retry_key = uuid4().hex
+    retry_url = str(
+        server.url.copy_with(path="/retry_once", query=f"key={retry_key}".encode())
+    )
+    with requests.Session(retry=1, raise_for_status=True) as s:
+        r = s.get(retry_url)
+    assert r.status_code == 200
+    assert r.content == b"ok"
 
 
 def test_post_timeout(server):
@@ -284,14 +454,18 @@ def test_post_timeout(server):
 
 
 def test_not_follow_redirects(server):
-    r = requests.get(str(server.url.copy_with(path="/redirect_301")), allow_redirects=False)
+    r = requests.get(
+        str(server.url.copy_with(path="/redirect_301")), allow_redirects=False
+    )
     assert r.status_code == 301
     assert r.redirect_count == 0
     assert r.content == b"Redirecting..."
 
 
 def test_follow_redirects(server):
-    r = requests.get(str(server.url.copy_with(path="/redirect_301")), allow_redirects=True)
+    r = requests.get(
+        str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
+    )
     assert r.status_code == 200
     assert r.redirect_count == 1
 
@@ -304,6 +478,26 @@ def test_too_many_redirects(server):
     assert e.value.response.status_code == 301
 
 
+def test_safe_redirect_blocks_private_ip(server):
+    """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
+    target = str(server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    r = requests.get(url, allow_redirects=True)
+    assert r.status_code == 200
+    assert r.redirect_count == 1
+
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
+    with pytest.raises(requests.RequestsError, match="SSRF"):
+        requests.get(url, allow_redirects=CurlFollow.SAFE)
+
+
+def test_safe_redirect_string(server):
+    """The string 'safe' should behave the same as CurlFollow.SAFE."""
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
+    with pytest.raises(requests.RequestsError, match="SSRF"):
+        requests.get(url, allow_redirects="safe")
+
+
 def test_verify(https_server):
     with pytest.raises(requests.RequestsError, match="SSL certificate problem"):
         requests.get(str(https_server.url), verify=True)
@@ -314,8 +508,24 @@ def test_verify_false(https_server):
     assert r.status_code == 200
 
 
+def test_verify_false_skips_cainfo(https_server, tmp_path):
+    cacert_path = tmp_path / "custom_ca.pem"
+    cacert_path.write_text("", encoding="utf-8")
+    curl = Curl(cacert=str(cacert_path))
+    with requests.Session(
+        curl=curl,
+        verify=False,
+        curl_infos=[CurlInfo.CAINFO],
+    ) as s:
+        r = s.get(str(https_server.url))
+    assert r.status_code == 200
+    assert r.infos[CurlInfo.CAINFO] != str(cacert_path).encode()
+
+
 def test_referer(server):
-    r = requests.get(str(server.url.copy_with(path="/echo_headers")), referer="http://example.com")
+    r = requests.get(
+        str(server.url.copy_with(path="/echo_headers")), referer="http://example.com"
+    )
     headers = r.json()
     assert headers["Referer"][0] == "http://example.com"
 
@@ -326,7 +536,9 @@ def test_referer(server):
 
 
 def test_redirect_url(server):
-    r = requests.get(str(server.url.copy_with(path="/redirect_301")), allow_redirects=True)
+    r = requests.get(
+        str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
+    )
     assert r.url == str(server.url.copy_with(path="/"))
 
 
@@ -336,22 +548,44 @@ def test_response_headers(server):
 
 
 def test_response_cookies(server):
-    r = requests.get(str(server.url.copy_with(path="/set_cookies")))
-    print(r.cookies)
+    s = requests.Session(cookies={"old": "bar"})
+    r = s.get(str(server.url.copy_with(path="/set_cookies")))
+
+    # set-cookies from response
     assert r.cookies["foo"] == "bar"
+    assert s.cookies["foo"] == "bar"
+
+    # session cookies not in response object
+    assert r.cookies.get("old") is None
+
+    # non-exist cookies
+    assert r.cookies.get("xxx") is None
 
 
 def test_elapsed(server):
     r = requests.get(str(server.url.copy_with(path="/slow_response")))
-    assert r.elapsed > 0.1
+    assert r.elapsed.total_seconds() > 0.1
 
 
 def test_reason(server):
-    r = requests.get(str(server.url.copy_with(path="/redirect_301")), allow_redirects=False)
+    r = requests.get(
+        str(server.url.copy_with(path="/redirect_301")), allow_redirects=False
+    )
     assert r.reason == "Moved Permanently"
-    r = requests.get(str(server.url.copy_with(path="/redirect_301")), allow_redirects=True)
+    r = requests.get(
+        str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
+    )
     assert r.status_code == 200
     assert r.reason == "OK"
+
+
+def test_raise_for_status(server):
+    r = requests.get(str(server.url.copy_with(path="/status/400")))
+    assert r.status_code == 400
+    try:
+        r.raise_for_status()
+    except HTTPError as e:
+        assert e.response.status_code == 400  # type: ignore
 
 
 #######################################################################################
@@ -372,7 +606,9 @@ def test_session_options(server):
 
 
 def test_session_base_url(server):
-    s = requests.Session(base_url=str(server.url.copy_with(path="/a/b", params={"foo": "bar"})))
+    s = requests.Session(
+        base_url=str(server.url.copy_with(path="/a/b", params={"foo": "bar"}))
+    )
 
     # target path is empty
     r = s.get("")
@@ -408,18 +644,25 @@ def test_session_update_parms(server):
 def test_session_preset_cookies(server):
     s = requests.Session(cookies={"foo": "bar"})
     # send requests with other cookies
-    r = s.get(str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"})
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
+    )
     cookies = r.json()
+
     # old cookies should be persisted
     assert cookies["foo"] == "bar"
+
     # new cookies should be added
     assert cookies["hello"] == "world"
-    # XXX request cookies will always be added to the entire session
+
+    # XXX: request cookies will always be added to the entire session
     # request cookies should not be added to session cookiejar
     # assert s.cookies.get("hello") is None
 
     # but you can override
-    r = s.get(str(server.url.copy_with(path="/echo_cookies")), cookies={"foo": "notbar"})
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"foo": "notbar"}
+    )
     cookies = r.json()
     assert cookies["foo"] == "notbar"
 
@@ -437,7 +680,9 @@ def test_cookie_domains(server):
     s.cookies.set("foo", "bar", domain="example.com")
     s.cookies.set("foo2", "bar", domain="127.0.0.1")
     # send requests with other cookies
-    r = s.get(str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"})
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
+    )
     cookies = r.json()
     # only specific domains should be there
     assert "foo" not in cookies
@@ -452,7 +697,9 @@ def test_session_cookies(server):
     r = s.get(str(server.url.copy_with(path="/set_cookies")))
     assert s.cookies["foo"] == "bar"
     # send requests with other cookies
-    r = s.get(str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"})
+    r = s.get(
+        str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
+    )
     cookies = r.json()
     # old cookies should be persisted
     assert cookies["foo"] == "bar"
@@ -477,19 +724,19 @@ def test_cookies_with_special_chars(server):
     assert r.json()["foo"] == "bar space"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/119
+# https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_mislead_by_host(server):
     s = requests.Session(debug=True)
     s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
     s.cookies.set("foo", "bar")
     print("URL is: ", str(server.url))
-    # TODO replace hard-coded url with server.url.replace(host="example.com")
+    # TODO: replace hard-coded url with server.url.replace(host="example.com")
     r = s.get("http://example.com:8000", headers={"Host": "example.com"})
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/119
+# https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_redirect_to_another_domain(server):
     s = requests.Session()
     s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8000:127.0.0.1"])
@@ -502,7 +749,7 @@ def test_cookies_redirect_to_another_domain(server):
     assert cookies["foo"] == "google.com"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/119
+# https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_wo_hostname_redirect_to_another_domain(server):
     s = requests.Session(debug=True)
     s.curl.setopt(
@@ -520,12 +767,13 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
         params={"to": "http://google.com:8000/echo_cookies"},
     )
     cookies = r.json()
-    # cookies without domains are bound to the first domain, which is example.com in this case.
+    # cookies without domains are bound to the first domain, which is example.com in
+    # this case.
     assert len(cookies) == 1
     assert cookies["hello"] == "world"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/39
+# https://github.com/lexiforest/curl_cffi/issues/39
 def test_post_body_cleaned(server):
     s = requests.Session()
     # POST with body
@@ -537,7 +785,7 @@ def test_post_body_cleaned(server):
     assert r.content == b""
 
 
-# https://github.com/yifeikong/curl_cffi/issues/16
+# https://github.com/lexiforest/curl_cffi/issues/16
 def test_session_with_headers(server):
     s = requests.Session()
     r = s.get(str(server.url), headers={"Foo": "bar"})
@@ -545,7 +793,7 @@ def test_session_with_headers(server):
     assert r.status_code == 200
 
 
-# https://github.com/yifeikong/curl_cffi/pull/171
+# https://github.com/lexiforest/curl_cffi/pull/171
 def test_session_with_hostname_proxies(server, proxy_server):
     proxies = {
         f"all://{server.url.host}": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"
@@ -556,16 +804,18 @@ def test_session_with_hostname_proxies(server, proxy_server):
     assert r.text == "Hello from man in the middle"
 
 
-# https://github.com/yifeikong/curl_cffi/pull/171
+# https://github.com/lexiforest/curl_cffi/pull/171
 def test_session_with_http_proxies(server, proxy_server):
-    proxies = {"http": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"}
+    proxies = {
+        "http": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"
+    }
     s = requests.Session(proxies=proxies)
     url = str(server.url.copy_with(path="/echo_headers"))
     r = s.get(url)
     assert r.text == "Hello from man in the middle"
 
 
-# https://github.com/yifeikong/curl_cffi/pull/171
+# https://github.com/lexiforest/curl_cffi/pull/171
 def test_session_with_all_proxies(server, proxy_server):
     proxies = {"all": f"http://{proxy_server.flags.hostname}:{proxy_server.flags.port}"}
     s = requests.Session(proxies=proxies)
@@ -574,7 +824,7 @@ def test_session_with_all_proxies(server, proxy_server):
     assert r.text == "Hello from man in the middle"
 
 
-# https://github.com/yifeikong/curl_cffi/issues/222
+# https://github.com/lexiforest/curl_cffi/issues/222
 def test_closed_session_throws_error():
     with requests.Session() as s:
         pass
@@ -599,9 +849,6 @@ def test_closed_session_throws_error():
 
     with pytest.raises(SessionClosed):
         s.patch("https://example.com")
-
-    with pytest.raises(SessionClosed):
-        s.ws_connect("wss://example.com")
 
 
 def test_stream_iter_content(server):
@@ -782,16 +1029,44 @@ def test_max_recv_speed(server):
 
 
 def test_curl_infos(server):
-    s = requests.Session(curl_infos=[CurlInfo.PRIMARY_IP])
+    s = requests.Session(curl_infos=[CurlInfo.PRIMARY_IP, CurlInfo.PRIMARY_PORT])
 
     r = s.get(str(server.url))
 
     assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"  # pyright: ignore
+    assert r.infos[CurlInfo.PRIMARY_PORT] == 8000
 
 
-def test_response_ip(server):
+def test_response_ip_and_port(server):
     s = requests.Session()
     r = s.get(str(server.url))
 
     assert r.primary_ip == "127.0.0.1"
+    assert r.primary_port == 8000
     assert r.local_ip == "127.0.0.1"
+    assert r.local_port != 0
+
+
+def test_http_version(server):
+    r = requests.get(str(server.url), http_version="v1")
+    assert r.status_code == 200
+
+
+def test_session_auto_raise_for_status_enabled(server):
+    """Test that Session automatically raises HTTPError for error status codes
+    when raise_for_status=True"""
+    s = requests.Session(raise_for_status=True)
+    try:
+        s.get(str(server.url.copy_with(path="/status/404")))
+        raise AssertionError("Should have raised HTTPError for 404")
+    except HTTPError as e:
+        assert e.response.status_code == 404  # type: ignore
+
+
+def test_session_auto_raise_for_status_disabled(server):
+    """Test that Session does NOT raise HTTPError when raise_for_status=False
+    (default)"""
+    s = requests.Session(raise_for_status=False)
+    r = s.get(str(server.url.copy_with(path="/status/404")))
+    assert r.status_code == 404
+    # Should not raise an exception

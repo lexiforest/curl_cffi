@@ -7,6 +7,7 @@ void curl_easy_cleanup(void *curl);
 void curl_easy_reset(void *curl);
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
 void *curl_easy_duphandle(void *curl);
+int curl_easy_upkeep(void *curl);
 
 char *curl_version();
 
@@ -21,6 +22,8 @@ void curl_slist_free_all(struct curl_slist *list);
 // callbacks
 extern "Python" size_t buffer_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
+extern "Python" size_t read_buffer_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
+extern "Python" size_t read_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" int debug_function(void *curl, int type, char *data, size_t size, void *clientp);
 
 // multi interfaces
@@ -40,11 +43,16 @@ int curl_multi_socket_action(void *curlm, int sockfd, int ev_bitmask, int *runni
 int curl_multi_setopt(void *curlm, int option, void* param);
 int curl_multi_assign(void *curlm, int sockfd, void *sockptr);
 int curl_multi_perform(void *curlm, int *running_handle);
+int curl_multi_timeout(void *curlm, long *timeout_ms);
+int curl_multi_wait(void *curlm, void *extra_fds, unsigned int extra_nfds, int timeout_ms, int *numfds);
+int curl_multi_poll(void *curlm, void *extra_fds, unsigned int extra_nfds, int timeout_ms, int *numfds);
+int curl_multi_wakeup(void *curlm);
+const char *curl_multi_strerror(int code);
 struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 
 // multi callbacks
-extern "Python" void socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
-extern "Python" void timer_function(void *curlm, int timeout_ms, void *clientp);
+extern "Python" int socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
+extern "Python" int timer_function(void *curlm, int timeout_ms, void *clientp);
 
 // websocket
 struct curl_ws_frame {
@@ -56,8 +64,8 @@ struct curl_ws_frame {
   ...;
 };
 
-int curl_ws_recv(void *curl, void *buffer, int buflen, int *recv, struct curl_ws_frame **meta);
-int curl_ws_send(void *curl, void *buffer, int buflen, int *sent, int fragsize, unsigned int sendflags);
+int curl_ws_recv(void *curl, void *buffer, size_t buflen, size_t *recv, const struct curl_ws_frame **meta);
+int curl_ws_send(void *curl, const void *buffer, size_t buflen, size_t *sent, int fragsize, unsigned int sendflags);
 
 // mime
 void *curl_mime_init(void* curl);  // -> form

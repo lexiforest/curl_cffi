@@ -8,6 +8,9 @@ on:
       - main
       - bugfix/*
       - feature/*
+      - release/*
+      - chore/*
+      - security/*
     tags:
       - v*
 
@@ -19,79 +22,146 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: |
-          pip install mypy ruff
-          make lint
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+    - name: Lint
+      run: |
+        pip install mypy ruff
+        ruff check --exclude issues
 
   sdist:
     name: Build sdist wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: |
-          make preprocess
-          pipx run build --sdist
-      - uses: actions/upload-artifact@v3  # https://github.com/actions/upload-artifact/issues/478
-        with:
-          path: ./dist/*.tar.gz
+    - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: |
-          pip install ./dist/*.tar.gz
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: build sdist
+      run: |
+        make preprocess
+        pip install build
+        python -m build --sdist
+        pip install ./dist/*.tar.gz
+
+    - name: upload artifacts
+      uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
+      with:
+        name: curl_cffi-${{ github.sha }}-sdist.zip
+        path: ./dist/*.tar.gz
 
   bdist:
     name: Build bdist wheels and test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-12, macos-14, windows-2019]
+        os: [ubuntu-24.04, macos-15-intel, macos-14, windows-2022, windows-11-arm]
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
+    - if: runner.os == 'Linux'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
 
-      # macOS make is too old
-      - if: runner.os == 'macOS'
-        run: |
-          brew install make automake libtool
+    # macOS make is too old
+    - if: runner.os == 'macOS'
+      run: |
+        brew install make automake libtool
 
-      - name: Build and test wheels
-        uses: pypa/cibuildwheel@v2.17.0
+    - name: Build and test wheels
+      uses: pypa/cibuildwheel@v3.3.1
 
-      # - name: Setup tmate session
-      #   uses: mxschmitt/action-tmate@v3
+    # - name: Setup tmate session
+    #   uses: mxschmitt/action-tmate@v3
 
-      - uses: actions/upload-artifact@v3  # https://github.com/actions/upload-artifact/issues/478
-        with:
-          path: ./wheelhouse/*.whl
+    - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
+      with:
+        name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
+        path: ./wheelhouse/*.whl
 
-  upload_all:
-    needs: [bdist, sdist]
+  bdist_android:
+    name: Build Android wheels
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/download-artifact@v3  # https://github.com/actions/upload-artifact/issues/478
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - uses: android-actions/setup-android@v3
+
+    - name: Build wheels (Android)
+      uses: pypa/cibuildwheel@v3.3.1
+      env:
+        CIBW_PLATFORM: android
+        CIBW_BUILD: cp313-android_arm64_v8a
+        ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+        ANDROID_API_LEVEL: 24
+
+    - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
+      with:
+        name: curl_cffi-${{ github.sha }}-android.zip
+        path: ./wheelhouse/*.whl
+
+  # Make our build process future-proof
+  build_latest:
+    name: Build bdist on latest OSes
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # For linux, it's built inside a container, no need to test for latest versions.
+        os: [macos-latest, windows-latest, windows-11-arm]
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - if: runner.os == 'Linux'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
+
+    # macOS make is too old
+    - if: runner.os == 'macOS'
+      run: |
+        brew install make automake libtool
+
+    - name: Build and test wheels
+      uses: pypa/cibuildwheel@v3.3.1
+
+  upload_all:
+    needs: [bdist, bdist_android, sdist]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        name: artifact
+        pattern: curl_cffi-*
+        merge-multiple: true
         path: dist
 
-    - uses: pypa/gh-action-pypi-publish@v1.8.14
+    - uses: pypa/gh-action-pypi-publish@v1.12.4
       if: startsWith(github.ref, 'refs/tags/')
       with:
         password: ${{ secrets.PYPI_TOKEN }}
+        packages-dir: dist/
 
     - name: Upload release files
       if: startsWith(github.ref, 'refs/tags/')

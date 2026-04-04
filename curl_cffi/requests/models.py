@@ -1,10 +1,14 @@
+from contextlib import suppress
 import queue
 import re
 import warnings
 from concurrent.futures import Future
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Optional, Union
+from collections.abc import Awaitable, Callable
+from datetime import timedelta
 
-from .. import Curl
+from ..curl import Curl
+from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
@@ -15,7 +19,12 @@ try:
 except ImportError:
     from json import loads
 
+with suppress(ImportError):
+    from markdownify import markdownify as md
+    import readability as rd
+
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
+STREAM_END = object()
 
 
 def clear_queue(q: queue.Queue):
@@ -26,12 +35,26 @@ def clear_queue(q: queue.Queue):
 
 
 class Request:
-    """Representing a sent request."""
+    """Representing a sent request.
 
-    def __init__(self, url: str, headers: Headers, method: str):
+    Attributes:
+        url: request url.
+        headers: request headers.
+        method: request http method.
+        body: request body as bytes, or None if not provided.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        headers: Headers,
+        method: str,
+        body: Optional[bytes] = None,
+    ):
         self.url = url
         self.headers = headers
         self.method = method
+        self.body = body
 
 
 class Response:
@@ -46,18 +69,26 @@ class Response:
         ok: is status_code in [200, 400)?
         headers: response headers.
         cookies: response cookies.
-        elapsed: how many seconds the request cost.
+        elapsed: timedelta of the request duration.
         encoding: http body encoding.
         charset: alias for encoding.
         primary_ip: primary ip of the server.
+        primary_port: primary port of the server.
         local_ip: local ip used in this connection.
+        local_port: local port used in this connection.
         charset_encoding: encoding specified by the Content-Type header.
-        default_encoding: encoding for decoding response content if charset is not found in
-                headers. Defaults to "utf-8". Can be set to a callable for automatic detection.
+        default_encoding: encoding for decoding response content if charset is not found
+            in headers. Defaults to "utf-8". Can be set to a callable for automatic
+            detection.
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
         history: history redirections, only headers are available.
+        download_size: total downloaded bytes (body).
+        upload_size: total uploaded bytes (body).
+        header_size: total header size.
+        request_size: request size.
+        response_size: download_size + header_size
     """
 
     def __init__(self, curl: Optional[Curl] = None, request: Optional[Request] = None):
@@ -70,19 +101,27 @@ class Response:
         self.ok = True
         self.headers = Headers()
         self.cookies = Cookies()
-        self.elapsed = 0.0
+        self.elapsed: timedelta = timedelta()
         self.default_encoding: Union[str, Callable[[bytes], str]] = "utf-8"
         self.redirect_count = 0
         self.redirect_url = ""
         self.http_version = 0
         self.primary_ip: str = ""
+        self.primary_port: int = 0
         self.local_ip: str = ""
-        self.history: List[Dict[str, Any]] = []
-        self.infos: Dict[str, Any] = {}
+        self.local_port: int = 0
+        self.history: list[dict[str, Any]] = []
+        self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
+        self._stream_closed = False
+        self.download_size: int = 0
+        self.upload_size: int = 0
+        self.header_size: int = 0
+        self.request_size: int = 0
+        self.response_size: int = 0
 
     @property
     def charset(self) -> str:
@@ -95,10 +134,11 @@ class Response:
         Determines the encoding to decode byte content into text.
 
         The method follows a specific priority to decide the encoding:
-        1. If `.encoding` has been explicitly set, it is used.
-        2. The encoding specified by the `charset` parameter in the `Content-Type` header.
-        3. The encoding specified by the `default_encoding` attribute. This can either be
-           a string (e.g., "utf-8") or a callable for charset autodetection.
+        1. If ``.encoding`` has been explicitly set, it is used.
+        2. The encoding specified by the ``charset`` parameter in the ``Content-Type``
+            header.
+        3. The encoding specified by the ``default_encoding`` attribute. This can either
+            be a string (e.g., "utf-8") or a callable for charset autodetection.
         """
         if not hasattr(self, "_encoding"):
             encoding = self.charset_encoding
@@ -134,6 +174,13 @@ class Response:
                 self._text = self._decode(self.content)
         return self._text
 
+    def markdown(self) -> str:
+        doc = rd.Document(self.content)
+        title = doc.title()
+        summary = doc.summary(html_partial=True)
+        body_as_md = md(f"<h1>{title}</h1><main>{summary}</main>")
+        return body_as_md
+
     def _decode(self, content: bytes) -> str:
         try:
             return content.decode(self.encoding, errors="replace")
@@ -143,7 +190,7 @@ class Response:
     def raise_for_status(self):
         """Raise an error if status code is not in [200, 400)"""
         if not self.ok:
-            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}")
+            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
 
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
@@ -154,7 +201,9 @@ class Response:
         """
         pending = None
 
-        for chunk in self.iter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
+        for chunk in self.iter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
@@ -174,7 +223,11 @@ class Response:
         iterate streaming content chunk by chunk in bytes.
         """
         if chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
+            warnings.warn(
+                "chunk_size is ignored, there is no way to tell curl that.",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
         if decode_unicode:
             raise NotImplementedError()
 
@@ -185,15 +238,15 @@ class Response:
 
             # re-raise the exception if something wrong happened.
             if isinstance(chunk, RequestException):
-                self.curl.reset()
+                self._finalize_stream()
                 raise chunk
 
             # end of stream.
-            if chunk is None:
-                self.curl.reset()
-                return
+            if chunk is STREAM_END:
+                break
 
             yield chunk
+        self._finalize_stream()
 
     def json(self, **kw):
         """return a parsed json object of the content."""
@@ -201,11 +254,20 @@ class Response:
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
+        self._finalize_stream()
 
+    def _finalize_stream(self) -> None:
+        if self._stream_closed:
+            return
+        if self.queue is None and self.stream_task is None and self.quit_now is None:
+            return
+        self._stream_closed = True
         if self.quit_now:
             self.quit_now.set()
         if self.stream_task:
             self.stream_task.result()
+        if self.curl:
+            self.curl.close()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
@@ -216,7 +278,9 @@ class Response:
         """
         pending = None
 
-        async for chunk in self.aiter_content(chunk_size=chunk_size, decode_unicode=decode_unicode):
+        async for chunk in self.aiter_content(
+            chunk_size=chunk_size, decode_unicode=decode_unicode
+        ):
             if pending is not None:
                 chunk = pending + chunk
             lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
@@ -237,7 +301,11 @@ class Response:
         iterate streaming content chunk by chunk in bytes.
         """
         if chunk_size:
-            warnings.warn("chunk_size is ignored, there is no way to tell curl that.", stacklevel=2)
+            warnings.warn(
+                "chunk_size is ignored, there is no way to tell curl that.",
+                CurlCffiWarning,
+                stacklevel=2,
+            )
         if decode_unicode:
             raise NotImplementedError()
 
@@ -252,7 +320,7 @@ class Response:
                 raise chunk
 
             # end of stream.
-            if chunk is None:
+            if chunk is STREAM_END:
                 await self.aclose()
                 return
 
@@ -277,7 +345,6 @@ class Response:
         if self.astream_task:
             await self.astream_task
 
-    # It prints the status code of the response instead of
-    # the object's memory location.
+    # It prints the status code of the response instead of the object's memory location.
     def __repr__(self) -> str:
         return f"<Response [{self.status_code}]>"
