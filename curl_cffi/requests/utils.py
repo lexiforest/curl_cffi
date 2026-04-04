@@ -770,6 +770,14 @@ def set_curl_options(
 
     # tcp fingerprint string
     if tcp_fp:
+        if proxy is not None:
+            warnings.warn(
+                "tcp_fp has no effect when a proxy is set. The TCP connection is to "
+                "the proxy server, so the target sees the proxy's TCP fingerprint, "
+                "not yours. Consider using HTTP/3 (QUIC/UDP) to avoid TCP fingerprinting.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
         set_tcp_fp_options(c, tcp_fp)
 
     buffer = None
