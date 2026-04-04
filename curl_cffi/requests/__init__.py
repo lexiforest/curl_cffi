@@ -110,6 +110,7 @@ def request(
         impersonate: which browser version to impersonate.
         ja3: ja3 string to impersonate.
         akamai: akamai string to impersonate.
+        tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
         extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
         thread: thread engine to use for working with other thread implementations.
             choices: eventlet, gevent.
