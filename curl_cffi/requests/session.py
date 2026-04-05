@@ -25,7 +25,7 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, parse_qsl, quote, unquote, urlencode, urljoin, urlparse
+from urllib.parse import urlparse
 
 # Unpack introduced in 3.11
 try:
@@ -33,15 +33,11 @@ try:
 except ImportError:
     from typing_extensions import Unpack
 
-from .. import AsyncCurl, Curl, CurlError, CurlHttpVersion, CurlInfo, CurlOpt, CurlSslVersion
-from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
-from .cache import CacheStrategy
-from urllib.parse import urlparse
-
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
+from .cache import CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
@@ -103,6 +99,7 @@ if TYPE_CHECKING:
         response_class: Optional[type[R]]
         discard_cookies: bool
         raise_for_status: bool
+        cache: Optional[CacheSpec]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -246,7 +243,7 @@ class BaseSession(Generic[R]):
         response_class: Optional[type[R]] = None,
         discard_cookies: bool = False,
         raise_for_status: bool = False,
-        cache: Optional[CacheStrategy] = None,
+        cache: Optional[CacheSpec] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -272,7 +269,7 @@ class BaseSession(Generic[R]):
         self.debug = debug
         self.interface = interface
         self.cert = cert
-        self.cache = cache
+        self.cache = normalize_cache_backend(cache)
 
         if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
@@ -393,6 +390,22 @@ class BaseSession(Generic[R]):
     def _check_session_closed(self):
         if self._closed:
             raise SessionClosed("Session is closed, cannot send request.")
+
+    def _cache_enabled(
+        self,
+        request,
+        *,
+        stream: Optional[bool],
+        content_callback: Optional[Callable[..., object]],
+    ) -> bool:
+        return bool(
+            self.cache
+            and self.cache.should_cache_request(
+                request,
+                stream=bool(stream),
+                content_callback=content_callback,
+            )
+        )
 
     def _retry_delay(self, attempt: int) -> float:
         strategy = self.retry
@@ -689,6 +702,17 @@ class Session(BaseSession[R]):
             event_class=threading.Event,
         )
 
+        if self._cache_enabled(req, stream=stream, content_callback=content_callback):
+            cached_response = self.cache.get(
+                req,
+                response_class=self.response_class,
+            )  # type: ignore[union-attr]
+            if cached_response is not None:
+                if self.raise_for_status:
+                    cached_response.raise_for_status()
+                c.reset()
+                return cast(R, cached_response)
+
         if stream:
 
             def perform():
@@ -755,6 +779,10 @@ class Session(BaseSession[R]):
                     c, buffer, header_buffer, default_encoding, discard_cookies
                 )
                 rsp.request = req
+                if self._cache_enabled(
+                    req, stream=stream, content_callback=content_callback
+                ):
+                    self.cache.set(req, rsp)  # type: ignore[union-attr]
                 if self.raise_for_status:
                     rsp.raise_for_status()
                 return rsp
@@ -944,6 +972,12 @@ class AsyncSession(BaseSession[R]):
 
             s = AsyncSession()  # it also works.
         """
+        if kwargs.get("cache") is not None:
+            raise NotImplementedError(
+                "AsyncSession does not support cache yet because CacheBackend I/O "
+                "is blocking."
+            )
+
         super().__init__(**kwargs)
         self._loop: asyncio.AbstractEventLoop | None = loop
         self._acurl: AsyncCurl | None = async_curl

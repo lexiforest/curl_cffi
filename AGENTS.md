@@ -9,6 +9,8 @@ on cffi for interfacing between python and libcurl.
 
 ## Build, Test, and Development Commands
 
+Use `uv` to manage venv and dependencies.
+
 Install editable dependencies with `pip install -e .[test]` and `pip install -e .[dev]`. Use `make preprocess` before source builds; it fetches and patches the bundled libcurl headers. Common commands:
 
 - `make test` runs the unit suite (`python -bb -m pytest tests/unittest`).
