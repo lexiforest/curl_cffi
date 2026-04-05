@@ -75,8 +75,6 @@ def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
     if async_curl._timer:
         async_curl._timer.cancel()  # If already called, cancel does nothing.
         async_curl._timer = None
-    if timeout_ms < 0:
-        return 0
 
     # libcurl says to install a timer which calls socket_action on fire.
     async_curl._timer = async_curl.loop.call_later(
@@ -120,7 +118,8 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any) -> in
 
 
 class BaseAsyncCurl:
-    """Shared logic for async curl backends."""
+    """Wrapper around curl_multi handle to provide async support. It uses the libcurl
+    socket_action APIs."""
 
     def __init__(
         self,
@@ -128,22 +127,27 @@ class BaseAsyncCurl:
         cacert: str = "",
         cancelled_errors: tuple[type[BaseException], ...] = (),
     ) -> None:
+        """
+        Args:
+            cacert: CA cert path to use, by default, certs from ``certifi`` are used.
+        """
         self._curlm = lib.curl_multi_init()
         self._cacert = cacert or DEFAULT_CACERT
-        self._curl2future: dict[Curl, Any] = {}
-        self._curl2curl: dict[ffi.CData, Curl] = {}
-        self._sockfds: set[int] = set()
+        self._curl2future: dict[Curl, Any] = {}  # curl to future map
+        self._curl2curl: dict[ffi.CData, Curl] = {}  # c curl to Curl
+        self._sockfds: set[int] = set()  # sockfds
+        self._timeout_checker = self.create_task(self._force_timeout())
         self._timer = None
         self._cancelled_errors = cancelled_errors
         self._setup()
-        self._timeout_checker = self.create_task(self._force_timeout())
 
-    def _setup(self) -> None:
+    def _setup(self):
         self.setopt(CurlMOpt.TIMERFUNCTION, lib.timer_function)
         self.setopt(CurlMOpt.SOCKETFUNCTION, lib.socket_function)
         self._self_handle = ffi.new_handle(self)
         self.setopt(CurlMOpt.SOCKETDATA, self._self_handle)
         self.setopt(CurlMOpt.TIMERDATA, self._self_handle)
+        # self.setopt(CurlMOpt.PIPELINING, CURLPIPE_NOTHING)
 
     def create_future(self):  # pragma: no cover - overridden in subclasses
         raise NotImplementedError
@@ -154,48 +158,56 @@ class BaseAsyncCurl:
     async def sleep(self, seconds: float) -> None:  # pragma: no cover
         raise NotImplementedError
 
-    async def close(self) -> None:
+    async def close(self):
         """Close and cleanup running timers, readers, writers and handles."""
+
+        # Close and wait for the force timeout checker to complete
         self._timeout_checker.cancel()
         with suppress(*self._cancelled_errors):
             await self._timeout_checker
 
+        # Close all pending futures
         for curl, future in self._curl2future.items():
             lib.curl_multi_remove_handle(self._curlm, curl._curl)
             if future and not future.done() and not future.cancelled():
                 future.set_result(None)
 
+        # Cleanup curl_multi handle
         lib.curl_multi_cleanup(self._curlm)
         self._curlm = None
 
+        # Remove add readers and writers
         for sockfd in self._sockfds:
             self.loop.remove_reader(sockfd)
             self.loop.remove_writer(sockfd)
 
+        # Cancel all time functions
         if self._timer:
             self._timer.cancel()
 
-    async def _force_timeout(self) -> None:
-        """Safeguard against missing signals from curl."""
+    async def _force_timeout(self):
+        """This coroutine is used to safeguard from any missing signals from curl, and
+        put everything back on track"""
         while True:
             if not self._curlm:
                 break
-            self.process_data(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
+            self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
             await self.sleep(0.1)
 
     def add_handle(self, curl: Curl):
-        """Add a curl handle to be managed by curl_multi."""
+        """Add a curl handle to be managed by curl_multi. This is the equivalent of
+        `perform` in the async world."""
         curl._ensure_cacert()
         errcode = lib.curl_multi_add_handle(self._curlm, curl._curl)
         self._check_error(errcode)
         future = self.create_future()
         self._curl2future[curl] = future
         self._curl2curl[curl._curl] = curl
-        # Kick the state machine so timeouts/IO get scheduled immediately.
-        self.process_data(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
         return future
 
     def socket_action(self, sockfd: int, ev_bitmask: int) -> int:
+        """wrapper for curl_multi_socket_action,
+        returns the number of running curl handles."""
         running_handle = ffi.new("int *")
         errcode = lib.curl_multi_socket_action(
             self._curlm, sockfd, ev_bitmask, running_handle
@@ -203,7 +215,8 @@ class BaseAsyncCurl:
         self._check_error(errcode)
         return running_handle[0]
 
-    def process_data(self, sockfd: int, ev_bitmask: int) -> None:
+    def process_data(self, sockfd: int, ev_bitmask: int):
+        """Call curl_multi_info_read to read data for given socket."""
         if not self._curlm:
             warnings.warn(
                 "Curlm already closed! quitting from process_data",
@@ -218,6 +231,7 @@ class BaseAsyncCurl:
         while True:
             try:
                 curl_msg = lib.curl_multi_info_read(self._curlm, msg_in_queue)
+                # NULL is returned as a signal that no more to be get at this point
                 if curl_msg == ffi.NULL:
                     break
                 if curl_msg.msg == CURLMSG_DONE:
@@ -243,22 +257,25 @@ class BaseAsyncCurl:
         self._curl2curl.pop(curl._curl, None)
         return self._curl2future.pop(curl, None)
 
-    def remove_handle(self, curl: Curl) -> None:
+    def remove_handle(self, curl: Curl):
+        """Cancel a future for given curl handle."""
         future = self._pop_future(curl)
         if future and not future.done() and not future.cancelled():
             future.cancel()
 
-    def set_result(self, curl: Curl) -> None:
+    def set_result(self, curl: Curl):
+        """Mark a future as done for given curl handle."""
         future = self._pop_future(curl)
         if future and not future.done() and not future.cancelled():
             future.set_result(None)
 
-    def set_exception(self, curl: Curl, exception: BaseException) -> None:
+    def set_exception(self, curl: Curl, exception: BaseException):
+        """Raise exception of a future for given curl handle."""
         future = self._pop_future(curl)
         if future and not future.done() and not future.cancelled():
             future.set_exception(exception)
 
-    def _check_error(self, errcode: int, *args: Any) -> None:
+    def _check_error(self, errcode: int, *args: Any):
         if errcode == CurlECode.OK:
             return
         errmsg = lib.curl_multi_strerror(errcode)
