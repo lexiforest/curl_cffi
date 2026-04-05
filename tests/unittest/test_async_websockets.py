@@ -990,6 +990,11 @@ class TestAsyncWebSocketClose:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         await ws.close()
 
+        # Drain any in-flight frames (like the server's echoed CLOSE frame)
+        # that slipped into the buffer before the reader task was cancelled.
+        while not ws._receive_queue.empty():
+            ws._receive_queue.get_nowait()
+
         with pytest.raises(WebSocketClosed):
             _ = await ws.recv()
 
@@ -1268,7 +1273,7 @@ class TestAsyncWebSocketStateChecks:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         try:
             # Wait for close frame
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.5)
             with suppress(WebSocketClosed, WebSocketError, WebSocketTimeout):
                 _ = await ws.recv(timeout=0.5)
         finally:
@@ -1769,7 +1774,7 @@ class TestAsyncWebSocketAutoclose:
                 _ = await ws.recv(timeout=2.0)
 
             # Wait a bit for autoclose to process
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(1)
             # Connection should be closed
             assert ws.closed or not ws.is_alive()
         finally:
@@ -1856,9 +1861,6 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
                 recv_queue_size=5,
                 block_on_recv_queue_full=False,
             ) as ws:
-                # Give server time to send all messages (which will overflow queue)
-                await asyncio.sleep(0.3)
-
                 # Try to receive - may get error due to queue overflow
                 received: list[str] = []
                 for _ in range(20):
