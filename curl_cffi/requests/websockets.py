@@ -20,7 +20,8 @@ from random import uniform
 from select import select
 from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar, cast, final
 
-from ..aio import CURL_SOCKET_BAD, get_selector
+from ..async_base import CURL_SOCKET_BAD
+from ..aio import get_selector
 from ..const import CurlECode, CurlFollow, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
 from ..utils import CurlCffiWarning
