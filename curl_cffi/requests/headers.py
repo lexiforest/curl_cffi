@@ -102,7 +102,7 @@ class Headers(MutableMapping[str, Optional[str]]):
             ]
         elif isinstance(headers, list):
             # list of "Name: Value" pairs
-            if isinstance(headers[0], (str, bytes)):
+            if isinstance(headers[0], str | bytes):
                 sep = ":" if isinstance(headers[0], str) else b":"
                 h = []
                 for line in headers:
@@ -252,9 +252,11 @@ class Headers(MutableMapping[str, Optional[str]]):
         normalized_key = key.lower().encode(self.encoding)
 
         items = [
-            header_value.decode(self.encoding)
-            if header_value is not None
-            else header_value
+            (
+                header_value.decode(self.encoding)
+                if header_value is not None
+                else header_value
+            )
             for _, header_key, header_value in self._list
             if header_key == normalized_key
         ]

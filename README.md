@@ -3,7 +3,7 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/curl-cffi/week)](https://pepy.tech/projects/curl-cffi)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
-[![Generic badge](https://img.shields.io/badge/Telegram%20Group-join-blue?logo=telegram)](https://t.me/real_curl_cffi)
+[![Generic badge](https://img.shields.io/badge/Telegram%20Channel-join-blue?logo=telegram)](https://t.me/impersonate_pro)
 [![Generic badge](https://img.shields.io/badge/Discord-join-purple?logo=blue)](https://discord.gg/kJqMHHgdn2)
 
 [Documentation](https://curl-cffi.readthedocs.io)
@@ -16,7 +16,12 @@ python http clients like `httpx` or `requests`, `curl_cffi` can impersonate
 browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Python 3.9 is the minimum supported version since v0.10.
+Python 3.10 is the minimum supported version since v0.14.
+
+## Recent highlights
+
+- 💨 http/3 fingerprints and UDP socks5 proxy support was added in `v0.15.0`!
+- 🦞 Added `curl-cffi` CLI and skills for debugging and for claws/agents.
 
 ## Recall.ai - API for meeting recordings
 
@@ -26,9 +31,9 @@ If you’re looking for a meeting recording API, consider checking out [Recall.a
 
 ## Residential Proxies
 
-<a href="https://www.thordata.com/?ls=github&lk=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
+<a href="https://www.thordata.com/?ls=github&lk=curl_" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
 
-Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/products/residential-proxies/?ls=github&lk=curl_cffi) and receive 2000 free SERP API calls.
+Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/?ls=github&lk=curl_) and receive 2000 free SERP API calls.
 
 ## Sponsors
 
@@ -42,7 +47,7 @@ Maintenance of this project is made possible by all the <a href="https://github.
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
-to register: https://yescaptcha.com/i/stfnIO
+to register: <https://yescaptcha.com/i/stfnIO>
 
 ------
 
@@ -65,7 +70,8 @@ No browser automation. Just simple API calls that return the exact cookies and h
 - Mimics the requests API, no need to learn another one.
 - Pre-compiled, so you don't have to compile on your machine.
 - Supports `asyncio` and `trio` with proxy rotation on each request.
-- Supports http 2.0 & 3.0, which requests does not.
+- Supports http 2.0, which requests does not.
+- Supports http 3.0, with fingerprints and udp proxy.
 - Supports websocket.
 - MIT licensed.
 
@@ -76,12 +82,33 @@ No browser automation. Just simple API calls that return the exact cookies and h
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
 |websocket|❌|✅|❌|❌|✅|
+|native retry|❌|❌|❌|❌|✅|
 |fingerprints|❌|❌|❌|❌|✅|
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
 Notes:
-1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
-2. Since v0.11.4.
+
+1. For pycurl, http/3 is usually disabled at compile time by default.
+2. http/3 support since v0.11.4, http/3 proxy and fingerprints since v0.15.0.
+
+### curl-cffi CLI(new)
+
+Since v0.15, `curl_cffi` comes with a CLI called `curl-cffi`, you can use it for debugging
+a certain url with the `--impersonate` option. It can also serve as a `web_fetch`
+replacement for "claws" and "agents".
+
+||curl|httpie|curl-cffi|
+|---|---|---|---|
+|http/2|✅|❌|✅|
+|http/3|☑️<sup>1</sup>|❌|✅|
+|human-friendly|☑️<sup>2</sup>|✅|✅|
+|colorful|❌|✅|✅|
+|fingerprints|❌|❌|✅|
+
+Notes:
+
+1. You need an http/3 enabled curl build, it's not enabled by default, at leat on my machine.
+2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax. If you prefer the curl syntax, you can keep using `curl-impersonate`.
 
 ## Install
 
@@ -90,6 +117,10 @@ Notes:
 This should work on Linux, macOS and Windows out of the box.
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
+
+Android support, including Termux, is currently in beta, you can install the beta release for testing.
+For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
+If you are using these OSes, please lend an hand.
 
 To install beta releases:
 
@@ -102,16 +133,24 @@ To install unstable version from GitHub:
     make preprocess
     pip install .
 
-On macOS, you may need to install the following dependencies:
-
-    brew install zstd nghttp2
-
 ## Usage
 
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
+`curl_cffi` also bundles with a CLI called `curl-cffi`.
+
+### CLI
+
+```sh
+curl-cffi get tls.browserleaks.com/json
+
+# curl-cffi can be hard to type, use an alias if you want
+alias imp=curl-cffi
+imp get tls.browserleaks.com/json --impersonate chrome
+```
+
+For a complete CLI guide, see [docs](https://curl-cffi.readthedocs.io).
 
 ### requests-like
-
 
 ```python
 import curl_cffi
@@ -127,6 +166,13 @@ print(r.json())
 # simply set impersonate="chrome" without specifying a version.
 # Other similar values are: "safari" and "safari_ios"
 r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
+
+# Use http/3 with impersonation
+r = curl_cffi.get(
+    "https://fp.impersonate.pro/api/http3",
+    http_version="v3",
+    impersonate="chrome"
+)
 
 # Randomly choose a browser version based on current market share in real world
 # from: https://caniuse.com/usage-table
@@ -179,12 +225,12 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>|chrome132, chrome134, chrome135|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142, chrome145<sup>[9]</sup>, chrome146<sup>[9]</sup>|chrome132, chrome134, chrome135|
 |Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
 |Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
 |Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
-|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144, firefox147<sup>[9]</sup>|coming soon|
 |Firefox Android|N/A|firefox135_android|
 |Tor|tor145 <sup>[7]</sup>|coming soon|
 |Edge|edge99, edge101|edge133, edge135|
@@ -193,6 +239,7 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 
 Notes:
+
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
@@ -203,6 +250,7 @@ Notes:
 6. Added in version `0.11.0`.
 7. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
 8. Added in  `0.12.0`.
+9. http3 support included.
 
 ### Asyncio
 
@@ -273,13 +321,11 @@ ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 import asyncio
 from curl_cffi import AsyncSession
 
-async with AsyncSession() as s:
-    ws = await s.ws_connect("wss://echo.websocket.org")
-    await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-    await ws.flush()
-    async for message in ws:
-        print(message)
-    await ws.close()
+async with AsyncSession() as session:
+    async with session.ws_connect("wss://echo.websocket.org") as ws:
+        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+        async for message in ws:
+            print(message)
 ```
 
 ## Ecosystem

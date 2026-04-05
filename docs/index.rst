@@ -12,12 +12,14 @@ curl_cffi's documentation
    :glob:
 
    quick_start
+   cli/_index
    impersonate/_index
    advanced
    vs-requests
    cookies
    community
    api
+   security
    faq
    changelog
    dev
@@ -63,9 +65,9 @@ Residential Proxies
 .. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png
    :width: 149
    :alt: Thordata
-   :target: https://www.thordata.com/?ls=github&lk=curl_cffi
+   :target: https://www.thordata.com/?ls=github&lk=curl_
 
-`Thordata <https://www.thordata.com/?ls=github&lk=curl_cffi>`_: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of `residential proxies <https://www.thordata.com/products/residential-proxies/?ls=github&lk=curl_cffi>`_ and receive 2000 free SERP API calls.
+`Thordata <https://www.thordata.com/?ls=github&lk=curl_>`_: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of `residential proxies <https://www.thordata.com/?ls=github&lk=curl_>`_ and receive 2000 free SERP API calls.
 
 
 Features
@@ -116,6 +118,12 @@ Features
    * - websocket
      - ❌
      - ✅
+     - ❌
+     - ❌
+     - ✅
+   * - native retry
+     - ❌
+     - ❌
      - ❌
      - ❌
      - ✅

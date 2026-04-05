@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["HttpVersionLiteral", "set_curl_options", "not_set"]
+__all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
 import asyncio
@@ -8,13 +8,13 @@ import math
 import queue
 import warnings
 from collections import Counter
+from collections.abc import Callable
 from io import BytesIO
 from json import dumps
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
-from ..const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from ..utils import CurlCffiWarning
 from .cookies import Cookies
@@ -46,7 +46,23 @@ HttpVersionLiteral = Literal["v1", "v2", "v2tls", "v2_prior_knowledge", "v3", "v
 
 SAFE_CHARS = set("!#$%&'()*+,/:;=?@[]~")
 
-not_set: Final[Any] = object()
+
+@final
+class NotSetType:
+    """
+    Unique single initialized type distinct from ``None``.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "NOT_SET"
+
+    def __reduce__(self) -> Literal["NOT_SET"]:
+        return "NOT_SET"
+
+
+NOT_SET: Final[NotSetType] = NotSetType()
 
 
 # ruff: noqa: SIM116
@@ -118,7 +134,7 @@ def update_url_params(url: str, params: Union[dict, list, tuple]) -> str:
     new_args_counter = Counter(x[0] for x in params)
     for key, value in params:
         # Bool and Dict values should be converted to json-friendly values
-        if isinstance(value, (bool, dict)):
+        if isinstance(value, bool | dict):
             value = dumps(value)
         # 1 to 1 mapping, we have to search and update it.
         if old_args_counter.get(key) == 1 and new_args_counter.get(key) == 1:
@@ -311,6 +327,18 @@ def set_akamai_options(curl: Curl, akamai: str):
     curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
 
 
+def set_perk_options(curl: Curl, perk: str):
+    settings, header_order, quic_transport_parameters = perk.split("|")
+
+    curl.setopt(CurlOpt.HTTP3_SETTINGS, settings)
+
+    # m,a,s,p -> masp
+    # curl-impersonate only accepts masp format, without commas.
+    curl.setopt(CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
+
+    curl.setopt(CurlOpt.QUIC_TRANSPORT_PARAMETERS, quic_transport_parameters)
+
+
 def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
     if fp.tls_signature_algorithms:
         curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
@@ -327,6 +355,14 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fp.tls_record_size_limit)
     if fp.http2_no_priority:
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, fp.http2_no_priority)
+    if fp.form_boundary is not None:
+        curl.setopt(CurlOpt.FORM_BOUNDARY, fp.form_boundary)
+    if fp.split_cookies is not None:
+        curl.setopt(CurlOpt.SPLIT_COOKIES, fp.split_cookies)
+    if fp.http3_sig_hash_algs is not None:
+        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.sig_hash_algs)
+    if fp.http3_tls_extension_order is not None:
+        curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fp.http3_tls_extension_order)
 
 
 def set_curl_options(
@@ -334,16 +370,20 @@ def set_curl_options(
     method: HttpMethod,
     url: str,
     *,
-    params_list: list[Union[dict, list, tuple, None]] = [],  # noqa: B006
+    params_list: list[
+        Union[dict[str, object], list[object], tuple[object, ...], None]
+    ] = [],  # noqa: B006
     base_url: Optional[str] = None,
-    data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-    json: Optional[dict | list] = None,
+    data: Optional[
+        Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]
+    ] = None,
+    json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
-    files: Optional[dict] = None,
+    files: Optional[dict[object, object]] = None,
     auth: Optional[tuple[str, str]] = None,
-    timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
-    allow_redirects: Optional[bool] = True,
+    timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
+    allow_redirects: Optional[Union[bool, CurlFollow, str]] = True,
     max_redirects: Optional[int] = 30,
     proxies_list: list[Optional[ProxySpec]] = [],  # noqa: B006
     proxy: Optional[str] = None,
@@ -351,10 +391,11 @@ def set_curl_options(
     verify_list: list[Union[bool, str, None]] = [],  # noqa: B006
     referer: Optional[str] = None,
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
-    content_callback: Optional[Callable] = None,
+    content_callback: Optional[Callable[..., object]] = None,
     impersonate: Optional[Union[BrowserTypeLiteral, str]] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
+    perk: Optional[str] = None,
     extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
     default_headers: bool = True,
     quote: Union[str, Literal[False]] = "",
@@ -395,7 +436,7 @@ def set_curl_options(
     c.setopt(CurlOpt.URL, url.encode())
 
     # data/body/json
-    if isinstance(data, (dict, list, tuple)):
+    if isinstance(data, dict | list | tuple):
         body = urlencode(data).encode()
     elif isinstance(data, str):
         body = data.encode()
@@ -409,6 +450,8 @@ def set_curl_options(
         raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
     if json is not None:
         body = dumps(json, separators=(",", ":")).encode()
+    body_provided = data is not None or json is not None
+    request_body = body if body_provided and multipart is None else None
 
     # Tell libcurl to be aware of bodies and related headers when,
     # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do
@@ -423,19 +466,14 @@ def set_curl_options(
 
     # headers
     base_headers, headers = headers_list
+
     # let headers encoding take precedence over base headers encoding
     encoding = headers.encoding if isinstance(headers, Headers) else None
     h = Headers(base_headers, encoding=encoding)
     h.update(headers)
 
-    # remove Host header if it's unnecessary, otherwise curl may get confused.
-    # Host header will be automatically added by curl if it's not present.
-    # https://github.com/lexiforest/curl_cffi/issues/119
-    host_header = h.get("Host")
-    if host_header is not None:
-        u = urlparse(url)
-        if host_header == u.netloc or host_header == u.hostname:
-            h.pop("Host", None)
+    # Previously we removed Host for https://github.com/lexiforest/curl_cffi/issues/119
+    # Since curl-impersonate 1.5.0, curl always use Host parsed from url as cookiehost
 
     # Make curl always include empty headers.
     # See: https://stackoverflow.com/a/32911474/1061155
@@ -455,7 +493,7 @@ def set_curl_options(
         update_header_line(
             header_lines, "Content-Type", "application/x-www-form-urlencoded"
         )
-    if isinstance(data, (str, bytes)) and data:
+    if isinstance(data, str | bytes) and data:
         update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
     # Never send `Expect` header.
@@ -463,7 +501,7 @@ def set_curl_options(
 
     c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
-    req = Request(url, h, method)
+    req = Request(url, h, method, request_body)
 
     # cookies
     c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
@@ -514,7 +552,7 @@ def set_curl_options(
             c.setopt(CurlOpt.LOW_SPEED_LIMIT, 1)
             c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(all_timeout))
 
-    elif isinstance(timeout, (int, float)):
+    elif isinstance(timeout, int | float):
         if not stream:
             c.setopt(CurlOpt.TIMEOUT_MS, int(timeout * 1000))
         else:
@@ -523,7 +561,12 @@ def set_curl_options(
             c.setopt(CurlOpt.LOW_SPEED_TIME, math.ceil(timeout))
 
     # allow_redirects
-    c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))  # type: ignore
+    if isinstance(allow_redirects, CurlFollow):
+        c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))
+    elif allow_redirects == "safe":
+        c.setopt(CurlOpt.FOLLOWLOCATION, int(CurlFollow.SAFE))
+    else:
+        c.setopt(CurlOpt.FOLLOWLOCATION, int(allow_redirects))  # type: ignore
 
     # max_redirects
     c.setopt(CurlOpt.MAXREDIRS, max_redirects)
@@ -610,24 +653,17 @@ def set_curl_options(
             c.setopt(CurlOpt.SSLCERT, cert)
             c.setopt(CurlOpt.SSLKEY, key)
 
+    # http_version, before impersonation, which relies on checking if user wants http/3
+    if http_version:
+        http_version = normalize_http_version(http_version)
+        c.setopt(CurlOpt.HTTP_VERSION, http_version)
+
     # impersonate
     if impersonate:
         impersonate = normalize_browser_type(impersonate)
         ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
         if ret != 0:
             raise ImpersonateError(f"Impersonating {impersonate} is not supported")
-
-    # extra_fp options
-    if extra_fp:
-        if isinstance(extra_fp, dict):
-            extra_fp = ExtraFingerprints(**extra_fp)
-        if impersonate:
-            warnings.warn(
-                "Extra fingerprints was altered after impersonated version was set.",
-                CurlCffiWarning,
-                stacklevel=1,
-            )
-        set_extra_fp(c, extra_fp)
 
     # ja3 string
     if ja3:
@@ -644,6 +680,18 @@ def set_curl_options(
             permute = True
         set_ja3_options(c, ja3, permute=permute)
 
+    # extra_fp options
+    if extra_fp:
+        if isinstance(extra_fp, dict):
+            extra_fp = ExtraFingerprints(**extra_fp)
+        if impersonate:
+            warnings.warn(
+                "Extra fingerprints was altered after impersonated version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
+        set_extra_fp(c, extra_fp)
+
     # akamai string
     if akamai:
         if impersonate:
@@ -654,10 +702,15 @@ def set_curl_options(
             )
         set_akamai_options(c, akamai)
 
-    # http_version, after impersonate, which will change this to http2
-    if http_version:
-        http_version = normalize_http_version(http_version)
-        c.setopt(CurlOpt.HTTP_VERSION, http_version)
+    # perk string
+    if perk:
+        if impersonate:
+            warnings.warn(
+                "Perk fingerprint was altered after impersonated version was set.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
+        set_akamai_options(c, perk)
 
     buffer = None
     q = None

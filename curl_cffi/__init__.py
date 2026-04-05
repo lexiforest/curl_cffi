@@ -8,6 +8,7 @@ __all__ = [
     "CurlMOpt",
     "CurlECode",
     "CurlHttpVersion",
+    "CurlFollow",
     "CurlSslVersion",
     "CurlWsFlag",
     "config_warnings",
@@ -36,6 +37,7 @@ __all__ = [
     "WebSocketError",
     "WebSocketClosed",
     "WebSocketTimeout",
+    "WebSocketRetryStrategy",
     "WsCloseCode",
     "ExtraFingerprints",
     "CookieTypes",
@@ -53,6 +55,7 @@ from ._wrapper import ffi, lib
 from .aio import AsyncCurl
 from .const import (
     CurlECode,
+    CurlFollow,
     CurlHttpVersion,
     CurlInfo,
     CurlMOpt,
@@ -81,6 +84,7 @@ from .requests import (
     WebSocketClosed,
     WebSocketError,
     WebSocketTimeout,
+    WebSocketRetryStrategy,
     WsCloseCode,
     delete,
     exceptions,
