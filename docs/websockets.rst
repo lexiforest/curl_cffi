@@ -3,16 +3,12 @@ WebSockets
 
 ``curl_cffi`` provides WebSocket clients for both synchronous and asynchronous contexts.
 
-.. important::
-
-   The asynchronous implementation (``AsyncWebSocket``) is significantly more developed, robust, and feature-rich than the synchronous version. It features background I/O, flow control, configurable backpressure, and automatic retries.
-
-   Unless you are strictly bound to a synchronous environment, we strongly recommend using the asynchronous API described below for all use cases.
+The asynchronous client (``AsyncWebSocket``) is the recommended choice for most applications. Built for high performance, it offers a rich feature set—including background I/O, configurable backpressure, and automatic retries. All examples in this guide focus on the asynchronous API.
 
 Quick Start
 ===========
 
-The recommended way to use WebSockets is via the ``AsyncSession``.
+The recommended way to connect to a WebSocket is via the ``AsyncSession``.
 
 .. note::
 
@@ -42,20 +38,6 @@ The recommended way to use WebSockets is via the ``AsyncSession``.
                     print(f"Stream: {message}")
 
     asyncio.run(main())
-
-Async WebSockets
-================
-
-The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performance asyncio applications. It supports standard features like text/binary frames, pings, and automatic handling of control frames.
-
-**Architecture**
-
-This implementation uses a **background I/O model** to ensure high performance:
-
-1.  **Outgoing**: Messages are queued for delivery (non-blocking unless the queue is full).
-2.  **Incoming**: A background task continuously reads from the network and populates a receive queue.
-
-This design decouples your application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
 
 Connecting
 ==========
@@ -102,16 +84,6 @@ Methods for sending data place the message into an outgoing queue. They are gene
     # Send generic (accepts str, bytes, bytearray, memoryview)
     await ws.send("Auto-detected payload")
 
-**Pings**
-
-Libcurl handles PONGs automatically, but you can send a manual PING frame if needed (e.g., for application-layer keepalives).
-
-.. code-block:: python
-
-    await ws.ping(b"keepalive")
-
-PONG frames are consumed internally and are not delivered to user-facing receive methods.
-
 Receiving Data
 ==============
 
@@ -124,7 +96,7 @@ All receive methods support an optional ``timeout`` argument (in seconds).
 
 .. code-block:: python
 
-    # Receive as string (enforces TEXT frame and decodes utf-8 automatically)
+    # Receive as string (decodes utf-8 automatically)
     msg = await ws.recv_str()
 
     # Receive with a 5-second timeout
@@ -134,10 +106,16 @@ All receive methods support an optional ``timeout`` argument (in seconds).
         print("No message received in 5 seconds")
 
     # Receive raw bytes and frame flags
-    # Useful for inspecting frame types (e.g., checking for CONTINUATION flags)
+    # Useful for inspecting the frame type (e.g., TEXT vs BINARY)
     content, flags = await ws.recv()
+    if flags & CurlWsFlag.TEXT:
+        text = content.decode("utf-8")
 
 Concurrent calls to receive methods are fully supported. Messages are distributed to waiters in FIFO order, unlike many other libraries that limit consumption to a single task.
+
+.. note::
+
+    ``recv_str()`` and ``recv_json()`` check that the incoming message is a ``TEXT`` frame. If the server sends a ``BINARY`` frame, these methods will raise a ``WebSocketError``.
 
 Async Iteration
 ---------------
@@ -153,36 +131,50 @@ The most pythonic way to consume a stream is iteration.
     async for message in ws:
         print(message.decode("utf-8"))
 
+Heartbeats and Pings
+====================
+
+Libcurl handles incoming PONGs automatically. If you need to send a manual PING frame (e.g., for application-layer keepalives):
+
+.. code-block:: python
+
+    await ws.ping(b"keepalive")
+
+.. note::
+
+    PONG frames are consumed internally by the background task and are not delivered to your ``recv()`` calls or async iteration.
+
 Lifecycle Management
 ====================
 
 Closing
 -------
 
-The context manager handles closing automatically. If you need to close manually:
+The context manager handles closing automatically. If you need to close manually, there are two methods available:
 
 .. code-block:: python
 
-    await ws.close()
-    # Or with a custom code/reason
+    # Graceful shutdown: sends a close frame, waits for queued
+    # outgoing messages to flush, and awaits server acknowledgment.
     await ws.close(code=1000, message=b"bye")
 
-    # Forcefully terminate the connection
+    # Forceful shutdown: cancels all background I/O tasks and
+    # cleans up the socket immediately. Thread-safe and synchronous.
     ws.terminate()
 
-Both methods are idempotent and safe to call multiple times. While ``close()`` initiates a graceful handshake and waits for cleanup, ``terminate()`` is thread-safe and task-safe, allowing for immediate disconnection from any thread without waiting for a graceful shutdown.
+Both methods are idempotent and safe to call multiple times.
 
 Flushing
 --------
 
-Because ``send()`` is decoupled from the network, returning from ``await send()`` simply means the message is queued for transmission. Call ``flush()`` after sending to guarantee that all queued messages have been written to the socket.
+Because sending is non-blocking, returning from ``await ws.send()`` only guarantees the message was placed in the internal queue. A background task handles the actual network transmission.
+
+If your application logic requires confirmation that messages have been successfully handed off to the underlying network socket before proceeding (e.g., before shutting down the application or triggering a dependent side-effect), use ``flush()``.
 
 .. code-block:: python
 
     await ws.send_str("Critical Data")
-    await ws.flush()  # Blocks until the send queue is empty
-
-You rarely need to call flush if ``send_queue_size`` is small (the default). Use it only when you must verify all messages are sent before the next step in your code.
+    await ws.flush()  # Blocks until all queued messages are transmitted
 
 Error Handling
 ==============
@@ -205,7 +197,17 @@ Network errors are raised as ``WebSocketError`` or its subclasses.
 Advanced Configuration
 ======================
 
-The ``AsyncWebSocket`` implementation allows fine-tuning for high-performance scenarios.
+The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performance asyncio applications.
+
+Background I/O Architecture
+---------------------------
+
+This implementation uses a decoupled background I/O model to ensure high performance:
+
+1.  **Outgoing**: Messages are queued for delivery (non-blocking unless the queue is full).
+2.  **Incoming**: A background task continuously reads from the network and populates a receive queue.
+
+This design divorces your application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
 
 Queue Sizes (Backpressure)
 --------------------------
@@ -240,11 +242,11 @@ There are no limits on the size of the message that can be sent. Large outbound 
 Manual Fragmentation
 --------------------
 
-If you need to manually fragment a large message, you can send it in chunks by combining the frame type with the ``CURLWS_CONT`` flag.
-The final chunk should drop the ``CONT`` flag to indicate the end of the message.
+The library automatically fragments large payloads for you. If you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
 
 .. warning::
-    According to the libcurl specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in *every* chunk, alongside the ``CONT`` flag. Do not send ``CONT`` by itself.
+
+    According to the ``libcurl`` specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in every chunk, alongside the ``CONT`` flag. The final chunk simply drops the ``CONT`` flag to conclude the message.
 
 .. code-block:: python
 
