@@ -202,12 +202,12 @@ The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performan
 Background I/O Architecture
 ---------------------------
 
-This implementation uses a decoupled background I/O model to ensure high performance:
+This implementation uses a background I/O model to ensure high performance:
 
 1.  **Outgoing**: Messages are queued for delivery (non-blocking unless the queue is full).
 2.  **Incoming**: A background task continuously reads from the network and populates a receive queue.
 
-This design divorces your application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
+This design separates the application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
 
 Queue Sizes (Backpressure)
 --------------------------
