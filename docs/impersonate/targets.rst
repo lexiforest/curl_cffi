@@ -23,30 +23,32 @@ to specify your own customized fingerprints. See below for details.
 - chrome120 :sup:`1`
 - chrome123 :sup:`3`
 - chrome124 :sup:`3`
-- chrome131 :sup:`4`
+- chrome131 :sup:`5`
 - chrome133a :sup:`5` :sup:`6`
-- chrome136 :sup:`7`
-- chrome142
-- chrome145 :sup:`9`
+- chrome136 :sup:`8`
+- chrome142 :sup:`11`
+- chrome145 :sup:`13` :sup:`14`
+- chrome146 :sup:`13` :sup:`14`
 - chrome99_android
-- chrome131_android :sup:`4`
+- chrome131_android :sup:`5`
 - edge99
 - edge101
-- safari153 :sup:`2`
-- safari155 :sup:`2`
-- safari170 :sup:`1`
-- safari172_ios :sup:`1`
-- safari180 :sup:`4`
-- safari180_ios :sup:`4`
-- safari184 :sup:`7`
-- safari184_ios :sup:`7`
-- safari260 :sup:`8`
-- safari260_ios :sup:`8`
+- safari153 :sup:`2` :sup:`9`
+- safari155 :sup:`2` :sup:`9`
+- safari170 :sup:`1` :sup:`9`
+- safari172_ios :sup:`1` :sup:`9`
+- safari180 :sup:`4` :sup:`9`
+- safari180_ios :sup:`4` :sup:`9`
+- safari184 :sup:`8` :sup:`9`
+- safari184_ios :sup:`8` :sup:`9`
+- safari260 :sup:`9` :sup:`10`
+- safari260_ios :sup:`9` :sup:`10`
+- safari2601 :sup:`9` :sup:`11`
 - firefox133 :sup:`5`
 - firefox135 :sup:`7`
-- firefox144
-- firefox147 :sup:`9`
-- tor145 :sup:`7`
+- firefox144 :sup:`11` :sup:`12`
+- firefox147 :sup:`13` :sup:`14`
+- tor145 :sup:`8`
 
 Notes:
 
@@ -55,16 +57,22 @@ Notes:
 3. Added in version ``0.7.0``.
 4. Added in version ``0.8.0``.
 5. Added in version ``0.9.0``.
-6. The version postfix ``-a``(e.g. ``chrome133a``) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
-7. Added in version ``0.11.0``
-8. Added in version ``0.12.0``
-9. ``chrome145`` and ``firefox147`` support http3.
+6. The version suffix ``a`` (e.g. ``chrome133a``) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
+7. Added in version ``0.10.0``.
+8. Added in version ``0.11.0``
+9. Since ``0.11.0``, the format ``safari184_ios`` is preferred over ``safari18_4_ios``, both are supported, but the latter is quite confusing and hard to parse.
+10. Added in version ``0.12.0``
+11. Added in version ``0.14.0``.
+12. Fixed in version ``0.15.0``, previous User-Agent header was `not correct <https://github.com/lexiforest/curl-impersonate/issues/234>`_.
+13. Added in version ``0.15.0``.
+14. http3 support included.
+
 
 Which target version to use?
 ----------------------------
 
 Generally speaking, you should use the latest Chrome or Safari versions. Currently, they're
-``chrome145``, ``safari260`` and ``safari260_ios``. To always impersonate the latest available
+``chrome146``, ``safari260`` and ``safari260_ios``. To always impersonate the latest available
 browser versions, you can simply use ``chrome``, ``firefox``, ``safari`` and ``chrome_android``, ``safari_ios``.
 
 .. code-block:: python

@@ -31,9 +31,9 @@ If you’re looking for a meeting recording API, consider checking out [Recall.a
 
 ## Residential Proxies
 
-<a href="https://www.thordata.com/?ls=github&lk=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
+<a href="https://www.thordata.com/?ls=github&lk=curl_" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
 
-Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/products/residential-proxies/?ls=github&lk=curl_cffi) and receive 2000 free SERP API calls.
+Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/?ls=github&lk=curl_) and receive 2000 free SERP API calls.
 
 ## Sponsors
 
@@ -209,25 +209,25 @@ print(r.json())
 
 `curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-Open source version of curl_cffi includes versions whose fingerprints differ from previous versions.
-If you see a version, e.g. `chrome135`, were skipped, you can simply impersonate it with your own headers and the previous version.
+The open source version of curl_cffi includes versions whose fingerprints differ from previous versions.
+If you see a version, e.g. `chrome135`, was skipped, you can simply impersonate it with your own headers and the previous version.
 
-If you don't want to look up the headers etc, by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro),
-we have comprehensive browser fingerprints database for almost all the browser versions on various platforms.
+If you don't want to look up the headers/etc by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro).
+We have comprehensive browser fingerprints database for almost all the browser versions on various platforms.
 
 If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
 to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate/_index.html) for details.
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142, chrome145<sup>[9]</sup>|chrome132, chrome134, chrome135|
-|Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[5]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[8]</sup>, chrome142<sup>[11]</sup>, chrome145<sup>[13][14]</sup>, chrome146<sup>[13][14]</sup>|chrome132, chrome134, chrome135|
+|Chrome Android| chrome99_android, chrome131_android<sup>[5]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
-|Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
-|Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
-|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144, firefox147<sup>[9]</sup>|coming soon|
+|Safari<sup>[9]</sup>|safari153<sup>[2]</sup>, safari155<sup>[2]</sup>, safari170<sup>[1]</sup>, safari180<sup>[4]</sup>, safari184<sup>[8]</sup>, safari260<sup>[10]</sup>, safari2601<sup>[11]</sup>|coming soon|
+|Safari iOS<sup>[9]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios<sup>[8]</sup>, safari260_ios<sup>[10]</sup>|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144<sup>[11][12]</sup>, firefox147<sup>[13][14]</sup>|coming soon|
 |Firefox Android|N/A|firefox135_android|
-|Tor|tor145 <sup>[7]</sup>|coming soon|
+|Tor|tor145<sup>[8]</sup>|coming soon|
 |Edge|edge99, edge101|edge133, edge135|
 |Opera|N/A|coming soon|
 |Brave|N/A|coming soon|
@@ -240,12 +240,15 @@ Notes:
 3. Added in version `0.7.0`.
 4. Added in version `0.8.0`.
 5. Added in version `0.9.0`.
-6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
-5. Added in version `0.10.0`.
-6. Added in version `0.11.0`.
-7. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
-8. Added in  `0.12.0`.
-9. `chrome145` and `firefox147` support http3.
+6. The version suffix `a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
+7. Added in version `0.10.0`.
+8. Added in version `0.11.0`.
+9. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
+10. Added in version `0.12.0`.
+11. Added in version `0.14.0`.
+12. Fixed in version `0.15.0`, previous User-Agent header was [not correct](https://github.com/lexiforest/curl-impersonate/issues/234).
+13. Added in version `0.15.0`.
+14. http3 support included.
 
 ### Asyncio
 
@@ -303,6 +306,8 @@ async with AsyncSession() as session:
         async for message in ws:
             print(message)
 ```
+
+See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
 
 ## Ecosystem
 

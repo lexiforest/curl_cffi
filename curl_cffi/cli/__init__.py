@@ -142,6 +142,13 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         dest="http_version",
         help="Use HTTP/3",
     )
+    http_version_group.add_argument(
+        "--http3-only",
+        action="store_const",
+        const="v3only",
+        dest="http_version",
+        help="Use HTTP/3 only (no fallback to HTTP/2 or HTTP/1.1)",
+    )
 
 
 def _add_request_positionals(parser: argparse.ArgumentParser) -> None:
