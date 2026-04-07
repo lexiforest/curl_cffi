@@ -990,11 +990,7 @@ class TestAsyncWebSocketClose:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         await ws.close()
 
-        # Drain any in-flight frames (like the server's echoed CLOSE frame)
-        # that slipped into the buffer before the reader task was cancelled.
-        while not ws._receive_queue.empty():
-            ws._receive_queue.get_nowait()
-
+        # Test receive after close.
         with pytest.raises(WebSocketClosed):
             _ = await ws.recv()
 
