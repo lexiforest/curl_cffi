@@ -1386,7 +1386,7 @@ class AsyncWebSocket(BaseWebSocket):
         chunks_clear: Callable[[], None] = chunks.clear
 
         try:
-            while not self._terminated:
+            while not self.closed:
                 try:
                     chunk, frame = curl_ws_recv()
 
