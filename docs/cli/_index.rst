@@ -20,6 +20,13 @@ bars:
 
     pip install 'curl_cffi[cli]'
 
+On macOS, you can also install via Homebrew:
+
+.. code-block:: bash
+
+    brew tap lexiforest/curl_cffi
+    brew install curl-cffi
+
 The command ``curl-cffi`` will be available in your shell. If it's not in your ``PATH``
 for some reason, you can:
 

@@ -116,6 +116,11 @@ Notes:
     pip install curl_cffi --upgrade
 
 This should work on Linux, macOS and Windows out of the box.
+
+On macOS, you can also install via Homebrew:
+
+    brew tap lexiforest/curl_cffi
+    brew install curl-cffi
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
 
