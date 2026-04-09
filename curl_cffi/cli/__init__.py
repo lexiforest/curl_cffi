@@ -190,10 +190,10 @@ Tools:
   run FILE                         Run requests from .http or .har file
   doctor                           Dump diagnostic information
 
-Pro (impersonate.pro):
+Fingerprints:
   update                           Update local fingerprints cache
   list                             List local and native fingerprints
-  config --api-key KEY             Configure API access
+  config                           Configure API access for Pro fingerprints
 
 Run '{prog} <command> --help' for details on a specific command.""")
 

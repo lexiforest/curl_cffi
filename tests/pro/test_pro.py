@@ -76,6 +76,53 @@ def test_single_fingerprint(mock_profiles_api):
     assert testing100.http2_settings == "1:65536;3:1000;4:6291456;6:262144"
 
 
+def test_update_fingerprints_new_api_shape(monkeypatch):
+    payload = {
+        "pagination": {
+            "skip": 0,
+            "limit": 100,
+            "total": 1,
+            "has_more": False,
+            "next_skip": None,
+        },
+        "data": [
+            {
+                "name": "testing102",
+                "fingerprint": {
+                    "http2_settings": "1:65536;2:0;4:6291456;6:262144",
+                    "http2_priority_weight": 256,
+                    "http2_priority_exclusive": 1,
+                },
+            }
+        ],
+    }
+
+    class DummyResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode()
+
+    def dummy_urlopen(request):
+        assert request.full_url.endswith("/fingerprints")
+        headers = dict(request.header_items())
+        assert headers.get("Authorization") == f"Bearer {TESTING_API_KEY}"
+        return DummyResponse()
+
+    monkeypatch.setattr("curl_cffi.fingerprints.urlopen", dummy_urlopen)
+
+    FingerprintManager.update_fingerprints("https://api.test")
+    fingerprints = FingerprintManager.load_fingerprints()
+    testing102 = fingerprints["testing102"]
+    assert testing102.http2_settings == "1:65536;2:0;4:6291456;6:262144"
+    assert testing102.http2_priority_weight == 256
+    assert testing102.http2_priority_exclusive == 1
+
+
 @pytest.mark.skip()
 def test_using_profile():
     FingerprintManager.update_fingerprints("https://api.test")

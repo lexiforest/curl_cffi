@@ -482,6 +482,8 @@ def _apply_fingerprint(
         )
     if fingerprint.http2_stream_weight is not None:
         curl.setopt(CurlOpt.STREAM_WEIGHT, fingerprint.http2_stream_weight)
+    elif fingerprint.http2_priority_weight is not None:
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fingerprint.http2_priority_weight)
     if fingerprint.http2_stream_exclusive is not None:
         curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fingerprint.http2_stream_exclusive)
     elif fingerprint.http2_priority_exclusive is not None:

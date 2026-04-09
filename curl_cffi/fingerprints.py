@@ -344,6 +344,7 @@ class Fingerprint:
     http2_stream_weight: int | None = None
     http2_stream_exclusive: int | None = None
     http2_no_priority: bool = False
+    http2_priority_weight: int | None = None
     http2_priority_exclusive: int | None = None
 
     http3_settings: str = ""
@@ -447,17 +448,26 @@ class FingerprintManager:
         try:
             with urlopen(request) as response:
                 data = json.loads(response.read())
-                items = data.get("items") if isinstance(data, dict) else data
+                if isinstance(data, dict):
+                    items = data.get("items", data.get("data"))
+                else:
+                    items = data
         except Exception:
             print(f"Failed to access fingerprint endpoint at {url}")
             return
 
+        if not isinstance(items, list):
+            print(f"No fingerprints found at {url}")
+            return
+
         fingerprints: dict[str, dict] = {}
         for item in items:
+            if not isinstance(item, dict):
+                continue
             name = item.get("name") or item.get("target")
             if not name:
                 continue
-            raw = item.get("data", {})
+            raw = item.get("data", item.get("fingerprint", {}))
             if isinstance(raw, str):
                 try:
                     raw = json.loads(raw)
