@@ -81,9 +81,13 @@ def select_file(
 
 
 def replace_once(text: str, pattern: str, replacement: str, *, count: int = 1) -> str:
-    new_text, replaced = re.subn(pattern, replacement, text, count=count, flags=re.MULTILINE)
+    new_text, replaced = re.subn(
+        pattern, replacement, text, count=count, flags=re.MULTILINE
+    )
     if replaced != count:
-        raise SystemExit(f"Expected to replace {count} match(es) for pattern: {pattern!r}")
+        raise SystemExit(
+            f"Expected to replace {count} match(es) for pattern: {pattern!r}"
+        )
     return new_text
 
 
@@ -99,7 +103,9 @@ def replace_indented_field(text: str, field: str, value: str) -> str:
     return new_text
 
 
-def update_formula(formula_path: pathlib.Path, version: str, payload: dict) -> tuple[str, str, str]:
+def update_formula(
+    formula_path: pathlib.Path, version: str, payload: dict
+) -> tuple[str, str, str]:
     urls = payload.get("urls", [])
     if not urls:
         raise SystemExit("No files were returned by the PyPI API")
@@ -121,7 +127,9 @@ def update_formula(formula_path: pathlib.Path, version: str, payload: dict) -> t
     text = formula_path.read_text(encoding="utf-8")
     text = replace_once(text, r'^  url ".*"$', f'  url "{sdist["url"]}"')
     text = replace_once(text, r'^  version ".*"$', f'  version "{version}"')
-    text = replace_once(text, r'^  sha256 ".*"$', f'  sha256 "{sdist["digests"]["sha256"]}"')
+    text = replace_once(
+        text, r'^  sha256 ".*"$', f'  sha256 "{sdist["digests"]["sha256"]}"'
+    )
 
     resource_pattern = re.compile(
         r'(^\s+resource "curl-cffi" do\n)(.*?)(^\s+end$)',
@@ -129,7 +137,9 @@ def update_formula(formula_path: pathlib.Path, version: str, payload: dict) -> t
     )
     matches = list(resource_pattern.finditer(text))
     if len(matches) != 2:
-        raise SystemExit(f'Expected 2 "curl-cffi" resource blocks, found {len(matches)}')
+        raise SystemExit(
+            f'Expected 2 "curl-cffi" resource blocks, found {len(matches)}'
+        )
 
     updated_parts = []
     last_end = 0
@@ -137,7 +147,7 @@ def update_formula(formula_path: pathlib.Path, version: str, payload: dict) -> t
         body = match.group(2)
         body = replace_indented_field(body, "url", artifact["url"])
         body = replace_indented_field(body, "sha256", artifact["digests"]["sha256"])
-        updated_parts.append(text[last_end:match.start()])
+        updated_parts.append(text[last_end : match.start()])
         updated_parts.append(f"{match.group(1)}{body}{match.group(3)}")
         last_end = match.end()
     updated_parts.append(text[last_end:])
