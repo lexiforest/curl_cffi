@@ -13,6 +13,13 @@ The CLI is included when you install ``curl_cffi``:
 
     pip install curl_cffi
 
+Install the optional ``cli`` extra for syntax highlighting and download progress
+bars:
+
+.. code-block:: bash
+
+    pip install 'curl_cffi[cli]'
+
 On macOS, you can also install via Homebrew:
 
 .. code-block:: bash

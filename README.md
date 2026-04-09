@@ -102,13 +102,14 @@ replacement for "claws" and "agents".
 |http/2|✅|❌|✅|
 |http/3|☑️<sup>1</sup>|❌|✅|
 |human-friendly|☑️<sup>2</sup>|✅|✅|
-|colorful|❌|✅|✅|
+|colorful|❌|✅|✅<sup>3</sup>|
 |fingerprints|❌|❌|✅|
 
 Notes:
 
 1. You need an http/3 enabled curl build, it's not enabled by default, at leat on my machine.
 2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax. If you prefer the curl syntax, you can keep using `curl-impersonate`.
+3. Install `curl_cffi[cli]` for colorful CLI output. Without `rich`, the CLI uses plain text output.
 
 ## Install
 
