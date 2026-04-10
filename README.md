@@ -63,6 +63,15 @@ No browser automation. Just simple API calls that return the exact cookies and h
 
 ------
 
+## Impersonate Suite
+
+`curl-cffi` is part of the impersonate suite.
+
+- [curl-impersonate](https://github.com/lexiforest/curl-impersonate). A curl distribution that impersonates browsers.
+- [curl_cffi](https://github.com/lexiforest/curl_cffi). Python binding to curl-impersonate.
+- [impers](https://github.com/lexiforest/impers). Node.js binding to curl-impersonate.
+- [impersonate.pro](https://impersonate.pro). Commercial support, more fingerprints and integrated solutions.
+
 ## Features
 
 - Supports JA3/TLS and http2 fingerprints impersonation, including recent browsers and custom fingerprints.
@@ -121,12 +130,10 @@ On macOS, you can also install via Homebrew:
 
     brew tap lexiforest/curl_cffi
     brew install curl-cffi
-If it does not work on you platform, you may need to compile and install `curl-impersonate`
-first and set some environment variables like `LD_LIBRARY_PATH`.
 
-Android support, including Termux, is currently in beta, you can install the beta release for testing.
+<small>Android support, including Termux, is currently in beta, you can install the beta release for testing.
 For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
-If you are using these OSes, please lend an hand.
+If you are using these OSes, please lend an hand.</small>
 
 To install beta releases:
 
