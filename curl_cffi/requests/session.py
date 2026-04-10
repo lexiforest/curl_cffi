@@ -402,14 +402,27 @@ class BaseSession(Generic[R]):
 
 
 class Session(BaseSession[R]):
-    """A request session, cookies and connections will be reused. This object is
-    thread-safe, but it's recommended to use a separate session for each thread."""
+    """A request session, cookies and connections will be reused.
+
+    Each thread that uses this session gets its own curl handle via
+    thread-local storage, so concurrent requests from different threads
+    are safe. However, within a single thread, only one request may be
+    in-flight at a time unless ``max_pool_size`` is set.
+
+    When ``max_pool_size`` is set to a positive integer, the session uses
+    a pool of curl handles instead of thread-local storage, enabling
+    concurrent requests across threads. Note that pool mode does not
+    support direct ``session.curl`` customization via ``setopt()``.
+
+    For full async concurrency, use ``AsyncSession`` which maintains a handle pool.
+    """
 
     def __init__(
         self,
         curl: Optional[Curl] = None,
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
+        max_pool_size: int = 0,
         **kwargs: Unpack[BaseSessionParams[R]],
     ) -> None:
         """
@@ -422,6 +435,11 @@ class Session(BaseSession[R]):
                 from another thread.
             thread: thread engine to use for working with other thread implementations.
                 choices: eventlet, gevent.
+            max_pool_size: when set to a positive integer, use a pool of curl handles
+                instead of a single thread-local handle. This enables safe concurrent
+                requests across threads. Each request pops a handle from the pool and
+                returns it when done. 
+                Streaming responses hold their handle until closed.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
@@ -469,18 +487,32 @@ class Session(BaseSession[R]):
         super().__init__(**kwargs)
         self._thread = thread
         self._use_thread_local_curl = use_thread_local_curl
+        self._max_pool_size = max_pool_size
         self._queue = None
         self._executor = None
-        if use_thread_local_curl:
-            self._local = threading.local()
-            if curl:
-                self._is_customized_curl = True
-                self._local.curl = curl
-            else:
-                self._is_customized_curl = False
-                self._local.curl = Curl(debug=self.debug)
-        else:
+
+        if max_pool_size > 0:
+            # Pool mode: use a LifoQueue of curl handles for concurrent access
+            self._pool: Optional[queue.LifoQueue[Optional[Curl]]] = queue.LifoQueue(
+                maxsize=max_pool_size
+            )
+            for _ in range(max_pool_size):
+                self._pool.put_nowait(None)  # lazy placeholders
+            # Keep a primary handle for backward compat (upkeep, ws_connect, etc.)
+            self._use_thread_local_curl = False
             self._curl = curl if curl else Curl(debug=self.debug)
+        else:
+            self._pool = None
+            if use_thread_local_curl:
+                self._local = threading.local()
+                if curl:
+                    self._is_customized_curl = True
+                    self._local.curl = curl
+                else:
+                    self._is_customized_curl = False
+                    self._local.curl = Curl(debug=self.debug)
+            else:
+                self._curl = curl if curl else Curl(debug=self.debug)
 
     @property
     def curl(self):
@@ -503,6 +535,26 @@ class Session(BaseSession[R]):
             self._executor = ThreadPoolExecutor()
         return self._executor
 
+    def _pop_curl(self) -> Curl:
+        """Get a curl handle from the pool. Blocks if pool is exhausted."""
+        assert self._pool is not None
+        curl = self._pool.get()
+        if curl is None:
+            curl = Curl(debug=self.debug)
+        return curl
+
+    def _push_curl(self, curl: Curl) -> None:
+        """Return a curl handle to the pool."""
+        if self._pool is not None and not self._closed:
+            curl.clean_handles_and_buffers()
+            curl.reset()
+            try:
+                self._pool.put_nowait(curl)
+            except queue.Full:
+                curl.close()
+        else:
+            curl.close()
+
     def __enter__(self):
         return self
 
@@ -512,6 +564,14 @@ class Session(BaseSession[R]):
     def close(self) -> None:
         """Close the session."""
         self._closed = True
+        if self._pool is not None:
+            while True:
+                try:
+                    curl = self._pool.get_nowait()
+                    if curl is not None:
+                        curl.close()
+                except queue.Empty:
+                    break
         self.curl.close()
 
     @contextmanager
@@ -623,8 +683,12 @@ class Session(BaseSession[R]):
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
-        # clone a new curl instance for streaming response
-        if stream:
+        # Determine which curl handle to use
+        if self._pool is not None:
+            # Pool mode: each request gets its own handle from the pool
+            c = self._pop_curl()
+        elif stream:
+            # Thread-local mode: clone a new curl instance for streaming response
             c = self.curl.duphandle()
             _ = self.curl.reset()
         else:
@@ -680,7 +744,7 @@ class Session(BaseSession[R]):
 
             def perform():
                 try:
-                    c.perform()
+                    c.perform(auto_cleanup=False)
                 except CurlError as e:
                     rsp = self._parse_response(
                         c, buffer, header_buffer, default_encoding, discard_cookies
@@ -688,6 +752,7 @@ class Session(BaseSession[R]):
                     rsp.request = req
                     q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
                 finally:
+                    c.clean_handles_and_buffers()
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
                     q.put(STREAM_END)  # type: ignore
@@ -706,13 +771,18 @@ class Session(BaseSession[R]):
                 if quit_now:
                     quit_now.set()
                 stream_task.result()
-                c.close()
+                if self._pool is not None:
+                    self._push_curl(c)
+                else:
+                    c.close()
                 raise first_element
 
             rsp.request = req
             rsp.stream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
+            if self._pool is not None:
+                rsp._release_curl = self._push_curl
             if self.raise_for_status:
                 rsp.raise_for_status()
             return rsp
@@ -722,14 +792,18 @@ class Session(BaseSession[R]):
                     # see: https://eventlet.net/doc/threading.html
                     import eventlet.tpool
 
-                    eventlet.tpool.execute(c.perform)  # type: ignore
+                    eventlet.tpool.execute(
+                        lambda: c.perform(auto_cleanup=False)
+                    )  # type: ignore
                 elif self._thread == "gevent":
                     # see: https://www.gevent.org/api/gevent.threadpool.html
                     import gevent
 
-                    gevent.get_hub().threadpool.spawn(c.perform).get()  # type: ignore
+                    gevent.get_hub().threadpool.spawn(
+                        lambda: c.perform(auto_cleanup=False)
+                    ).get()  # type: ignore
                 else:
-                    c.perform()
+                    c.perform(auto_cleanup=False)
             except CurlError as e:
                 rsp = self._parse_response(
                     c, buffer, header_buffer, default_encoding, discard_cookies
@@ -746,7 +820,11 @@ class Session(BaseSession[R]):
                     rsp.raise_for_status()
                 return rsp
             finally:
-                c.reset()
+                if self._pool is not None:
+                    self._push_curl(c)
+                else:
+                    c.clean_handles_and_buffers()
+                    c.reset()
 
     def request(
         self,

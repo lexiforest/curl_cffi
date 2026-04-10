@@ -1,6 +1,7 @@
 from contextlib import suppress
 import queue
 import re
+import threading
 import warnings
 from concurrent.futures import Future
 from typing import Any, Optional, Union
@@ -117,6 +118,8 @@ class Response:
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
         self._stream_closed = False
+        self._stream_close_lock = threading.Lock()
+        self._release_curl: Optional[Callable] = None
         self.download_size: int = 0
         self.upload_size: int = 0
         self.header_size: int = 0
@@ -257,16 +260,23 @@ class Response:
         self._finalize_stream()
 
     def _finalize_stream(self) -> None:
-        if self._stream_closed:
-            return
-        if self.queue is None and self.stream_task is None and self.quit_now is None:
-            return
-        self._stream_closed = True
+        with self._stream_close_lock:
+            if self._stream_closed:
+                return
+            if self.queue is None and \
+                self.stream_task is None and \
+                self.quit_now is None:
+                return
+            self._stream_closed = True
         if self.quit_now:
             self.quit_now.set()
         if self.stream_task:
             self.stream_task.result()
-        if self.curl:
+        # Return handle to pool if a release callback is set, otherwise close it
+        if self._release_curl and self.curl:
+            self._release_curl(self.curl)
+            self._release_curl = None
+        elif self.curl:
             self.curl.close()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
