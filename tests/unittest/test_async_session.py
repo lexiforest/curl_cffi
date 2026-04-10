@@ -6,6 +6,7 @@ from contextlib import suppress
 import pytest
 
 from curl_cffi import Headers
+from curl_cffi.const import CurlOpt
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
 
@@ -206,6 +207,22 @@ async def test_referer(server):
         r = await s.get(
             str(server.url.copy_with(path="/echo_headers")),
             referer="http://example.com",
+        )
+        headers = r.json()
+        assert headers["Referer"][0] == "http://example.com"
+
+
+async def test_curl_options(server):
+    async with AsyncSession(
+        curl_options={CurlOpt.HTTPHEADER: [b"Referer: http://example.com"]}
+    ) as s:
+        r = await s.get(
+            "http://example.com/echo_headers",
+            curl_options={
+                CurlOpt.CONNECT_TO: [
+                    f"example.com::{server.config.host}:{server.config.port}"
+                ]
+            },
         )
         headers = r.json()
         assert headers["Referer"][0] == "http://example.com"

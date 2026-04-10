@@ -17,6 +17,7 @@ from datetime import timedelta
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
+    Any,
     Generic,
     Literal,
     Optional,
@@ -83,7 +84,7 @@ if TYPE_CHECKING:
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
         default_headers: bool
         default_encoding: Union[str, Callable[[bytes], str]]
-        curl_options: Optional[dict]
+        curl_options: Optional[dict[CurlOpt, Any]]
         curl_infos: Optional[list]
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         debug: bool
@@ -125,6 +126,7 @@ if TYPE_CHECKING:
         max_recv_speed: int
         multipart: Optional[CurlMime]
         discard_cookies: bool
+        curl_options: Optional[dict[CurlOpt, Any]]
 
     class RequestParams(StreamRequestParams, total=False):
         stream: Optional[bool]
@@ -226,7 +228,7 @@ class BaseSession(Generic[R]):
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
-        curl_options: Optional[dict[CurlOpt, str]] = None,
+        curl_options: Optional[dict[CurlOpt, Any]] = None,
         curl_infos: Optional[list[object]] = None,
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
@@ -622,6 +624,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        curl_options: Optional[dict] = None,
     ) -> R:
         # clone a new curl instance for streaming response
         if stream:
@@ -671,7 +674,11 @@ class Session(BaseSession[R]):
             max_recv_speed=max_recv_speed,
             multipart=multipart,
             cert=cert or self.cert,
-            curl_options=self.curl_options,
+            curl_options=(
+                self.curl_options | curl_options
+                if curl_options is not None
+                else self.curl_options
+            ),
             queue_class=queue.Queue,
             event_class=threading.Event,
         )
@@ -784,6 +791,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        curl_options: Optional[dict] = None,
     ):
         """Send the request, see ``requests.request`` for details on parameters."""
 
@@ -827,6 +835,7 @@ class Session(BaseSession[R]):
                     max_recv_speed=max_recv_speed,
                     multipart=multipart,
                     discard_cookies=discard_cookies,
+                    curl_options=curl_options,
                 )
             except RequestException:
                 if attempt == strategy.count:
@@ -1048,7 +1057,7 @@ class AsyncSession(BaseSession[R]):
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
-        curl_options: dict[CurlOpt, str] | None = None,
+        curl_options: dict[CurlOpt, Any] | None = None,
     ) -> AsyncWebSocketContext:
         """Connects to a WebSocket.
 
@@ -1239,6 +1248,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        curl_options: Optional[dict[CurlOpt, Any]] = None,
     ) -> R:
         curl = await self.pop_curl()
         req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
@@ -1282,7 +1292,11 @@ class AsyncSession(BaseSession[R]):
             max_recv_speed=max_recv_speed,
             multipart=multipart,
             cert=cert or self.cert,
-            curl_options=self.curl_options,
+            curl_options=(
+                self.curl_options | curl_options
+                if curl_options is not None
+                else self.curl_options
+            ),
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
         )
@@ -1389,6 +1403,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        curl_options: Optional[dict[CurlOpt, Any]] = None,
     ) -> R:
         """Send the request, see ``curl_cffi.requests.request`` for details on args."""
 
@@ -1432,6 +1447,7 @@ class AsyncSession(BaseSession[R]):
                     max_recv_speed=max_recv_speed,
                     multipart=multipart,
                     discard_cookies=discard_cookies,
+                    curl_options=curl_options,
                 )
             except RequestException:
                 if attempt == strategy.count:
