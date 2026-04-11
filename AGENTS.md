@@ -33,4 +33,3 @@ Recent history favors short, imperative commit subjects, often with a type or sc
 
 ## Configuration Notes
 - `make preprocess` and `make build` download upstream sources; ensure network access is available.
-- If you use a custom libcurl build, be prepared to set relevant library paths (for example, `LD_LIBRARY_PATH`).

@@ -31,9 +31,7 @@ def test_get_default_config_dir_windows(monkeypatch):
     monkeypatch.setattr("curl_cffi.fingerprints.os.path", ntpath)
     monkeypatch.setenv("APPDATA", r"C:\Users\tester\AppData\Roaming")
 
-    assert (
-        _get_default_config_dir() == r"C:\Users\tester\AppData\Roaming\impersonate"
-    )
+    assert _get_default_config_dir() == r"C:\Users\tester\AppData\Roaming\impersonate"
 
 
 def test_get_config_dir_prefers_env_override(monkeypatch, tmp_path):
