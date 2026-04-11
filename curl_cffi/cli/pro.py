@@ -100,7 +100,10 @@ def add_pro_parsers(subparsers) -> None:
 def handle_pro_command(args) -> bool:
     """Handle pro subcommands. Returns True if handled, False otherwise."""
     if args.command == "update":
-        FingerprintManager.update_fingerprints()
+        updated = FingerprintManager.update_fingerprints()
+        if updated is not None:
+            suffix = "" if updated == 1 else "s"
+            print(f"Total {updated} fingerprint{suffix} in cache.")
         return True
 
     if args.command == "list":

@@ -56,7 +56,8 @@ From Python:
 
     from curl_cffi.fingerprints import FingerprintManager
 
-    FingerprintManager.update_fingerprints()
+    updated = FingerprintManager.update_fingerprints()
+    print(updated)
 
 Load local fingerprints
 =======================
@@ -72,9 +73,15 @@ Load local fingerprints
 Storage paths
 =============
 
-By default, local files are written under ``~/.config/impersonate``:
+By default, local files are written to a platform-native config directory:
+
+- Linux: ``$XDG_CONFIG_HOME/impersonate`` or ``~/.config/impersonate``
+- macOS: ``~/.config/impersonate``
+- Windows: ``%APPDATA%\impersonate``
+
+Files stored there:
 
 - ``config.json``: API key config
-- ``profiles.json``: cached fingerprints
+- ``fingerprints.json``: cached fingerprints
 
 Override the directory with ``IMPERSONATE_CONFIG_DIR``.

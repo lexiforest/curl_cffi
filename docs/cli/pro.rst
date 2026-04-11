@@ -22,6 +22,8 @@ Download the latest fingerprints:
 
     curl-cffi update
 
+Successful updates print the total number of fingerprints now stored in the local cache.
+
 List native + cached fingerprints in a table:
 
 .. code-block:: bash

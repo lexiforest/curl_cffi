@@ -1,5 +1,6 @@
 import json
 import os
+from urllib.error import URLError
 
 import pytest
 
@@ -63,8 +64,9 @@ def test_is_pro():
 
 def test_update_fingerprints(mock_profiles_api):
     os.environ["IMPERSONATE_API_ROOT"] = "https://api.test"
-    FingerprintManager.update_fingerprints()
+    updated = FingerprintManager.update_fingerprints()
     fingerprints = FingerprintManager.load_fingerprints()
+    assert updated == 2
     assert "testing100" in fingerprints
     assert "testing101" in fingerprints
 
@@ -121,6 +123,24 @@ def test_update_fingerprints_new_api_shape(monkeypatch):
     assert testing102.http2_settings == "1:65536;2:0;4:6291456;6:262144"
     assert testing102.http2_priority_weight == 256
     assert testing102.http2_priority_exclusive == 1
+
+
+def test_update_fingerprints_prints_access_error(monkeypatch, capsys):
+    def dummy_urlopen(request):
+        raise URLError("Connection refused")
+
+    monkeypatch.setattr("curl_cffi.fingerprints.urlopen", dummy_urlopen)
+
+    updated = FingerprintManager.update_fingerprints("https://api.test")
+
+    captured = capsys.readouterr()
+    assert updated is None
+    assert "updating fingerprints from https://api.test/fingerprints" in captured.out
+    assert (
+        "Failed to access fingerprint endpoint at "
+        "https://api.test/fingerprints: <urlopen error Connection refused>"
+        in captured.out
+    )
 
 
 @pytest.mark.skip()

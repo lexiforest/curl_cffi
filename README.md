@@ -218,6 +218,17 @@ We have comprehensive browser fingerprints database for almost all the browser v
 If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
 to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate/_index.html) for details.
 
+To see the complete list of fingerprints, use the command line:
+
+```sh
+curl-cffi list
+```
+
+Since v0.15.1, you can use `curl-cffi update` to retrieve the latest fingerprints, without updating to a new version.
+We offer the Safari, Chrome, Firefox updates for free and others as part of the [commercial plan](https://impersonate.pro).
+
+The following table is the builtin fingerprints bundled with current version.
+
 |Browser|Open Source| Pro version|
 |---|---|---|
 |Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[5]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[8]</sup>, chrome142<sup>[11]</sup>, chrome145<sup>[13][14]</sup>, chrome146<sup>[13][14]</sup>|chrome132, chrome134, chrome135|

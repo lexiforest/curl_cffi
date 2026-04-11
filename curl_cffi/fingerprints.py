@@ -306,7 +306,23 @@ NATIVE_IMPERSONATE_TARGETS = [
 
 
 DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
-DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/impersonate")
+
+
+def _get_default_config_dir() -> str:
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return os.path.join(appdata, "impersonate")
+        userprofile = os.environ.get("USERPROFILE")
+        if userprofile:
+            return os.path.join(userprofile, "AppData", "Roaming", "impersonate")
+        home = os.path.expanduser("~")
+        return os.path.join(home, "AppData", "Roaming", "impersonate")
+
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        return os.path.join(xdg_config_home, "impersonate")
+    return os.path.expanduser("~/.config/impersonate")
 
 
 @dataclass
@@ -379,7 +395,7 @@ class FingerprintSpec:
 class FingerprintManager:
     @classmethod
     def get_config_dir(cls) -> str:
-        return os.environ.get("IMPERSONATE_CONFIG_DIR", DEFAULT_CONFIG_DIR)
+        return os.environ.get("IMPERSONATE_CONFIG_DIR", _get_default_config_dir())
 
     @classmethod
     def get_config_path(cls) -> str:
@@ -435,7 +451,7 @@ class FingerprintManager:
         cls.is_pro.cache_clear()
 
     @classmethod
-    def update_fingerprints(cls, api_root: str | None = None) -> None:
+    def update_fingerprints(cls, api_root: str | None = None) -> int | None:
         """Get the latest fingerprints for impersonating."""
         api_root = api_root or cls.get_api_root()
         url = f"{api_root.rstrip('/')}/fingerprints"
@@ -447,13 +463,19 @@ class FingerprintManager:
         request = Request(url, headers=headers, method="GET")
         try:
             with urlopen(request) as response:
-                data = json.loads(response.read())
-                if isinstance(data, dict):
-                    items = data.get("items", data.get("data"))
-                else:
-                    items = data
-        except Exception:
-            print(f"Failed to access fingerprint endpoint at {url}")
+                payload = response.read()
+        except Exception as exc:
+            print(f"Failed to access fingerprint endpoint at {url}: {exc}")
+            return
+
+        try:
+            data = json.loads(payload)
+            if isinstance(data, dict):
+                items = data.get("items", data.get("data"))
+            else:
+                items = data
+        except json.JSONDecodeError as exc:
+            print(f"Invalid fingerprint response from {url}: {exc}")
             return
 
         if not isinstance(items, list):
@@ -482,6 +504,7 @@ class FingerprintManager:
         with open(cls.get_fingerprint_path(), "w") as wf:
             json.dump(fingerprints, wf, indent=2)
         cls.load_fingerprints.cache_clear()
+        return len(fingerprints)
 
     @staticmethod
     def _parse_fingerprints(payload: dict[str, object]) -> dict[str, Fingerprint]:
