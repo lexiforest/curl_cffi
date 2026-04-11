@@ -384,18 +384,6 @@ def _normalize_tls_version(version: str) -> CurlSslVersion:
     return lookup[key]
 
 
-def _split_tls_ciphers(ciphers: list[str]) -> tuple[list[str], list[str]]:
-    tls13_prefixes = ("TLS_AES_", "TLS_CHACHA20_", "TLS_AES_128_CCM")
-    tls12 = []
-    tls13 = []
-    for cipher in ciphers:
-        if cipher.startswith(tls13_prefixes):
-            tls13.append(cipher)
-        else:
-            tls12.append(cipher)
-    return tls12, tls13
-
-
 def _load_fingerprint(target: str):
     try:
         fingerprints = FingerprintManager.load_fingerprints()
@@ -420,11 +408,7 @@ def _apply_fingerprint(
         curl.setopt(CurlOpt.SSLVERSION, tls_version | CurlSslVersion.MAX_DEFAULT)
 
     if fingerprint.tls_ciphers:
-        tls12, tls13 = _split_tls_ciphers(fingerprint.tls_ciphers)
-        if tls12:
-            curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(tls12))
-        if tls13:
-            curl.setopt(CurlOpt.TLS13_CIPHERS, ":".join(tls13))
+        curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(fingerprint.tls_ciphers))
 
     curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(fingerprint.tls_alpn))
     curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(fingerprint.tls_alps))
