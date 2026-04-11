@@ -1386,7 +1386,7 @@ class AsyncWebSocket(BaseWebSocket):
         chunks_clear: Callable[[], None] = chunks.clear
 
         try:
-            while not self._terminated:
+            while not self.closed:
                 try:
                     chunk, frame = curl_ws_recv()
 
@@ -1695,7 +1695,6 @@ class AsyncWebSocket(BaseWebSocket):
 
         # Loop until the entire view is sent
         while offset < total_bytes or (offset == 0 and total_bytes == 0):
-
             # Boundary check: Calculate next fragment ONLY when needed
             if offset == frame_end:
                 if total_bytes - offset > max_frame_size:

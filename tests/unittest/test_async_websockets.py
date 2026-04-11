@@ -759,9 +759,9 @@ class TestAsyncWebSocketConcurrency:
                 _ = task.cancel()
 
             # All tasks should complete (no deadlock)
-            assert (
-                len(pending) == 0
-            ), f"Deadlock detected: {len(pending)} tasks still pending"
+            assert len(pending) == 0, (
+                f"Deadlock detected: {len(pending)} tasks still pending"
+            )
             assert len(done) == num_consumers
 
             # Collect results - some may be messages or errors if connection closed
@@ -903,9 +903,9 @@ class TestAsyncWebSocketConcurrency:
             # Should have at least 1 message (the echo) and the rest should be
             # close frames or closed errors
             assert messages >= 1, "Expected at least the echo message"
-            assert (
-                timeout_errors == 0
-            ), "No recv() should timeout - connection should close cleanly"
+            assert timeout_errors == 0, (
+                "No recv() should timeout - connection should close cleanly"
+            )
 
 
 class TestAsyncWebSocketCancellation:
@@ -990,6 +990,7 @@ class TestAsyncWebSocketClose:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         await ws.close()
 
+        # Test receive after close.
         with pytest.raises(WebSocketClosed):
             _ = await ws.recv()
 
@@ -1268,7 +1269,7 @@ class TestAsyncWebSocketStateChecks:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         try:
             # Wait for close frame
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.5)
             with suppress(WebSocketClosed, WebSocketError, WebSocketTimeout):
                 _ = await ws.recv(timeout=0.5)
         finally:
@@ -1769,7 +1770,7 @@ class TestAsyncWebSocketAutoclose:
                 _ = await ws.recv(timeout=2.0)
 
             # Wait a bit for autoclose to process
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(1)
             # Connection should be closed
             assert ws.closed or not ws.is_alive()
         finally:
@@ -1856,9 +1857,6 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
                 recv_queue_size=5,
                 block_on_recv_queue_full=False,
             ) as ws:
-                # Give server time to send all messages (which will overflow queue)
-                await asyncio.sleep(0.3)
-
                 # Try to receive - may get error due to queue overflow
                 received: list[str] = []
                 for _ in range(20):

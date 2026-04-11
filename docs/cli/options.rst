@@ -21,8 +21,8 @@ Output control
 --------------
 
 When connected to a terminal, the default output includes response headers and
-body with syntax highlighting (JSON, HTML, XML). When piped, only the body is
-printed as plain text.
+body. If ``rich`` is installed, JSON, HTML, and XML bodies are syntax
+highlighted. When piped, only the body is printed as plain text.
 
 .. list-table::
    :widths: 25 75
@@ -59,7 +59,8 @@ printed as plain text.
 Download
 --------
 
-Downloads display a progress bar with transfer speed. Filenames are
+Downloads display a progress bar with transfer speed when ``rich`` is installed.
+Without ``rich``, the download is written with plain text output. Filenames are
 automatically sanitized to remove unsafe characters.
 
 .. list-table::

@@ -5,7 +5,7 @@ authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["cffi>=2.0.0", "certifi>=2024.2.2", "rich"]
+dependencies = ["cffi>=2.0.0", "certifi>=2024.2.2"]
 readme = "README.md"
 requires-python = ">=3.10"
 urls = { "repository" = "https://github.com/lexiforest/curl_cffi" }
@@ -24,6 +24,7 @@ classifiers = [
 
 [project.optional-dependencies]
 extra = ["readability-lxml>=0.8.1", "markdownify>=1.1.0", "lxml_html_clean"]
+cli = ["rich"]
 dev = [
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",

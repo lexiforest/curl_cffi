@@ -13,6 +13,20 @@ The CLI is included when you install ``curl_cffi``:
 
     pip install curl_cffi
 
+Install the optional ``cli`` extra for syntax highlighting and download progress
+bars:
+
+.. code-block:: bash
+
+    pip install 'curl_cffi[cli]'
+
+On macOS, you can also install via Homebrew:
+
+.. code-block:: bash
+
+    brew tap lexiforest/curl_cffi
+    brew install curl-cffi
+
 The command ``curl-cffi`` will be available in your shell. If it's not in your ``PATH``
 for some reason, you can:
 
