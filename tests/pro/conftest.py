@@ -1,5 +1,4 @@
 import contextlib
-import json
 import os
 import threading
 import time
@@ -108,7 +107,7 @@ def get_fingerprints() -> dict[str, Any]:
             {
                 "id": i,
                 "name": f"testing{100 + i}",
-                "data": json.dumps(dataclasses.asdict(fingerprint)),
+                "fingerprint": dataclasses.asdict(fingerprint),
                 "min_supported_version": "0.14.0",
                 "updated_at": "2025-08-30T00:00:00",
                 "created_at": "2025-08-30T00:00:00",
