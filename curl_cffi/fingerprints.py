@@ -470,10 +470,10 @@ class FingerprintManager:
 
         try:
             data = json.loads(payload)
-            if isinstance(data, dict):
-                items = data.get("items", data.get("data"))
-            else:
-                items = data
+            if not isinstance(data, dict):
+                print(f"Invalid fingerprint response from {url}: expected object")
+                return
+            items = data.get("items", data.get("data"))
         except json.JSONDecodeError as exc:
             print(f"Invalid fingerprint response from {url}: {exc}")
             return

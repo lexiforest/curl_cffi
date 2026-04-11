@@ -61,7 +61,7 @@ class Server(uvicorn.Server):
 
 
 @get("/fingerprints", sync_to_thread=False)
-def get_fingerprints() -> list[dict[str, Any]]:
+def get_fingerprints() -> dict[str, Any]:
     profiles = []
     for i in range(10):
         fingerprint = Fingerprint(
@@ -114,7 +114,16 @@ def get_fingerprints() -> list[dict[str, Any]]:
                 "created_at": "2025-08-30T00:00:00",
             }
         )
-    return profiles
+    return {
+        "pagination": {
+            "skip": 0,
+            "limit": 10,
+            "total": len(profiles),
+            "has_more": False,
+            "next_skip": None,
+        },
+        "data": profiles,
+    }
 
 
 app = Litestar(route_handlers=[get_fingerprints])

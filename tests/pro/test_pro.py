@@ -31,13 +31,17 @@ def setup_pro(tmp_path_factory):
 
 @pytest.fixture()
 def mock_profiles_api(monkeypatch):
-    payload = [
-        {
-            "name": "testing100",
-            "data": json.dumps({"http2_settings": "1:65536;3:1000;4:6291456;6:262144"}),
-        },
-        {"name": "testing101", "data": json.dumps({"http2_settings": "1:1"})},
-    ]
+    payload = {
+        "data": [
+            {
+                "name": "testing100",
+                "data": json.dumps(
+                    {"http2_settings": "1:65536;3:1000;4:6291456;6:262144"}
+                ),
+            },
+            {"name": "testing101", "data": json.dumps({"http2_settings": "1:1"})},
+        ]
+    }
 
     class DummyResponse:
         def __enter__(self):
