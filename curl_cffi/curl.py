@@ -123,6 +123,13 @@ def debug_function_default(type_: int, data: bytes) -> None:
 
 
 @ffi.def_extern()
+def sockopt_callback(clientp, curlfd, purpose):
+    """ffi callback for curl sockopt function, calls the callback python function"""
+    callback = ffi.from_handle(clientp)
+    return callback(curlfd, purpose)
+
+
+@ffi.def_extern()
 def buffer_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl write function, directly writes to a buffer"""
     # assert size == 1
@@ -348,6 +355,13 @@ class Curl:
             self._debug_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
             option = CurlOpt.DEBUGDATA
+        elif option == CurlOpt.SOCKOPTFUNCTION:
+            c_value = ffi.new_handle(value)
+            self._sockopt_handle = c_value
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.SOCKOPTFUNCTION, lib.sockopt_callback
+            )
+            option = CurlOpt.SOCKOPTDATA
         elif value_type == "char*":
             if isinstance(value, str):
                 # Windows/libcurl expects ANSI code page for file paths (char*).

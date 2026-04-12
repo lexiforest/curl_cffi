@@ -327,6 +327,61 @@ def set_akamai_options(curl: Curl, akamai: str):
     curl.setopt(CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER, header_order.replace(",", ""))
 
 
+def set_tcp_fp_options(curl: Curl, tcp_fp: str):
+    """Set TCP fingerprint options via CURLOPT_SOCKOPTFUNCTION.
+
+    Format: "ttl,window_size,window_scale,mss"
+    Example: "128,64240,8,1460" (Windows fingerprint)
+
+    Uses setsockopt on the socket fd to set:
+    - IP_TTL: Time To Live (Windows=128, Linux/macOS=64)
+    - TCP_WINDOW_CLAMP: TCP window size (Windows=64240, Linux/macOS=65535)
+    - TCP_MAXSEG: Maximum Segment Size (typically 1460 for Ethernet)
+
+    Note: TCP_WINDOW_CLAMP and window_scale behavior is OS-dependent.
+    window_scale is set indirectly via SO_RCVBUF.
+    """
+    import socket
+    import sys
+
+    parts = tcp_fp.split(",")
+    if len(parts) != 4:
+        raise ValueError(
+            f"tcp_fp must have 4 comma-separated values: ttl,window_size,window_scale,mss. "
+            f"Got {len(parts)} values."
+        )
+    ttl, window_size, window_scale, mss = (int(p.strip()) for p in parts)
+
+    def _sockopt_cb(curlfd: int, purpose: int) -> int:
+        try:
+            # Wrap the raw fd in a Python socket object (without closing it)
+            sock = socket.socket(fileno=curlfd)
+            try:
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+
+                if mss > 0:
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG, mss)
+
+                # Set receive buffer to influence window size and scale.
+                # The kernel doubles this value, so we set half.
+                # window_size = (window_size_value) << window_scale
+                rcvbuf = window_size << window_scale
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
+
+                # TCP_WINDOW_CLAMP is Linux-only
+                if sys.platform == "linux":
+                    TCP_WINDOW_CLAMP = 10
+                    sock.setsockopt(socket.IPPROTO_TCP, TCP_WINDOW_CLAMP, window_size)
+            finally:
+                # Detach so we don't close curl's socket
+                sock.detach()
+        except OSError:
+            return 1  # CURL_SOCKOPT_ERROR
+        return 0  # CURL_SOCKOPT_OK
+
+    curl.setopt(CurlOpt.SOCKOPTFUNCTION, _sockopt_cb)
+
+
 def set_perk_options(curl: Curl, perk: str):
     settings, header_order, quic_transport_parameters = perk.split("|")
 
@@ -396,6 +451,7 @@ def set_curl_options(
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
     perk: Optional[str] = None,
+    tcp_fp: Optional[str] = None,
     extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
     default_headers: bool = True,
     quote: Union[str, Literal[False]] = "",
@@ -710,7 +766,19 @@ def set_curl_options(
                 CurlCffiWarning,
                 stacklevel=1,
             )
-        set_akamai_options(c, perk)
+        set_perk_options(c, perk)
+
+    # tcp fingerprint string
+    if tcp_fp:
+        if proxy is not None:
+            warnings.warn(
+                "tcp_fp has no effect when a proxy is set. The TCP connection is to "
+                "the proxy server, so the target sees the proxy's TCP fingerprint, "
+                "not yours. Consider using HTTP/3 (QUIC/UDP) to avoid TCP fingerprinting.",
+                CurlCffiWarning,
+                stacklevel=1,
+            )
+        set_tcp_fp_options(c, tcp_fp)
 
     buffer = None
     q = None
