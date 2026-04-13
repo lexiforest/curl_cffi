@@ -733,12 +733,6 @@ class CurlMime:
             if ret != 0:
                 raise CurlError("Add field failed.")
 
-        # remote file name
-        if filename is not None:
-            ret = lib.curl_mime_filename(part, filename.encode())
-            if ret != 0:
-                raise CurlError("Add field failed.")
-
         if local_path and data:
             raise CurlError("Can not use local_path and data at the same time.")
 
@@ -754,6 +748,12 @@ class CurlMime:
             if not Path(local_path_str).exists():
                 raise FileNotFoundError(f"File not found at {local_path_str}")
             ret = lib.curl_mime_filedata(part, local_path_str.encode())
+            if ret != 0:
+                raise CurlError("Add field failed.")
+
+        # remote file name
+        if filename is not None:
+            ret = lib.curl_mime_filename(part, filename.encode())
             if ret != 0:
                 raise CurlError("Add field failed.")
 
