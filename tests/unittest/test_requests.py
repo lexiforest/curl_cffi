@@ -11,7 +11,7 @@ import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import HTTPError
+from curl_cffi.requests.exceptions import HTTPError, IncompleteRead, TooManyRedirects
 from curl_cffi.requests.models import Response
 from curl_cffi.utils import CurlCffiWarning
 
@@ -912,6 +912,7 @@ def test_stream_incomplete_read(server):
                 for _ in r.iter_content():
                     continue
         assert e.value.code == CurlECode.PARTIAL_FILE
+        assert isinstance(e.value, IncompleteRead)
 
 
 def test_stream_incomplete_read_without_close(server):
@@ -925,6 +926,7 @@ def test_stream_incomplete_read_without_close(server):
                 continue
 
         assert e.value.code == CurlECode.PARTIAL_FILE
+        assert isinstance(e.value, IncompleteRead)
 
 
 def test_stream_redirect_loop(server):
@@ -934,6 +936,7 @@ def test_stream_redirect_loop(server):
             with s.stream("GET", url, max_redirects=2):
                 pass
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+        assert isinstance(e.value, TooManyRedirects)
         assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
 
