@@ -1,7 +1,18 @@
+import json
 import ntpath
 import os
 
+import pytest
+
+import curl_cffi
 from curl_cffi.fingerprints import FingerprintManager, _get_default_config_dir
+
+
+@pytest.fixture(autouse=True)
+def clear_fingerprint_cache():
+    FingerprintManager.load_fingerprints.cache_clear()
+    yield
+    FingerprintManager.load_fingerprints.cache_clear()
 
 
 def test_get_default_config_dir_linux_xdg(monkeypatch):
@@ -38,3 +49,47 @@ def test_get_config_dir_prefers_env_override(monkeypatch, tmp_path):
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
 
     assert FingerprintManager.get_config_dir() == str(tmp_path)
+
+
+def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    fingerprint_path = tmp_path / "fingerprints.json"
+    fingerprint_path.write_text(
+        json.dumps(
+            {
+                "edge_146_macos_26": {
+                    "headers": {
+                        "User-Agent": "fingerprint-ua",
+                        "Accept": "text/html",
+                    }
+                }
+            }
+        )
+    )
+
+    fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
+
+    assert fingerprint.headers["User-Agent"] == "fingerprint-ua"
+    fingerprint.headers["User-Agent"] = "custom-ua"
+    assert fingerprint.headers["User-Agent"] == "custom-ua"
+    assert FingerprintManager.get_fingerprint("edge_146_macos_26").headers[
+        "User-Agent"
+    ] == (
+        "fingerprint-ua"
+    )
+
+
+def test_get_fingerprint_unknown_target_raises_key_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+
+    with pytest.raises(KeyError, match="Fingerprint target not found"):
+        curl_cffi.get_fingerprint("missing-target")
+
+
+def test_get_fingerprint_returns_native_target_copy(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+
+    fingerprint = curl_cffi.get_fingerprint("chrome120")
+
+    assert fingerprint.client == "chrome"
+    assert fingerprint.headers == {}

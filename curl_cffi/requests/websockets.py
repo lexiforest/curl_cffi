@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from ..const import CurlHttpVersion
     from ..curl import CurlWsFrame
+    from ..fingerprints import Fingerprint
     from .cookies import CookieTypes
     from .headers import HeaderTypes
     from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
@@ -320,6 +321,7 @@ class WebSocket(BaseWebSocket):
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
         impersonate: BrowserTypeLiteral | None = None,
+        fingerprint: Fingerprint | None = None,
         ja3: str | None = None,
         akamai: str | None = None,
         perk: str | None = None,
@@ -357,6 +359,7 @@ class WebSocket(BaseWebSocket):
             referer: shortcut for setting referer header.
             accept_encoding: shortcut for setting accept-encoding header.
             impersonate: which browser version to impersonate.
+            fingerprint: fingerprint object to apply directly.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
             perk: perk string to impersonate.
@@ -394,6 +397,7 @@ class WebSocket(BaseWebSocket):
             referer=referer,
             accept_encoding=accept_encoding,
             impersonate=impersonate,
+            fingerprint=fingerprint,
             ja3=ja3,
             akamai=akamai,
             perk=perk,

@@ -70,6 +70,24 @@ Load local fingerprints
     print(len(fingerprints))
     print(fingerprints["chrome136"])
 
+Load and edit fingerprints
+==========================
+
+For fingerprint-backed targets, you can load a fresh editable ``Fingerprint`` object
+and pass it back to a request with the ``fingerprint=...`` parameter.
+
+.. code-block:: python
+
+    import curl_cffi
+
+    fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
+    fingerprint.headers["User-Agent"] = "..."
+
+    r = curl_cffi.get(
+        "https://example.com",
+        fingerprint=fingerprint,
+    )
+
 Storage paths
 =============
 

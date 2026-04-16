@@ -10,14 +10,14 @@ import warnings
 from collections import Counter
 from collections.abc import Callable
 from io import BytesIO
-from json import dumps, JSONDecodeError
+from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
 from ..utils import CurlCffiWarning, HttpVersionLiteral
-from ..fingerprints import Fingerprint, FingerprintManager
+from ..fingerprints import Fingerprint
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
 from .headers import Headers
@@ -228,6 +228,16 @@ def update_header_line(
         header_lines.append(f"{key}: {value}")
 
 
+def _header_line_key(header_line: str) -> str:
+    """Return the lowercase header key from a curl header line."""
+    colon_idx = header_line.find(":")
+    semicolon_idx = header_line.find(";")
+    indexes = [idx for idx in (colon_idx, semicolon_idx) if idx >= 0]
+    if not indexes:
+        return header_line.strip().lower()
+    return header_line[: min(indexes)].strip().lower()
+
+
 def peek_queue(q: queue.Queue, default=None):
     try:
         return q.queue[0]
@@ -384,18 +394,10 @@ def _normalize_tls_version(version: str) -> CurlSslVersion:
     return lookup[key]
 
 
-def _load_fingerprint(target: str):
-    try:
-        fingerprints = FingerprintManager.load_fingerprints()
-    except (FileNotFoundError, JSONDecodeError):
-        return None
-    return fingerprints.get(target)
-
-
 def _apply_fingerprint(
     curl: Curl,
     fingerprint: Fingerprint,
-    header_lines: Optional[list[str]],
+    existing_header_names: set[str],
     default_headers: bool,
 ) -> None:
     if fingerprint.http_version:
@@ -414,10 +416,11 @@ def _apply_fingerprint(
     curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(fingerprint.tls_alps))
     curl.setopt(CurlOpt.SSL_ENABLE_TICKET, int(fingerprint.tls_session_ticket))
     curl.setopt(CurlOpt.TLS_GREASE, int(fingerprint.tls_grease))
-    curl.setopt(
-        CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT,
-        int(fingerprint.tls_use_new_alps_codepoint),
-    )
+    if fingerprint.tls_use_new_alps_codepoint:
+        curl.setopt(
+            CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT,
+            int(fingerprint.tls_use_new_alps_codepoint),
+        )
     curl.setopt(
         CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(fingerprint.tls_signed_cert_timestamps)
     )
@@ -475,31 +478,16 @@ def _apply_fingerprint(
     if fingerprint.http2_no_priority:
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, int(fingerprint.http2_no_priority))
 
-    if default_headers and header_lines is not None and fingerprint.headers:
+    if default_headers and fingerprint.headers:
+        header_lines = []
         for key, value in fingerprint.headers.items():
-            update_header_line(header_lines, key, value)
-        curl.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
-
-
-def set_impersonate_target(
-    curl: Curl,
-    target: str,
-    *,
-    default_headers: bool = True,
-    header_lines: Optional[list[str]] = None,
-) -> None:
-    normalized = normalize_browser_type(target)
-    ret = curl.impersonate(normalized, default_headers=default_headers)  # type: ignore
-    if ret == 0:
-        return
-
-    fingerprint = _load_fingerprint(target) or _load_fingerprint(normalized)
-    if fingerprint is None:
-        raise ImpersonateError(f"Impersonating {target} is not supported")
-
-    _apply_fingerprint(curl, fingerprint, header_lines, default_headers)
-
-
+            normalized = key.lower()
+            if normalized in existing_header_names:
+                continue
+            existing_header_names.add(normalized)
+            header_lines.append(f"{key}: {value}")
+        if header_lines:
+            curl.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 def set_curl_options(
     curl: Curl,
     method: HttpMethod,
@@ -528,6 +516,7 @@ def set_curl_options(
     accept_encoding: Optional[str] = "gzip, deflate, br, zstd",
     content_callback: Optional[Callable[..., object]] = None,
     impersonate: Optional[Union[BrowserTypeLiteral, str]] = None,
+    fingerprint: Optional[Fingerprint] = None,
     ja3: Optional[str] = None,
     akamai: Optional[str] = None,
     perk: Optional[str] = None,
@@ -545,6 +534,12 @@ def set_curl_options(
     curl_options: Optional[dict[CurlOpt, str]] = None,
 ):
     c = curl
+
+    if fingerprint is not None and impersonate is not None:
+        raise TypeError("Cannot specify both 'impersonate' and 'fingerprint'")
+    fingerprint_source = (
+        "impersonated version" if impersonate is not None else "fingerprint"
+    )
 
     method = method.upper()  # type: ignore
 
@@ -635,6 +630,7 @@ def set_curl_options(
     update_header_line(header_lines, "Expect", "", replace=True)
 
     c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
+    existing_header_names = {_header_line_key(line) for line in header_lines}
 
     req = Request(url, h, method, request_body)
 
@@ -795,18 +791,19 @@ def set_curl_options(
 
     # impersonate
     if impersonate:
-        set_impersonate_target(
-            c,
-            target=impersonate,
-            default_headers=default_headers,
-            header_lines=header_lines,
-        )
+        impersonate = normalize_browser_type(impersonate)
+        ret = c.impersonate(impersonate, default_headers=default_headers)  # type: ignore
+        if ret != 0:
+            raise ImpersonateError(f"Impersonating {impersonate} is not supported")
+
+    if fingerprint is not None:
+        _apply_fingerprint(c, fingerprint, existing_header_names, default_headers)
 
     # ja3 string
     if ja3:
-        if impersonate:
+        if impersonate is not None or fingerprint is not None:
             warnings.warn(
-                "JA3 fingerprint was altered after impersonated version was set.",
+                f"JA3 fingerprint was altered after {fingerprint_source} was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
@@ -821,9 +818,9 @@ def set_curl_options(
     if extra_fp:
         if isinstance(extra_fp, dict):
             extra_fp = ExtraFingerprints(**extra_fp)
-        if impersonate:
+        if impersonate is not None or fingerprint is not None:
             warnings.warn(
-                "Extra fingerprints was altered after impersonated version was set.",
+                f"Extra fingerprints was altered after {fingerprint_source} was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
@@ -831,9 +828,9 @@ def set_curl_options(
 
     # akamai string
     if akamai:
-        if impersonate:
+        if impersonate is not None or fingerprint is not None:
             warnings.warn(
-                "Akamai fingerprint was altered after impersonated version was set.",
+                f"Akamai fingerprint was altered after {fingerprint_source} was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )
@@ -841,9 +838,9 @@ def set_curl_options(
 
     # perk string
     if perk:
-        if impersonate:
+        if impersonate is not None or fingerprint is not None:
             warnings.warn(
-                "Perk fingerprint was altered after impersonated version was set.",
+                f"Perk fingerprint was altered after {fingerprint_source} was set.",
                 CurlCffiWarning,
                 stacklevel=1,
             )

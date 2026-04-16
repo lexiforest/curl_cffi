@@ -53,6 +53,7 @@ else:
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
+    from ..fingerprints import Fingerprint
 
     class ProxySpec(TypedDict, total=False):
         all: str
@@ -77,6 +78,7 @@ if TYPE_CHECKING:
         max_redirects: int
         retry: Union[int, RetryStrategy]
         impersonate: Optional[BrowserTypeLiteral]
+        fingerprint: Optional[Fingerprint]
         ja3: Optional[str]
         akamai: Optional[str]
         perk: Optional[str]
@@ -112,6 +114,7 @@ if TYPE_CHECKING:
         accept_encoding: Optional[str]
         content_callback: Optional[Callable]
         impersonate: Optional[BrowserTypeLiteral]
+        fingerprint: Optional[Fingerprint]
         ja3: Optional[str]
         akamai: Optional[str]
         perk: Optional[str]
@@ -220,6 +223,7 @@ class BaseSession(Generic[R]):
         max_redirects: int = 30,
         retry: Optional[Union[int, RetryStrategy]] = 0,
         impersonate: Optional[BrowserTypeLiteral] = None,
+        fingerprint: Optional[Fingerprint] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -248,6 +252,7 @@ class BaseSession(Generic[R]):
         self.max_redirects = max_redirects
         self.retry = _normalize_retry(retry)
         self.impersonate = impersonate
+        self.fingerprint = fingerprint
         self.ja3 = ja3
         self.akamai = akamai
         self.perk = perk
@@ -443,6 +448,7 @@ class Session(BaseSession[R]):
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
             impersonate: which browser version to impersonate in the session.
+            fingerprint: fingerprint object to apply directly in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
@@ -608,6 +614,7 @@ class Session(BaseSession[R]):
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable[..., object]] = None,
         impersonate: Optional[BrowserTypeLiteral] = None,
+        fingerprint: Optional[Fingerprint] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -657,6 +664,7 @@ class Session(BaseSession[R]):
             accept_encoding=accept_encoding,
             content_callback=content_callback,
             impersonate=impersonate or self.impersonate,
+            fingerprint=fingerprint or self.fingerprint,
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             perk=perk or self.perk,
@@ -904,6 +912,7 @@ class AsyncSession(BaseSession[R]):
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
             impersonate: which browser version to impersonate in the session.
+            fingerprint: fingerprint object to apply directly in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
@@ -1028,6 +1037,7 @@ class AsyncSession(BaseSession[R]):
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
         impersonate: BrowserTypeLiteral | None = None,
+        fingerprint: Fingerprint | None = None,
         ja3: str | None = None,
         akamai: str | None = None,
         perk: str | None = None,
@@ -1075,6 +1085,7 @@ class AsyncSession(BaseSession[R]):
             referer: shortcut for setting referer header.
             accept_encoding: shortcut for setting accept-encoding header.
             impersonate: which browser version to impersonate.
+            fingerprint: fingerprint object to apply directly.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
             perk: perk string to impersonate.
@@ -1225,6 +1236,7 @@ class AsyncSession(BaseSession[R]):
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
         impersonate: Optional[BrowserTypeLiteral] = None,
+        fingerprint: Optional[Fingerprint] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -1268,6 +1280,7 @@ class AsyncSession(BaseSession[R]):
             accept_encoding=accept_encoding,
             content_callback=content_callback,
             impersonate=impersonate or self.impersonate,
+            fingerprint=fingerprint or self.fingerprint,
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             perk=perk or self.perk,

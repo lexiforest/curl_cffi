@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from datetime import datetime
 from functools import cache
@@ -10,6 +11,7 @@ __all__ = [
     "Fingerprint",
     "FingerprintSpec",
     "FingerprintManager",
+    "get_fingerprint",
 ]
 
 
@@ -549,6 +551,14 @@ class FingerprintManager:
         return parsed
 
     @classmethod
+    def get_fingerprint(cls, target: str) -> Fingerprint:
+        """Return a deep-copied fingerprint that callers can edit safely."""
+        fingerprints = cls.load_fingerprints()
+        if target not in fingerprints:
+            raise KeyError(f"Fingerprint target not found: {target}")
+        return deepcopy(fingerprints[target])
+
+    @classmethod
     def list_fingerprints(cls) -> list[dict[str, object]]:
         native_lookup = {
             item["target_name"]: item for item in NATIVE_IMPERSONATE_TARGETS
@@ -581,3 +591,8 @@ class FingerprintManager:
                     }
                 )
         return rows
+
+
+def get_fingerprint(target: str) -> Fingerprint:
+    """Return a deep-copied fingerprint that callers can edit safely."""
+    return FingerprintManager.get_fingerprint(target)
