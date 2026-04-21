@@ -345,6 +345,7 @@ class CurlOpt(IntEnum):
     QUIC_TRANSPORT_PARAMETERS = 10000 + 1027
     HTTP3_SIG_HASH_ALGS = 10000 + 1028
     HTTP3_TLS_EXTENSION_ORDER = 10000 + 1029
+    HTTPHEADER_ORDER = 10000 + 1030
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -613,7 +614,7 @@ class CurlIpResolve(IntEnum):
 class CurlFollow(IntEnum):
     """``CURLFOLLOW_*`` consts for redirect behavior"""
 
-    # /* generic follow redirects
+    # generic follow redirects
     ALL = 1
 
     # Do not use the custom method in the follow-up request if the HTTP code

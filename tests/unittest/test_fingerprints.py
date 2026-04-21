@@ -51,6 +51,24 @@ def test_get_config_dir_prefers_env_override(monkeypatch, tmp_path):
     assert FingerprintManager.get_config_dir() == str(tmp_path)
 
 
+def test_get_api_key_prefers_environment_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"api_key": "imp_config"}))
+    monkeypatch.setenv("IMPERSONATE_API_KEY", "imp_env")
+
+    assert FingerprintManager.get_api_key() == "imp_env"
+
+
+def test_get_api_key_falls_back_to_config_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"api_key": "imp_config"}))
+    monkeypatch.delenv("IMPERSONATE_API_KEY", raising=False)
+
+    assert FingerprintManager.get_api_key() == "imp_config"
+
+
 def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
     fingerprint_path = tmp_path / "fingerprints.json"
@@ -74,9 +92,7 @@ def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
     assert fingerprint.headers["User-Agent"] == "custom-ua"
     assert FingerprintManager.get_fingerprint("edge_146_macos_26").headers[
         "User-Agent"
-    ] == (
-        "fingerprint-ua"
-    )
+    ] == ("fingerprint-ua")
 
 
 def test_get_fingerprint_unknown_target_raises_key_error(monkeypatch, tmp_path):

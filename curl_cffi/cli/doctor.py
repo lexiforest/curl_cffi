@@ -23,7 +23,7 @@ def print_doctor() -> None:
     print(f"api_root: {FingerprintManager.get_api_root()}")
     print(f"config_path: {config_path}")
     print(f"config_present: {config_exists}")
-    print(f"api_key_configured: {FingerprintManager.is_pro()}")
+    print(f"api_key_configured: {FingerprintManager.get_api_key() is not None}")
     print(f"fingerprint_path: {fingerprint_path}")
     print(f"fingerprint_present: {fingerprint_exists}")
     try:

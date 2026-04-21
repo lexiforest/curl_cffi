@@ -158,7 +158,7 @@ your own headers. For stored fingerprint targets, you can also load and edit a
 
    fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
    fingerprint.headers["User-Agent"] = "..."
-   requests.get(url, fingerprint=fingerprint)
+   requests.get(url, impersonate=fingerprint)
 
 
 How to deal with encoding/decoding errors?

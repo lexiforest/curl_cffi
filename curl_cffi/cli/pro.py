@@ -115,7 +115,7 @@ def handle_pro_command(args) -> bool:
         return True
 
     if args.command == "config":
-        FingerprintManager.enable_pro(args.api_key)
+        FingerprintManager.set_api_key(args.api_key)
         print("API key saved to " + FingerprintManager.get_config_path())
         return True
 

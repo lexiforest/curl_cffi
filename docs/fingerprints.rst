@@ -39,7 +39,13 @@ or in Python:
 
     from curl_cffi.fingerprints import FingerprintManager
 
-    FingerprintManager.enable_pro("imp_xxxxxxxx")
+    FingerprintManager.set_api_key("imp_xxxxxxxx")
+
+Or override the configured key at runtime:
+
+.. code-block:: sh
+
+    export IMPERSONATE_API_KEY=imp_xxxxxxxx
 
 Update fingerprints
 ===================
@@ -74,7 +80,7 @@ Load and edit fingerprints
 ==========================
 
 For fingerprint-backed targets, you can load a fresh editable ``Fingerprint`` object
-and pass it back to a request with the ``fingerprint=...`` parameter.
+and pass it back to a request with the ``impersonate=...`` parameter.
 
 .. code-block:: python
 
@@ -85,7 +91,7 @@ and pass it back to a request with the ``fingerprint=...`` parameter.
 
     r = curl_cffi.get(
         "https://example.com",
-        fingerprint=fingerprint,
+        impersonate=fingerprint,
     )
 
 Storage paths
@@ -102,4 +108,7 @@ Files stored there:
 - ``config.json``: API key config
 - ``fingerprints.json``: cached fingerprints
 
-Override the directory with ``IMPERSONATE_CONFIG_DIR``.
+Environment overrides:
+
+- ``IMPERSONATE_API_KEY``: override the API key loaded from ``config.json``.
+- ``IMPERSONATE_CONFIG_DIR``: override the config/cache directory.

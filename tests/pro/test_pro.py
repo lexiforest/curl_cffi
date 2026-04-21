@@ -9,24 +9,14 @@ from curl_cffi.fingerprints import FingerprintManager
 TESTING_API_KEY = "imp_alizee-lyonnet"
 
 
-def test_is_pro_default_false(tmp_path, monkeypatch):
-    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
-    assert FingerprintManager.is_pro() is False
-
-
 @pytest.fixture(scope="session", autouse=True)
 def setup_pro(tmp_path_factory):
     os.environ["IMPERSONATE_CONFIG_DIR"] = str(
         tmp_path_factory.mktemp("impersonate-pro-tests")
     )
     # login before testing starts
-    FingerprintManager.enable_pro(api_key=TESTING_API_KEY)
+    FingerprintManager.set_api_key(api_key=TESTING_API_KEY)
     yield
-
-
-def test_is_pro():
-    FingerprintManager.is_pro.cache_clear()
-    assert FingerprintManager.is_pro() is True
 
 
 def test_update_fingerprints(api_server):

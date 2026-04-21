@@ -7,11 +7,17 @@ These subcommands manage fingerprints and API access for
 Configure API key
 -----------------
 
-Store your impersonate.pro API key:
+Store your impersonate.pro API key in the local config file:
 
 .. code-block:: bash
 
     curl-cffi config --api-key imp_xxxxxxxx
+
+Or provide it at runtime with an environment variable:
+
+.. code-block:: bash
+
+    export IMPERSONATE_API_KEY=imp_xxxxxxxx
 
 Update and list fingerprints
 ----------------------------
@@ -39,5 +45,6 @@ Output fingerprints as JSON:
 Environment variables
 ---------------------
 
+- ``IMPERSONATE_API_KEY``: override the API key loaded from ``config.json``.
 - ``IMPERSONATE_API_ROOT``: override API endpoint used by ``update``.
 - ``IMPERSONATE_CONFIG_DIR``: override local config/cache directory.

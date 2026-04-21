@@ -107,8 +107,7 @@ def request(
         accept_encoding: shortcut for setting accept-encoding header.
         content_callback: a callback function to receive response body.
             ``def callback(chunk: bytes) -> None:``
-        impersonate: which browser version to impersonate.
-        fingerprint: fingerprint object to apply directly.
+        impersonate: which browser version or fingerprint to impersonate.
         ja3: ja3 string to impersonate.
         akamai: akamai string to impersonate.
         extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.

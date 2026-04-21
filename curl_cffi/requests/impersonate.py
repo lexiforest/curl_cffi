@@ -103,7 +103,7 @@ REAL_TARGET_MAP = {
 }
 
 
-def normalize_browser_type(item):
+def resolve_latest_browser_type(item):
     if item == "chrome":  # noqa: SIM116
         return DEFAULT_CHROME
     elif item == "edge":

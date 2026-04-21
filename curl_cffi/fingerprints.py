@@ -154,6 +154,14 @@ NATIVE_IMPERSONATE_TARGETS = [
     },
     {
         "browser": "Chrome",
+        "version": "146",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "chrome146",
+        "h3_fingerprints": True,
+    },
+    {
+        "browser": "Chrome",
         "version": "99",
         "os": "Android",
         "os_version": "12",
@@ -258,6 +266,14 @@ NATIVE_IMPERSONATE_TARGETS = [
     },
     {
         "browser": "Safari",
+        "version": "26.0.1",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "safari2601",
+        "h3_fingerprints": False,
+    },
+    {
+        "browser": "Safari",
         "version": "26.0",
         "os": "iOS",
         "os_version": "26.0",
@@ -353,8 +369,12 @@ class Fingerprint:
     tls_use_new_alps_codepoint: bool = False
     tls_signed_cert_timestamps: bool = False
     tls_ech: str | None = None
+    tls_permute_extensions: bool = False
 
     headers: dict[str, str] = field(default_factory=dict)
+    header_order: str = ""
+    split_cookies: bool = False
+    form_boundary: str = ""
 
     http2_settings: str = ""
     http2_window_update: int = 0
@@ -362,8 +382,6 @@ class Fingerprint:
     http2_stream_weight: int | None = None
     http2_stream_exclusive: int | None = None
     http2_no_priority: bool = False
-    http2_priority_weight: int | None = None
-    http2_priority_exclusive: int | None = None
 
     http3_settings: str = ""
     http3_pseudo_headers_order: str = ""
@@ -413,6 +431,9 @@ class FingerprintManager:
 
     @classmethod
     def get_api_key(cls) -> str | None:
+        api_key = os.environ.get("IMPERSONATE_API_KEY")
+        if api_key:
+            return api_key
         config_path = cls.get_config_path()
         if not os.path.exists(config_path):
             return None
@@ -427,13 +448,8 @@ class FingerprintManager:
         return None
 
     @classmethod
-    @cache
-    def is_pro(cls) -> bool:
-        return cls.get_api_key() is not None
-
-    @classmethod
-    def enable_pro(cls, api_key: str) -> None:
-        """Enable the pro version."""
+    def set_api_key(cls, api_key: str) -> None:
+        """Persist the API key for impersonate.pro."""
         config_dir = cls.get_config_dir()
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
@@ -450,7 +466,6 @@ class FingerprintManager:
         config["update_time"] = datetime.utcnow().isoformat()
         with open(config_file, "w") as f:
             json.dump(config, f, indent=4)
-        cls.is_pro.cache_clear()
 
     @classmethod
     def update_fingerprints(cls, api_root: str | None = None) -> int | None:
