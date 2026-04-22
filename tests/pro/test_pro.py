@@ -1,9 +1,9 @@
 import os
-from urllib.error import URLError
 
 import pytest
 
-from curl_cffi.fingerprints import FingerprintManager
+from curl_cffi.curl import CurlError
+from curl_cffi.fingerprints import FingerprintManager, FingerprintUpdateError
 
 
 TESTING_API_KEY = "imp_alizee-lyonnet"
@@ -36,19 +36,21 @@ def test_single_fingerprint(api_server):
     assert testing100.tls_supported_groups == ["X25519", "P-256", "P-384", "P-521"]
 
 
-def test_update_fingerprints_prints_access_error(monkeypatch, capsys):
-    def dummy_urlopen(request):
-        raise URLError("Connection refused")
+def test_update_fingerprints_raises_access_error(monkeypatch):
+    def dummy_fetch(url, headers):
+        raise CurlError(
+            "Failed to perform, curl: (6) Could not resolve host: api.test. "
+            "See https://curl.se/libcurl/c/libcurl-errors.html first for more details."
+        )
 
-    monkeypatch.setattr("curl_cffi.fingerprints.urlopen", dummy_urlopen)
+    monkeypatch.setattr(FingerprintManager, "_fetch_fingerprint_payload", dummy_fetch)
 
-    updated = FingerprintManager.update_fingerprints("https://api.test")
+    with pytest.raises(
+        FingerprintUpdateError, match="Failed to access fingerprint endpoint"
+    ) as exc_info:
+        FingerprintManager.update_fingerprints("https://api.test")
 
-    captured = capsys.readouterr()
-    assert updated is None
-    assert "updating fingerprints from https://api.test/fingerprints" in captured.out
-    assert (
+    assert str(exc_info.value).startswith(
         "Failed to access fingerprint endpoint at "
-        "https://api.test/fingerprints: <urlopen error Connection refused>"
-        in captured.out
+        "https://api.test/fingerprints: Failed to perform, curl: (6) "
     )

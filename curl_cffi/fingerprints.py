@@ -4,11 +4,15 @@ from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from datetime import datetime
 from functools import cache
+from io import BytesIO
 from typing import Literal
-from urllib.request import Request, urlopen
+
+from .const import CurlInfo, CurlOpt
+from .curl import Curl, CurlError
 
 __all__ = [
     "Fingerprint",
+    "FingerprintUpdateError",
     "FingerprintSpec",
     "FingerprintManager",
     "get_fingerprint",
@@ -326,6 +330,10 @@ NATIVE_IMPERSONATE_TARGETS = [
 DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
 
 
+class FingerprintUpdateError(RuntimeError, CurlError):
+    """Raised when fingerprint update fails."""
+
+
 def _get_default_config_dir() -> str:
     if os.name == "nt":
         appdata = os.environ.get("APPDATA")
@@ -427,7 +435,9 @@ class FingerprintManager:
 
     @classmethod
     def get_api_root(cls) -> str:
-        return os.environ.get("IMPERSONATE_API_ROOT", DEFAULT_API_ROOT)
+        return (
+            os.environ.get("IMPERSONATE_API_ROOT", DEFAULT_API_ROOT) or DEFAULT_API_ROOT
+        )
 
     @classmethod
     def get_api_key(cls) -> str | None:
@@ -467,8 +477,38 @@ class FingerprintManager:
         with open(config_file, "w") as f:
             json.dump(config, f, indent=4)
 
+    @staticmethod
+    def _fetch_fingerprint_payload(url: str, headers: dict[str, str]) -> bytes:
+        curl = Curl()
+        buffer = BytesIO()
+        try:
+            curl.setopt(CurlOpt.URL, url.encode())
+            if headers:
+                curl.setopt(
+                    CurlOpt.HTTPHEADER,
+                    [f"{key}: {value}".encode() for key, value in headers.items()],
+                )
+            curl.setopt(CurlOpt.WRITEDATA, buffer)
+            curl.perform()
+            status_code = int(curl.getinfo(CurlInfo.RESPONSE_CODE))
+        except CurlError as exc:
+            raise FingerprintUpdateError(
+                f"Failed to access fingerprint endpoint at {url}: {exc}"
+            ) from exc
+        finally:
+            curl.close()
+
+        payload = buffer.getvalue()
+        if status_code >= 400:
+            body = payload.decode("utf-8", errors="replace")
+            raise FingerprintUpdateError(
+                f"Failed to access fingerprint endpoint at {url}: "
+                f"HTTP {status_code}: {body}"
+            )
+        return payload
+
     @classmethod
-    def update_fingerprints(cls, api_root: str | None = None) -> int | None:
+    def update_fingerprints(cls, api_root: str | None = None) -> int:
         """Get the latest fingerprints for impersonating."""
         api_root = api_root or cls.get_api_root()
         url = f"{api_root.rstrip('/')}/fingerprints"
@@ -476,28 +516,22 @@ class FingerprintManager:
         api_key = cls.get_api_key()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        print(f"updating fingerprints from {url}")
-        request = Request(url, headers=headers, method="GET")
-        try:
-            with urlopen(request) as response:
-                payload = response.read()
-        except Exception as exc:
-            print(f"Failed to access fingerprint endpoint at {url}: {exc}")
-            return
+        payload = cls._fetch_fingerprint_payload(url, headers)
 
         try:
             data = json.loads(payload)
             if not isinstance(data, dict):
-                print(f"Invalid fingerprint response from {url}: expected object")
-                return
+                raise FingerprintUpdateError(
+                    f"Invalid fingerprint response from {url}: expected object"
+                )
             items = data.get("items", data.get("data"))
         except json.JSONDecodeError as exc:
-            print(f"Invalid fingerprint response from {url}: {exc}")
-            return
+            raise FingerprintUpdateError(
+                f"Invalid fingerprint response from {url}: {exc}"
+            ) from exc
 
         if not isinstance(items, list):
-            print(f"No fingerprints found at {url}")
-            return
+            raise FingerprintUpdateError(f"No fingerprints found at {url}")
 
         fingerprints: dict[str, dict] = {}
         for item in items:

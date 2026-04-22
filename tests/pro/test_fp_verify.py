@@ -13,7 +13,6 @@ TLS_PEET_URL = "https://tls.peet.ws/api/all"
 RAW_PATH = "/raw"
 VERIFY_FIELDS = (
     ("fingerprint", "http2", "akamai_fingerprint_hash"),
-    ("fingerprint", "http2", "sent_frames", 2, "headers"),
     ("fingerprint", "tls", "ja3"),
 )
 IGNORED_HEADER_NAMES = {"dnt", "sec-ch-ua", "sec-ch-ua-platform"}
@@ -112,6 +111,10 @@ def _load_raw_fingerprint(target: str, api_root: str) -> dict[str, object]:
     raise AssertionError(f"Could not load raw fingerprint payload for {target!r}")
 
 
+def _should_print_target_progress() -> bool:
+    return os.environ.get("CI", "").lower() not in {"1", "true", "yes"}
+
+
 def _get_path(value: object, path: tuple[object, ...]) -> object:
     current = value
     for part in path:
@@ -124,6 +127,49 @@ def _get_path(value: object, path: tuple[object, ...]) -> object:
                 raise AssertionError(f"Expected object while resolving {path!r}")
             current = current[part]
     return current
+
+
+def _find_http2_frame(
+    sent_frames: object,
+    *,
+    frame_type: str,
+    required_key: str | None = None,
+) -> dict[str, object]:
+    if not isinstance(sent_frames, list):
+        raise AssertionError("Expected http2.sent_frames to be a list")
+    for frame in sent_frames:
+        if not isinstance(frame, dict):
+            continue
+        if frame.get("frame_type") != frame_type:
+            continue
+        if required_key is not None and required_key not in frame:
+            continue
+        return frame
+    required_suffix = f" containing {required_key!r}" if required_key else ""
+    raise AssertionError(
+        f"Could not find HTTP/2 frame {frame_type!r}{required_suffix} in sent_frames"
+    )
+
+
+def _select_http_header_lines(payload: object) -> tuple[str, object]:
+    if not isinstance(payload, dict):
+        raise AssertionError("Expected payload object when selecting HTTP headers")
+
+    http2_payload = payload.get("http2")
+    if isinstance(http2_payload, dict):
+        sent_frames = http2_payload.get("sent_frames")
+        headers_frame = _find_http2_frame(
+            sent_frames,
+            frame_type="HEADERS",
+            required_key="headers",
+        )
+        return "$.http2.sent_frames[HEADERS].headers", headers_frame["headers"]
+
+    http1_payload = payload.get("http1")
+    if isinstance(http1_payload, dict) and "headers" in http1_payload:
+        return "$.http1.headers", http1_payload["headers"]
+
+    raise AssertionError("Could not find comparable HTTP headers in payload")
 
 
 def _normalize_peet_value(value: object) -> object:
@@ -210,6 +256,33 @@ def _format_header_lines_diff(raw_value: object, peet_value: object) -> str:
     return "\n".join(diff_lines)
 
 
+def _record_mismatch(
+    mismatches: dict[str, list[str]],
+    *,
+    target: str,
+    dotted_path: str,
+    raw_value: object,
+    peet_value: object,
+) -> None:
+    if peet_value == raw_value:
+        return
+    if dotted_path in {
+        "$.fingerprint.http2.sent_frames[HEADERS].headers",
+        "$.fingerprint.http1.headers",
+    }:
+        diff_body = _format_header_lines_diff(raw_value, peet_value)
+    else:
+        diff_body = "\n".join(
+            [
+                "raw:",
+                _format_diff_value(raw_value),
+                "peet:",
+                _format_diff_value(peet_value),
+            ]
+        )
+    mismatches.setdefault(target, []).append("\n".join([dotted_path, diff_body]))
+
+
 def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
     api_key = _require_live_api_key()
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
@@ -231,43 +304,59 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
     assert custom_targets, "No non-preset fingerprints found in updated cache"
 
     mismatches: dict[str, list[str]] = {}
+    should_print_target_progress = _should_print_target_progress()
 
     for target in custom_targets:
-        print(f"verifying fingerprint: {target}")
+        if should_print_target_progress:
+            print(f"verifying fingerprint: {target}")
         peet_payload = requests.get(TLS_PEET_URL, impersonate=target, timeout=30).json()
         raw_payload = _load_raw_fingerprint(target, api_root)
+        raw_fingerprint = _get_path(raw_payload, ("fingerprint",))
 
         for path in VERIFY_FIELDS:
-            peet_path = path[1:]
+            if path == ("fingerprint", "http2", "akamai_fingerprint_hash"):
+                if (
+                    not isinstance(raw_fingerprint, dict)
+                    or "http2" not in raw_fingerprint
+                ):
+                    continue
+                if not isinstance(peet_payload, dict) or "http2" not in peet_payload:
+                    continue
             raw_value = _get_path(raw_payload, path)
-            peet_value = _normalize_peet_value(_get_path(peet_payload, peet_path))
-            if path == ("fingerprint", "http2", "sent_frames", 2, "headers"):
-                raw_value = _filter_ignored_headers(raw_value)
-                peet_value = _filter_ignored_headers(peet_value)
-            elif path == ("fingerprint", "tls", "ja3"):
+            peet_value = _normalize_peet_value(_get_path(peet_payload, path[1:]))
+            if path == ("fingerprint", "tls", "ja3"):
                 raw_value = _normalize_ja3(raw_value)
                 peet_value = _normalize_ja3(peet_value)
-            if peet_value != raw_value:
-                dotted_path = "$." + ".".join(str(part) for part in path)
-                if path == ("fingerprint", "http2", "sent_frames", 2, "headers"):
-                    diff_body = _format_header_lines_diff(raw_value, peet_value)
-                else:
-                    diff_body = "\n".join(
-                        [
-                            "raw:",
-                            _format_diff_value(raw_value),
-                            "peet:",
-                            _format_diff_value(peet_value),
-                        ]
-                    )
-                mismatches.setdefault(target, []).append(
-                    "\n".join(
-                        [
-                            dotted_path,
-                            diff_body,
-                        ]
-                    )
+            _record_mismatch(
+                mismatches,
+                target=target,
+                dotted_path="$." + ".".join(str(part) for part in path),
+                raw_value=raw_value,
+                peet_value=peet_value,
+            )
+
+        raw_header_path, raw_headers = _select_http_header_lines(raw_fingerprint)
+        peet_header_path, peet_headers = _select_http_header_lines(peet_payload)
+        raw_headers = _filter_ignored_headers(raw_headers)
+        peet_headers = _filter_ignored_headers(_normalize_peet_value(peet_headers))
+        if raw_header_path != peet_header_path:
+            mismatches.setdefault(target, []).append(
+                "\n".join(
+                    [
+                        "$.fingerprint.http*.headers",
+                        f"raw path:  {raw_header_path}",
+                        f"peet path: {peet_header_path}",
+                    ]
                 )
+            )
+            continue
+        _record_mismatch(
+            mismatches,
+            target=target,
+            dotted_path="$.fingerprint" + raw_header_path[1:],
+            raw_value=raw_headers,
+            peet_value=peet_headers,
+        )
 
     if mismatches:
         formatted = []

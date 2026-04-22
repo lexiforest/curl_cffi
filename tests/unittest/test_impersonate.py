@@ -4,6 +4,22 @@ from curl_cffi import requests
 from curl_cffi.const import CurlHttpVersion, CurlSslVersion
 
 
+def _find_http2_frame(
+    response_json, *, frame_type: str, required_key: str | None = None
+):
+    sent_frames = response_json["http2"]["sent_frames"]
+    for frame in sent_frames:
+        if frame.get("frame_type") != frame_type:
+            continue
+        if required_key is not None and required_key not in frame:
+            continue
+        return frame
+    required_suffix = f" containing {required_key!r}" if required_key else ""
+    raise AssertionError(
+        f"Could not find HTTP/2 frame {frame_type!r}{required_suffix} in sent_frames"
+    )
+
+
 def test_impersonate_with_version(server):
     # the test server does not understand http/2
     r = requests.get(
@@ -245,7 +261,8 @@ def test_customized_extra_fp_stream_weight():
     url = "https://tls.peet.ws/api/all"
     fp = requests.ExtraFingerprints(http2_stream_weight=64)
     r = requests.get(url, extra_fp=fp).json()
-    assert r["http2"]["sent_frames"][2]["priority"]["weight"] == 64
+    headers_frame = _find_http2_frame(r, frame_type="HEADERS", required_key="priority")
+    assert headers_frame["priority"]["weight"] == 64
 
 
 @pytest.mark.skip(reason="Unstable API")
@@ -253,4 +270,5 @@ def test_customized_extra_fp_stream_exclusive():
     url = "https://tls.peet.ws/api/all"
     fp = requests.ExtraFingerprints(http2_stream_exclusive=0)
     r = requests.get(url, extra_fp=fp).json()
-    assert r["http2"]["sent_frames"][2]["priority"]["exclusive"] == 0
+    headers_frame = _find_http2_frame(r, frame_type="HEADERS", required_key="priority")
+    assert headers_frame["priority"]["exclusive"] == 0

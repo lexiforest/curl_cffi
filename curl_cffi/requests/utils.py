@@ -417,6 +417,16 @@ def _is_native_impersonate_target(target: str) -> bool:
     return normalized in NATIVE_TARGET_NAMES
 
 
+def _strip_padding_extension(extension_order: str) -> str:
+    return "-".join(part for part in extension_order.split("-") if part != "21")
+
+
+def _normalize_supported_group(group: str) -> str:
+    if group == "X25519Kyber768":
+        return "X25519Kyber768Draft00"
+    return group
+
+
 def _apply_fingerprint(
     curl: Curl,
     fingerprint: Fingerprint,
@@ -463,12 +473,17 @@ def _apply_fingerprint(
         )
 
     if fingerprint.tls_supported_groups:
-        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(fingerprint.tls_supported_groups))
+        normalized_groups = [
+            _normalize_supported_group(group)
+            for group in fingerprint.tls_supported_groups
+        ]
+        curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(normalized_groups))
 
     if fingerprint.tls_extension_order:
-        extension_ids = set(int(e) for e in fingerprint.tls_extension_order.split("-"))
+        tls_extension_order = _strip_padding_extension(fingerprint.tls_extension_order)
+        extension_ids = set(int(e) for e in tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
-        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, fingerprint.tls_extension_order)
+        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
 
     if fingerprint.tls_delegated_credentials:
         curl.setopt(

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
-from curl_cffi.fingerprints import FingerprintManager
+from curl_cffi.fingerprints import FingerprintManager, FingerprintUpdateError
 
 
 def _validate_api_key(value: str) -> str:
@@ -100,8 +101,11 @@ def add_pro_parsers(subparsers) -> None:
 def handle_pro_command(args) -> bool:
     """Handle pro subcommands. Returns True if handled, False otherwise."""
     if args.command == "update":
-        updated = FingerprintManager.update_fingerprints()
-        if updated is not None:
+        try:
+            updated = FingerprintManager.update_fingerprints()
+        except FingerprintUpdateError as exc:
+            print(str(exc), file=sys.stderr)
+        else:
             suffix = "" if updated == 1 else "s"
             print(f"Total {updated} fingerprint{suffix} in cache.")
         return True
