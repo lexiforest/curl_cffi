@@ -144,7 +144,7 @@ For Akamai http2 fingerprints, you can fully customize the 3 parts:
 * ``CURLOPT_HTTP2_SETTINGS`` sets the settings frame values, for example ``1:65536;3:1000;4:6291456;6:262144`` (non-standard HTTP/2 options created for this project).
 * ``CURLOPT_HTTP2_WINDOW_UPDATE`` sets initial window update value for http2, for example ``15663105`` (non-standard HTTP/2 options created for this project).
 
-For a complete list of options and explanation, see the `curl-impersoante README`_.
+For a complete list of options and explanation, see the `curl-impersonate README`_.
 
 .. _curl-impersonate README: https://github.com/lexiforest/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
 

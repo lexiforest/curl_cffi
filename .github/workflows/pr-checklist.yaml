@@ -1,5 +1,7 @@
 name: PR Checklist
 
+permissions: {}
+
 on:
   pull_request:
     types: [opened, edited, synchronize]
@@ -9,8 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check review confirmation
+        env:
+          BODY: ${{ github.event.pull_request.body }}
         run: |
-          BODY="${{ github.event.pull_request.body }}"
           if echo "$BODY" | grep -q '\[x\] I have manually reviewed the changes and fully understand the code\.'; then
             echo "Checklist item confirmed."
           else
