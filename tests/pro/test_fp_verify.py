@@ -3,7 +3,6 @@ import os
 import re
 from itertools import zip_longest
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 
 from curl_cffi import requests
 from curl_cffi.fingerprints import FingerprintManager, NATIVE_IMPERSONATE_TARGETS
@@ -32,9 +31,7 @@ def _request_json(url: str, *, api_key: str | None = None) -> object:
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    request = Request(url, headers=headers, method="GET")
-    with urlopen(request) as response:
-        return json.loads(response.read())
+    return json.loads(FingerprintManager._fetch_fingerprint_payload(url, headers))
 
 
 def _wrap_fingerprint_payload(payload: object) -> dict[str, object] | None:
@@ -47,9 +44,14 @@ def _wrap_fingerprint_payload(payload: object) -> dict[str, object] | None:
     return None
 
 
+def _payload_name_matches(payload: dict[str, object], target: str) -> bool:
+    name = payload.get("name") or payload.get("target")
+    return not isinstance(name, str) or name == target
+
+
 def _extract_target_payload(payload: object, target: str) -> dict[str, object] | None:
     wrapped = _wrap_fingerprint_payload(payload)
-    if wrapped is not None:
+    if wrapped is not None and _payload_name_matches(wrapped, target):
         return wrapped
 
     if isinstance(payload, dict):
@@ -93,23 +95,26 @@ def _extract_target_payload(payload: object, target: str) -> dict[str, object] |
 def _load_raw_fingerprint(target: str, api_root: str) -> dict[str, object]:
     api_key = _require_live_api_key()
     base_url = f"{api_root.rstrip('/')}{RAW_PATH}"
-    candidate_urls = (
-        base_url,
-        f"{base_url}?{urlencode({'target': target})}",
-        f"{base_url}?{urlencode({'name': target})}",
-        f"{base_url}/{target}",
+    url = f"{base_url}?{urlencode({'name': target})}"
+    try:
+        payload = _request_json(url, api_key=api_key)
+    except Exception as exc:
+        raise AssertionError(
+            f"Could not load raw fingerprint payload for {target!r}\n"
+            f"{url}: {type(exc).__name__}: {exc}"
+        ) from exc
+    target_payload = _extract_target_payload(payload, target)
+    if target_payload is not None:
+        return target_payload
+
+    raise AssertionError(
+        "\n".join(
+            [
+                f"Could not load raw fingerprint payload for {target!r}",
+                f"{url}: target not found in response",
+            ]
+        )
     )
-
-    for url in candidate_urls:
-        try:
-            payload = _request_json(url, api_key=api_key)
-        except Exception:
-            continue
-        target_payload = _extract_target_payload(payload, target)
-        if target_payload is not None:
-            return target_payload
-
-    raise AssertionError(f"Could not load raw fingerprint payload for {target!r}")
 
 
 def _should_print_target_progress() -> bool:
