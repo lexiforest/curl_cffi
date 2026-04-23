@@ -686,7 +686,8 @@ class Session(BaseSession[R]):
                         c, buffer, header_buffer, default_encoding, discard_cookies
                     )
                     rsp.request = req
-                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
+                    error = code2error(e.code, str(e))
+                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
@@ -1297,7 +1298,8 @@ class AsyncSession(BaseSession[R]):
                         curl, buffer, header_buffer, default_encoding, discard_cookies
                     )
                     rsp.request = req
-                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
+                    error = code2error(e.code, str(e))
+                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()

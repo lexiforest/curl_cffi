@@ -6,8 +6,11 @@ from contextlib import suppress
 import pytest
 
 from curl_cffi import Headers
+from curl_cffi.const import CurlECode
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
+from curl_cffi.requests.exceptions import TooManyRedirects
+from curl_cffi.requests.models import Response
 
 
 async def test_get(server):
@@ -187,6 +190,18 @@ async def test_follow_redirects(server):
         )
         assert r.status_code == 200
         assert r.redirect_count == 1
+
+
+async def test_too_many_redirects(server):
+    async with AsyncSession() as s:
+        with pytest.raises(RequestsError) as e:
+            await s.get(
+                str(server.url.copy_with(path="/redirect_loop")), max_redirects=2
+            )
+    assert isinstance(e.value, TooManyRedirects)
+    assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+    assert isinstance(e.value.response, Response)
+    assert e.value.response.status_code == 301
 
 
 async def test_verify(https_server):
@@ -448,6 +463,17 @@ async def test_stream_empty_body(server):
         url = str(server.url.copy_with(path="/empty_body"))
         async with s.stream("GET", url) as r:
             assert r.status_code == 200
+
+
+async def test_stream_redirect_loop(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/redirect_loop"))
+        with pytest.raises(RequestsError) as e:
+            await s.get(url, max_redirects=2, stream=True)
+    assert isinstance(e.value, TooManyRedirects)
+    assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
+    assert isinstance(e.value.response, Response)
+    assert e.value.response.status_code == 301
 
 
 async def test_stream_atext(server):
