@@ -36,19 +36,29 @@ def test_single_fingerprint(api_server):
     assert testing100.tls_supported_groups == ["X25519", "P-256", "P-384", "P-521"]
 
 
-def test_update_fingerprints_raises_access_error(monkeypatch):
-    def dummy_fetch(url, headers):
-        raise CurlError(
-            "Failed to perform, curl: (6) Could not resolve host: api.test. "
-            "See https://curl.se/libcurl/c/libcurl-errors.html first for more details."
-        )
+def test_fetch_fingerprint_payload_raises_access_error(monkeypatch):
+    class DummyCurl:
+        def setopt(self, option, value):
+            pass
 
-    monkeypatch.setattr(FingerprintManager, "_fetch_fingerprint_payload", dummy_fetch)
+        def perform(self):
+            raise CurlError(
+                "Failed to perform, curl: (6) Could not resolve host: api.test. "
+                "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
+                "details."
+            )
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("curl_cffi.fingerprints.Curl", DummyCurl)
 
     with pytest.raises(
         FingerprintUpdateError, match="Failed to access fingerprint endpoint"
     ) as exc_info:
-        FingerprintManager.update_fingerprints("https://api.test")
+        FingerprintManager._fetch_fingerprint_payload(
+            "https://api.test/fingerprints", {}
+        )
 
     assert str(exc_info.value).startswith(
         "Failed to access fingerprint endpoint at "
