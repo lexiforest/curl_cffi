@@ -128,8 +128,7 @@ This should work on Linux, macOS and Windows out of the box.
 
 On macOS, you can also install via Homebrew:
 
-    brew tap lexiforest/curl_cffi
-    brew install curl-cffi
+    brew install lexiforest/tap/curl-cffi
 
 <small>Android support, including Termux, is currently in beta, you can install the beta release for testing.
 For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
