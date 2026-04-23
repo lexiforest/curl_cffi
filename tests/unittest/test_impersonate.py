@@ -175,14 +175,14 @@ def test_customized_akamai_safari():
     r = requests.get(url, akamai=akamai).json()
     assert r["akamai_text"] == akamai
 
-    # test_tls_peet_ws_settings
+    # test_peet.impersonate.pro_settings
     r = requests.get(url, akamai=akamai.replace(";", ",")).json()
     assert r["akamai_text"] == akamai
 
 
 @pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_sig_hash_algs():
-    url = "https://tls.peet.ws/api/all"
+    url = "https://peet.impersonate.pro/api/all"
     safari_algs = [
         "ecdsa_secp256r1_sha256",
         "rsa_pss_rsae_sha256",
@@ -207,7 +207,7 @@ def test_customized_extra_fp_sig_hash_algs():
 
 @pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_tls_min_version():
-    url = "https://tls.peet.ws/api/all"
+    url = "https://peet.impersonate.pro/api/all"
     safari_min_version = CurlSslVersion.TLSv1_0
     fp = requests.ExtraFingerprints(tls_min_version=safari_min_version)
     r = requests.get(url, extra_fp=fp).json()
@@ -219,7 +219,7 @@ def test_customized_extra_fp_tls_min_version():
 
 @pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_grease():
-    url = "https://tls.peet.ws/api/all"
+    url = "https://peet.impersonate.pro/api/all"
     fp = requests.ExtraFingerprints(tls_grease=True)
     r = requests.get(url, extra_fp=fp).json()
     assert "TLS_GREASE" in r["tls"]["ciphers"][0]
@@ -246,7 +246,7 @@ def test_customized_extra_fp_permute():
 
 @pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_cert_compression():
-    url = "https://tls.peet.ws/api/all"
+    url = "https://peet.impersonate.pro/api/all"
     fp = requests.ExtraFingerprints(tls_cert_compression="zlib")
     r = requests.get(url, extra_fp=fp).json()
     result_algs = []
@@ -258,7 +258,7 @@ def test_customized_extra_fp_cert_compression():
 
 @pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_stream_weight():
-    url = "https://tls.peet.ws/api/all"
+    url = "https://peet.impersonate.pro/api/all"
     fp = requests.ExtraFingerprints(http2_stream_weight=64)
     r = requests.get(url, extra_fp=fp).json()
     headers_frame = _find_http2_frame(r, frame_type="HEADERS", required_key="priority")
@@ -267,7 +267,7 @@ def test_customized_extra_fp_stream_weight():
 
 @pytest.mark.skip(reason="Unstable API")
 def test_customized_extra_fp_stream_exclusive():
-    url = "https://tls.peet.ws/api/all"
+    url = "https://peet.impersonate.pro/api/all"
     fp = requests.ExtraFingerprints(http2_stream_exclusive=0)
     r = requests.get(url, extra_fp=fp).json()
     headers_frame = _find_http2_frame(r, frame_type="HEADERS", required_key="priority")

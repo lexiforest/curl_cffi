@@ -8,7 +8,7 @@ from curl_cffi import requests
 from curl_cffi.fingerprints import FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 
 
-TLS_PEET_URL = "https://tls.peet.ws/api/all"
+TLS_PEET_URL = "https://peet.impersonate.pro/api/all"
 RAW_PATH = "/raw"
 VERIFY_FIELDS = (
     ("fingerprint", "http2", "akamai_fingerprint_hash"),
