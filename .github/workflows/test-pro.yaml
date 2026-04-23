@@ -18,6 +18,7 @@ permissions:
 
 env:
   CIBW_TEST_COMMAND: "pytest {project}/tests/pro"
+  CIBW_ENVIRONMENT_PASS_LINUX: IMPERSONATE_API_KEY
   IMPERSONATE_API_KEY: ${{ secrets.IMPERSONATE_API_KEY }}
 
 jobs:
