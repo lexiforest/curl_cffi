@@ -50,3 +50,28 @@ def test_apply_fingerprint_rewrites_kyber_supported_group_alias():
     )
 
     assert curl.options[CurlOpt.SSL_EC_CURVES] == "X25519Kyber768Draft00:P-256"
+
+
+def test_apply_fingerprint_empty_host_uses_curl_generated_host():
+    curl = FakeCurl()
+    fingerprint = Fingerprint(
+        headers={
+            "User-Agent": "test-agent",
+            "Host": "",
+            "Connection": "Keep-Alive",
+        },
+        header_order="User-Agent,Host,Connection",
+    )
+
+    _apply_fingerprint(
+        curl,
+        fingerprint,
+        existing_header_names=set(),
+        default_headers=True,
+    )
+
+    assert curl.options[CurlOpt.HTTPHEADER] == [
+        b"User-Agent: test-agent",
+        b"Connection: Keep-Alive",
+    ]
+    assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "User-Agent,Host,Connection"

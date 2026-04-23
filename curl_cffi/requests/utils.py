@@ -529,6 +529,10 @@ def _apply_fingerprint(
             normalized = key.lower()
             if normalized in existing_header_names:
                 continue
+            if normalized == "host" and value == "":
+                # Empty Host in fingerprints means "use the request host"; adding
+                # a custom empty Host line suppresses libcurl's generated Host.
+                continue
             existing_header_names.add(normalized)
             header_lines.append(f"{key}: {value}")
         if header_lines:

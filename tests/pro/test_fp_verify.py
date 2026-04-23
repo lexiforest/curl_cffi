@@ -16,6 +16,7 @@ VERIFY_FIELDS = (
     ("fingerprint", "tls", "ja3"),
 )
 IGNORED_HEADER_NAMES = {"dnt", "sec-ch-ua", "sec-ch-ua-platform"}
+IGNORED_JA3_EXTENSIONS = {"21", "41"}
 
 
 def _require_live_api_key() -> str:
@@ -199,7 +200,7 @@ def _normalize_ja3(value: object) -> object:
     extensions = [
         extension
         for extension in parts[2].split("-")
-        if extension and extension != "41"
+        if extension and extension not in IGNORED_JA3_EXTENSIONS
     ]
     parts[2] = "-".join(extensions)
     return ",".join(parts)
@@ -222,10 +223,19 @@ def _filter_ignored_headers(value: object) -> object:
     if not isinstance(value, list):
         return value
     return [
-        item
+        _normalize_header_line(item)
         for item in value
         if _normalize_header_name(item) not in IGNORED_HEADER_NAMES
     ]
+
+
+def _normalize_header_line(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    if not value.startswith(":"):
+        return value
+    name, _, _ = value[1:].partition(":")
+    return f":{name}: <ignored>"
 
 
 def _format_header_lines_diff(raw_value: object, peet_value: object) -> str:
