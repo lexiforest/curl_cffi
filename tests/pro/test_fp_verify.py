@@ -238,6 +238,8 @@ def _normalize_header_line(value: object) -> object:
     if not isinstance(value, str):
         return value
     if not value.startswith(":"):
+        if _normalize_header_name(value) == "host":
+            return "Host: <ignored>"
         return value
     name, _, _ = value[1:].partition(":")
     return f":{name}: <ignored>"
