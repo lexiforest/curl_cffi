@@ -1,0 +1,51 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/build-and-test.yaml
+
+  publish:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/curl-cffi
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+    - name: Download distributions
+      uses: actions/download-artifact@v4.1.7
+      with:
+        pattern: curl_cffi-*
+        merge-multiple: true
+        path: dist
+
+    - name: List distributions
+      run: ls -l dist
+
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@v1.14.0
+      with:
+        packages-dir: dist/
+
+    - name: Upload release files
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ./dist/*.whl
+          ./dist/*.tar.gz
