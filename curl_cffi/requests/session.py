@@ -981,8 +981,12 @@ class AsyncSession(BaseSession[R]):
 
     async def close(self) -> None:
         """Close the session."""
-        await self.acurl.close()
+        # Set _closed before closing the multi-handle so that any in-flight
+        # stream cleanup callbacks (release_curl) see the closed flag and call
+        # curl.close() instead of acurl.remove_handle() on an already-destroyed
+        # multi-handle, which would cause a segfault (#675).
         self._closed = True
+        await self.acurl.close()
         while True:
             try:
                 curl = self.pool.get_nowait()
