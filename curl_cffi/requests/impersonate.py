@@ -186,6 +186,7 @@ class ExtraFingerprints:
     http2_stream_weight: int = 256
     http2_stream_exclusive: int = 1
     http2_no_priority: bool = False
+    header_order: Optional[str] = None
     split_cookies: Optional[bool] = None
     form_boundary: Optional[bool] = None
     http3_sig_hash_algs: Optional[str] = None
@@ -203,6 +204,7 @@ class ExtraFpDict(TypedDict, total=False):
     http2_stream_weight: int
     http2_stream_exclusive: int
     http2_no_priority: bool
+    header_order: Optional[str]
     split_cookies: Optional[bool]
     form_boundary: Optional[bool]
     http3_sig_hash_algs: Optional[str]
