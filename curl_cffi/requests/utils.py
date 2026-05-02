@@ -365,6 +365,8 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fp.tls_record_size_limit)
     if fp.http2_no_priority:
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, fp.http2_no_priority)
+    if fp.header_order:
+        curl.setopt(CurlOpt.HTTPHEADER_ORDER, fp.header_order)
     if fp.form_boundary is not None:
         curl.setopt(CurlOpt.FORM_BOUNDARY, fp.form_boundary)
     if fp.split_cookies is not None:

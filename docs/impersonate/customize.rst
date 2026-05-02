@@ -105,6 +105,14 @@ Although JA3 and Akamai fingerprint string already captures many of the aspects 
 This is when the ``extra_fp`` option comes in, each field of this dict is pretty easy to understand. You should first set the ja3 and akamai string, then check if you have the
 identical fingerprint like your target. If not, use the ``extra_fp`` to further refine your impersonation.
 
+For example, to customize regular HTTP header ordering:
+
+.. code-block:: python
+
+   extra_fp = {
+       "header_order": "User-Agent,Host,Connection"
+   }
+
 
 Using CURLOPTs
 ~~~~~~~~~~~~~~
@@ -179,5 +187,4 @@ Extension 28: record size limit
    ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
 
    r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
-
 

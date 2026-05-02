@@ -1,6 +1,8 @@
 from curl_cffi.const import CurlOpt
 from curl_cffi.fingerprints import Fingerprint
+from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests.utils import _apply_fingerprint
+from curl_cffi.requests.utils import set_extra_fp
 
 
 class FakeCurl:
@@ -91,4 +93,13 @@ def test_apply_fingerprint_empty_host_uses_curl_generated_host():
         b"User-Agent: test-agent",
         b"Connection: Keep-Alive",
     ]
+    assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "User-Agent,Host,Connection"
+
+
+def test_set_extra_fp_sets_header_order():
+    curl = FakeCurl()
+    extra_fp = ExtraFingerprints(header_order="User-Agent,Host,Connection")
+
+    set_extra_fp(curl, extra_fp)
+
     assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "User-Agent,Host,Connection"
