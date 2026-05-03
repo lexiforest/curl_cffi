@@ -123,6 +123,17 @@ Additional headers can be override with ``headers=...``.
 
     1. Add your headers to override them.
     2. Use ``default_headers=False`` to completely turn off the default headers.
+    3. Use ``curl_cffi.get_fingerprint(...)`` and pass the result to ``impersonate=...`` for
+       fully editable custom fingerprints.
+
+.. code-block:: python
+
+    fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
+    fingerprint.headers["User-Agent"] = "..."
+    r = curl_cffi.get(
+        "https://httpbin.org/headers",
+        impersonate=fingerprint,
+    )
 
 .. code-block:: python
 

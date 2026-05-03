@@ -1,5 +1,6 @@
-name: Build, test and release
+name: Build and test
 on:
+  workflow_call:
   pull_request:
     branches:
       - main
@@ -11,11 +12,9 @@ on:
       - release/*
       - chore/*
       - security/*
-    tags:
-      - v*
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   lint:
@@ -145,28 +144,3 @@ jobs:
 
     - name: Build and test wheels
       uses: pypa/cibuildwheel@v3.3.1
-
-  upload_all:
-    needs: [bdist, bdist_android, sdist]
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/download-artifact@v4.1.7  # https://github.com/actions/upload-artifact/issues/478
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        pattern: curl_cffi-*
-        merge-multiple: true
-        path: dist
-
-    - uses: pypa/gh-action-pypi-publish@v1.12.4
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        password: ${{ secrets.PYPI_TOKEN }}
-        packages-dir: dist/
-
-    - name: Upload release files
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          ./dist/*.whl
-          ./dist/*.tar.gz

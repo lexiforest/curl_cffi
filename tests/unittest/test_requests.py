@@ -11,7 +11,7 @@ import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import HTTPError
+from curl_cffi.requests.exceptions import HTTPError, TooManyRedirects
 from curl_cffi.requests.models import Response
 from curl_cffi.utils import CurlCffiWarning
 
@@ -197,21 +197,21 @@ def test_url_encode(server):
     # FIXME: should use server.url, but it always encode
 
     # should not change
-    url = "http://127.0.0.1:8000/%2f%2f%2f"
+    url = "http://127.0.0.1:8008/%2f%2f%2f"
     r = requests.get(url)
     assert r.url == url
 
-    url = "http://127.0.0.1:8000/imaginary-pagination:7"
+    url = "http://127.0.0.1:8008/imaginary-pagination:7"
     r = requests.get(str(url))
     assert r.url == url
 
-    url = "http://127.0.0.1:8000/post.json?limit=1&tags=foo&page=0"
+    url = "http://127.0.0.1:8008/post.json?limit=1&tags=foo&page=0"
     r = requests.get(str(url))
     assert r.url == url
 
     # Non-ASCII URL should be percent encoded as UTF-8 sequence
-    non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
-    encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
+    non_ascii_url = "http://127.0.0.1:8008/search?q=测试"
+    encoded_non_ascii_url = "http://127.0.0.1:8008/search?q=%E6%B5%8B%E8%AF%95"
 
     r = requests.get(non_ascii_url)
     assert r.url == encoded_non_ascii_url
@@ -220,8 +220,8 @@ def test_url_encode(server):
     assert r.url == encoded_non_ascii_url
 
     # should be quoted
-    url = "http://127.0.0.1:8000/e x a m p l e"
-    quoted = "http://127.0.0.1:8000/e%20x%20a%20m%20p%20l%20e"
+    url = "http://127.0.0.1:8008/e x a m p l e"
+    quoted = "http://127.0.0.1:8008/e%20x%20a%20m%20p%20l%20e"
     r = requests.get(str(url))
     assert r.url == quoted
 
@@ -232,37 +232,37 @@ def test_url_encode(server):
     # 1. https://stackoverflow.com/q/57365497/1061155
     # 2. https://stackoverflow.com/q/23496750/1061155
 
-    url = "http://127.0.0.1:8000/imaginary-pagination:7"
-    quoted = "http://127.0.0.1:8000/imaginary-pagination%3A7"
+    url = "http://127.0.0.1:8008/imaginary-pagination:7"
+    quoted = "http://127.0.0.1:8008/imaginary-pagination%3A7"
     r = requests.get(url, quote=":")
     assert r.url == quoted
 
-    url = "http://127.0.0.1:8000/post.json?limit=1&tags=id:<1000&page=0"
-    quoted = "http://127.0.0.1:8000/post.json?limit=1&tags=id%3A%3C1000&page=0"
+    url = "http://127.0.0.1:8008/post.json?limit=1&tags=id:<1000&page=0"
+    quoted = "http://127.0.0.1:8008/post.json?limit=1&tags=id%3A%3C1000&page=0"
     r = requests.get(url, quote=":")
     assert r.url == quoted
 
     # Do not quote at all
-    url = "http://127.0.0.1:8000/query={}"
-    quoted = "http://127.0.0.1:8000/query=%7B%7D"
+    url = "http://127.0.0.1:8008/query={}"
+    quoted = "http://127.0.0.1:8008/query=%7B%7D"
     r = requests.get(url)
     assert r.url == quoted
     r = requests.get(url, quote=False)
     assert r.url == url
 
     # Do not unquote
-    url = "http://127.0.0.1:8000/path?token=example%7C2024-10-20T10%3A00%3A00Z"
+    url = "http://127.0.0.1:8008/path?token=example%7C2024-10-20T10%3A00%3A00Z"
     r = requests.get(url)
     print(r.url)
     assert r.url == url
 
     # empty values should be kept
-    url = "http://127.0.0.1:8000/api?param1=value1&param2=&param3=value3"
+    url = "http://127.0.0.1:8008/api?param1=value1&param2=&param3=value3"
     r = requests.get(url)
     assert r.url == url
 
     # path should not be unquoted when params supplied
-    url = "http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
+    url = "http://127.0.0.1:8008/anything/%2F%3Dsilly%3D%2F"
     r = requests.get(url)
     assert r.url == url
     params = {"foo": "bar"}
@@ -473,6 +473,7 @@ def test_follow_redirects(server):
 def test_too_many_redirects(server):
     with pytest.raises(requests.RequestsError) as e:
         requests.get(str(server.url.copy_with(path="/redirect_loop")), max_redirects=2)
+    assert isinstance(e.value, TooManyRedirects)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
@@ -727,11 +728,11 @@ def test_cookies_with_special_chars(server):
 # https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_mislead_by_host(server):
     s = requests.Session(debug=True)
-    s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8008:127.0.0.1"])
     s.cookies.set("foo", "bar")
     print("URL is: ", str(server.url))
     # TODO: replace hard-coded url with server.url.replace(host="example.com")
-    r = s.get("http://example.com:8000", headers={"Host": "example.com"})
+    r = s.get("http://example.com:8008", headers={"Host": "example.com"})
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar"
 
@@ -739,11 +740,11 @@ def test_cookies_mislead_by_host(server):
 # https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_redirect_to_another_domain(server):
     s = requests.Session()
-    s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8000:127.0.0.1"])
+    s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8008:127.0.0.1"])
     s.cookies.set("foo", "google.com", domain="google.com")
     r = s.get(
         str(server.url.copy_with(path="/redirect_to")),
-        params={"to": "http://google.com:8000/echo_cookies"},
+        params={"to": "http://google.com:8008/echo_cookies"},
     )
     cookies = r.json()
     assert cookies["foo"] == "google.com"
@@ -755,16 +756,16 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
     s.curl.setopt(
         CurlOpt.RESOLVE,
         [
-            "example.com:8000:127.0.0.1",
-            "google.com:8000:127.0.0.1",
+            "example.com:8008:127.0.0.1",
+            "google.com:8008:127.0.0.1",
         ],
     )
     s.cookies.set("foo", "bar")
     s.cookies.set("hello", "world", domain="google.com")
     r = s.get(
         # str(server.url.copy_with(path="/redirect_to")),
-        "http://example.com:8000/redirect_to",
-        params={"to": "http://google.com:8000/echo_cookies"},
+        "http://example.com:8008/redirect_to",
+        params={"to": "http://google.com:8008/echo_cookies"},
     )
     cookies = r.json()
     # cookies without domains are bound to the first domain, which is example.com in
@@ -933,6 +934,7 @@ def test_stream_redirect_loop(server):
         with pytest.raises(requests.RequestsError) as e:  # noqa: SIM117
             with s.stream("GET", url, max_redirects=2):
                 pass
+        assert isinstance(e.value, TooManyRedirects)
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
@@ -945,6 +947,7 @@ def test_stream_redirect_loop_without_close(server):
             # if the error happens receiving header, it's raised right away
             s.get(url, max_redirects=2, stream=True)
 
+        assert isinstance(e.value, TooManyRedirects)
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
@@ -975,6 +978,7 @@ def test_stream_auto_close_with_header_errors(server):
     url = str(server.url.copy_with(path="/redirect_loop"))
     with pytest.raises(requests.RequestsError) as e:
         s.get(url, max_redirects=2, stream=True)
+    assert isinstance(e.value, TooManyRedirects)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
@@ -1034,7 +1038,7 @@ def test_curl_infos(server):
     r = s.get(str(server.url))
 
     assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"  # pyright: ignore
-    assert r.infos[CurlInfo.PRIMARY_PORT] == 8000
+    assert r.infos[CurlInfo.PRIMARY_PORT] == 8008
 
 
 def test_response_ip_and_port(server):
@@ -1042,7 +1046,7 @@ def test_response_ip_and_port(server):
     r = s.get(str(server.url))
 
     assert r.primary_ip == "127.0.0.1"
-    assert r.primary_port == 8000
+    assert r.primary_port == 8008
     assert r.local_ip == "127.0.0.1"
     assert r.local_port != 0
 

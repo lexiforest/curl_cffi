@@ -1,5 +1,5 @@
-curl-cffi vs curl-impersoante vs HTTPie
-===========================
+curl-cffi vs curl-impersonate vs HTTPie
+=======================================
 
 Why do we need yet another http request tool?
 

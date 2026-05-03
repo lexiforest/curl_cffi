@@ -12,8 +12,10 @@ __all__ = [
     "CurlSslVersion",
     "CurlWsFlag",
     "config_warnings",
+    "Fingerprint",
+    "FingerprintManager",
+    "get_fingerprint",
     "ffi",
-    "is_pro",
     "lib",
     "Session",
     "AsyncSession",
@@ -95,6 +97,7 @@ from .requests import (
     request,
 )
 
-from .utils import config_warnings, is_pro
+from .utils import config_warnings
+from .fingerprints import Fingerprint, FingerprintManager, get_fingerprint
 
 config_warnings(on=False)

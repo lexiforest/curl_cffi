@@ -1,8 +1,11 @@
 .ONESHELL:
 SHELL := bash
 
+PYTHON ?= python3
+PIP ?= $(PYTHON) -m pip
+
 # this is the upstream libcurl-impersonate version
-VERSION := 1.5.2
+VERSION := 1.5.5
 CURL_VERSION := curl-8_15_0
 
 ifeq ($(OS),Windows_NT)
@@ -45,18 +48,18 @@ local-curl: $(CURL_VERSION)
 	touch .preprocessed
 
 gen-const:
-	python3 scripts/generate_consts.py $(CURL_VERSION)
+	$(PYTHON) scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
 
 install-editable:
-	pip install -e .
+	$(PIP) install -e .
 
 build: .preprocessed
 	rm -rf dist/
-	pip install build
-	python -m build --wheel
+	$(PIP) install build
+	$(PYTHON) -m build --wheel
 
 lint:
 	uv run ruff check --exclude issues
@@ -65,7 +68,7 @@ format:
 	uv run ruff format --exclude issues
 
 test:
-	python -bb -m pytest tests/unittest
+	$(PYTHON) -bb -m pytest tests/unittest
 
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/
