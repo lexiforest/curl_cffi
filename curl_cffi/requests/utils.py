@@ -372,7 +372,7 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
     if fp.split_cookies is not None:
         curl.setopt(CurlOpt.SPLIT_COOKIES, fp.split_cookies)
     if fp.http3_sig_hash_algs is not None:
-        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.sig_hash_algs)
+        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.http3_sig_hash_algs)
     if fp.http3_tls_extension_order is not None:
         curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fp.http3_tls_extension_order)
 
@@ -907,7 +907,7 @@ def set_curl_options(
                 CurlCffiWarning,
                 stacklevel=1,
             )
-        set_akamai_options(c, perk)
+        set_perk_options(c, perk)
 
     buffer = None
     q = None
