@@ -137,9 +137,7 @@ def test_set_extra_fp_sets_extra_fingerprint_options():
     assert curl.options[CurlOpt.TLS_GREASE] == 1
     assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 1
     assert curl.options[CurlOpt.SSL_CERT_COMPRESSION] == "zlib"
-    assert curl.options[CurlOpt.TLS_DELEGATED_CREDENTIALS] == (
-        "ecdsa_secp256r1_sha256"
-    )
+    assert curl.options[CurlOpt.TLS_DELEGATED_CREDENTIALS] == ("ecdsa_secp256r1_sha256")
     assert curl.options[CurlOpt.TLS_RECORD_SIZE_LIMIT] == 4001
     assert curl.options[CurlOpt.STREAM_WEIGHT] == 128
     assert curl.options[CurlOpt.STREAM_EXCLUSIVE] == 0
