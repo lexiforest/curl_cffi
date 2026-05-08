@@ -365,12 +365,14 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, fp.tls_record_size_limit)
     if fp.http2_no_priority:
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, fp.http2_no_priority)
+    if fp.header_order:
+        curl.setopt(CurlOpt.HTTPHEADER_ORDER, fp.header_order)
     if fp.form_boundary is not None:
         curl.setopt(CurlOpt.FORM_BOUNDARY, fp.form_boundary)
     if fp.split_cookies is not None:
         curl.setopt(CurlOpt.SPLIT_COOKIES, fp.split_cookies)
     if fp.http3_sig_hash_algs is not None:
-        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.sig_hash_algs)
+        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.http3_sig_hash_algs)
     if fp.http3_tls_extension_order is not None:
         curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fp.http3_tls_extension_order)
 
@@ -521,6 +523,23 @@ def _apply_fingerprint(
     curl.setopt(CurlOpt.SPLIT_COOKIES, int(fingerprint.split_cookies))
     if fingerprint.form_boundary:
         curl.setopt(CurlOpt.FORM_BOUNDARY, fingerprint.form_boundary)
+
+    # http3 settings
+    if fingerprint.http3_settings:
+        curl.setopt(CurlOpt.HTTP3_SETTINGS, fingerprint.http3_settings)
+    if fingerprint.http3_pseudo_headers_order:
+        curl.setopt(
+            CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER,
+            fingerprint.http3_pseudo_headers_order.replace(",", ""),
+        )
+    if fingerprint.http3_tls_extension_order:
+        curl.setopt(
+            CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fingerprint.http3_tls_extension_order
+        )
+    if fingerprint.quic_transport_parameters:
+        curl.setopt(
+            CurlOpt.QUIC_TRANSPORT_PARAMETERS, fingerprint.quic_transport_parameters
+        )
 
     # default headers will not override user-defined headers
     if default_headers and fingerprint.headers:
@@ -905,7 +924,7 @@ def set_curl_options(
                 CurlCffiWarning,
                 stacklevel=1,
             )
-        set_akamai_options(c, perk)
+        set_perk_options(c, perk)
 
     buffer = None
     q = None

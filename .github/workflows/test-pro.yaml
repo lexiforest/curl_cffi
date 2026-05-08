@@ -1,8 +1,5 @@
 name: Test pro features
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
