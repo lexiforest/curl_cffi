@@ -13,11 +13,15 @@ from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
 
-# Use orjson if present
+# Use orjson if present for performance; always keep stdlib json available so
+# callers can opt out via Response.json(use_stdlib_json=True). orjson does not
+# accept kwargs (see #639), so kwargs like parse_float= require the stdlib path.
+from json import loads as _stdlib_json_loads
+
 try:
     from orjson import loads
 except ImportError:
-    from json import loads
+    loads = _stdlib_json_loads
 
 with suppress(ImportError):
     from markdownify import markdownify as md
@@ -248,8 +252,22 @@ class Response:
             yield chunk
         self._finalize_stream()
 
-    def json(self, **kw):
-        """return a parsed json object of the content."""
+    def json(self, *, use_stdlib_json: bool = False, **kw):
+        """return a parsed json object of the content.
+
+        Args:
+            use_stdlib_json: When True, force ``json.loads`` from the standard
+                library instead of ``orjson.loads``. ``orjson`` is preferred for
+                performance but does not accept keyword arguments such as
+                ``parse_float=Decimal``; pass this flag whenever you need to
+                forward kwargs to the parser. No effect when ``orjson`` is not
+                installed (stdlib is already used). See #639.
+            **kw: Forwarded to the JSON loader. Only honoured by
+                ``json.loads``; using kwargs without ``use_stdlib_json=True``
+                while ``orjson`` is installed will raise ``TypeError``.
+        """
+        if use_stdlib_json:
+            return _stdlib_json_loads(self.content, **kw)
         return loads(self.content, **kw)
 
     def close(self):
