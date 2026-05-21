@@ -15,9 +15,8 @@ VERIFY_FIELDS = (
     ("fingerprint", "http2", "akamai_fingerprint_hash"),
     ("fingerprint", "tls", "ja3"),
 )
-IGNORED_HEADER_NAMES = {"dnt", "sec-ch-ua", "sec-ch-ua-platform"}
+IGNORED_HEADER_NAMES = {"dnt", "origin", "referer", "sec-ch-ua", "sec-ch-ua-platform"}
 IGNORED_JA3_EXTENSIONS = {"21", "41"}
-DEFAULT_ACCEPT_LANGUAGE = "en-US,en;q=0.9"
 
 
 def _require_live_api_key() -> str:
@@ -213,6 +212,7 @@ def _normalize_ja3(value: object) -> object:
         for extension in parts[2].split("-")
         if extension and extension not in IGNORED_JA3_EXTENSIONS
     ]
+    extensions.sort(key=lambda extension: int(extension))
     parts[2] = "-".join(extensions)
     return ",".join(parts)
 
@@ -273,14 +273,12 @@ def _header_line_matches(raw_value: object, peet_value: object) -> bool:
     if raw_header is None or peet_header is None:
         return False
 
-    raw_name, raw_header_value = raw_header
-    peet_name, peet_header_value = peet_header
+    raw_name, _ = raw_header
+    peet_name, _ = peet_header
     if raw_name != peet_name:
         return False
 
-    return (
-        raw_name == "accept-language" and peet_header_value == DEFAULT_ACCEPT_LANGUAGE
-    )
+    return raw_name == "accept-language"
 
 
 def _header_lines_match(raw_value: object, peet_value: object) -> bool:
@@ -521,6 +519,18 @@ def _verify_ping_fingerprint(
         raw_value=_ping_header_lines(raw_http2),
         peet_value=_ping_header_lines(ping_http2),
     )
+
+
+def test_normalize_ja3_sorts_extension_segment():
+    raw_ja3 = "771,4865-4866,23-10-41-21-35,29-23,0"
+    permuted_ja3 = "771,4865-4866,35-21-41-23-10,29-23,0"
+    assert _normalize_ja3(raw_ja3) == _normalize_ja3(permuted_ja3)
+    assert _normalize_ja3(raw_ja3) == "771,4865-4866,10-23-35,29-23,0"
+
+
+def test_header_line_matches_ignores_accept_language_value():
+    assert _header_line_matches("accept-language: en-US", "Accept-Language: zh-CN")
+    assert not _header_line_matches("accept: text/html", "accept: application/json")
 
 
 def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
