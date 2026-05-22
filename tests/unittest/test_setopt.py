@@ -147,3 +147,27 @@ def test_set_extra_fp_sets_extra_fingerprint_options():
     assert curl.options[CurlOpt.FORM_BOUNDARY] is True
     assert curl.options[CurlOpt.HTTP3_SIG_HASH_ALGS] == "rsa_pss_rsae_sha256"
     assert curl.options[CurlOpt.HTTP3_TLS_EXTENSION_ORDER] == "0-10-13"
+
+
+def test_set_extra_fp_skips_unset_profile_defaults():
+    curl = FakeCurl()
+    extra_fp = ExtraFingerprints(tls_permute_extensions=True)
+
+    utils.set_extra_fp(curl, extra_fp)
+
+    assert curl.options == {CurlOpt.SSL_PERMUTE_EXTENSIONS: 1}
+
+
+def test_set_extra_fp_honors_explicit_false_and_zero_values():
+    curl = FakeCurl()
+    extra_fp = ExtraFingerprints(
+        tls_grease=False,
+        tls_permute_extensions=False,
+        http2_stream_exclusive=0,
+    )
+
+    utils.set_extra_fp(curl, extra_fp)
+
+    assert curl.options[CurlOpt.TLS_GREASE] == 0
+    assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 0
+    assert curl.options[CurlOpt.STREAM_EXCLUSIVE] == 0
