@@ -353,12 +353,18 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
     if fp.tls_signature_algorithms:
         curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
 
-    curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
-    curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
-    curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
-    curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
-    curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
-    curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
+    if fp.tls_min_version is not None:
+        curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
+    if fp.tls_grease is not None:
+        curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
+    if fp.tls_permute_extensions is not None:
+        curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
+    if fp.tls_cert_compression is not None:
+        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
+    if fp.http2_stream_weight is not None:
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
+    if fp.http2_stream_exclusive is not None:
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
     if fp.tls_delegated_credential:
         curl.setopt(CurlOpt.TLS_DELEGATED_CREDENTIALS, fp.tls_delegated_credential)
     if fp.tls_record_size_limit:
