@@ -441,8 +441,9 @@ def _apply_fingerprint(
     fingerprint: Fingerprint,
     existing_header_names: set[str],
     default_headers: bool,
+    http_version_set: bool = False,
 ) -> None:
-    if fingerprint.http_version:
+    if fingerprint.http_version and not http_version_set:
         curl.setopt(
             CurlOpt.HTTP_VERSION, normalize_http_version(fingerprint.http_version)
         )
@@ -860,6 +861,7 @@ def set_curl_options(
             c.setopt(CurlOpt.SSLKEY, key)
 
     # http_version, before impersonation, which relies on checking if user wants http/3
+    http_version_set = bool(http_version)
     if http_version:
         http_version = normalize_http_version(http_version)
         c.setopt(CurlOpt.HTTP_VERSION, http_version)
@@ -867,7 +869,9 @@ def set_curl_options(
     # impersonate
     if impersonate:
         if isinstance(impersonate, Fingerprint):
-            _apply_fingerprint(c, impersonate, existing_header_names, default_headers)
+            _apply_fingerprint(
+                c, impersonate, existing_header_names, default_headers, http_version_set
+            )
         else:
             if _is_native_impersonate_target(impersonate):
                 normalized = resolve_latest_browser_type(impersonate)
@@ -883,7 +887,11 @@ def set_curl_options(
                         f"Impersonating {impersonate} is not supported"
                     )
                 _apply_fingerprint(
-                    c, fingerprint, existing_header_names, default_headers
+                    c,
+                    fingerprint,
+                    existing_header_names,
+                    default_headers,
+                    http_version_set,
                 )
 
     # ja3 string
