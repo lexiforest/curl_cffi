@@ -17,6 +17,7 @@ from datetime import timedelta
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
+    Any,
     Generic,
     Literal,
     Optional,
@@ -53,6 +54,7 @@ else:
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
+
     from ..fingerprints import Fingerprint
 
     class ProxySpec(TypedDict, total=False):
@@ -1362,23 +1364,22 @@ class AsyncSession(BaseSession[R]):
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-        json: Optional[dict | list] = None,
+        params: Optional[
+            Union[dict[str, str], list[tuple[str, str]], tuple[tuple[str, str], ...]]
+        ] = None,
+        data: Optional[
+            Union[dict[str, str], list[tuple[str, str]], str, BytesIO, bytes]
+        ] = None,
+        json: Optional[Union[dict[str, Any], list[Any]]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        files: Optional[dict] = None,
+        files: Optional[dict[str, Any]] = None,
         auth: Optional[tuple[str, str]] = None,
         timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[Union[bool, CurlFollow, str]] = None,
-        max_redirects: Optional[int] = None,
-        proxies: Optional[ProxySpec] = None,
-        proxy: Optional[str] = None,
-        proxy_auth: Optional[tuple[str, str]] = None,
-        verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
-        content_callback: Optional[Callable] = None,
+        content_callback: Optional[Callable[..., Any]] = None,
         impersonate: Optional[Union[BrowserTypeLiteral, Fingerprint]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
