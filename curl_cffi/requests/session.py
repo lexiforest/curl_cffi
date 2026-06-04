@@ -938,6 +938,7 @@ class AsyncSession(BaseSession[R]):
         super().__init__(**kwargs)
         self._loop: asyncio.AbstractEventLoop | None = loop
         self._acurl: AsyncCurl | None = async_curl
+        self._owns_acurl: bool = async_curl is None
         self.max_clients: int = max_clients
         self.init_pool()
 
@@ -981,7 +982,8 @@ class AsyncSession(BaseSession[R]):
 
     async def close(self) -> None:
         """Close the session."""
-        await self.acurl.close()
+        if self._owns_acurl:
+            await self.acurl.close()
         self._closed = True
         while True:
             try:
