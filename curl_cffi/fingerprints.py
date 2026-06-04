@@ -20,6 +20,7 @@ __all__ = [
 ]
 
 FINGERPRINT_PAGE_LIMIT = 100
+FINGERPRINT_CACHE_VERSION = 2
 
 
 """
@@ -330,7 +331,7 @@ NATIVE_IMPERSONATE_TARGETS = [
 ]
 
 
-DEFAULT_API_ROOT = "https://api.impersonate.pro/v1"
+DEFAULT_API_ROOT = "https://api.impersonate.pro/v2"
 
 
 class FingerprintUpdateError(RuntimeError, CurlError):
@@ -355,22 +356,90 @@ def _get_default_config_dir() -> str:
 
 
 @dataclass
+class TlsFingerprint:
+    version: str = ""
+    ciphers: list[str] = field(default_factory=list)
+    alpn: bool = False
+    alps: bool = False
+    cert_compression: list[str] = field(default_factory=list)
+    session_ticket: bool = False
+    extension_order: str = ""
+    delegated_credentials: list[str] = field(default_factory=list)
+    record_size_limit: int | None = None
+    grease: bool = False
+    use_new_alps_codepoint: bool = False
+    signed_cert_timestamps: bool = False
+    ech: str | None = None
+    permute_extensions: bool = False
+    signature_hashes: list[str] = field(default_factory=list)
+    sig_hash_algs: str = ""
+    supported_groups: list[str] = field(default_factory=list)
+    key_shares_limit: int | None = None
+
+
+@dataclass
+class Http2Fingerprint:
+    tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
+    settings: str = ""
+    pseudo_headers_order: str = ""
+    header_order: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+    header_lang: str = ""
+    window_update: int = 0
+    stream_weight: int | None = None
+    stream_exclusive: int | None = None
+    no_priority: bool = False
+    priority_weight: int | None = None
+    priority_exclusive: int | None = None
+    split_cookies: bool = False
+    form_boundary: str = ""
+
+    def __post_init__(self):
+        if isinstance(self.tls, dict):
+            self.tls = _filter_dataclass(TlsFingerprint, self.tls)
+
+
+@dataclass
+class Http3Fingerprint:
+    tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
+    settings: str = ""
+    pseudo_headers_order: str = ""
+    header_order: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+    header_lang: str = ""
+    quic_transport_parameters: str = ""
+
+    def __post_init__(self):
+        if isinstance(self.tls, dict):
+            self.tls = _filter_dataclass(TlsFingerprint, self.tls)
+
+
+def _filter_dataclass(cls, value: dict[str, object]):
+    allowed = {item.name for item in fields(cls)}
+    return cls(**{k: v for k, v in value.items() if k in allowed})
+
+
+@dataclass
 class Fingerprint:
     client: str = ""
     client_version: str = ""
     os: str = ""
     os_version: str = ""
+    http2: Http2Fingerprint | dict[str, object] = field(
+        default_factory=Http2Fingerprint
+    )
+    http3: Http3Fingerprint | dict[str, object] = field(
+        default_factory=Http3Fingerprint
+    )
 
-    http_version: str = "v2"
-
-    tls_version: str = "1.2"
+    tls_version: str = ""
     tls_ciphers: list[str] = field(default_factory=list)
     # the value is [h2, http/1.1], which will be filled by libcurl
     tls_alpn: bool = False
     tls_alps: bool = False
     tls_cert_compression: list[str] = field(default_factory=list)
     tls_signature_hashes: list[str] = field(default_factory=list)  # .sig_hash_args
-    tls_key_shares_limit: int = 2  # the default key shares length is 2
+    tls_key_shares_limit: int | None = None
     tls_supported_groups: list[str] = field(default_factory=list)  # .curves
     tls_session_ticket: bool = False
     tls_extension_order: str = ""
@@ -396,10 +465,129 @@ class Fingerprint:
 
     http3_settings: str = ""
     http3_pseudo_headers_order: str = ""
+    http3_sig_hash_algs: str = ""
     http3_tls_extension_order: str = ""
     quic_transport_parameters: str = ""
 
     header_lang: str = ""
+
+    def __post_init__(self):
+        if isinstance(self.http2, dict):
+            self.http2 = _filter_dataclass(Http2Fingerprint, self.http2)
+        if isinstance(self.http3, dict):
+            self.http3 = _filter_dataclass(Http3Fingerprint, self.http3)
+
+        self._map_legacy_fields_to_nested()
+        self._sync_legacy_fields_from_nested()
+
+    def _map_legacy_fields_to_nested(self):
+        for http in (self.http2, self.http3):
+            if not http.tls.version:
+                http.tls.version = self.tls_version
+            if not http.tls.ciphers:
+                http.tls.ciphers = list(self.tls_ciphers)
+            if self.tls_alpn:
+                http.tls.alpn = self.tls_alpn
+            if self.tls_alps:
+                http.tls.alps = self.tls_alps
+            if not http.tls.cert_compression:
+                http.tls.cert_compression = list(self.tls_cert_compression)
+            if self.tls_session_ticket:
+                http.tls.session_ticket = self.tls_session_ticket
+            if not http.tls.signature_hashes:
+                http.tls.signature_hashes = list(self.tls_signature_hashes)
+            if not http.tls.supported_groups:
+                http.tls.supported_groups = list(self.tls_supported_groups)
+            if http.tls.key_shares_limit is None:
+                http.tls.key_shares_limit = self.tls_key_shares_limit
+            if not http.tls.delegated_credentials:
+                http.tls.delegated_credentials = list(self.tls_delegated_credentials)
+            if http.tls.record_size_limit is None:
+                http.tls.record_size_limit = self.tls_record_size_limit
+            if self.tls_grease:
+                http.tls.grease = self.tls_grease
+            if self.tls_use_new_alps_codepoint:
+                http.tls.use_new_alps_codepoint = self.tls_use_new_alps_codepoint
+            if self.tls_signed_cert_timestamps:
+                http.tls.signed_cert_timestamps = self.tls_signed_cert_timestamps
+            if http.tls.ech is None:
+                http.tls.ech = self.tls_ech
+            if self.tls_permute_extensions:
+                http.tls.permute_extensions = self.tls_permute_extensions
+            if not http.headers:
+                http.headers = dict(self.headers)
+            if not http.header_order:
+                http.header_order = self.header_order
+            if not http.header_lang:
+                http.header_lang = self.header_lang
+
+        if not self.http2.tls.extension_order:
+            self.http2.tls.extension_order = self.tls_extension_order
+        if not self.http2.settings:
+            self.http2.settings = self.http2_settings
+        if not self.http2.pseudo_headers_order:
+            self.http2.pseudo_headers_order = self.http2_pseudo_headers_order
+        if not self.http2.window_update:
+            self.http2.window_update = self.http2_window_update
+        if self.http2_stream_weight is not None and self.http2.stream_weight is None:
+            self.http2.stream_weight = self.http2_stream_weight
+        if (
+            self.http2_stream_exclusive is not None
+            and self.http2.stream_exclusive is None
+        ):
+            self.http2.stream_exclusive = self.http2_stream_exclusive
+        if self.http2_no_priority:
+            self.http2.no_priority = self.http2_no_priority
+        if self.split_cookies:
+            self.http2.split_cookies = self.split_cookies
+        if self.form_boundary:
+            self.http2.form_boundary = self.form_boundary
+
+        if not self.http3.tls.extension_order:
+            self.http3.tls.extension_order = self.http3_tls_extension_order
+        if not self.http3.tls.sig_hash_algs:
+            self.http3.tls.sig_hash_algs = self.http3_sig_hash_algs
+        if not self.http3.settings:
+            self.http3.settings = self.http3_settings
+        if not self.http3.pseudo_headers_order:
+            self.http3.pseudo_headers_order = self.http3_pseudo_headers_order
+        if not self.http3.quic_transport_parameters:
+            self.http3.quic_transport_parameters = self.quic_transport_parameters
+
+    def _sync_legacy_fields_from_nested(self):
+        self.tls_version = self.http2.tls.version
+        self.tls_ciphers = self.http2.tls.ciphers
+        self.tls_alpn = self.http2.tls.alpn
+        self.tls_alps = self.http2.tls.alps
+        self.tls_cert_compression = self.http2.tls.cert_compression
+        self.tls_session_ticket = self.http2.tls.session_ticket
+        self.tls_extension_order = self.http2.tls.extension_order
+        self.tls_signature_hashes = self.http2.tls.signature_hashes
+        self.tls_supported_groups = self.http2.tls.supported_groups
+        self.tls_key_shares_limit = self.http2.tls.key_shares_limit or 0
+        self.tls_delegated_credentials = self.http2.tls.delegated_credentials
+        self.tls_record_size_limit = self.http2.tls.record_size_limit
+        self.tls_grease = self.http2.tls.grease
+        self.tls_use_new_alps_codepoint = self.http2.tls.use_new_alps_codepoint
+        self.tls_signed_cert_timestamps = self.http2.tls.signed_cert_timestamps
+        self.tls_ech = self.http2.tls.ech
+        self.tls_permute_extensions = self.http2.tls.permute_extensions
+        self.headers = self.http2.headers
+        self.header_order = self.http2.header_order
+        self.header_lang = self.http2.header_lang
+        self.split_cookies = self.http2.split_cookies
+        self.form_boundary = self.http2.form_boundary
+        self.http2_settings = self.http2.settings
+        self.http2_pseudo_headers_order = self.http2.pseudo_headers_order
+        self.http2_window_update = self.http2.window_update
+        self.http2_stream_weight = self.http2.stream_weight
+        self.http2_stream_exclusive = self.http2.stream_exclusive
+        self.http2_no_priority = self.http2.no_priority
+        self.http3_settings = self.http3.settings
+        self.http3_pseudo_headers_order = self.http3.pseudo_headers_order
+        self.http3_sig_hash_algs = self.http3.tls.sig_hash_algs
+        self.http3_tls_extension_order = self.http3.tls.extension_order
+        self.quic_transport_parameters = self.http3.quic_transport_parameters
 
 
 # fmt: off
@@ -555,6 +743,19 @@ class FingerprintManager:
                     except json.JSONDecodeError:
                         continue
                 if isinstance(raw, dict):
+                    raw = raw.copy()
+                    if "client" not in raw and isinstance(item.get("client"), str):
+                        raw["client"] = item["client"]
+                    if "client_version" not in raw and isinstance(
+                        item.get("version"), str
+                    ):
+                        raw["client_version"] = item["version"]
+                    if "os" not in raw and isinstance(item.get("os"), str):
+                        raw["os"] = item["os"]
+                    if "os_version" not in raw and isinstance(
+                        item.get("os_version"), str
+                    ):
+                        raw["os_version"] = item["os_version"]
                     fingerprints[name] = raw
 
             pagination = data.get("pagination")
@@ -572,9 +773,23 @@ class FingerprintManager:
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
         with open(cls.get_fingerprint_path(), "w") as wf:
-            json.dump(fingerprints, wf, indent=2)
+            json.dump(
+                {"version": FINGERPRINT_CACHE_VERSION, "data": fingerprints},
+                wf,
+                indent=2,
+            )
         cls.load_fingerprints.cache_clear()
         return len(fingerprints)
+
+    @staticmethod
+    def _unwrap_fingerprint_cache(payload: object) -> dict[str, object]:
+        if not isinstance(payload, dict):
+            return {}
+        version = payload.get("version")
+        data = payload.get("data")
+        if version == FINGERPRINT_CACHE_VERSION and isinstance(data, dict):
+            return data
+        return payload
 
     @staticmethod
     def _parse_fingerprints(payload: dict[str, object]) -> dict[str, Fingerprint]:
@@ -614,8 +829,8 @@ class FingerprintManager:
         if os.path.exists(fingerprint_path):
             with open(fingerprint_path) as f:
                 fingerprints = json.loads(f.read())
-            if isinstance(fingerprints, dict):
-                parsed.update(cls._parse_fingerprints(fingerprints))
+            fingerprints = cls._unwrap_fingerprint_cache(fingerprints)
+            parsed.update(cls._parse_fingerprints(fingerprints))
         return parsed
 
     @classmethod
@@ -655,7 +870,11 @@ class FingerprintManager:
                         "version": fingerprint.client_version,
                         "os": fingerprint.os,
                         "os_version": fingerprint.os_version,
-                        "h3_fingerprints": fingerprint.http_version in ("v3", "v3only"),
+                        "h3_fingerprints": bool(
+                            fingerprint.http3.settings
+                            or fingerprint.http3.pseudo_headers_order
+                            or fingerprint.http3.quic_transport_parameters
+                        ),
                     }
                 )
         return rows
