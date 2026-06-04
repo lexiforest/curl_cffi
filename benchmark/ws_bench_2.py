@@ -159,6 +159,7 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
     logger.info("Loaded hash for '%s': %s", config.data_filename, source_hash)
 
     try:
+        logger.info("Allocating %d GiB memory buffer", config.total_gb)
         with mmap.mmap(-1, config.total_bytes) as testdata_buffer:
             # Receive the data into the buffer
             offset: int = 0

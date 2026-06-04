@@ -142,7 +142,7 @@ Libcurl handles incoming PONGs automatically. If you need to send a manual PING 
 
 .. note::
 
-    PONG frames are consumed internally by the background task and are not delivered to your ``recv()`` calls or async iteration.
+    PONG frames are consumed internally and are not delivered to your ``recv()`` calls or async iteration.
 
 Lifecycle Management
 ====================
@@ -174,7 +174,15 @@ If your application logic requires confirmation that messages have been successf
 .. code-block:: python
 
     await ws.send_str("Critical Data")
-    await ws.flush()  # Blocks until all queued messages are transmitted
+    await ws.flush()  # Awaits until all queued messages are transmitted
+
+Since the background sender sends out the data as soon as it's queued, waiting for the send queue to clear is not usually required.
+
+You can check the size of the send queue by checking the ``send_queue_size`` property.
+
+.. code-block:: python
+
+    print(ws.send_queue_size)
 
 Error Handling
 ==============
@@ -214,17 +222,28 @@ Queue Sizes (Backpressure)
 
 You can control the internal buffer sizes to manage backpressure.
 
-*   **recv_queue_size** (default: 32): Max incoming messages to buffer.
-*   **send_queue_size** (default: 16): Max outgoing messages to buffer.
-*   **block_on_recv_queue_full** (default: ``True``): The background reader pauses when the queue is full (TCP backpressure). If ``False``, the connection will fail instead (``OUT_OF_MEMORY``) to avoid stalling the reader.
+*   **recv_queue_size** (default: 128): Max incoming messages to buffer.
+*   **send_queue_size** (default: 128): Max outgoing messages to buffer.
+*   **block_on_recv_queue_full** (default: ``True``): The reader pauses when the queue is full (TCP backpressure). If ``False``, the connection will fail instead (``OUT_OF_MEMORY``) to avoid stalling the reader.
 
 .. code-block:: python
 
     # Increase queues for high-throughput streams (e.g., market data)
     ws = await session.ws_connect(
         url,
-        recv_queue_size=256,
-        send_queue_size=32
+        recv_queue_size=512,
+        send_queue_size=256
+    )
+
+Buffer sizes are a trade-off between latency, bufferbloat and burst absorption capacity.
+
+.. code-block:: python
+
+    # High throughput, fast moving streams (e.g., video)
+    ws = await session.ws_connect(
+        url,
+        recv_queue_size=2048,
+        send_queue_size=2048
     )
 
 Message Limits
@@ -267,7 +286,7 @@ Frame Coalescing (Throughput)
 For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple queued message payloads from the send queue into a single transmission batch to reduce syscall overhead.
 
 *   **coalesce_frames** (default: ``False``): Enable batching.
-*   **max_send_batch_size** (default: 32): Max messages to merge.
+*   **max_send_batch_size** (default: 64): Max messages to merge.
 
 .. code-block:: python
 
@@ -301,10 +320,27 @@ Cooperative Multitasking
 
 To prevent the background I/O tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
 
-*   **recv_time_slice** (default: 0.005s): Max time spent processing incoming messages before yielding.
-*   **send_time_slice** (default: 0.001s): Max time spent sending messages before yielding.
+*   **recv_time_slice** (default: 0.01s): Max time spent processing incoming messages before yielding (10ms).
+*   **send_time_slice** (default: 0.005s): Max time spent sending messages before yielding (5ms).
 
 .. code-block:: python
 
     # Force more frequent yields for lower latency in other async tasks
     ws = await session.ws_connect(url, recv_time_slice=0.001)
+
+Performance Tuning
+==================
+
+The ``curl_cffi`` WebSocket implementation uses a patched version of libcurl enhanced with AVX-512/AVX2/NEON SIMD **hardware acceleration**. It is capable of multi-gigabit throughput.
+
+If your application needs to push a massive volume of data (e.g., file uploads, video streaming, or bulk syncing), **you should focus on sending fewer, larger messages rather than many small messages.**
+
+*   **The Overhead:** The WebSocket protocol requires every client-to-server message to be masked (XOR) for security. Additionally, every call to ``await ws.send()`` carries a small asyncio overhead.
+*   **The Solution:** Increase queue sizes and condense your data into larger blocks (e.g., 64KB to 1MB per message) before sending. This drastically reduces the framing, masking, and FFI overhead, allowing libcurl to process the data at maximum speed.
+
+Automatic Reassembly
+--------------------
+
+You never need to worry about network fragmentation. If you send or receive a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, and seamlessly reassembles those frames on the other side.
+
+Your application will always receive the data exactly as it was sent — as a single, complete string or bytes.
