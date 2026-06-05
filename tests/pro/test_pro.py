@@ -1,4 +1,6 @@
+import json
 import os
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -24,6 +26,60 @@ def test_update_fingerprints(api_server):
     fingerprints = FingerprintManager.load_fingerprints()
     assert updated == 10
     assert "testing100" in fingerprints
+    assert "testing101" in fingerprints
+
+
+def test_update_fingerprints_reads_paginated_api(monkeypatch):
+    urls = []
+
+    def fetch_payload(url, headers):
+        urls.append(url)
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
+        skip = int(query["skip"][0])
+        limit = int(query["limit"][0])
+        assert limit == 100
+
+        total = 102
+        end = min(skip + limit, total)
+        items = [
+            {
+                "name": f"testing{i}",
+                "fingerprint": {
+                    "client": "testing",
+                    "client_version": str(i),
+                },
+            }
+            for i in range(skip, end)
+        ]
+        return json.dumps(
+            {
+                "pagination": {
+                    "skip": skip,
+                    "limit": limit,
+                    "total": total,
+                    "has_more": end < total,
+                    "next_skip": end if end < total else None,
+                },
+                "data": items,
+            }
+        ).encode()
+
+    monkeypatch.setattr(
+        FingerprintManager,
+        "_fetch_fingerprint_payload",
+        staticmethod(fetch_payload),
+    )
+
+    updated = FingerprintManager.update_fingerprints("https://api.test")
+    fingerprints = FingerprintManager.load_fingerprints()
+
+    assert updated == 102
+    assert urls == [
+        "https://api.test/fingerprints?skip=0&limit=100",
+        "https://api.test/fingerprints?skip=100&limit=100",
+    ]
+    assert "testing0" in fingerprints
     assert "testing101" in fingerprints
 
 

@@ -6,6 +6,7 @@ from datetime import datetime
 from functools import cache
 from io import BytesIO
 from typing import Literal
+from urllib.parse import urlencode
 
 from .const import CurlInfo, CurlOpt
 from .curl import Curl, CurlError
@@ -17,6 +18,8 @@ __all__ = [
     "FingerprintManager",
     "get_fingerprint",
 ]
+
+FINGERPRINT_PAGE_LIMIT = 100
 
 
 """
@@ -511,43 +514,59 @@ class FingerprintManager:
     def update_fingerprints(cls, api_root: str | None = None) -> int:
         """Get the latest fingerprints for impersonating."""
         api_root = api_root or cls.get_api_root()
-        url = f"{api_root.rstrip('/')}/fingerprints"
+        base_url = f"{api_root.rstrip('/')}/fingerprints"
         headers = {}
         api_key = cls.get_api_key()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        payload = cls._fetch_fingerprint_payload(url, headers)
-
-        try:
-            data = json.loads(payload)
-            if not isinstance(data, dict):
-                raise FingerprintUpdateError(
-                    f"Invalid fingerprint response from {url}: expected object"
-                )
-            items = data.get("items", data.get("data"))
-        except json.JSONDecodeError as exc:
-            raise FingerprintUpdateError(
-                f"Invalid fingerprint response from {url}: {exc}"
-            ) from exc
-
-        if not isinstance(items, list):
-            raise FingerprintUpdateError(f"No fingerprints found at {url}")
 
         fingerprints: dict[str, dict] = {}
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name") or item.get("target")
-            if not name:
-                continue
-            raw = item.get("data", item.get("fingerprint", {}))
-            if isinstance(raw, str):
-                try:
-                    raw = json.loads(raw)
-                except json.JSONDecodeError:
+        skip = 0
+        limit = FINGERPRINT_PAGE_LIMIT
+        while True:
+            url = f"{base_url}?{urlencode({'skip': skip, 'limit': limit})}"
+            payload = cls._fetch_fingerprint_payload(url, headers)
+
+            try:
+                data = json.loads(payload)
+                if not isinstance(data, dict):
+                    raise FingerprintUpdateError(
+                        f"Invalid fingerprint response from {url}: expected object"
+                    )
+                items = data.get("items", data.get("data"))
+            except json.JSONDecodeError as exc:
+                raise FingerprintUpdateError(
+                    f"Invalid fingerprint response from {url}: {exc}"
+                ) from exc
+
+            if not isinstance(items, list):
+                raise FingerprintUpdateError(f"No fingerprints found at {url}")
+
+            for item in items:
+                if not isinstance(item, dict):
                     continue
-            if isinstance(raw, dict):
-                fingerprints[name] = raw
+                name = item.get("name") or item.get("target")
+                if not name:
+                    continue
+                raw = item.get("data", item.get("fingerprint", {}))
+                if isinstance(raw, str):
+                    try:
+                        raw = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                if isinstance(raw, dict):
+                    fingerprints[name] = raw
+
+            pagination = data.get("pagination")
+            if not isinstance(pagination, dict) or not pagination.get("has_more"):
+                break
+            next_skip = pagination.get("next_skip")
+            if not isinstance(next_skip, int) or next_skip <= skip:
+                raise FingerprintUpdateError(
+                    f"Invalid fingerprint pagination from {url}: "
+                    "expected increasing next_skip"
+                )
+            skip = next_skip
 
         config_dir = cls.get_config_dir()
         if not os.path.exists(config_dir):
