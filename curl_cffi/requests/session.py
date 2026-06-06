@@ -91,6 +91,7 @@ if TYPE_CHECKING:
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         debug: bool
         interface: Optional[str]
+        doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         response_class: Optional[type[R]]
         discard_cookies: bool
@@ -124,6 +125,7 @@ if TYPE_CHECKING:
         quote: Union[str, Literal[False]]
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         interface: Optional[str]
+        doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
         multipart: Optional[CurlMime]
@@ -234,6 +236,7 @@ class BaseSession(Generic[R]):
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         response_class: Optional[type[R]] = None,
         discard_cookies: bool = False,
@@ -262,6 +265,7 @@ class BaseSession(Generic[R]):
         self.http_version = http_version
         self.debug = debug
         self.interface = interface
+        self.doh_url = doh_url
         self.cert = cert
 
         if response_class is not None and issubclass(response_class, Response) is False:
@@ -452,6 +456,7 @@ class Session(BaseSession[R]):
             perk: perk string to impersonate in the session.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             interface: interface name or local IP to bind to (bare IP = source address).
+            doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
                 automatic detection.
@@ -621,6 +626,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -671,6 +677,7 @@ class Session(BaseSession[R]):
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
+            doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
@@ -784,6 +791,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -827,6 +835,7 @@ class Session(BaseSession[R]):
                     quote=quote,
                     http_version=http_version,
                     interface=interface,
+                    doh_url=doh_url,
                     cert=cert,
                     stream=stream,
                     max_recv_speed=max_recv_speed,
@@ -1044,6 +1053,7 @@ class AsyncSession(BaseSession[R]):
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
+        doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
         recv_queue_size: int = 128,
@@ -1095,6 +1105,7 @@ class AsyncSession(BaseSession[R]):
                 encode the URL yourself.
             http_version: limiting http version, defaults to http2.
             interface: interface name or local IP to bind to (bare IP = source address).
+            doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             recv_queue_size: The maximum number of incoming WebSocket
@@ -1165,6 +1176,7 @@ class AsyncSession(BaseSession[R]):
                 quote=quote,
                 http_version=http_version or self.http_version,
                 interface=interface or self.interface,
+                doh_url=doh_url or self.doh_url,
                 max_recv_speed=max_recv_speed,
                 cert=cert or self.cert,
                 queue_class=asyncio.Queue,
@@ -1243,6 +1255,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -1287,6 +1300,7 @@ class AsyncSession(BaseSession[R]):
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
+            doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
@@ -1398,6 +1412,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -1441,6 +1456,7 @@ class AsyncSession(BaseSession[R]):
                     quote=quote,
                     http_version=http_version,
                     interface=interface,
+                    doh_url=doh_url,
                     cert=cert,
                     stream=stream,
                     max_recv_speed=max_recv_speed,
