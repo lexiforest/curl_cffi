@@ -451,7 +451,7 @@ class Session(BaseSession[R]):
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
-            interface: which interface use.
+            interface: interface name or local IP to bind to (bare IP = source address).
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
                 automatic detection.
@@ -1094,7 +1094,7 @@ class AsyncSession(BaseSession[R]):
                 url will be kept as is, without any automatic percent-encoding, you must
                 encode the URL yourself.
             http_version: limiting http version, defaults to http2.
-            interface: which interface to use.
+            interface: interface name or local IP to bind to (bare IP = source address).
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             recv_queue_size: The maximum number of incoming WebSocket
