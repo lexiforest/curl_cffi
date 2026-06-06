@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from curl_cffi.fingerprints import Fingerprint
 from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests import utils
 
@@ -158,6 +159,32 @@ def test_set_extra_fp_skips_unset_profile_defaults():
     utils.set_extra_fp(curl, extra_fp)
 
     assert curl.options == {CurlOpt.SSL_PERMUTE_EXTENSIONS: 1}
+
+
+@pytest.mark.parametrize(
+    "fingerprint, http_version, expected",
+    [
+        (Fingerprint(), "v3only", CurlHttpVersion.V3ONLY),
+        (Fingerprint(http_version="v3"), None, CurlHttpVersion.V3),
+    ],
+)
+def test_set_curl_options_http_version_precedence(fingerprint, http_version, expected):
+    curl = FakeCurl()
+
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        impersonate=fingerprint,
+        http_version=http_version,
+    )
+
+    assert curl.options[CurlOpt.HTTP_VERSION] == expected
 
 
 def test_set_extra_fp_honors_explicit_false_and_zero_values():
