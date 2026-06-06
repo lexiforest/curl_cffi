@@ -125,7 +125,7 @@ def request(
         curl_options: extra curl options to use.
         http_version: limiting http version, defaults to http2.
         debug: print extra curl debug info.
-        interface: which interface to use.
+        interface: interface name or local IP to bind to (bare IP = source address).
         cert: a tuple of (cert, key) filenames for client cert.
         stream: streaming the response, default False.
         max_recv_speed: maximum receive speed, bytes per second.

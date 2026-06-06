@@ -365,7 +365,7 @@ class WebSocket(BaseWebSocket):
                 will be removed from the safe string. If set to ``False``, the URL
                 is used as-is (you must encode it yourself).
             http_version: Limiting http version, defaults to http2.
-            interface: which interface to use.
+            interface: interface name or local IP to bind to (bare IP = source address).
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             curl_options: extra curl options to use.

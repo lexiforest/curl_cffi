@@ -4,6 +4,7 @@ __all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
 import asyncio
+import ipaddress
 import math
 import queue
 import warnings
@@ -960,7 +961,15 @@ def set_curl_options(
 
     # interface
     if interface:
-        c.setopt(CurlOpt.INTERFACE, interface.encode())
+        value = interface
+        if "!" not in interface:
+            try:
+                ipaddress.ip_address(interface)
+            except ValueError:
+                pass
+            else:
+                value = f"host!{interface}"
+        c.setopt(CurlOpt.INTERFACE, value.encode())
 
     # max_recv_speed
     # do not check, since 0 is a valid value to disable it
