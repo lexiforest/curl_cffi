@@ -5,7 +5,9 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 from glob import glob
+from http.client import HTTPException
 from pathlib import Path
 from urllib.request import urlretrieve
 
@@ -89,7 +91,17 @@ def download_libcurl():
     )
 
     print(f"Downloading libcurl-impersonate from {url}...")
-    urlretrieve(url, file)
+    retries = 3
+    for attempt in range(1, retries + 1):
+        try:
+            urlretrieve(url, file)
+            break
+        except (OSError, HTTPException) as e:
+            if attempt == retries:
+                raise
+            wait = 2 ** (attempt - 1)
+            print(f"Download failed ({e}); retry {attempt}/{retries} in {wait}s...")
+            time.sleep(wait)
 
     print("Unpacking downloaded files...")
     os.makedirs(libdir, exist_ok=True)
