@@ -666,52 +666,59 @@ class Session(BaseSession[R]):
         else:
             c = self.curl
 
-        req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
-            c,
-            method=method,
-            url=url,
-            params_list=[self.params, params],
-            base_url=self.base_url,
-            data=data,
-            json=json,
-            headers_list=[self.headers, headers],
-            cookies_list=[self._cookies, cookies],
-            files=files,
-            auth=auth or self.auth,
-            timeout=self.timeout if timeout is NOT_SET else timeout,
-            allow_redirects=(
-                self.allow_redirects if allow_redirects is None else allow_redirects
-            ),
-            max_redirects=(
-                self.max_redirects if max_redirects is None else max_redirects
-            ),
-            proxies_list=[self.proxies, proxies],
-            proxy=proxy,
-            proxy_auth=proxy_auth or self.proxy_auth,
-            verify_list=[self.verify, verify],
-            referer=referer,
-            accept_encoding=accept_encoding,
-            content_callback=content_callback,
-            impersonate=impersonate or self.impersonate,
-            ja3=ja3 or self.ja3,
-            akamai=akamai or self.akamai,
-            perk=perk or self.perk,
-            extra_fp=extra_fp or self.extra_fp,
-            default_headers=(
-                self.default_headers if default_headers is None else default_headers
-            ),
-            quote=quote,
-            http_version=http_version or self.http_version,
-            interface=interface or self.interface,
-            doh_url=doh_url or self.doh_url,
-            stream=stream,
-            max_recv_speed=max_recv_speed,
-            multipart=multipart,
-            cert=cert or self.cert,
-            curl_options=self.curl_options,
-            queue_class=queue.Queue,
-            event_class=threading.Event,
-        )
+        try:
+            req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+                c,
+                method=method,
+                url=url,
+                params_list=[self.params, params],
+                base_url=self.base_url,
+                data=data,
+                json=json,
+                headers_list=[self.headers, headers],
+                cookies_list=[self._cookies, cookies],
+                files=files,
+                auth=auth or self.auth,
+                timeout=self.timeout if timeout is NOT_SET else timeout,
+                allow_redirects=(
+                    self.allow_redirects if allow_redirects is None else allow_redirects
+                ),
+                max_redirects=(
+                    self.max_redirects if max_redirects is None else max_redirects
+                ),
+                proxies_list=[self.proxies, proxies],
+                proxy=proxy,
+                proxy_auth=proxy_auth or self.proxy_auth,
+                verify_list=[self.verify, verify],
+                referer=referer,
+                accept_encoding=accept_encoding,
+                content_callback=content_callback,
+                impersonate=impersonate or self.impersonate,
+                ja3=ja3 or self.ja3,
+                akamai=akamai or self.akamai,
+                perk=perk or self.perk,
+                extra_fp=extra_fp or self.extra_fp,
+                default_headers=(
+                    self.default_headers if default_headers is None else default_headers
+                ),
+                quote=quote,
+                http_version=http_version or self.http_version,
+                interface=interface or self.interface,
+                doh_url=doh_url or self.doh_url,
+                stream=stream,
+                max_recv_speed=max_recv_speed,
+                multipart=multipart,
+                cert=cert or self.cert,
+                curl_options=self.curl_options,
+                queue_class=queue.Queue,
+                event_class=threading.Event,
+            )
+        except (CurlError, TypeError, NotImplementedError):
+            if stream:
+                c.close()
+            else:
+                c.reset()
+            raise
 
         if self._cache_enabled(req, stream=stream, content_callback=content_callback):
             cached_response = self.cache.get(
@@ -1342,52 +1349,56 @@ class AsyncSession(BaseSession[R]):
         discard_cookies: bool = False,
     ) -> R:
         curl = await self.pop_curl()
-        req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
-            curl=curl,
-            method=method,
-            url=url,
-            params_list=[self.params, params],
-            base_url=self.base_url,
-            data=data,
-            json=json,
-            headers_list=[self.headers, headers],
-            cookies_list=[self.cookies, cookies],
-            files=files,
-            auth=auth or self.auth,
-            timeout=self.timeout if timeout is NOT_SET else timeout,
-            allow_redirects=(
-                self.allow_redirects if allow_redirects is None else allow_redirects
-            ),
-            max_redirects=(
-                self.max_redirects if max_redirects is None else max_redirects
-            ),
-            proxies_list=[self.proxies, proxies],
-            proxy=proxy,
-            proxy_auth=proxy_auth or self.proxy_auth,
-            verify_list=[self.verify, verify],
-            referer=referer,
-            accept_encoding=accept_encoding,
-            content_callback=content_callback,
-            impersonate=impersonate or self.impersonate,
-            ja3=ja3 or self.ja3,
-            akamai=akamai or self.akamai,
-            perk=perk or self.perk,
-            extra_fp=extra_fp or self.extra_fp,
-            default_headers=(
-                self.default_headers if default_headers is None else default_headers
-            ),
-            quote=quote,
-            http_version=http_version or self.http_version,
-            interface=interface or self.interface,
-            doh_url=doh_url or self.doh_url,
-            stream=stream,
-            max_recv_speed=max_recv_speed,
-            multipart=multipart,
-            cert=cert or self.cert,
-            curl_options=self.curl_options,
-            queue_class=asyncio.Queue,
-            event_class=asyncio.Event,
-        )
+        try:
+            req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+                curl=curl,
+                method=method,
+                url=url,
+                params_list=[self.params, params],
+                base_url=self.base_url,
+                data=data,
+                json=json,
+                headers_list=[self.headers, headers],
+                cookies_list=[self.cookies, cookies],
+                files=files,
+                auth=auth or self.auth,
+                timeout=self.timeout if timeout is NOT_SET else timeout,
+                allow_redirects=(
+                    self.allow_redirects if allow_redirects is None else allow_redirects
+                ),
+                max_redirects=(
+                    self.max_redirects if max_redirects is None else max_redirects
+                ),
+                proxies_list=[self.proxies, proxies],
+                proxy=proxy,
+                proxy_auth=proxy_auth or self.proxy_auth,
+                verify_list=[self.verify, verify],
+                referer=referer,
+                accept_encoding=accept_encoding,
+                content_callback=content_callback,
+                impersonate=impersonate or self.impersonate,
+                ja3=ja3 or self.ja3,
+                akamai=akamai or self.akamai,
+                perk=perk or self.perk,
+                extra_fp=extra_fp or self.extra_fp,
+                default_headers=(
+                    self.default_headers if default_headers is None else default_headers
+                ),
+                quote=quote,
+                http_version=http_version or self.http_version,
+                interface=interface or self.interface,
+                doh_url=doh_url or self.doh_url,
+                stream=stream,
+                max_recv_speed=max_recv_speed,
+                multipart=multipart,
+                cert=cert or self.cert,
+                curl_options=self.curl_options,
+                queue_class=asyncio.Queue,
+                event_class=asyncio.Event,
+            )
+        except (CurlError, TypeError, NotImplementedError):
+            self.release_curl(curl)
+            raise
         if stream:
             task = self.acurl.add_handle(curl)
             curl_released = False
