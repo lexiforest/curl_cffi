@@ -9,7 +9,7 @@ import math
 import queue
 import warnings
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import AsyncIterable, Callable, Iterable, Iterator
 from io import BytesIO
 from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
@@ -565,6 +565,29 @@ def _apply_fingerprint(
             curl.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
 
+@final
+class _IterableReader:
+    """Adapt a sync ``Iterable[bytes]`` to the ``read(size)`` interface that
+    libcurl's read callback expects, buffering and slicing chunks to ``size``."""
+
+    __slots__ = ("_it", "_buf")
+
+    def __init__(self, iterable: Iterable[bytes]) -> None:
+        self._it: Iterator[bytes] = iter(iterable)
+        self._buf: bytearray = bytearray()
+
+    def read(self, size: int) -> bytes:
+        buf = self._buf
+        while len(buf) < size:
+            try:
+                buf += next(self._it)
+            except StopIteration:
+                break
+        chunk = bytes(buf[:size])
+        del buf[:size]
+        return chunk
+
+
 def set_curl_options(
     curl: Curl,
     method: HttpMethod,
@@ -575,7 +598,15 @@ def set_curl_options(
     ] = [],  # noqa: B006
     base_url: Optional[str] = None,
     data: Optional[
-        Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]
+        Union[
+            dict[str, str],
+            list[tuple[object]],
+            str,
+            BytesIO,
+            bytes,
+            Iterable[bytes],
+            AsyncIterable[bytes],
+        ]
     ] = None,
     json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
@@ -613,8 +644,12 @@ def set_curl_options(
 
     method = method.upper()  # type: ignore
 
+    is_stream_body = data is not None and not isinstance(
+        data, (str, bytes, bytearray, dict, list, tuple, BytesIO)
+    )
+
     # method
-    if method == "POST":
+    if method == "POST" and not is_stream_body:
         c.setopt(CurlOpt.POST, 1)
     elif method != "GET":
         c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
@@ -636,7 +671,24 @@ def set_curl_options(
     c.setopt(CurlOpt.URL, url.encode())
 
     # data/body/json
-    if isinstance(data, dict | list | tuple):
+    stream_reader: object | None = None
+    if is_stream_body:
+        if hasattr(data, "read"):
+            stream_reader = data
+        elif isinstance(data, AsyncIterable):
+            raise TypeError(
+                "AsyncIterable body requires AsyncSession; the sync client cannot "
+                "stream an async body."
+            )
+        elif isinstance(data, Iterable):
+            stream_reader = _IterableReader(data)
+        else:
+            raise TypeError(
+                "data must be dict/list/tuple, str, BytesIO, bytes, a file-like "
+                "object, or an Iterable[bytes]"
+            )
+        body = b""
+    elif isinstance(data, dict | list | tuple):
         body = urlencode(data).encode()
     elif isinstance(data, str):
         body = data.encode()
@@ -651,13 +703,19 @@ def set_curl_options(
     if json is not None:
         body = dumps(json, separators=(",", ":")).encode()
     body_provided = data is not None or json is not None
-    request_body = body if body_provided and multipart is None else None
+    request_body = (
+        body if body_provided and multipart is None and stream_reader is None else None
+    )
 
     # Tell libcurl to be aware of bodies and related headers when,
     # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do
     # 2. GET/DELETE with body, although it's against the RFC, some applications.
     #   e.g. Elasticsearch, use this.
-    if body or method in ("POST", "PUT", "PATCH"):
+    if stream_reader is not None:
+        c.setopt(CurlOpt.UPLOAD, 1)
+        c.setopt(CurlOpt.READDATA, stream_reader)
+        c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
+    elif body or method in ("POST", "PUT", "PATCH"):
         c.setopt(CurlOpt.POSTFIELDS, body)
         # necessary if body contains '\0'
         c.setopt(CurlOpt.POSTFIELDSIZE, len(body))
@@ -671,6 +729,11 @@ def set_curl_options(
     encoding = headers.encoding if isinstance(headers, Headers) else None
     h = Headers(base_headers, encoding=encoding)
     h.update(headers)
+
+    if stream_reader is not None:
+        content_length = h.get("content-length")
+        if content_length is not None:
+            c.setopt(CurlOpt.INFILESIZE_LARGE, int(content_length))
 
     # Previously we removed Host for https://github.com/lexiforest/curl_cffi/issues/119
     # Since curl-impersonate 1.5.0, curl always use Host parsed from url as cookiehost

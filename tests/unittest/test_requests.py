@@ -109,6 +109,27 @@ def test_post_form(server):
     assert r.content == b"foo%5B%5D=7&foo%5B%5D=8&bar=9"
 
 
+def test_post_iterable_body(server):
+    def gen():
+        yield b"foo"
+        yield b"x" * 200000
+        yield b"bar"
+
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), data=gen())
+    assert r.status_code == 200
+    assert r.content == b"foo" + b"x" * 200000 + b"bar"
+
+
+def test_post_file_like_body(server, tmp_path):
+    path = tmp_path / "body.bin"
+    path.write_bytes(b"streamed-from-file")
+
+    with path.open("rb") as f:
+        r = requests.post(str(server.url.copy_with(path="/echo_body")), data=f)
+    assert r.status_code == 200
+    assert r.content == b"streamed-from-file"
+
+
 def test_post_redirect_to_get(server):
     url = str(server.url.copy_with(path="/redirect_then_echo_headers"))
     r = requests.post(url, data={"foo": "bar"}, allow_redirects=True, debug=True)

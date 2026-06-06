@@ -9,7 +9,13 @@ import sys
 import threading
 import time
 import warnings
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    Callable,
+    Generator,
+    Iterable,
+)
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
@@ -51,6 +57,16 @@ if sys.version_info >= (3, 13):
     R = TypeVar("R", bound=Response, default=Response)
 else:
     R = TypeVar("R", bound=Response)
+
+RequestData = Union[
+    dict[str, str],
+    list[tuple],
+    str,
+    BytesIO,
+    bytes,
+    Iterable[bytes],
+    AsyncIterable[bytes],
+]
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
@@ -98,7 +114,7 @@ if TYPE_CHECKING:
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]]
+        data: Optional[RequestData]
         json: Optional[dict | list]
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
@@ -593,9 +609,7 @@ class Session(BaseSession[R]):
         params: Optional[
             Union[dict[str, object], list[object], tuple[object, ...]]
         ] = None,
-        data: Optional[
-            Union[dict[str, str], list[tuple[object, ...]], str, BytesIO, bytes]
-        ] = None,
+        data: Optional[RequestData] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -758,7 +772,7 @@ class Session(BaseSession[R]):
         method: HttpMethod,
         url: str,
         params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        data: Optional[RequestData] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -1217,7 +1231,7 @@ class AsyncSession(BaseSession[R]):
         method: HttpMethod,
         url: str,
         params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        data: Optional[RequestData] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -1370,9 +1384,7 @@ class AsyncSession(BaseSession[R]):
         params: Optional[
             Union[dict[str, str], list[tuple[str, str]], tuple[tuple[str, str], ...]]
         ] = None,
-        data: Optional[
-            Union[dict[str, str], list[tuple[str, str]], str, BytesIO, bytes]
-        ] = None,
+        data: Optional[RequestData] = None,
         json: Optional[Union[dict[str, Any], list[Any]]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
