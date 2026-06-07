@@ -1053,6 +1053,36 @@ class AsyncSession(BaseSession[R]):
             except asyncio.QueueEmpty:
                 break
 
+    async def upkeep(self) -> list[int]:
+        """
+        Performs connection upkeep for all idle connections in the pool.
+
+        This is done by calling `curl_easy_upkeep` on each underlying curl handle.
+        This function can be used to keep connections alive. For example, HTTP/2
+        connections can be kept alive by sending PING frames.
+
+        Returns:
+            A list of curl return codes from `curl_easy_upkeep`.
+        """
+        self._check_session_closed()
+
+        pooled_curls = []
+        tasks = []
+        while True:
+            try:
+                curl = self.pool.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            pooled_curls.append(curl)
+            if curl:
+                tasks.append(self.loop.run_in_executor(None, curl.upkeep))
+
+        try:
+            return list(await asyncio.gather(*tasks))
+        finally:
+            for curl in pooled_curls:
+                self.push_curl(curl)
+
     def release_curl(self, curl: Curl) -> None:
         curl.clean_handles_and_buffers()
         if not self._closed:
