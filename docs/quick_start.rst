@@ -4,7 +4,7 @@ Quick Start
 Install
 =======
 
-Note: We only support Python 3.9 and above. Python 3.8 has reached its end of life.
+Note: We only support Python 3.10 and above. Python 3.9 has reached its end of life.
 
 Via pip
 -------
@@ -123,6 +123,17 @@ Additional headers can be override with ``headers=...``.
 
     1. Add your headers to override them.
     2. Use ``default_headers=False`` to completely turn off the default headers.
+    3. Use ``curl_cffi.get_fingerprint(...)`` and pass the result to ``impersonate=...`` for
+       fully editable custom fingerprints.
+
+.. code-block:: python
+
+    fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
+    fingerprint.headers["User-Agent"] = "..."
+    r = curl_cffi.get(
+        "https://httpbin.org/headers",
+        impersonate=fingerprint,
+    )
 
 .. code-block:: python
 
@@ -130,20 +141,20 @@ Additional headers can be override with ``headers=...``.
     >>> print(r.text)
     {
       "headers": {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7", 
-        "Accept-Encoding": "gzip, deflate, br, zstd", 
-        "Accept-Language": "en-US,en;q=0.9", 
-        "Host": "httpbin.org", 
-        "Priority": "u=0, i", 
-        "Sec-Ch-Ua": "\"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\", \"Not.A/Brand\";v=\"99\"", 
-        "Sec-Ch-Ua-Mobile": "?0", 
-        "Sec-Ch-Ua-Platform": "\"macOS\"", 
-        "Sec-Fetch-Dest": "document", 
-        "Sec-Fetch-Mode": "navigate", 
-        "Sec-Fetch-Site": "none", 
-        "Sec-Fetch-User": "?1", 
-        "Upgrade-Insecure-Requests": "1", 
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36", 
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Host": "httpbin.org",
+        "Priority": "u=0, i",
+        "Sec-Ch-Ua": "\"Chromium\";v=\"136\", \"Google Chrome\";v=\"136\", \"Not.A/Brand\";v=\"99\"",
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": "\"macOS\"",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
         "X-Amzn-Trace-Id": "Root=1-68452cc9-7287427f222e720c57971297"
       }
     }
@@ -152,9 +163,9 @@ Additional headers can be override with ``headers=...``.
     >>> print(r.text)
     {
       "headers": {
-        "Accept": "*/*", 
-        "Accept-Encoding": "gzip, deflate, br", 
-        "Host": "httpbin.org", 
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Host": "httpbin.org",
         "X-Amzn-Trace-Id": "Root=1-68452d20-2cf4cf00201987301c476c06"
       }
     }
@@ -210,10 +221,10 @@ Use the ``data={...}`` option.
     >>> r = curl_cffi.post("https://httpbin.org/post", data={"name": "Luke"})
     >>> print(r.text)
     {
-      "args": {}, 
+      "args": {},
       "form": {
         "name": "Luke"
-      }, 
+      },
       ...
     }
 
@@ -227,10 +238,10 @@ Still, use the ``data=b"..."`` option.
     >>> r = curl_cffi.post("https://httpbin.org/post", data=b"LukeSkywalker")
     >>> print(r.text)
     {
-      "args": {}, 
-      "data": "LukeSkywalker", 
-      "files": {}, 
-      "form": {}, 
+      "args": {},
+      "data": "LukeSkywalker",
+      "files": {},
+      "form": {},
       ...
     }
 
@@ -248,10 +259,10 @@ Use the ``json=...`` option.
     >>> r = curl_cffi.post("https://httpbin.org/post", json={"name": "Luke"})
     >>> print(r.text)
     {
-      "args": {}, 
-      "data": "{\"name\":\"Luke\"}", 
-      "files": {}, 
-      "form": {}, 
+      "args": {},
+      "data": "{\"name\":\"Luke\"}",
+      "files": {},
+      "form": {},
       ...
     }
 
@@ -347,7 +358,7 @@ But when possible, you should choose the native ``content_callback`` option.
     >>> r = curl_cffi.get("https://httpbin.org/stream/20", stream=True)
     >>> for chunk in r.iter_content():
     ...     print("CHUNK", chunk)
-    ... 
+    ...
     CHUNK b'{"url": "https://httpbin.org/stream/20",...'
     CHUNK b'{"url": "https://httpbin.org/stream/20",...'
 
@@ -370,7 +381,7 @@ For more examples, see the `examples on GitHub <https://github.com/lexiforest/cu
 
     >>> def callback(chunk):
     ...     print("CHUNK", chunk)
-    ... 
+    ...
     >>> r = curl_cffi.get("https://httpbin.org/stream/20", content_callback=callback)
     CHUNK b'{"url": "https://httpbin.org/stream/20"...'
     CHUNK b'{"url": "https://httpbin.org/stream/20"...'
@@ -452,6 +463,40 @@ If you want to set a global option in ``Session``, you can use the same paramete
 
 For a complete list, see :doc:`api`
 
+Caching
+~~~~~~~
+
+``Session`` can cache successful responses, which is useful in tests where you
+want to avoid repeated network calls or mock a stable upstream response.
+
+.. code-block:: python
+
+    from datetime import timedelta
+    from curl_cffi import Session
+
+    with Session(cache=timedelta(minutes=5)) as s:
+        r = s.get("https://example.com/api")
+
+For more control over cache location and behavior, see :doc:`advanced`.
+
+Retries
+~~~~~~~
+
+Use ``retry`` to automatically re-run failed requests.
+
+.. code-block:: python
+
+    from curl_cffi import Session, RetryStrategy
+
+    # Simple count-based retries
+    with Session(retry=2) as s:
+        r = s.get("https://example.com")
+
+    # Custom strategy with delay/backoff/jitter
+    strategy = RetryStrategy(count=3, delay=0.2, jitter=0.1, backoff="exponential")
+    with Session(retry=strategy) as s:
+        r = s.get("https://example.com")
+
 Response vs Session cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -529,8 +574,8 @@ WebSockets
     def on_message(ws: WebSocket, message):
         print(message)
 
-    with Session() as s:
-        ws = s.ws_connect(
+    with Session() as session:
+        ws = session.ws_connect(
             "wss://api.gemini.com/v1/marketdata/BTCUSD",
             on_message=on_message,
         )
@@ -540,10 +585,10 @@ WebSockets
     import asyncio
     from curl_cffi import AsyncSession
 
-    async with AsyncSession() as s:
-        ws = await s.ws_connect("wss://echo.websocket.org")
-        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-        async for message in ws:
-            print(message)
+    async with AsyncSession() as session:
+        async with session.ws_connect("wss://echo.websocket.org") as ws:
+            await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+            async for message in ws:
+                print(message)
 
 For detailed websocket guide, see :doc:`websockets`.

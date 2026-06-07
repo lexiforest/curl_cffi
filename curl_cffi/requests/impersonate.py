@@ -6,6 +6,7 @@ from typing import Literal, Optional, TypedDict
 from ..const import CurlOpt, CurlSslVersion
 from ..utils import CurlCffiWarning
 
+
 BrowserTypeLiteral = Literal[
     # Edge
     "edge99",
@@ -26,6 +27,8 @@ BrowserTypeLiteral = Literal[
     "chrome133a",
     "chrome136",
     "chrome142",
+    "chrome145",
+    "chrome146",
     "chrome99_android",
     "chrome131_android",
     # Safari
@@ -44,6 +47,7 @@ BrowserTypeLiteral = Literal[
     "firefox133",
     "firefox135",
     "firefox144",
+    "firefox147",
     "tor145",
     # alias
     "chrome",
@@ -75,31 +79,31 @@ BrowserTypeLiteral = Literal[
 ]
 
 
-DEFAULT_CHROME = "chrome142"
+DEFAULT_CHROME = "chrome146"
 DEFAULT_EDGE = "edge101"
 DEFAULT_SAFARI = "safari2601"
 DEFAULT_SAFARI_IOS = "safari260_ios"
 DEFAULT_SAFARI_BETA = "safari2601"
 DEFAULT_SAFARI_IOS_BETA = "safari260_ios"
 DEFAULT_CHROME_ANDROID = "chrome131_android"
-DEFAULT_FIREFOX = "firefox144"
+DEFAULT_FIREFOX = "firefox147"
 DEFAULT_TOR = "tor145"
 
 
 REAL_TARGET_MAP = {
-    "chrome": "chrome142",
+    "chrome": "chrome146",
     "edge": "edge101",
     "safari": "safari2601",
     "safari_ios": "safari260_ios",
     "safari_beta": "safari2601",
     "safari_ios_beta": "safari260_ios",
     "chrome_android": "chrome131_android",
-    "firefox": "firefox144",
+    "firefox": "firefox147",
     "tor": "tor145",
 }
 
 
-def normalize_browser_type(item):
+def resolve_latest_browser_type(item):
     if item == "chrome":  # noqa: SIM116
         return DEFAULT_CHROME
     elif item == "edge":
@@ -140,6 +144,8 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     chrome133a = "chrome133a"
     chrome136 = "chrome136"
     chrome142 = "chrome142"
+    chrome145 = "chrome145"
+    chrome146 = "chrome146"
     chrome99_android = "chrome99_android"
     chrome131_android = "chrome131_android"
     safari153 = "safari153"
@@ -155,6 +161,8 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
     safari2601 = "safari2601"
     firefox133 = "firefox133"
     firefox135 = "firefox135"
+    firefox144 = "firefox144"
+    firefox147 = "firefox147"
     tor145 = "tor145"
 
     # deprecated aliases
@@ -168,29 +176,39 @@ class BrowserType(str, Enum):  # TODO: remove in version 1.x
 
 @dataclass
 class ExtraFingerprints:
-    tls_min_version: int = CurlSslVersion.TLSv1_2
-    tls_grease: bool = False
-    tls_permute_extensions: bool = False
-    tls_cert_compression: Literal["zlib", "brotli"] = "brotli"
+    tls_min_version: Optional[int] = None
+    tls_grease: Optional[bool] = None
+    tls_permute_extensions: Optional[bool] = None
+    tls_cert_compression: Optional[Literal["zlib", "brotli"]] = None
     tls_signature_algorithms: Optional[list[str]] = None
     tls_delegated_credential: str = ""
     tls_record_size_limit: int = 0
-    http2_stream_weight: int = 256
-    http2_stream_exclusive: int = 1
+    http2_stream_weight: Optional[int] = None
+    http2_stream_exclusive: Optional[int] = None
     http2_no_priority: bool = False
+    header_order: Optional[str] = None
+    split_cookies: Optional[bool] = None
+    form_boundary: Optional[bool] = None
+    http3_sig_hash_algs: Optional[str] = None
+    http3_tls_extension_order: Optional[str] = None
 
 
 class ExtraFpDict(TypedDict, total=False):
-    tls_min_version: int
-    tls_grease: bool
-    tls_permute_extensions: bool
-    tls_cert_compression: Literal["zlib", "brotli"]
+    tls_min_version: Optional[int]
+    tls_grease: Optional[bool]
+    tls_permute_extensions: Optional[bool]
+    tls_cert_compression: Optional[Literal["zlib", "brotli"]]
     tls_signature_algorithms: Optional[list[str]]
     tls_delegated_credential: str
     tls_record_size_limit: int
-    http2_stream_weight: int
-    http2_stream_exclusive: int
+    http2_stream_weight: Optional[int]
+    http2_stream_exclusive: Optional[int]
     http2_no_priority: bool
+    header_order: Optional[str]
+    split_cookies: Optional[bool]
+    form_boundary: Optional[bool]
+    http3_sig_hash_algs: Optional[str]
+    http3_tls_extension_order: Optional[str]
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
@@ -201,6 +219,7 @@ TLS_VERSION_MAP = {
     0x0303: CurlSslVersion.TLSv1_2,  # 771
     0x0304: CurlSslVersion.TLSv1_3,  # 772
 }
+
 
 # A list of the possible cipher suite ids. Taken from
 # http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
@@ -431,7 +450,7 @@ def toggle_extension(curl, extension_id: int, enable: bool):
     elif extension_id == 21:
         pass  # type: ignore
     # firefox extension, toggled by extra_fp
-    elif extension_id in [34, 28]:
+    elif extension_id in (34, 28):
         pass
     else:
         raise NotImplementedError(

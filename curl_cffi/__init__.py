@@ -8,11 +8,14 @@ __all__ = [
     "CurlMOpt",
     "CurlECode",
     "CurlHttpVersion",
+    "CurlFollow",
     "CurlSslVersion",
     "CurlWsFlag",
     "config_warnings",
+    "Fingerprint",
+    "FingerprintManager",
+    "get_fingerprint",
     "ffi",
-    "is_pro",
     "lib",
     "Session",
     "AsyncSession",
@@ -35,8 +38,11 @@ __all__ = [
     "WebSocketError",
     "WebSocketClosed",
     "WebSocketTimeout",
+    "WebSocketRetryStrategy",
     "WsCloseCode",
     "ExtraFingerprints",
+    "CacheBackend",
+    "FileCacheBackend",
     "CookieTypes",
     "HeaderTypes",
     "ProxySpec",
@@ -52,6 +58,7 @@ from ._wrapper import ffi, lib
 from .aio import AsyncCurl
 from .const import (
     CurlECode,
+    CurlFollow,
     CurlHttpVersion,
     CurlInfo,
     CurlMOpt,
@@ -66,9 +73,11 @@ from .requests import (
     AsyncWebSocket,
     BrowserType,
     BrowserTypeLiteral,
+    CacheBackend,
     Cookies,
     CookieTypes,
     ExtraFingerprints,
+    FileCacheBackend,
     Headers,
     HeaderTypes,
     ProxySpec,
@@ -79,6 +88,7 @@ from .requests import (
     WebSocketClosed,
     WebSocketError,
     WebSocketTimeout,
+    WebSocketRetryStrategy,
     WsCloseCode,
     delete,
     exceptions,
@@ -91,6 +101,7 @@ from .requests import (
     request,
 )
 
-from .utils import config_warnings, is_pro
+from .utils import config_warnings
+from .fingerprints import Fingerprint, FingerprintManager, get_fingerprint
 
 config_warnings(on=False)

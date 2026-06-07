@@ -1,9 +1,18 @@
 .ONESHELL:
 SHELL := bash
 
+PYTHON ?= python3
+PIP ?= $(PYTHON) -m pip
+
 # this is the upstream libcurl-impersonate version
-VERSION := 1.2.3
+VERSION := 2.0.0a5
 CURL_VERSION := curl-8_15_0
+
+ifeq ($(OS),Windows_NT)
+    CURRENT_USER := $(shell echo %USERNAME%)
+else
+    CURRENT_USER := $(shell whoami)
+endif
 
 $(CURL_VERSION):
 	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
@@ -28,7 +37,7 @@ curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
 	touch .preprocessed
 
 local-curl: $(CURL_VERSION)
-	cp /usr/local/lib/libcurl-impersonate* /Users/runner/work/_temp/install/lib/
+	cp /usr/local/lib/libcurl-impersonate* /Users/$(CURRENT_USER)/work/_temp/install/lib/
 	cd $(CURL_VERSION)
 	for p in ../curl-impersonate/patches/curl*.patch; do patch -p1 < ../$$p; done
 	# Re-generate the configure script
@@ -39,27 +48,27 @@ local-curl: $(CURL_VERSION)
 	touch .preprocessed
 
 gen-const:
-	python scripts/generate_consts.py $(CURL_VERSION)
+	$(PYTHON) scripts/generate_consts.py $(CURL_VERSION)
 
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
 
 install-editable:
-	pip install -e .
+	$(PIP) install -e .
 
 build: .preprocessed
 	rm -rf dist/
-	pip install build
-	python -m build --wheel
+	$(PIP) install build
+	$(PYTHON) -m build --wheel
 
 lint:
-	ruff check --exclude issues
+	uv run ruff check --exclude issues
 
 format:
-	ruff format --exclude issues
+	uv run ruff format --exclude issues
 
 test:
-	python -bb -m pytest tests/unittest
+	$(PYTHON) -bb -m pytest tests/unittest
 
 clean:
 	rm -rf build/ dist/ curl_cffi.egg-info/ $(CURL_VERSION)/ curl-impersonate-$(VERSION)/

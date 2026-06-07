@@ -1,0 +1,22 @@
+name: PR Checklist
+
+permissions: {}
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-review-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check review confirmation
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if echo "$BODY" | grep -q '\[x\] I have manually reviewed the changes and fully understand the code\.'; then
+            echo "Checklist item confirmed."
+          else
+            echo "::error::You must check the box: 'I have manually reviewed the change and fully understand the code.'"
+            exit 1
+          fi

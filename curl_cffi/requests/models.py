@@ -24,6 +24,24 @@ with suppress(ImportError):
     import readability as rd
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
+# https://www.rfc-editor.org/rfc/rfc7159#section-8.1
+JSON_NATIVE_ENCODINGS = {
+    "utf-8",
+    "utf8",
+    "utf-8-sig",
+    "utf-16",
+    "utf16",
+    "utf-16-be",
+    "utf-16-le",
+    "utf-16be",
+    "utf-16le",
+    "utf-32",
+    "utf32",
+    "utf-32-be",
+    "utf-32-le",
+    "utf-32be",
+    "utf-32le",
+}
 STREAM_END = object()
 
 
@@ -35,12 +53,26 @@ def clear_queue(q: queue.Queue):
 
 
 class Request:
-    """Representing a sent request."""
+    """Representing a sent request.
 
-    def __init__(self, url: str, headers: Headers, method: str):
+    Attributes:
+        url: request url.
+        headers: request headers.
+        method: request http method.
+        body: request body as bytes, or None if not provided.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        headers: Headers,
+        method: str,
+        body: Optional[bytes] = None,
+    ):
         self.url = url
         self.headers = headers
         self.method = method
+        self.body = body
 
 
 class Response:
@@ -102,6 +134,7 @@ class Response:
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
+        self._stream_closed = False
         self.download_size: int = 0
         self.upload_size: int = 0
         self.header_size: int = 0
@@ -223,7 +256,7 @@ class Response:
 
             # re-raise the exception if something wrong happened.
             if isinstance(chunk, RequestException):
-                self.curl.reset()
+                self._finalize_stream()
                 raise chunk
 
             # end of stream.
@@ -231,18 +264,33 @@ class Response:
                 break
 
             yield chunk
+        self._finalize_stream()
 
     def json(self, **kw):
         """return a parsed json object of the content."""
+        charset_encoding = self.charset_encoding
+        if charset_encoding is not None:
+            encoding = charset_encoding.lower().replace("_", "-")
+            if encoding not in JSON_NATIVE_ENCODINGS:
+                return loads(self.text, **kw)
         return loads(self.content, **kw)
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
+        self._finalize_stream()
 
+    def _finalize_stream(self) -> None:
+        if self._stream_closed:
+            return
+        if self.queue is None and self.stream_task is None and self.quit_now is None:
+            return
+        self._stream_closed = True
         if self.quit_now:
             self.quit_now.set()
         if self.stream_task:
             self.stream_task.result()
+        if self.curl:
+            self.curl.close()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """

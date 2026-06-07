@@ -3,17 +3,16 @@
 Websocket server example - TLS (WSS)
 """
 
-from asyncio import (
-    FIRST_COMPLETED,
-    AbstractEventLoop,
-    CancelledError,
-    Task,
-    get_running_loop,
-    wait,
-)
+from asyncio import TaskGroup
 
 from aiohttp import web
-from ws_bench_utils import binary_data_generator, config, get_loop, logger
+from ws_bench_utils import (
+    BenchmarkDirection,
+    binary_data_generator,
+    config,
+    get_loop,
+    logger,
+)
 
 
 async def recv(ws: web.WebSocketResponse) -> None:
@@ -54,30 +53,27 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     Returns:
         web.WebSocketResponse: Response object
     """
-    loop: AbstractEventLoop = get_running_loop()
-    waiters: set[Task[None]] = set()
     ws: web.WebSocketResponse = web.WebSocketResponse()
     _ = await ws.prepare(request)
     logger.info("Secure client connected.")
 
     try:
-        # NOTE: Uncomment for send/recv or both concurrently
-        # waiters.add(loop.create_task(recv(ws)))
-        waiters.add(loop.create_task(send(ws)))
+        async with TaskGroup() as tg:
+            # This is server side so everything is reversed
+            match config.benchmark_direction:
+                case BenchmarkDirection.READ_ONLY:
+                    _ = tg.create_task(send(ws))
 
-        _, _ = await wait(waiters, return_when=FIRST_COMPLETED)
+                case BenchmarkDirection.SEND_ONLY:
+                    _ = tg.create_task(recv(ws))
 
+                case BenchmarkDirection.CONCURRENT:
+                    _ = tg.create_task(send(ws))
+                    _ = tg.create_task(recv(ws))
+
+    # pylint: disable-next=broad-exception-caught
     except Exception:
         logger.exception("Connection closed with exception")
-
-    finally:
-        for wait_task in waiters:
-            try:
-                if not wait_task.done():
-                    _ = wait_task.cancel()
-                    await wait_task
-            except CancelledError:
-                ...
 
     logger.info("Client disconnected.")
     return ws
