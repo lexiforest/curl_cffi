@@ -1069,14 +1069,10 @@ class AsyncSession(BaseSession[R]):
                 tasks.append(self.loop.run_in_executor(None, curl.upkeep))
 
         try:
-            if not tasks:
-                return []
-            results = await asyncio.gather(*tasks)
-            return list(results)
+            return list(await asyncio.gather(*tasks))
         finally:
             for curl in pooled_curls:
-                with suppress(asyncio.QueueFull):
-                    self.pool.put_nowait(curl)
+                self.push_curl(curl)
 
     def release_curl(self, curl: Curl) -> None:
         curl.clean_handles_and_buffers()
