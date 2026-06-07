@@ -242,8 +242,18 @@ With http/2, you can optionally send a ping frame to keep the connection alive w
 
 .. code-block:: python
 
-   import curl_cffi
+   from curl_cffi import Session
 
    s = Session()
    s.get("https://example.com")
    s.upkeep()
+
+``AsyncSession`` also exposes ``upkeep`` for idle connections in its pool:
+
+.. code-block:: python
+
+   from curl_cffi import AsyncSession
+
+   async with AsyncSession() as s:
+       await s.get("https://example.com")
+       await s.upkeep()
