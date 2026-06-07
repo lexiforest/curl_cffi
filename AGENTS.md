@@ -7,6 +7,8 @@ on cffi for interfacing between python and libcurl.
 
 `curl_cffi/` contains the Python package, including the low-level bindings in `curl.py` and the higher-level `requests/` API. Tests live under `tests/` and are split by scope: `tests/unittest/`, `tests/integration/`, and `tests/threads/`. Supporting material is kept in `docs/` (Sphinx docs), `examples/`, `benchmark/`, `scripts/`, `ffi/`, and `assets/`.
 
+`curl_cffi/cli` contains the CLI implementation.
+
 ## Build, Test, and Development Commands
 
 Use `uv` to manage venv and dependencies.
@@ -30,3 +32,6 @@ Pytest is the test runner; async coverage uses `pytest-asyncio` and `pytest-trio
 ## Commit & Pull Request Guidelines
 
 Recent history favors short, imperative commit subjects, often with a type or scope prefix, for example `feat: add support for loongarch64` or `ws: fix BufferError crash`. Keep commits focused and easy to review. For pull requests, open from a branch other than `main`, enable "Allow edits by maintainers", describe the user-visible change, link related issues, and note platform-specific build or test impact when relevant.
+
+## Configuration Notes
+- `make preprocess` and `make build` download upstream sources; ensure network access is available.

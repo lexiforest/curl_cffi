@@ -12,6 +12,7 @@ curl_cffi's documentation
    :glob:
 
    quick_start
+   fingerprints
    cli/_index
    impersonate/_index
    advanced
@@ -58,17 +59,6 @@ to register.
 
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
-
-Residential Proxies
-~~~~~~~~~~~~~~~~~~~
-
-.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png
-   :width: 149
-   :alt: Thordata
-   :target: https://www.thordata.com/?ls=github&lk=curl_
-
-`Thordata <https://www.thordata.com/?ls=github&lk=curl_>`_: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of `residential proxies <https://www.thordata.com/?ls=github&lk=curl_>`_ and receive 2000 free SERP API calls.
-
 
 Features
 --------
@@ -157,9 +147,15 @@ For more details, see :doc:`quick_start`.
 Documentation
 -------------
 
-You can first check out :doc:`quick_start`. Then the :doc:`impersonate`.
+You can first check out :doc:`quick_start`. Then :doc:`impersonate/_index`.
 
 For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websockets`.
+
+Since v0.15.1, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
+
+Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
+
+There is a CLI helper for managing fingerprints and debugging, see :doc:`cli/_index`.
 
 You can also find common use cases in the `examples <https://github.com/lexiforest/curl_cffi/tree/main/examples>`_ directory.
 

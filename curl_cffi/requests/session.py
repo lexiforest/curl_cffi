@@ -17,6 +17,7 @@ from datetime import timedelta
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
+    Any,
     Generic,
     Literal,
     Optional,
@@ -61,6 +62,8 @@ else:
 if TYPE_CHECKING:
     from typing_extensions import Unpack
 
+    from ..fingerprints import Fingerprint
+
     class ProxySpec(TypedDict, total=False):
         all: str
         http: str
@@ -83,7 +86,7 @@ if TYPE_CHECKING:
         allow_redirects: Union[bool, CurlFollow, str]
         max_redirects: int
         retry: Union[int, RetryStrategy]
-        impersonate: Optional[BrowserTypeLiteral]
+        impersonate: Optional[Union[BrowserTypeLiteral, str, Fingerprint]]
         ja3: Optional[str]
         akamai: Optional[str]
         perk: Optional[str]
@@ -119,7 +122,7 @@ if TYPE_CHECKING:
         referer: Optional[str]
         accept_encoding: Optional[str]
         content_callback: Optional[Callable]
-        impersonate: Optional[BrowserTypeLiteral]
+        impersonate: Optional[Union[BrowserTypeLiteral, str, Fingerprint]]
         ja3: Optional[str]
         akamai: Optional[str]
         perk: Optional[str]
@@ -227,7 +230,7 @@ class BaseSession(Generic[R]):
         allow_redirects: Union[bool, CurlFollow, str] = True,
         max_redirects: int = 30,
         retry: Optional[Union[int, RetryStrategy]] = 0,
-        impersonate: Optional[BrowserTypeLiteral] = None,
+        impersonate: Optional[Union[BrowserTypeLiteral, str, Fingerprint]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -468,12 +471,13 @@ class Session(BaseSession[R]):
                 internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
-            impersonate: which browser version to impersonate in the session.
+            impersonate: which browser version or fingerprint to impersonate
+                in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
-            interface: which interface use.
+            interface: interface name or local IP to bind to (bare IP = source address).
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
                 automatic detection.
@@ -633,7 +637,7 @@ class Session(BaseSession[R]):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable[..., object]] = None,
-        impersonate: Optional[BrowserTypeLiteral] = None,
+        impersonate: Optional[Union[BrowserTypeLiteral, str, Fingerprint]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -723,7 +727,8 @@ class Session(BaseSession[R]):
                         c, buffer, header_buffer, default_encoding, discard_cookies
                     )
                     rsp.request = req
-                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
+                    error = code2error(e.code, str(e))
+                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
@@ -810,7 +815,7 @@ class Session(BaseSession[R]):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[BrowserTypeLiteral] = None,
+        impersonate: Optional[Union[BrowserTypeLiteral, Fingerprint]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -944,7 +949,8 @@ class AsyncSession(BaseSession[R]):
                 internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
-            impersonate: which browser version to impersonate in the session.
+            impersonate: which browser version or fingerprint to impersonate
+                in the session.
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
@@ -981,6 +987,7 @@ class AsyncSession(BaseSession[R]):
         super().__init__(**kwargs)
         self._loop: asyncio.AbstractEventLoop | None = loop
         self._acurl: AsyncCurl | None = async_curl
+        self._owns_acurl: bool = async_curl is None
         self.max_clients: int = max_clients
         self.init_pool()
 
@@ -1024,7 +1031,8 @@ class AsyncSession(BaseSession[R]):
 
     async def close(self) -> None:
         """Close the session."""
-        await self.acurl.close()
+        if self._owns_acurl:
+            await self.acurl.close()
         self._closed = True
         while True:
             try:
@@ -1074,7 +1082,7 @@ class AsyncSession(BaseSession[R]):
         verify: bool | None = None,
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
-        impersonate: BrowserTypeLiteral | None = None,
+        impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
         ja3: str | None = None,
         akamai: str | None = None,
         perk: str | None = None,
@@ -1085,13 +1093,13 @@ class AsyncSession(BaseSession[R]):
         interface: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
-        recv_queue_size: int = 32,
-        send_queue_size: int = 16,
-        max_send_batch_size: int = 32,
+        recv_queue_size: int = 128,
+        send_queue_size: int = 128,
+        max_send_batch_size: int = 64,
         coalesce_frames: bool = False,
         ws_retry: WebSocketRetryStrategy | None = None,
-        recv_time_slice: float = 0.005,
-        send_time_slice: float = 0.001,
+        recv_time_slice: float = 0.01,
+        send_time_slice: float = 0.005,
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
@@ -1121,7 +1129,7 @@ class AsyncSession(BaseSession[R]):
             verify: whether to verify https certs.
             referer: shortcut for setting referer header.
             accept_encoding: shortcut for setting accept-encoding header.
-            impersonate: which browser version to impersonate.
+            impersonate: which browser version or fingerprint to impersonate.
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
             perk: perk string to impersonate.
@@ -1133,7 +1141,7 @@ class AsyncSession(BaseSession[R]):
                 url will be kept as is, without any automatic percent-encoding, you must
                 encode the URL yourself.
             http_version: limiting http version, defaults to http2.
-            interface: which interface to use.
+            interface: interface name or local IP to bind to (bare IP = source address).
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             recv_queue_size: The maximum number of incoming WebSocket
@@ -1152,10 +1160,10 @@ class AsyncSession(BaseSession[R]):
             ws_retry (WebSocketRetryStrategy): Retry policy for WebSocket messages.
             recv_time_slice: The maximum duration (in seconds) to process incoming
                 messages before yielding to the event loop.
-                Defaults to ``0.005`` (5ms).
+                Defaults to ``0.01`` (10ms).
             send_time_slice: The maximum duration (in seconds) to process outgoing
                 messages before yielding to the event loop.
-                Defaults to ``0.001`` (1ms).
+                Defaults to ``0.005`` (5ms).
             max_message_size: Maximum allowed size for a complete received
                 WebSocket message (default: ``4 MiB``).
             drain_on_error: If ``True``, when a connection error occurs,
@@ -1209,6 +1217,7 @@ class AsyncSession(BaseSession[R]):
                 queue_class=asyncio.Queue,
                 event_class=asyncio.Event,
                 curl_options=curl_options,
+                perk=perk,
             )
             _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
             _ = curl.setopt(
@@ -1271,7 +1280,7 @@ class AsyncSession(BaseSession[R]):
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
         content_callback: Optional[Callable] = None,
-        impersonate: Optional[BrowserTypeLiteral] = None,
+        impersonate: Optional[Union[BrowserTypeLiteral, str, Fingerprint]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
@@ -1344,7 +1353,8 @@ class AsyncSession(BaseSession[R]):
                         curl, buffer, header_buffer, default_encoding, discard_cookies
                     )
                     rsp.request = req
-                    q.put_nowait(RequestException(str(e), e.code, rsp))  # type: ignore
+                    error = code2error(e.code, str(e))
+                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
@@ -1404,12 +1414,16 @@ class AsyncSession(BaseSession[R]):
         self,
         method: HttpMethod,
         url: str,
-        params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
-        json: Optional[dict | list] = None,
+        params: Optional[
+            Union[dict[str, str], list[tuple[str, str]], tuple[tuple[str, str], ...]]
+        ] = None,
+        data: Optional[
+            Union[dict[str, str], list[tuple[str, str]], str, BytesIO, bytes]
+        ] = None,
+        json: Optional[Union[dict[str, Any], list[Any]]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
-        files: Optional[dict] = None,
+        files: Optional[dict[str, Any]] = None,
         auth: Optional[tuple[str, str]] = None,
         timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[Union[bool, CurlFollow, str]] = None,
@@ -1420,8 +1434,8 @@ class AsyncSession(BaseSession[R]):
         verify: Optional[bool] = None,
         referer: Optional[str] = None,
         accept_encoding: Optional[str] = "gzip, deflate, br",
-        content_callback: Optional[Callable] = None,
-        impersonate: Optional[BrowserTypeLiteral] = None,
+        content_callback: Optional[Callable[..., Any]] = None,
+        impersonate: Optional[Union[BrowserTypeLiteral, Fingerprint]] = None,
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,

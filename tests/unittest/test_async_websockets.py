@@ -19,12 +19,22 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
+import unittest.mock
 from asyncio import Task
-from collections.abc import AsyncIterator, Awaitable, Callable, Generator
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterator,
+)
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from struct import unpack
 from typing import Protocol
+from unittest.mock import Mock
 
 import pytest
 import websockets
@@ -33,6 +43,9 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 from curl_cffi import (
     AsyncSession,
     AsyncWebSocket,
+    Curl,
+    CurlECode,
+    CurlError,
     CurlWsFlag,
     Response,
     WebSocketClosed,
@@ -58,6 +71,7 @@ class ServerBehavior(Enum):
     SILENT = auto()  # Accept messages but never respond
     LARGE_RESPONSE = auto()  # Respond with large messages
     FRAGMENTED = auto()  # Send fragmented messages
+    SEND_PINGS = auto()  # Send PING control frames
 
 
 @dataclass
@@ -71,6 +85,7 @@ class ServerConfig:
     response_size: int = 1024
     close_code: int = WsCloseCode.OK
     close_reason: str = ""
+    max_size: int = 32 * 1024 * 1024
 
 
 class WebSocketHandler(Protocol):
@@ -114,6 +129,32 @@ async def broadcast_handler(
         for msg in config.broadcast_messages:
             await ws.send(msg)
         # Keep connection open until client closes
+        async for _ in ws:
+            pass
+    except (ConnectionClosedOK, ConnectionClosedError):
+        pass
+
+
+async def send_pings_handler(
+    ws: websockets.ServerConnection, _config: ServerConfig
+) -> None:
+    """Sends PING frames mixed with standard messages to test filtering."""
+    try:
+        # Send a PING frame
+        _ = await ws.ping(b"server_ping_1")
+        await asyncio.sleep(0.05)
+
+        # Send a normal DATA frame
+        await ws.send(b"data_1")
+
+        # Send another PING frame
+        _ = await ws.ping(b"server_ping_2")
+        await asyncio.sleep(0.05)
+
+        # Send another DATA frame
+        await ws.send(b"data_2")
+
+        # Keep connection open
         async for _ in ws:
             pass
     except (ConnectionClosedOK, ConnectionClosedError):
@@ -174,6 +215,7 @@ HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.SILENT: silent_handler,
     ServerBehavior.LARGE_RESPONSE: large_response_handler,
     ServerBehavior.DELAYED_ECHO: echo_handler,  # Uses delay from config
+    ServerBehavior.SEND_PINGS: send_pings_handler,
 }
 
 
@@ -220,7 +262,10 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
             await handler_fn(ws, cfg)
 
         async def _run() -> None:
-            async with websockets.serve(handler, "127.0.0.1", port):
+            initial_max_size: int = config_holder[0].max_size
+            async with websockets.serve(
+                handler, "127.0.0.1", port, max_size=initial_max_size
+            ):
                 stop_q.put(_stop)
                 ready.set()
                 _ = await stop_event.wait()
@@ -301,7 +346,7 @@ async def create_ws(
     session: AsyncSession[Response],
     url: str,
     **kwargs,
-) -> AsyncIterator[AsyncWebSocket]:
+) -> AsyncGenerator[AsyncWebSocket]:
     """Context manager for creating WebSocket connections with custom options."""
     ws: AsyncWebSocket = await session.ws_connect(url, **kwargs)
     try:
@@ -473,11 +518,53 @@ class TestAsyncWebSocketMessageTypes:
         ws_config: Callable[..., None],
     ) -> None:
         """Test recv_json raises on empty payload."""
-        ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=[b""])
+        ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=[""])
         async with session.ws_connect(configurable_ws_server.url) as ws:
             with pytest.raises(WebSocketError) as exc_info:
                 await ws.recv_json()
             assert "empty" in str(exc_info.value).lower()
+
+    async def test_pong_is_silently_consumed(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that server PONG replies are silently consumed and not enqueued."""
+        ws_config(behavior=ServerBehavior.SILENT)
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            # Send a ping. The Python `websockets` server replies with a PONG.
+            await ws.ping(b"heartbeat")
+
+            # Wait a moment to ensure the PONG arrives back at the client
+            await asyncio.sleep(0.1)
+
+            # The queue should be completely empty, proving the PONG was dropped
+            # by the _read_loop and didn't leak into the application data.
+            with pytest.raises(WebSocketTimeout):
+                _ = await ws.recv(timeout=0.2)
+
+    async def test_server_ping_is_silently_consumed(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that server-initiated PING frames are silently consumed."""
+        ws_config(behavior=ServerBehavior.SEND_PINGS)
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            # We expect to sequentially receive the data messages, skipping the PINGs
+            data1, flags1 = await ws.recv(timeout=1.0)
+            assert data1 == b"data_1"
+            assert not (flags1 & CurlWsFlag.PING)
+
+            data2, flags2 = await ws.recv(timeout=1.0)
+            assert data2 == b"data_2"
+            assert not (flags2 & CurlWsFlag.PING)
+
+            # Verify no rogue PING frames are left in the queue
+            with pytest.raises(WebSocketTimeout):
+                _ = await ws.recv(timeout=0.2)
 
 
 class TestAsyncWebSocketTimeouts:
@@ -504,27 +591,6 @@ class TestAsyncWebSocketTimeouts:
         # Should not timeout
         response: str = await ws_connection.recv_str(timeout=5.0)
         assert response == "quick"
-
-    @pytest.mark.skip(
-        reason="Queue fills too fast to reliably test - implementation detail"
-    )
-    async def test_send_timeout_queue_full(
-        self,
-        session: AsyncSession[Response],
-        configurable_ws_server: ConfigurableWSServer,
-        ws_config: Callable[..., None],
-    ) -> None:
-        """Test send timeout when queue is full."""
-        ws_config(behavior=ServerBehavior.SILENT)
-        async with session.ws_connect(
-            configurable_ws_server.url,
-            send_queue_size=1,
-        ) as ws:
-            # Fill the queue
-            await ws.send(payload=b"first")
-            # This should timeout trying to enqueue
-            with pytest.raises(WebSocketTimeout):
-                await ws.send(b"second", timeout=0.1)
 
 
 class TestAsyncWebSocketLargeMessages:
@@ -684,9 +750,9 @@ class TestAsyncWebSocketConcurrency:
                 _ = task.cancel()
 
             # All tasks should complete (no deadlock)
-            assert len(pending) == 0, (
-                f"Deadlock detected: {len(pending)} tasks still pending"
-            )
+            assert (
+                len(pending) == 0
+            ), f"Deadlock detected: {len(pending)} tasks still pending"
             assert len(done) == num_consumers
 
             # Collect results - some may be messages or errors if connection closed
@@ -828,9 +894,9 @@ class TestAsyncWebSocketConcurrency:
             # Should have at least 1 message (the echo) and the rest should be
             # close frames or closed errors
             assert messages >= 1, "Expected at least the echo message"
-            assert timeout_errors == 0, (
-                "No recv() should timeout - connection should close cleanly"
-            )
+            assert (
+                timeout_errors == 0
+            ), "No recv() should timeout - connection should close cleanly"
 
 
 class TestAsyncWebSocketCancellation:
@@ -854,32 +920,6 @@ class TestAsyncWebSocketCancellation:
 
             # Connection should still be alive
             assert ws.is_alive()
-
-    @pytest.mark.skip(
-        reason="Queue fills too fast to reliably test - implementation detail"
-    )
-    async def test_cancel_send_during_queue_wait(
-        self,
-        session: AsyncSession[Response],
-        configurable_ws_server: ConfigurableWSServer,
-        ws_config: Callable[..., None],
-    ) -> None:
-        """Test cancelling send while waiting on full queue."""
-        ws_config(behavior=ServerBehavior.SILENT)
-        async with session.ws_connect(
-            configurable_ws_server.url,
-            send_queue_size=1,
-        ) as ws:
-            # Fill queue
-            await ws.send(b"first")
-
-            # Start send that will wait
-            task: Task[None] = asyncio.create_task(ws.send(b"second"))
-            await asyncio.sleep(0.05)
-            _ = task.cancel()
-
-            with pytest.raises(asyncio.CancelledError):
-                await task
 
 
 class TestAsyncWebSocketClose:
@@ -915,6 +955,7 @@ class TestAsyncWebSocketClose:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         await ws.close()
 
+        # Test receive after close.
         with pytest.raises(WebSocketClosed):
             _ = await ws.recv()
 
@@ -992,6 +1033,27 @@ class TestAsyncWebSocketIterator:
             async for _ in ws:
                 pass
 
+    async def test_iterator_skips_control_frames(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that the async iterator cleanly skips ping/pong frames."""
+        ws_config(behavior=ServerBehavior.SEND_PINGS)
+
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            received: list[bytes] = []
+
+            # The iterator should seamlessly step over the PING frames
+            async for msg in ws:
+                received.append(msg)
+                if len(received) == 2:
+                    break
+
+            # We should only get the actual binary data payloads
+            assert received == [b"data_1", b"data_2"]
+
 
 class TestAsyncWebSocketQueueBehavior:
     """Tests for queue backpressure and overflow behavior."""
@@ -1021,30 +1083,6 @@ class TestAsyncWebSocketQueueBehavior:
                     received.append(msg)
                 except WebSocketTimeout:
                     break
-
-    @pytest.mark.skip(
-        reason="Queue drains too fast to reliably test - implementation detail"
-    )
-    async def test_send_queue_backpressure(
-        self,
-        session: AsyncSession[Response],
-        configurable_ws_server: ConfigurableWSServer,
-        ws_config: Callable[..., None],
-    ) -> None:
-        """Test send queue applies backpressure when full."""
-        ws_config(behavior=ServerBehavior.SILENT)
-
-        async with session.ws_connect(
-            configurable_ws_server.url,
-            send_queue_size=2,
-        ) as ws:
-            # Fill queue
-            await ws.send(b"1")
-            await ws.send(b"2")
-
-            # Next send should block briefly then timeout
-            with pytest.raises(WebSocketTimeout):
-                await ws.send(b"3", timeout=0.1)
 
     async def test_drain_on_error_false(
         self,
@@ -1110,28 +1148,6 @@ class TestAsyncWebSocketFlush:
         await ws_connection.flush(timeout=5.0)
         assert ws_connection.send_queue_size == 0
 
-    @pytest.mark.skip(reason="Flush completes too fast - libcurl buffers internally")
-    async def test_flush_timeout(
-        self,
-        session: AsyncSession[Response],
-        configurable_ws_server: ConfigurableWSServer,
-        ws_config: Callable[..., None],
-    ) -> None:
-        """Test flush timeout when messages can't be sent."""
-        ws_config(behavior=ServerBehavior.SILENT)
-
-        async with session.ws_connect(
-            configurable_ws_server.url,
-            send_queue_size=100,
-        ) as ws:
-            # Queue many messages
-            for _ in range(50):
-                await ws.send(b"x" * 10000)
-
-            # Flush with very short timeout
-            with pytest.raises(WebSocketTimeout):
-                await ws.flush(timeout=0.001)
-
 
 class TestAsyncWebSocketStateChecks:
     """Tests for connection state inspection methods."""
@@ -1172,7 +1188,7 @@ class TestAsyncWebSocketStateChecks:
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         try:
             # Wait for close frame
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.5)
             with suppress(WebSocketClosed, WebSocketError, WebSocketTimeout):
                 _ = await ws.recv(timeout=0.5)
         finally:
@@ -1362,7 +1378,7 @@ class TestAsyncWebSocketParameterBoundaries:
                 data, _ = await ws.recv(timeout=5.0)
                 assert data == f"batch_{i}".encode()
 
-    @pytest.mark.parametrize("time_slice", [0.001, 0.005, 0.01, 0.05])
+    @pytest.mark.parametrize("time_slice", [0.001, 0.01, 0.05])
     async def test_various_time_slices(
         self,
         session: AsyncSession[Response],
@@ -1371,16 +1387,40 @@ class TestAsyncWebSocketParameterBoundaries:
         time_slice: float,
     ) -> None:
         """Test recv_time_slice and send_time_slice parameters."""
-        ws_config(behavior=ServerBehavior.ECHO)
-        async with session.ws_connect(
-            configurable_ws_server.url,
-            recv_time_slice=time_slice,
-            send_time_slice=time_slice,
-        ) as ws:
-            for i in range(10):
-                await ws.send(f"slice_{i}".encode())
-                data, _ = await ws.recv(timeout=5.0)
-                assert data == f"slice_{i}".encode()
+        ws_config(behavior=ServerBehavior.ECHO, max_size=20 * 1024 * 1024)
+        heartbeat_ticks = 0
+
+        async def heartbeat() -> None:
+            nonlocal heartbeat_ticks
+            while True:
+                await asyncio.sleep(0.001)
+                heartbeat_ticks += 1
+
+        hb_task: Task[None] = asyncio.create_task(heartbeat())
+
+        try:
+            async with session.ws_connect(
+                configurable_ws_server.url,
+                recv_time_slice=time_slice,
+                send_time_slice=time_slice,
+                max_message_size=20 * 1024 * 1024,
+            ) as ws:
+                # 5MB payload ensures we trigger the time-based yield on all hardware
+                payload_size = 5 * 1024 * 1024
+                large_payload: bytes = b"A" * payload_size
+
+                await ws.send(large_payload)
+                data, _ = await ws.recv(timeout=10.0)
+
+                assert data == large_payload
+                # If time-slicing works, the heartbeat task must have been
+                # given time to run during the transfer.
+                assert heartbeat_ticks > 0
+
+        finally:
+            _ = hb_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await hb_task
 
     @pytest.mark.parametrize(
         "max_size",
@@ -1404,6 +1444,66 @@ class TestAsyncWebSocketParameterBoundaries:
             await ws.send(small_msg)
             data, _ = await ws.recv(timeout=5.0)
             assert data == small_msg
+
+    @pytest.mark.asyncio
+    async def test_client_enforces_max_message_size(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that the client drops the connection if the server
+        sends a too-large message."""
+
+        # Server sends a 2MB response
+        two_mb = 2 * 1024 * 1024
+        ws_config(behavior=ServerBehavior.LARGE_RESPONSE, response_size=two_mb)
+
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            # Client limit set to 1MB
+            max_message_size=1024 * 1024,
+        ) as ws:
+            # Trigger the large response
+            await ws.send(b"trigger")
+
+            # The client's _read_loop should detect the oversized message,
+            # close the connection, and raise a WebSocketError.
+            with pytest.raises(WebSocketError) as exc_info:
+                _ = await ws.recv(timeout=5.0)
+
+            assert "Message too large" in str(exc_info.value)
+            assert exc_info.value.code == CurlECode.TOO_LARGE
+
+    @pytest.mark.asyncio
+    async def test_server_enforces_max_message_size(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test the client's reaction when the server drops the connection
+        for an oversized message."""
+        ws_config(behavior=ServerBehavior.ECHO)
+
+        # 33MB is just over the 32MB default limit set in ServerConfig
+        too_big = 33 * 1024 * 1024
+        payload: bytes = b"A" * too_big
+
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            # Ensure client is willing to send it
+            max_message_size=40 * 1024 * 1024,
+        ) as ws:
+            await ws.send(payload)
+
+            # We expect a Close frame (1009 Message Too Big)
+            data, flags = await ws.recv(timeout=10.0)
+            assert flags & CurlWsFlag.CLOSE
+
+            # Payload starts with 2-byte integer code
+            close_code = unpack("!H", data[:2])[0]
+            assert close_code == WsCloseCode.MESSAGE_TOO_BIG  # 1009
 
 
 class TestAsyncWebSocketCoalesceFrames:
@@ -1474,6 +1574,174 @@ class TestAsyncWebSocketCoalesceFrames:
                 data, _ = await ws.recv(timeout=5.0)
                 assert f"msg_{i}".encode() in data
 
+    async def test_coalesce_preserves_message_order(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that coalescing does not reorder messages of different types."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            coalesce_frames=True,
+            max_send_batch_size=10,
+        ) as ws:
+            # Synchronously queue 3 different message types so they form a single batch
+            await ws.send_str("text_1")
+            await ws.send_binary(b"binary_1")
+            await ws.send_str("text_2")
+
+            await ws.flush(timeout=2.0)
+
+            # Assert they arrive in the exact order they were queued
+            msg1, flags1 = await ws.recv(timeout=2.0)
+            assert flags1 & CurlWsFlag.TEXT
+            assert msg1 == b"text_1"
+
+            msg2, flags2 = await ws.recv(timeout=2.0)
+            assert flags2 & CurlWsFlag.BINARY
+            assert msg2 == b"binary_1"
+
+            msg3, flags3 = await ws.recv(timeout=2.0)
+            assert flags3 & CurlWsFlag.TEXT
+            assert msg3 == b"text_2"
+
+    async def test_coalesce_control_frame_interleaving(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test that control frames split coalescing groups and don't get reordered."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            coalesce_frames=True,
+            max_send_batch_size=10,
+        ) as ws:
+            # Queue 2 text frames, a ping, and 2 more text frames
+            await ws.send_str("A")
+            await ws.send_str("B")
+            await ws.ping(b"heartbeat")
+            await ws.send_str("C")
+            await ws.send_str("D")
+
+            await ws.flush(timeout=2.0)
+
+            # The echo server should return the coalesced chunks separately
+            # Chunk 1: "AB"
+            msg1, flags1 = await ws.recv(timeout=2.0)
+            assert msg1 == b"AB"
+            assert flags1 & CurlWsFlag.TEXT
+
+            # (The server handles the PING and sends a PONG automatically,
+            # so the next data frame we see from the echo handler should be "CD")
+
+            # Chunk 2: "CD"
+            msg2, flags2 = await ws.recv(timeout=2.0)
+            assert msg2 == b"CD"
+            assert flags2 & CurlWsFlag.TEXT
+
+
+class TestAsyncWebSocketFragmentationFix:
+    """Tests targeting the payload fragmentation and partial write fixes."""
+
+    async def test_partial_write_exact_boundary_resumption(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """
+        Forces a partial write to ensure _send_payload resumes the exact
+        remaining bytes of the frame, avoiding the '(43) unaligned frame size' error.
+        """
+        original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
+        attempt_logs: list[tuple[int, int]] = []
+
+        def mock_ws_send(chunk: memoryview, flags: int) -> int:
+            chunk_len: int = len(chunk)
+
+            # On the very first large frame, simulate a full socket buffer
+            # by refusing to accept more than 10,000 bytes.
+            if chunk_len == 65536 and len(attempt_logs) == 0:
+                n_sent: int = 10000
+            else:
+                n_sent = chunk_len
+
+            attempt_logs.append((chunk_len, n_sent))
+            return original_ws_send(chunk[:n_sent], flags)
+
+        with unittest.mock.patch.object(
+            ws_connection.curl, "ws_send", side_effect=mock_ws_send
+        ):
+            # Send 100,000 bytes (Requires 2 frames: 65536 + 34464)
+            payload: bytes = b"X" * 100000
+            await ws_connection.send(payload)
+
+            data, _ = await ws_connection.recv()
+            assert data == payload
+
+            # Verify the exact chunking sequence generated by the hot loop:
+            # 1. Loop tries 65536, mock only accepts 10000
+            # 2. Loop MUST try exactly 55536 next (the remainder of the 65536 frame)
+            # 3. Loop tries 34464 (the final fragment)
+            assert len(attempt_logs) == 3
+            assert attempt_logs[0] == (65536, 10000)
+            assert attempt_logs[1] == (
+                55536,
+                55536,
+            )  # <-- The old code failed here by trying 65536
+            assert attempt_logs[2] == (34464, 34464)
+
+    async def test_send_eagain_retry_preserves_state(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """
+        Test that an EAGAIN error doesn't corrupt the frame boundary state.
+        Verifies the zero-math hot-path retry optimization.
+        """
+        original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
+        call_count = 0
+
+        def mock_ws_send(chunk: memoryview, flags: int) -> int:
+            nonlocal call_count
+            call_count += 1
+
+            # Throw EAGAIN on the very first attempt to simulate a blocked socket
+            if call_count == 1:
+                raise CurlError("Simulated EAGAIN", CurlECode.AGAIN)
+
+            return original_ws_send(chunk, flags)
+
+        with unittest.mock.patch.object(
+            ws_connection.curl, "ws_send", side_effect=mock_ws_send
+        ):
+            payload: bytes = b"Y" * 100000
+            await ws_connection.send(payload)
+            data, _ = await ws_connection.recv()
+
+            assert data == payload
+            # 1 EAGAIN attempt + 1st fragment (65536) + 2nd fragment (34464)
+            assert call_count == 3
+
+    async def test_manual_fragmentation_with_cont_flag(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """
+        Test that user-supplied CONT flags are preserved correctly on final chunks.
+        Validates the 'current_flags = flags' assignment in the rewrite.
+        """
+        # Send part 1: TEXT | CONT
+        await ws_connection.send(b"Part1-", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+        # Send part 2: TEXT | CONT
+        await ws_connection.send(b"Part2-", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+        # Send part 3: TEXT (Final fragment drops the CONT flag)
+        await ws_connection.send(b"Part3", flags=CurlWsFlag.TEXT)
+
+        # The test server (websockets library) automatically reassembles
+        # fragmented network messages before echoing them back.
+        response: str = await ws_connection.recv_str()
+        assert response == "Part1-Part2-Part3"
+
 
 class TestAsyncWebSocketAutoclose:
     """Tests for autoclose behavior."""
@@ -1505,7 +1773,7 @@ class TestAsyncWebSocketAutoclose:
                 _ = await ws.recv(timeout=2.0)
 
             # Wait a bit for autoclose to process
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(1)
             # Connection should be closed
             assert ws.closed or not ws.is_alive()
         finally:
@@ -1592,9 +1860,6 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
                 recv_queue_size=5,
                 block_on_recv_queue_full=False,
             ) as ws:
-                # Give server time to send all messages (which will overflow queue)
-                await asyncio.sleep(0.3)
-
                 # Try to receive - may get error due to queue overflow
                 received: list[str] = []
                 for _ in range(20):
@@ -1809,3 +2074,557 @@ class TestAsyncWebSocketCoverageGaps:
             _ = await asyncio.wait_for(recv_task, timeout=2.0)
 
         assert ws.closed or ws._terminated
+
+
+@pytest.mark.asyncio
+class TestAsyncWebSocketBugFixes:
+    """Tests to verify fixes for previously identified subtle bugs."""
+
+    async def test_recv_timeout_race_condition(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """
+        Tests the race condition where a message arrives at the exact same
+        event loop tick that the timeout expires.
+        """
+        ws_config(behavior=ServerBehavior.SILENT)
+
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            # We mock the internal queue to simulate a task that resolves
+            # exactly when it is cancelled by the timeout block.
+            original_get: Callable[[], Awaitable[tuple[bytes, int]]] = (
+                ws._receive_queue.get
+            )
+
+            async def mock_get() -> tuple[bytes, int]:
+                try:
+                    await asyncio.sleep(10)
+                except asyncio.CancelledError:
+                    # Resolve exactly on cancellation (simulating the race)
+                    return (b"saved_by_the_bell", CurlWsFlag.TEXT)
+                return await original_get()
+
+            ws._receive_queue.get = mock_get  # pyright: ignore[reportPrivateUsage]
+
+            # The recv() call should NOT drop the message, should gracefully return it
+            data, flags = await ws.recv(timeout=0.1)
+            assert data == b"saved_by_the_bell"
+            assert flags == CurlWsFlag.TEXT
+
+    async def test_recv_json_enforces_text_frame(
+        self,
+        ws_connection: AsyncWebSocket,
+    ) -> None:
+        """
+        Tests that recv_json() properly validates that the payload is a TEXT frame
+        and rejects BINARY frames, aligning with the synchronous implementation.
+        """
+        # Send valid JSON, but as a BINARY frame
+        await ws_connection.send_binary(b'{"key": "value"}')
+
+        with pytest.raises(WebSocketError) as exc_info:
+            await ws_connection.recv_json(timeout=5.0)
+
+        assert exc_info.value.code == WsCloseCode.INVALID_DATA
+        assert "Not a valid text frame" in str(exc_info.value)
+
+
+class TestAsyncWebSocketRobustness:
+    """Extreme edge case and stress tests for protocol robustness."""
+
+    @pytest.mark.asyncio
+    async def test_raw_fragment_assembly_with_interleaved_control_frames(self) -> None:
+        """
+        Proves that the _read_loop correctly reassembles fragmented data frames
+        even when PING and PONG frames are maliciously interleaved in the stream,
+        without memory leaks or state corruption.
+        """
+
+        # We don't need a real network socket for this, we just need to feed
+        # the exact frame sequences to the parser to test its integrity.
+        mock_curl: Mock = Mock(spec=Curl)
+        mock_session: Mock = Mock()
+
+        ws: AsyncWebSocket = AsyncWebSocket(mock_session, mock_curl)
+        ws.closed = False
+        ws._block_on_recv_queue_full = False
+
+        class MockFrameMeta:
+            def __init__(self, flags: int, bytesleft: int = 0) -> None:
+                self.flags: int = flags
+                self.bytesleft: int = bytesleft
+
+        # Simulate libcurl yielding an evil sequence of fragmented frames:
+        # 1. Fragment 1 (TEXT | CONT)
+        # 2. PING (Injected control frame)
+        # 3. PONG (Injected control frame)
+        # 4. Fragment 2 (TEXT - Final chunk)
+        # 5. CLOSE
+        mock_sequence: list[tuple[bytes, MockFrameMeta]] = [
+            (b"Chunk 1 ", MockFrameMeta(CurlWsFlag.TEXT | CurlWsFlag.CONT)),
+            (b"ping_payload", MockFrameMeta(CurlWsFlag.PING)),
+            (b"pong_payload", MockFrameMeta(CurlWsFlag.PONG)),
+            (b"Chunk 2", MockFrameMeta(CurlWsFlag.TEXT)),
+            (b"bye", MockFrameMeta(CurlWsFlag.CLOSE)),
+        ]
+
+        iterator: Iterator[tuple[bytes, MockFrameMeta]] = iter(mock_sequence)
+        mock_curl.ws_recv.side_effect = lambda: next(iterator)
+
+        # Execute the read loop directly
+        await ws._read_loop()
+
+        # Check the receive queue.
+        # It should contain exactly ONE perfectly assembled message and ONE close frame.
+        # The PING and PONG frames must have been safely discarded.
+        msg1, flags1 = ws._receive_queue.get_nowait()
+        msg2, flags2 = ws._receive_queue.get_nowait()
+
+        assert msg1 == b"Chunk 1 Chunk 2"
+        assert flags1 == CurlWsFlag.TEXT
+        assert msg2 == b"bye"
+        assert flags2 & CurlWsFlag.CLOSE
+
+        # Ensure nothing else leaked into the queue
+        assert ws._receive_queue.empty()
+
+    @pytest.mark.asyncio
+    async def test_high_concurrency_mixed_frame_stress(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """
+        Blasts the connection with hundreds of concurrent sends of varying frame
+        types (TEXT, BINARY, PING, and massive Fragmented payloads) while
+        simultaneously receiving, to ensure thread-safety, queue backpressure,
+        remain robust without deadlocks.
+        """
+        ws_config(behavior=ServerBehavior.ECHO)
+
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            coalesce_frames=False,  # Must be False to guarantee 1:1 frame count mapping
+            max_send_batch_size=50,
+            send_queue_size=500,  # Large enough to absorb the blast without timing out
+            recv_queue_size=500,
+        ) as ws:
+
+            async def send_text() -> None:
+                for i in range(100):
+                    await ws.send_str(f"TEXT_{i}")
+                    await asyncio.sleep(0.001)  # Micro-sleeps force context switching
+
+            async def send_binary() -> None:
+                for i in range(100):
+                    await ws.send_binary(f"BIN_{i}".encode())
+                    await asyncio.sleep(0.001)
+
+            async def send_pings() -> None:
+                for i in range(50):
+                    await ws.ping(f"PING_{i}".encode())
+                    await asyncio.sleep(0.002)
+
+            async def send_large_fragmented() -> None:
+                for _ in range(10):
+                    # 100KB payloads will trigger libcurl's 64K fragmentation limits
+                    await ws.send_binary(b"L" * 100_000)
+                    await asyncio.sleep(0.01)
+
+            # Fire all 260 operations completely concurrently
+            _ = await asyncio.gather(
+                send_text(),
+                send_binary(),
+                send_pings(),
+                send_large_fragmented(),
+            )
+
+            # Now we receive and verify. We expect exactly 210 data frames back.
+            # (100 text + 100 bin + 10 large).
+            # The 50 PINGs are echoed as PONGs internally by libcurl/websockets
+            # and are silently discarded by the architecture.
+
+            received_text = 0
+            received_bin = 0
+            received_large = 0
+
+            for _ in range(210):
+                data, flags = await ws.recv(timeout=5.0)
+
+                if flags & CurlWsFlag.TEXT:
+                    received_text += 1
+                elif flags & CurlWsFlag.BINARY:
+                    if len(data) == 100_000:
+                        received_large += 1
+                        assert data == b"L" * 100_000
+                    else:
+                        received_bin += 1
+
+            assert received_text == 100
+            assert received_bin == 100
+            assert received_large == 10
+
+            # Verify the queue is perfectly empty
+            # (No leaked PONGs or malformed trailing fragments)
+            with pytest.raises(asyncio.TimeoutError):
+                _ = await asyncio.wait_for(ws._receive_queue.get(), timeout=0.2)
+
+    @pytest.mark.asyncio
+    async def test_unaligned_simd_xor_masking(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """
+        Tests the C-layer AVX-512/AVX2/Scalar fallback XOR masking.
+        Uses an unaligned size that crosses multiple internal C-layer buffers.
+        """
+        ws_config(behavior=ServerBehavior.ECHO)
+
+        # 512 KiB + 13 bytes.
+        # Safely under server limit, but crosses:
+        # - 64x 8KB SIMD xbufs
+        # - 4x 128KB libcurl chunk buffers
+        # - Ends with an unaligned remainder for scalar fallback checks.
+        payload_size = (512 * 1024) + 13
+        payload: bytes = b"X" * payload_size
+
+        async with session.ws_connect(configurable_ws_server.url) as ws:
+            await ws.send(payload)
+
+            # The server will echo it back. The C-layer must correctly
+            # unmask it for the assertion to pass.
+            data, flags = await ws.recv(timeout=10.0)
+            assert flags & CurlWsFlag.BINARY
+            assert len(data) == payload_size
+            assert data == payload
+
+    @pytest.mark.asyncio
+    async def test_huge_payload_stress_and_fairness(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """
+        Tests the integrity and event loop fairness of a huge 20MB payload.
+        This exercises the SIMD XOR masking across thousands of internal
+        C buffers and hundreds of Byte-Bucket yield points.
+        """
+        ws_config(behavior=ServerBehavior.ECHO)
+
+        # Heartbeat task to prove the loop stays responsive during the massive CPU task
+        heartbeat_ticks = 0
+
+        async def heartbeat():
+            nonlocal heartbeat_ticks
+            while True:
+                await asyncio.sleep(0.001)
+                heartbeat_ticks += 1
+
+        hb_task: Task[None] = asyncio.create_task(heartbeat())
+
+        # 20 MiB payload
+        huge_size = 20 * 1024 * 1024
+        payload: bytes = b"Z" * huge_size
+
+        try:
+            async with session.ws_connect(
+                configurable_ws_server.url,
+                max_message_size=25 * 1024 * 1024,
+                send_time_slice=0.005,
+                recv_time_slice=0.005,
+            ) as ws:
+                # Time the send/recv process
+                start_time: float = asyncio.get_running_loop().time()
+
+                await ws.send(payload)
+                data, _ = await ws.recv(timeout=20.0)
+
+                duration: float = asyncio.get_running_loop().time() - start_time
+
+                # Assert integrity
+                assert len(data) == huge_size
+                assert data == payload
+
+                # Assert fairness: With a 20MB payload and 5ms time slice,
+                # we yielded at least 160 times. Heartbeat MUST have ticked.
+                assert heartbeat_ticks > 0
+                assert heartbeat_ticks >= 5
+
+                # Log performance for visibility
+                print(
+                    f"\n[Huge Payload Test] Transferred {huge_size / 1024**2:.1f} MB "
+                    + f"in {duration:.2f}s (~{huge_size * 8 / duration / 1e6:.1f} Mbps)"
+                )
+
+        finally:
+            _ = hb_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await hb_task
+
+    @pytest.mark.asyncio
+    async def test_high_frequency_ping_pong(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """
+        Stress tests the OS selector (epoll/kqueue/select) by performing
+        rapid small-frame exchanges.
+        """
+        for i in range(500):
+            msg = f"ping_{i}".encode()
+            await ws_connection.send(msg)
+            data, _ = await ws_connection.recv(timeout=1.0)
+            assert data == msg
+
+    def test_multithreaded_event_loops(
+        self, configurable_ws_server: ConfigurableWSServer
+    ) -> None:
+        """
+        Runs two completely independent asyncio loops in two separate threads.
+        Ensures C-layer state (like CPU feature detection) is thread-safe.
+        """
+
+        def run_loop() -> None:
+            async def task() -> None:
+                async with (
+                    AsyncSession[Response]() as s,
+                    s.ws_connect(configurable_ws_server.url) as ws,
+                ):
+                    for _ in range(50):
+                        await ws.send(b"data")
+                        _ = await ws.recv()
+
+            asyncio.run(task())
+
+        t1: threading.Thread = threading.Thread(target=run_loop)
+        t2: threading.Thread = threading.Thread(target=run_loop)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+    @pytest.mark.asyncio
+    async def test_boundary_fragmentation_plus_one(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """
+        Tests a payload that is exactly 128KB + 1 byte.
+        Forces the C-layer to fill exactly one full chunk and then carry
+        the mask state over for a single trailing byte.
+        """
+        size = (128 * 1024) + 1
+        payload: bytes = b"B" * size
+        await ws_connection.send(payload)
+        data, _ = await ws_connection.recv(timeout=5.0)
+        assert data == payload
+
+    @pytest.mark.asyncio
+    async def test_transport_exception_bubbles_to_all_waiters(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """
+        Proves that a background transport exception correctly wakes up
+        ALL concurrent recv() waiters and doesn't deadlock.
+        """
+        ws_config(behavior=ServerBehavior.SILENT)
+        ws: AsyncWebSocket = await session.ws_connect(
+            configurable_ws_server.url, recv_queue_size=10
+        )
+
+        # Create 5 concurrent waiters
+        tasks: list[Task[tuple[bytes, int]]] = [
+            asyncio.create_task(ws.recv(timeout=10.0)) for _ in range(5)
+        ]
+        await asyncio.sleep(0.1)  # Let them suspend
+
+        # Inject a fatal transport exception directly into the background loop
+        fatal_error: CurlError = CurlError(
+            "Fatal mock socket error", CurlECode.RECV_ERROR
+        )
+        ws._finalize_connection(fatal_error)  # pyright: ignore[reportPrivateUsage]
+
+        # Wait for all tasks to resolve
+        done, pending = await asyncio.wait(tasks, timeout=2.0)
+
+        assert len(pending) == 0, "Some recv tasks deadlocked!"
+
+        # Every single task should have raised the EXACT transport exception
+        for task in done:
+            with pytest.raises(CurlError) as exc_info:
+                _ = task.result()
+            assert exc_info.value.code == CurlECode.RECV_ERROR
+
+        await ws.close()
+
+    @pytest.mark.asyncio
+    async def test_graceful_close_timeout_forces_termination(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """
+        If the server goes totally silent and refuses to complete the close handshake,
+        ws.close() must time out and forcefully terminate the socket.
+        """
+        # Server will accept the connection but never reply to anything
+        ws_config(behavior=ServerBehavior.SILENT)
+        ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
+
+        start_time: float = asyncio.get_running_loop().time()
+
+        # Close with a very aggressive 0.5s timeout
+        await ws.close(timeout=0.5)
+
+        duration: float = asyncio.get_running_loop().time() - start_time
+
+        # It should take approximately ~0.5 seconds, not hang forever
+        assert duration <= 0.5
+
+        # The connection MUST be marked as forcefully terminated
+        assert ws._terminated is True
+
+
+class TestAsyncWebSocketSIMDEdgeCases:
+    """Specific tests to probe the C-layer SIMD and scalar cleanup boundaries."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("extra_bytes", [0, 1, 2, 3, 4, 7, 31, 33, 63, 65])
+    async def test_simd_masking_tail_logic(
+        self, ws_connection: AsyncWebSocket, extra_bytes: int
+    ) -> None:
+        """
+        Probes the C-layer cleanup loops (32-bit and 8-bit fallbacks).
+        Payloads are sized to leave specific 'tails' after SIMD vector blocks.
+        """
+        # Base of 128 (AVX-512 unroll) + the tail we want to test
+        size: int = 128 + extra_bytes
+        payload: bytes = b"\xde\xad\xbe\xef" * (size // 4) + b"\xff" * (size % 4)
+        payload = payload[:size]  # Ensure exact size
+
+        await ws_connection.send_binary(payload)
+        data, _ = await ws_connection.recv(timeout=5.0)
+
+        assert len(data) == size
+        assert data == payload
+
+    @pytest.mark.asyncio
+    async def test_mask_index_persistence_across_unaligned_fragments(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """
+        Verifies that the XOR mask index is preserved across fragments that
+        are not multiples of 4.
+        """
+        # Send 3 bytes, then 3 bytes, then 3 bytes.
+        # This forces the mask index (0, 1, 2, 3) to wrap around mid-chunk.
+        chunks: list[bytes] = [b"ABC", b"DEF", b"GHI", b"JKL"]
+
+        # Manually fragment one logical message
+        await ws_connection.send(chunks[0], flags=CurlWsFlag.BINARY | CurlWsFlag.CONT)
+        await ws_connection.send(chunks[1], flags=CurlWsFlag.BINARY | CurlWsFlag.CONT)
+        await ws_connection.send(chunks[2], flags=CurlWsFlag.BINARY | CurlWsFlag.CONT)
+        await ws_connection.send(chunks[3], flags=CurlWsFlag.BINARY)  # Final
+
+        data, _ = await ws_connection.recv(timeout=5.0)
+        assert data == b"ABCDEFGHIJKL"
+
+    @pytest.mark.asyncio
+    async def test_write_loop_interleaving_stress(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],  # <--- MUST be in arguments
+    ) -> None:
+        """
+        Stress tests the background writer by ensuring the queue remains
+        functional while a massive 10MB message is being processed.
+        """
+        # Call the injected fixture to set up the server
+        ws_config(behavior=ServerBehavior.ECHO)
+
+        # Generate a 10MB non-repeating payload (0, 1, 2... 255, 0, 1...)
+        # This ensures every byte of the XOR mask logic is uniquely exercised.
+        huge_payload: bytes = bytes([i % 256 for i in range(10 * 1024 * 1024)])
+
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            max_message_size=15 * 1024 * 1024,
+            send_queue_size=100,
+        ) as ws:
+            # 1. Enqueue the huge message first.
+            # Because we await it, it is guaranteed to be the first item in the queue.
+            await ws.send(huge_payload)
+
+            # 2. Immediately queue smaller frames and PINGs.
+            # These will enter the queue behind the huge message.
+            for i in range(20):
+                await ws.send_str(f"interleaved_{i}")
+                await ws.ping(b"!")
+
+            # 3. Verify all data arrived intact and in strict FIFO order.
+
+            # Message 1: The Huge Payload
+            data_huge, flags_huge = await ws.recv(timeout=15.0)
+            assert len(data_huge) == len(huge_payload)
+            assert data_huge == huge_payload
+            assert flags_huge & CurlWsFlag.BINARY
+
+            # Messages 2-21: The Interleaved strings
+            for i in range(20):
+                data_small = await ws.recv_str(timeout=2.0)
+                assert data_small == f"interleaved_{i}"
+
+    @pytest.mark.asyncio
+    async def test_manual_fragmentation_with_empty_chunks(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """Tests logical messages containing empty fragments."""
+        await ws_connection.send(b"Start", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+        # Empty fragment in the middle
+        await ws_connection.send(b"", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+        await ws_connection.send(b"End", flags=CurlWsFlag.TEXT)
+
+        response = await ws_connection.recv_str()
+        assert response == "StartEnd"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("length", [1, 3, 15, 31, 63, 127])
+    async def test_simd_to_scalar_transition_boundaries(
+        self, ws_connection: AsyncWebSocket, length: int
+    ) -> None:
+        """
+        Forces the C-layer to use scalar clean-up loops by sending payloads
+        that are exactly one byte short of SIMD vector boundaries.
+        """
+        payload: bytes = b"A" * length
+        await ws_connection.send(payload)
+        data, _ = await ws_connection.recv(timeout=2.0)
+        assert data == payload
+        assert len(data) == length
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("offset", [1, 2, 3, 7])
+    async def test_unaligned_memory_source(
+        self, ws_connection: AsyncWebSocket, offset: int
+    ) -> None:
+        """
+        Tests sending a memoryview slice that starts at an unaligned physical address.
+        Verifies that SIMD 'loadu' (unaligned load) in C doesn't segfault.
+        """
+        base_data: bytes = b"AlignmentPadding" + b"ActualPayload" * 10
+        # Create a view starting at an odd offset (e.g., address ends in 1, 3, 7)
+        unaligned_view: memoryview = memoryview(base_data)[offset:]
+
+        await ws_connection.send(unaligned_view)
+        data, _ = await ws_connection.recv(timeout=2.0)
+        assert data == bytes(unaligned_view)

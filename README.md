@@ -29,12 +29,6 @@ Python 3.10 is the minimum supported version since v0.14.
 
 If you’re looking for a meeting recording API, consider checking out [Recall.ai](https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi), an API that records Zoom, Google Meet, Microsoft Teams, in-person meetings, and more.
 
-## Residential Proxies
-
-<a href="https://www.thordata.com/?ls=github&lk=curl_" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
-
-Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/?ls=github&lk=curl_) and receive 2000 free SERP API calls.
-
 ## Sponsors
 
 Maintenance of this project is made possible by all the <a href="https://github.com/lexiforest/curl_cffi/graphs/contributors">contributors</a> and <a href="https://github.com/sponsors/lexiforest">sponsors</a>. If you'd like to sponsor this project and have your avatar or company logo appear below <a href="https://github.com/sponsors/lexiforest">click here</a>. 💖
@@ -62,6 +56,15 @@ No browser automation. Just simple API calls that return the exact cookies and h
 🚀 [Get Your API Key](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=curl_cffi) | 📖 [Docs](https://docs.justhyped.dev) | 💬 [Discord](https://discord.gg/akamai)
 
 ------
+
+## Impersonate Suite
+
+`curl-cffi` is part of the impersonate suite.
+
+- [curl-impersonate](https://github.com/lexiforest/curl-impersonate). A curl distribution that impersonates browsers.
+- [curl_cffi](https://github.com/lexiforest/curl_cffi). Python binding to curl-impersonate.
+- [impers](https://github.com/lexiforest/impers). Node.js binding to curl-impersonate.
+- [impersonate.pro](https://impersonate.pro). Commercial support, more fingerprints and integrated solutions.
 
 ## Features
 
@@ -102,25 +105,28 @@ replacement for "claws" and "agents".
 |http/2|✅|❌|✅|
 |http/3|☑️<sup>1</sup>|❌|✅|
 |human-friendly|☑️<sup>2</sup>|✅|✅|
-|colorful|❌|✅|✅|
+|colorful|❌|✅|✅<sup>3</sup>|
 |fingerprints|❌|❌|✅|
 
 Notes:
 
 1. You need an http/3 enabled curl build, it's not enabled by default, at leat on my machine.
 2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax. If you prefer the curl syntax, you can keep using `curl-impersonate`.
+3. Install `curl_cffi[cli]` for colorful CLI output. Without `rich`, the CLI uses plain text output.
 
 ## Install
 
     pip install curl_cffi --upgrade
 
 This should work on Linux, macOS and Windows out of the box.
-If it does not work on you platform, you may need to compile and install `curl-impersonate`
-first and set some environment variables like `LD_LIBRARY_PATH`.
 
-Android support, including Termux, is currently in beta, you can install the beta release for testing.
+On macOS, you can also install via Homebrew:
+
+    brew install lexiforest/tap/curl-cffi
+
+<small>Android support, including Termux, is currently in beta, you can install the beta release for testing.
 For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
-If you are using these OSes, please lend an hand.
+If you are using these OSes, please lend an hand.</small>
 
 To install beta releases:
 
@@ -174,11 +180,6 @@ r = curl_cffi.get(
     impersonate="chrome"
 )
 
-# Randomly choose a browser version based on current market share in real world
-# from: https://caniuse.com/usage-table
-# NOTE: this is a pro feature.
-r = curl_cffi.get("https://example.com", impersonate="realworld")
-
 # To pin a specific version, use version numbers together.
 r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome124")
 
@@ -212,45 +213,42 @@ print(r.json())
 
 ### Supported impersonate browsers
 
-`curl_cffi` supports the same browser versions as supported by my [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
+`curl_cffi` supports the same browser versions preset as supported by our [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
-Open source version of curl_cffi includes versions whose fingerprints differ from previous versions.
-If you see a version, e.g. `chrome135`, were skipped, you can simply impersonate it with your own headers and the previous version.
+The open source version of `curl_cffi` includes versions when we are adding new capabilities for impersonating.
+If you see a version, e.g. `chrome135`, was skipped, it's simply because there's nothing new or we were busy at that time. 
+You can simply impersonate it with your own headers and the previous browser target.
 
-If you don't want to look up the headers etc, by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro),
-we have comprehensive browser fingerprints database for almost all the browser versions on various platforms.
+For a full list of preset fingerprints, see the [curl-impersonate docs](https://curl-impersonate.readthedocs.io/en/latest/fingerprints.html). 
+We will no longer put duplicated and outdated info here.
 
-If you are trying to impersonate a target other than a browser, use `ja3=...` and `akamai=...`
+If you don't want to look up the headers/etc by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro).
+We have comprehensive browser tls, http and JavaScript fingerprints database for almost all the browser versions on various platforms.
+
+Since v0.15.1, you can use `curl-cffi update` to retrieve the latest fingerprints, without updating to a new version.
+We offer the Safari, Chrome, Firefox updates for free and others as part of the [commercial plan](https://impersonate.pro).
+
+The current number of fingerprints:
+
+![Preset](https://img.shields.io/badge/Preset_Fingerprints-37-blue)
+![Free](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.free&label=Free%20Fingerprints) 
+![Pro](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.all&label=Pro%20Fingerprints)
+
+To see the current list of fingerprints on your device, use the command line:
+
+```sh
+curl-cffi list
+```
+
+To update fingerprints from impersonate.pro, use the command line:
+
+```sh
+curl-cffi update
+```
+
+If you are trying to impersonate a target other than a browser, use `ja3=...`, `akamai=...`, `extra_fp=...`, and `perk=...`
 to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate/_index.html) for details.
 
-|Browser|Open Source| Pro version|
-|---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142, chrome145<sup>[9]</sup>, chrome146<sup>[9]</sup>|chrome132, chrome134, chrome135|
-|Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
-|Chrome iOS|N/A|coming soon|
-|Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
-|Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
-|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144, firefox147<sup>[9]</sup>|coming soon|
-|Firefox Android|N/A|firefox135_android|
-|Tor|tor145 <sup>[7]</sup>|coming soon|
-|Edge|edge99, edge101|edge133, edge135|
-|Opera|N/A|coming soon|
-|Brave|N/A|coming soon|
-
-
-Notes:
-
-1. Added in version `0.6.0`.
-2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
-3. Added in version `0.7.0`.
-4. Added in version `0.8.0`.
-5. Added in version `0.9.0`.
-6. The version postfix `-a`(e.g. `chrome133a`) means that this is an alternative version, i.e. the fingerprint has not been officially updated by browser, but has been observed because of A/B testing.
-5. Added in version `0.10.0`.
-6. Added in version `0.11.0`.
-7. Since `0.11.0`, the format `safari184_ios` is preferred over `safari18_4_ios`, both are supported, but the latter is quite confusing and hard to parse.
-8. Added in  `0.12.0`.
-9. http3 support included.
 
 ### Asyncio
 
@@ -309,11 +307,13 @@ async with AsyncSession() as session:
             print(message)
 ```
 
+See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
+
 ## Ecosystem
 
 - Integrating with Scrapy: [divtiply/scrapy-curl-cffi](https://github.com/divtiply/scrapy-curl-cffi), [jxlil/scrapy-impersonate](https://github.com/jxlil/scrapy-impersonate) and [tieyongjie/scrapy-fingerprint](https://github.com/tieyongjie/scrapy-fingerprint).
 - Integrating with [requests](https://github.com/el1s7/curl-adapter), [httpx](https://github.com/vgavro/httpx-curl-cffi) as adapter.
-- Integrating with captcha resolvers: [YesCaptcha](https://yescaptcha.atlassian.net/wiki/spaces/YESCAPTCHA/overview). Please see the head area for promo code and link.
+- Integrating with captcha resolvers: [YesCaptcha](https://yescaptcha.com/i/stfnIO).
 
 ## Acknowledgement
 

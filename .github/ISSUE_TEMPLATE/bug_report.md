@@ -15,10 +15,10 @@ Issues are for bug reports and feature requests, documentation improvements, not
 Please check the following items and answer all the questions when reporting a bug, 
 otherwise it will be closed immediately.
 
-- [ ] **This is NOT a site-related "bugs"**, e.g. some site blocks me when using ``curl_cffi``,
-    UNLESS you have verified that the reason is imperfect impersonation.
+- [ ] I'm not asking you to help bypass a specific site with ``curl_cffi``.
 - [ ] A code snippet that can reproduce this bug will be provided, even if it's a one-liner.
 - [ ] Version and environment information will be pasted as below.
+- [ ] A `curl-cffi doctor` output will be included.
 
 **Describe the bug**
 A clear and concise description of what the bug is.
@@ -35,6 +35,11 @@ A clear and concise description of what you expected to happen.
  - OS: [e.g. linux x64, Windows 7, macOS Sequoia]
  - curl_cffi version [e.g. 0.5.7, 0.7.3]
  - `pip freeze` dump
+
+**`curl-cffi doctor` output**
+```text
+paste output here
+```
 
 **Additional context**
 - Which session are you using? async or sync?
