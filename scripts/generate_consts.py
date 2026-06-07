@@ -95,6 +95,7 @@ class CurlWsFlag(IntEnum):
     CLOSE = 1 << 3
     PING = 1 << 4
     OFFSET = 1 << 5
+    PONG = 1 << 6
 
 
 class CurlSslVersion(IntEnum):
@@ -118,5 +119,21 @@ class CurlIpResolve(IntEnum):
     V4 = 1  # uses only IPv4 addresses/connections
     V6 = 2  # uses only IPv6 addresses/connections
 
+
+class CurlFollow(IntEnum):
+    """``CURLFOLLOW_*`` consts for redirect behavior"""
+    # generic follow redirects
+    ALL = 1
+
+    # Do not use the custom method in the follow-up request if the HTTP code
+    # instructs so (301, 302, 303).
+    OBEYCODE = 2
+
+    # Only use the custom method in the first request, always reset in the next
+    FIRSTONLY = 3
+
+    # curl-impersonate: Follow redirects, but reject redirects to
+    # internal/private IP addresses (SSRF protection)
+    SAFE = 4
 '''
     )

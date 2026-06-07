@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import locale
 import re
 import struct
+import ssl
 import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
+
+import os
 
 import certifi
 
@@ -14,7 +18,24 @@ from ._wrapper import ffi, lib
 from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
 from .utils import CurlCffiWarning
 
-DEFAULT_CACERT = certifi.where()
+
+def _default_cacert() -> str:
+    # 1. Explicit env var overrides
+    for env_var in ("SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE"):
+        path = os.environ.get(env_var)
+        if path and os.path.exists(path):
+            return path
+
+    # 2. Python's CA bundle
+    defaults = ssl.get_default_verify_paths()
+    if defaults.cafile and os.path.exists(defaults.cafile):
+        return defaults.cafile
+
+    # 3. Fallback to certifi
+    return certifi.where()
+
+
+DEFAULT_CACERT = _default_cacert()
 REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
 STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
 
@@ -31,9 +52,11 @@ if TYPE_CHECKING:
 class CurlError(Exception):
     """Base exception for curl_cffi package"""
 
-    def __init__(self, msg, code: Union[CurlECode, Literal[0]] = 0, *args, **kwargs):
+    def __init__(
+        self, msg: str, code: int | CurlECode | Literal[0] = 0, *args, **kwargs
+    ) -> None:
         super().__init__(msg, *args, **kwargs)
-        self.code: Union[CurlECode, Literal[0]] = code
+        self.code: int | CurlECode | Literal[0] = code
 
 
 CURLINFO_TEXT = 0
@@ -46,6 +69,8 @@ CURLINFO_SSL_DATA_OUT = 6
 
 CURL_WRITEFUNC_PAUSE = 0x10000001
 CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
+CURL_READFUNC_ABORT = 0x10000000
+CURL_READFUNC_PAUSE = 0x10000001
 
 
 @ffi.def_extern()
@@ -127,6 +152,50 @@ def write_callback(ptr, size, nmemb, userdata):
     return nmemb * size
 
 
+@ffi.def_extern()
+def read_buffer_callback(ptr, size, nmemb, userdata):
+    """ffi callback for curl read function, reads from a buffer/file-like object"""
+    buffer = ffi.from_handle(userdata)
+    max_len = size * nmemb
+    data = buffer.read(max_len)
+    if data is None:
+        return 0
+    if isinstance(data, int):
+        return data
+    if isinstance(data, str):
+        data = data.encode()
+    if not data:
+        return 0
+    if len(data) > max_len:
+        raise CurlError(
+            f"Read callback returned {len(data)} bytes, but only {max_len} bytes are allowed."  # noqa: E501
+        )
+    ffi.memmove(ptr, data, len(data))
+    return len(data)
+
+
+@ffi.def_extern()
+def read_callback(ptr, size, nmemb, userdata):
+    """ffi callback for curl read function, calls the callback python function"""
+    callback = ffi.from_handle(userdata)
+    max_len = size * nmemb
+    data = callback(max_len)
+    if data is None:
+        return 0
+    if isinstance(data, int):
+        return data
+    if isinstance(data, str):
+        data = data.encode()
+    if not data:
+        return 0
+    if len(data) > max_len:
+        raise CurlError(
+            f"Read callback returned {len(data)} bytes, but only {max_len} bytes are allowed."  # noqa: E501
+        )
+    ffi.memmove(ptr, data, len(data))
+    return len(data)
+
+
 # Credits: @alexio777 on https://github.com/lexiforest/curl_cffi/issues/4
 def slist_to_list(head) -> list[bytes]:
     """Converts curl slist to a python list."""
@@ -144,6 +213,8 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
+    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
+
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
         Parameters:
@@ -157,14 +228,22 @@ class Curl:
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
+        self._skip_cacert = False
         self._write_handle: Any = None
         self._header_handle: Any = None
         self._debug_handle: Any = None
         self._body_handle: Any = None
+        self._read_handle: Any = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
         self._set_error_buffer()
+
+        # Pre-allocated CFFI objects for WebSocket performance
+        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
+        self._ws_recv_n_recv = ffi.new("size_t *")
+        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent = ffi.new("size_t *")
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
@@ -182,6 +261,9 @@ class Curl:
         self.close()
 
     def _check_error(self, errcode: int, *args: Any) -> None:
+        if errcode == 0:
+            return
+
         error = self._get_error(errcode, *args)
         if error is not None:
             raise error
@@ -236,6 +318,12 @@ class Curl:
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
             )
+        elif option == CurlOpt.READDATA:
+            c_value = ffi.new_handle(value)
+            self._read_handle = c_value
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.READFUNCTION, lib.read_buffer_callback
+            )
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(value)
             self._write_handle = c_value
@@ -248,6 +336,11 @@ class Curl:
                 self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
             )
             option = CurlOpt.HEADERDATA
+        elif option == CurlOpt.READFUNCTION:
+            c_value = ffi.new_handle(value)
+            self._read_handle = c_value
+            lib._curl_easy_setopt(self._curl, CurlOpt.READFUNCTION, lib.read_callback)
+            option = CurlOpt.READDATA
         elif option == CurlOpt.DEBUGFUNCTION:
             if value is True:
                 value = debug_function_default
@@ -256,7 +349,34 @@ class Curl:
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
             option = CurlOpt.DEBUGDATA
         elif value_type == "char*":
-            c_value = value.encode() if isinstance(value, str) else value
+            if isinstance(value, str):
+                # Windows/libcurl expects ANSI code page for file paths (char*).
+                # Non-ASCII paths encoded as UTF-8 can trigger ErrCode 77.
+                # Encode file-path-like options using the system encoding on Windows.
+                filepath_opts = {
+                    CurlOpt.CAINFO,
+                    CurlOpt.CAPATH,
+                    CurlOpt.PROXY_CAINFO,
+                    CurlOpt.PROXY_CAPATH,
+                    CurlOpt.SSLCERT,
+                    CurlOpt.SSLKEY,
+                    CurlOpt.CRLFILE,
+                    CurlOpt.ISSUERCERT,
+                    CurlOpt.SSH_PUBLIC_KEYFILE,
+                    CurlOpt.SSH_PRIVATE_KEYFILE,
+                    CurlOpt.COOKIEFILE,
+                    CurlOpt.COOKIEJAR,
+                    CurlOpt.NETRC_FILE,
+                    CurlOpt.UNIX_SOCKET_PATH,
+                }
+                if sys.platform.startswith("win") and option in filepath_opts:
+                    # Use the process ANSI code page to match what CRT fopen expects.
+                    enc = locale.getpreferredencoding(False)
+                    c_value = value.encode(enc, errors="strict")
+                else:
+                    c_value = value.encode()
+            else:
+                c_value = value
             # Must keep a reference, otherwise may be GCed.
             if option == CurlOpt.POSTFIELDS:
                 self._body_handle = c_value
@@ -288,7 +408,7 @@ class Curl:
 
         return ret
 
-    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list]:
+    def getinfo(self, option: CurlInfo) -> bytes | int | float | list[str | int]:
         """Wrapper for ``curl_easy_getinfo``. Gets information in response after
         curl.perform.
 
@@ -354,6 +474,8 @@ class Curl:
         )
 
     def _ensure_cacert(self) -> None:
+        if self._skip_cacert:
+            return
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
             self._check_error(ret, "set cacert")
@@ -399,6 +521,7 @@ class Curl:
         self._header_handle = None
         self._debug_handle = None
         self._body_handle = None
+        self._read_handle = None
 
         if clear_resolve:
             if self._resolve != ffi.NULL:
@@ -428,6 +551,7 @@ class Curl:
     def reset(self) -> None:
         """Reset all curl options, wrapper for ``curl_easy_reset``."""
         self._is_cert_set = False
+        self._skip_cacert = False
         if self._curl is not None:
             lib.curl_easy_reset(self._curl)
             self._set_error_buffer()
@@ -487,11 +611,12 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
 
-    def ws_recv(self, n: int = 1024) -> tuple[bytes, CurlWsFrame]:
-        """Receive a frame from a websocket connection.
+        if self._ws_recv_buffer is not None:
+            ffi.release(self._ws_recv_buffer)
+            self._ws_recv_buffer = None
 
-        Args:
-            n: maximum data to receive.
+    def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
+        """Receive a frame from a websocket connection.
 
         Returns:
             a tuple of frame content and curl frame meta struct.
@@ -502,19 +627,24 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
 
-        buffer = ffi.new("char[]", n)
-        n_recv = ffi.new("size_t *")
-        p_frame = ffi.new("struct curl_ws_frame **")
-
-        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
-        self._check_error(ret, "WS_RECV")
+        if ret := lib.curl_ws_recv(
+            self._curl,
+            self._ws_recv_buffer,
+            self._WS_RECV_BUFFER_SIZE,
+            self._ws_recv_n_recv,
+            self._ws_recv_p_frame,
+        ):
+            self._check_error(ret, "WS_RECV")
 
         # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
-        frame = p_frame[0]
+        return (
+            ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]],
+            self._ws_recv_p_frame[0],
+        )
 
-        return ffi.buffer(buffer)[: n_recv[0]], frame
-
-    def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
+    def ws_send(
+        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+    ) -> int:
         """Send data to a websocket connection.
 
         Args:
@@ -522,7 +652,7 @@ class Curl:
             flags: websocket flag to set for the frame, default: binary.
 
         Returns:
-            0 if no error.
+            The number of bytes sent.
 
         Raises:
             CurlError: if failed.
@@ -530,11 +660,16 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
-        n_sent = ffi.new("size_t *")
-        buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(payload), n_sent, 0, flags)
-        self._check_error(ret, "WS_SEND")
-        return n_sent[0]
+        if ret := lib.curl_ws_send(
+            self._curl,
+            ffi.from_buffer(payload),
+            len(payload),
+            self._ws_send_n_sent,
+            0,
+            flags,
+        ):
+            self._check_error(ret, "WS_SEND")
+        return self._ws_send_n_sent[0]
 
     def ws_close(self, code: int = 1000, message: bytes = b"") -> int:
         """Close a websocket connection. Shorthand for :meth:`ws_send`
@@ -551,13 +686,14 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        return self.ws_send(struct.pack("!H", code) + message)
+        payload = struct.pack("!H", code) + message
+        return self.ws_send(payload, flags=CurlWsFlag.CLOSE)
 
 
 class CurlMime:
     """Wrapper for the ``curl_mime_`` API."""
 
-    def __init__(self, curl: Optional[Curl] = None):
+    def __init__(self, curl: Curl | None = None):
         """
         Args:
             curl: Curl instance to use.
@@ -569,10 +705,10 @@ class CurlMime:
         self,
         name: str,
         *,
-        content_type: Optional[str] = None,
-        filename: Optional[str] = None,
-        local_path: Optional[Union[str, bytes, Path]] = None,
-        data: Optional[bytes] = None,
+        content_type: str | None = None,
+        filename: str | None = None,
+        local_path: str | bytes | Path | None = None,
+        data: bytes | None = None,
     ) -> None:
         """Add a mime part for a mutlipart html form.
 
@@ -597,12 +733,6 @@ class CurlMime:
             if ret != 0:
                 raise CurlError("Add field failed.")
 
-        # remote file name
-        if filename is not None:
-            ret = lib.curl_mime_filename(part, filename.encode())
-            if ret != 0:
-                raise CurlError("Add field failed.")
-
         if local_path and data:
             raise CurlError("Can not use local_path and data at the same time.")
 
@@ -621,6 +751,12 @@ class CurlMime:
             if ret != 0:
                 raise CurlError("Add field failed.")
 
+        # remote file name
+        if filename is not None:
+            ret = lib.curl_mime_filename(part, filename.encode())
+            if ret != 0:
+                raise CurlError("Add field failed.")
+
         if data is not None:
             if not isinstance(data, bytes):
                 data = str(data).encode()
@@ -634,7 +770,7 @@ class CurlMime:
             form.addpart(**file)
         return form
 
-    def attach(self, curl: Optional[Curl] = None) -> None:
+    def attach(self, curl: Curl | None = None) -> None:
         """Attach the mime instance to a curl instance."""
         c = curl if curl else self._curl
         c.setopt(CurlOpt.MIMEPOST, self._form)

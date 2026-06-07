@@ -70,9 +70,11 @@ The simplest way is to turn off cert verification by ``verify=False``:
 ErrCode: 77, Reason: error setting certificate verify locations
 ------
 
-Install ``curl_cffi`` and its dependencies in a pure-ASCII path, i.e. no Chinese or any
-other characters out of the ASCII table in the path.
-
+On Windows, if your Python environment or CA bundle path contains non-ASCII characters
+(e.g. accents), libcurl may fail to open the CA file when passed as a narrow ``char*``.
+``curl_cffi`` now encodes file-path options (e.g. ``CAINFO``, ``PROXY_CAINFO``,
+``SSLCERT``) using the system's preferred ANSI code page on Windows to ensure correct
+file access. This fixes most occurrences of error 77.
 
 How to use with fiddler/charles to intercept content
 ------
@@ -149,11 +151,14 @@ How to change the order of headers?
 
 By default, setting ``impersonate`` parameter will bring the corresponding headers. If
 you want to change the order or use your own headers, you need to turn off that and bring
-your own headers.
+your own headers. For stored fingerprint targets, you can also load and edit a
+``Fingerprint`` object directly.
 
 .. code-block::
 
-   requests.get(url, impersonate="chrome", default_headers=False, headers=...)
+   fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
+   fingerprint.headers["User-Agent"] = "..."
+   requests.get(url, impersonate=fingerprint)
 
 
 How to deal with encoding/decoding errors?

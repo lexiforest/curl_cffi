@@ -22,8 +22,12 @@ __all__ = [
     "WebSocketError",
     "WebSocketClosed",
     "WebSocketTimeout",
+    "WebSocketRetryStrategy",
     "WsCloseCode",
     "ExtraFingerprints",
+    "RetryStrategy",
+    "CacheBackend",
+    "FileCacheBackend",
     "CookieTypes",
     "HeaderTypes",
     "ProxySpec",
@@ -32,6 +36,7 @@ __all__ = [
 from typing import Optional, TYPE_CHECKING, TypedDict
 
 from ..const import CurlWsFlag
+from .cache import CacheBackend, FileCacheBackend
 from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
@@ -41,6 +46,7 @@ from .session import (
     AsyncSession,
     HttpMethod,
     ProxySpec,
+    RetryStrategy,
     Session,
     ThreadType,
     RequestParams,
@@ -53,6 +59,7 @@ from .websockets import (
     WebSocketError,
     WebSocketTimeout,
     WsCloseCode,
+    WebSocketRetryStrategy,
 )
 
 if TYPE_CHECKING:
@@ -61,6 +68,7 @@ if TYPE_CHECKING:
         thread: Optional[ThreadType]
         curl_options: Optional[dict]
         debug: Optional[bool]
+
 else:
     SessionRequestParams = TypedDict
 
@@ -102,7 +110,7 @@ def request(
         accept_encoding: shortcut for setting accept-encoding header.
         content_callback: a callback function to receive response body.
             ``def callback(chunk: bytes) -> None:``
-        impersonate: which browser version to impersonate.
+        impersonate: which browser version or fingerprint to impersonate.
         ja3: ja3 string to impersonate.
         akamai: akamai string to impersonate.
         extra_fp: extra fingerprints options, in complement to ja3 and akamai strings.
@@ -120,7 +128,7 @@ def request(
         curl_options: extra curl options to use.
         http_version: limiting http version, defaults to http2.
         debug: print extra curl debug info.
-        interface: which interface to use.
+        interface: interface name or local IP to bind to (bare IP = source address).
         cert: a tuple of (cert, key) filenames for client cert.
         stream: streaming the response, default False.
         max_recv_speed: maximum receive speed, bytes per second.
@@ -135,37 +143,37 @@ def request(
         return s.request(method=method, url=url, **kwargs)
 
 
-def head(url: str, **kwargs: Unpack[SessionRequestParams]):
+def head(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="HEAD", url=url, **kwargs)
 
 
-def get(url: str, **kwargs: Unpack[SessionRequestParams]):
+def get(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="GET", url=url, **kwargs)
 
 
-def post(url: str, **kwargs: Unpack[SessionRequestParams]):
+def post(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="POST", url=url, **kwargs)
 
 
-def put(url: str, **kwargs: Unpack[SessionRequestParams]):
+def put(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="PUT", url=url, **kwargs)
 
 
-def patch(url: str, **kwargs: Unpack[SessionRequestParams]):
+def patch(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="PATCH", url=url, **kwargs)
 
 
-def delete(url: str, **kwargs: Unpack[SessionRequestParams]):
+def delete(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="DELETE", url=url, **kwargs)
 
 
-def options(url: str, **kwargs: Unpack[SessionRequestParams]):
+def options(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="OPTIONS", url=url, **kwargs)
 
 
-def trace(url: str, **kwargs: Unpack[SessionRequestParams]):
+def trace(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="TRACE", url=url, **kwargs)
 
 
-def query(url: str, **kwargs: Unpack[SessionRequestParams]):
+def query(url: str, **kwargs: Unpack[SessionRequestParams]) -> Response:
     return request(method="QUERY", url=url, **kwargs)

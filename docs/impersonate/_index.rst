@@ -12,9 +12,9 @@ a tutorial on how to better impersonate using ``curl_cffi``.
    :glob:
 
    fingerprint
+   ja4
    targets
    customize
    psk
    faq
-
 
