@@ -1,8 +1,6 @@
-import json
 import os
 import platform
 import shutil
-import struct
 import sys
 import tempfile
 from glob import glob
@@ -13,6 +11,32 @@ from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
 __version__ = "2.0.0a5"
+
+# Architecture mappings: machine -> arch name
+ARCH_MAP = {
+    "x86_64": "x86_64",
+    "AMD64": "x86_64",
+    "i686": "i386",
+    "ARM64": "arm64",
+    "arm64": "arm64",
+    "aarch64": "aarch64",
+    "riscv64": "riscv64",
+    "loongarch64": "loongarch64",
+    "armv6l": "arm",
+    "armv7l": "arm",
+    "armv8l": "arm",
+}
+
+# Pointer size by machine (32-bit architectures)
+POINTER_SIZE_32 = {"i686", "armv6l", "armv7l"}
+
+# System name mappings
+SYSNAME_MAP = {
+    "Windows": "win32",
+    "Darwin": "macos",
+    "Linux": "linux",
+    "Android": "linux-android",
+}
 
 
 def is_android_env() -> bool:
@@ -26,42 +50,56 @@ def is_android_env() -> bool:
 
 
 def detect_arch():
-    with open(Path(__file__).parent.parent / "libs.json") as f:
-        archs = json.loads(f.read())
-
     uname = platform.uname()
-    uname_system = "Android" if is_android_env() else uname.system
-    glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
+    machine = uname.machine
+    system = "Android" if is_android_env() else uname.system
 
-    libc, _ = platform.libc_ver()
-    # https://github.com/python/cpython/issues/87414
-    libc = glibc_flavor if libc == "glibc" else "musl"
-    if is_android_env():
+    if machine not in ARCH_MAP:
+        raise Exception(f"Unsupported arch: {uname}")
+
+    arch = ARCH_MAP[machine]
+    pointer_size = 32 if machine in POINTER_SIZE_32 else 64
+    obj_name = (
+        "libcurl-impersonate.dll" if system == "Windows" else "libcurl-impersonate.a"
+    )
+    link_type = "dynamic" if system == "Windows" else "static"
+    sysname = SYSNAME_MAP.get(system)
+
+    if system == "Android":
         libc = "android"
-    pointer_size = struct.calcsize("P") * 8
+    else:
+        glibc_flavor = "gnueabihf" if machine in ("armv7l", "armv6l") else "gnu"
+        detected_libc, _ = platform.libc_ver()
+        libc = glibc_flavor if detected_libc == "glibc" else "musl"
 
-    for arch in archs:
-        if (
-            arch["system"] == uname_system
-            and arch["machine"] == uname.machine
-            and arch["pointer_size"] == pointer_size
-            and ("libc" not in arch or arch.get("libc") == libc)
-        ):
-            if arch.get("libdir"):
-                arch["libdir"] = os.path.expanduser(arch["libdir"])
-            else:
-                if "CI" in os.environ:
-                    tmpdir = "./tmplibdir"
-                    os.makedirs(tmpdir, exist_ok=True)
-                    arch["libdir"] = tmpdir
-                else:
-                    if arch.get("local_libdir"):
-                        arch["libdir"] = os.path.expanduser(arch["local_libdir"])
-                    else:
-                        tmpdir = tempfile.TemporaryDirectory()
-                        arch["libdir"] = tmpdir.name
-            return arch
-    raise Exception(f"Unsupported arch: {uname}")
+    if system == "Windows":
+        libdir_map = {
+            ("AMD64", 64): "./lib64",
+            ("AMD64", 32): "./lib32",
+            ("ARM64", 64): "./libarm64",
+        }
+        libdir = libdir_map.get((machine, pointer_size))
+    else:
+        if "CI" in os.environ:
+            libdir = "./tmplibdir"
+            os.makedirs(libdir, exist_ok=True)
+        else:
+            libdir = tempfile.mkdtemp()
+
+    if libdir:
+        libdir = os.path.expanduser(libdir)
+
+    return {
+        "system": system,
+        "machine": machine,
+        "pointer_size": pointer_size,
+        "libdir": libdir,
+        "sysname": sysname,
+        "link_type": link_type,
+        "obj_name": obj_name,
+        "arch": arch,
+        "libc": libc,
+    }
 
 
 arch = detect_arch()
