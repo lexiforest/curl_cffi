@@ -2,6 +2,7 @@ __all__ = [
     "Curl",
     "AsyncCurl",
     "CurlMime",
+    "CurlShare",
     "CurlError",
     "CurlInfo",
     "CurlOpt",
@@ -11,6 +12,10 @@ __all__ = [
     "CurlFollow",
     "CurlSslVersion",
     "CurlWsFlag",
+    "CurlSHOpt",
+    "CurlLockData",
+    "CurlLockAccess",
+    "CurlSHCode",
     "config_warnings",
     "Fingerprint",
     "FingerprintManager",
@@ -61,12 +66,16 @@ from .const import (
     CurlFollow,
     CurlHttpVersion,
     CurlInfo,
+    CurlLockAccess,
+    CurlLockData,
     CurlMOpt,
     CurlOpt,
+    CurlSHCode,
+    CurlSHOpt,
     CurlSslVersion,
     CurlWsFlag,
 )
-from .curl import Curl, CurlError, CurlMime
+from .curl import Curl, CurlError, CurlMime, CurlShare
 
 from .requests import (
     AsyncSession,

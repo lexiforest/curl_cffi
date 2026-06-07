@@ -54,6 +54,16 @@ struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 extern "Python" int socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
 extern "Python" int timer_function(void *curlm, int timeout_ms, void *clientp);
 
+// share interfaces
+void *curl_share_init();
+int _curl_share_setopt(void *share, int option, void *param);
+int curl_share_cleanup(void *share);
+const char *curl_share_strerror(int code);
+
+// share callbacks
+extern "Python" void lock_function(void *handle, int data, int access, void *userptr);
+extern "Python" void unlock_function(void *handle, int data, void *userptr);
+
 // websocket
 struct curl_ws_frame {
   int age;              /* zero */
