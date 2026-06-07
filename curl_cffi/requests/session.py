@@ -1056,15 +1056,15 @@ class AsyncSession(BaseSession[R]):
             A list of curl return codes from `curl_easy_upkeep`.
         """
         self._check_session_closed()
+
         pooled_curls = []
-        while not self.pool.empty():
+        tasks = []
+        while True:
             try:
-                pooled_curls.append(self.pool.get_nowait())
+                curl = self.pool.get_nowait()
             except asyncio.QueueEmpty:
                 break
-
-        tasks = []
-        for curl in pooled_curls:
+            pooled_curls.append(curl)
             if curl:
                 tasks.append(self.loop.run_in_executor(None, curl.upkeep))
 
