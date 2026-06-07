@@ -96,6 +96,27 @@ Sessions
    .. automethod:: close
    .. automethod:: ws_connect
 
+Cache
+~~~~~
+
+.. autoclass:: curl_cffi.requests.CacheBackend
+
+   .. automethod:: __init__
+   .. automethod:: should_cache_request
+   .. automethod:: should_store_response
+   .. automethod:: get
+   .. automethod:: set
+   .. automethod:: delete
+   .. automethod:: _read_payload
+   .. automethod:: _write_payload
+   .. automethod:: _delete_payload
+   .. automethod:: clear
+
+.. autoclass:: curl_cffi.requests.FileCacheBackend
+
+   .. automethod:: __init__
+   .. automethod:: clear
+
 Headers
 ~~~~~~~
 

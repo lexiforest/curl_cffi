@@ -1,8 +1,10 @@
 from datetime import timedelta
 import json
+from pathlib import Path
 
 import pytest
 
+from curl_cffi.requests import cache
 from curl_cffi.requests import AsyncSession, FileCacheBackend, Session
 from curl_cffi.requests.models import Response
 
@@ -23,6 +25,20 @@ def test_cache_hit_returns_cached_response(server, tmp_path):
 
     assert first.cookies["foo"] == second.cookies["foo"]
     assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+def test_cache_hit_updates_session_cookies(server, tmp_path):
+    cache = FileCacheBackend(expires=timedelta(seconds=60), path=tmp_path)
+    url = str(server.url.copy_with(path="/set_cookies"))
+
+    with Session(cache=cache) as session:
+        session.get(url)
+
+    with Session(cache=cache) as session:
+        response = session.get(url)
+
+        assert response.cookies["foo"] == "bar"
+        assert session.cookies["foo"] == "bar"
 
 
 def test_cache_ignores_selected_query_params(server, tmp_path):
@@ -95,6 +111,21 @@ def test_cache_clear_removes_cache_files_only(server, tmp_path):
 
     assert list(tmp_path.glob("*.json")) == []
     assert extra_file.read_text() == "keep"
+
+
+def test_default_cache_path_is_private_directory(monkeypatch, tmp_path):
+    monkeypatch.setattr(cache.tempfile, "gettempdir", lambda: str(tmp_path))
+    backend = FileCacheBackend(expires=timedelta(seconds=60))
+    outside_file = tmp_path / f"{'a' * 64}.json"
+    inside_file = backend.path / f"{'b' * 64}.json"
+    outside_file.write_text("outside")
+    inside_file.write_text("inside")
+
+    backend.clear()
+
+    assert backend.path == Path(tmp_path) / "curl_cffi_cache"
+    assert outside_file.read_text() == "outside"
+    assert not inside_file.exists()
 
 
 def test_cache_preserves_custom_response_class(server, tmp_path):

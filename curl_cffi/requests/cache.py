@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
@@ -343,13 +344,17 @@ class FileCacheBackend(CacheBackend):
         self,
         *,
         expires: timedelta,
-        path: str | os.PathLike[str] = "/tmp",
+        path: str | os.PathLike[str] | None = None,
         methods: Sequence[str] | None = None,
         ignored: Sequence[str] | None = None,
     ) -> None:
         super().__init__(expires=expires, methods=methods, ignored=ignored)
-        self.path = Path(path)
+        self.path = Path(path) if path is not None else self._default_path()
         self.path.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _default_path() -> Path:
+        return Path(tempfile.gettempdir()) / "curl_cffi_cache"
 
     def _file_path(self, key: str) -> Path:
         return self.path / f"{key}.json"

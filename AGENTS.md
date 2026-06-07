@@ -25,6 +25,8 @@ Install editable dependencies with `pip install -e .[test]` and `pip install -e 
 
 Target Python 3.10+ and follow existing Python conventions: 4-space indentation, `snake_case` for functions/modules, `CapWords` for classes, and concise docstrings/comments only where they clarify non-obvious logic. Keep line length at 88 characters to match Ruff. Prefer small, focused changes in `curl_cffi/` and keep public API names consistent with the existing `requests`-style surface.
 
+Do not use `import xxx as xxx` style, alway prefer `from xxx import xxx`
+
 ## Testing Guidelines
 
 Pytest is the test runner; async coverage uses `pytest-asyncio` and `pytest-trio`. Add or update tests with every behavior change. Name files `test_*.py` and mirror the affected module or feature, for example `tests/unittest/test_websockets.py`. Run the smallest relevant test target locally first, then `make test` before opening a PR.

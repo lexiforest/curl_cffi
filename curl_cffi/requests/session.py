@@ -712,6 +712,8 @@ class Session(BaseSession[R]):
                 response_class=self.response_class,
             )  # type: ignore[union-attr]
             if cached_response is not None:
+                if not (discard_cookies or self.discard_cookies):
+                    self._cookies.update(cached_response.cookies)
                 if self.raise_for_status:
                     cached_response.raise_for_status()
                 c.reset()
