@@ -463,6 +463,22 @@ If you want to set a global option in ``Session``, you can use the same paramete
 
 For a complete list, see :doc:`api`
 
+Caching
+~~~~~~~
+
+``Session`` can cache successful responses, which is useful in tests where you
+want to avoid repeated network calls or mock a stable upstream response.
+
+.. code-block:: python
+
+    from datetime import timedelta
+    from curl_cffi import Session
+
+    with Session(cache=timedelta(minutes=5)) as s:
+        r = s.get("https://example.com/api")
+
+For more control over cache location and behavior, see :doc:`advanced`.
+
 Retries
 ~~~~~~~
 
