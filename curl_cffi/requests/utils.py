@@ -601,6 +601,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
     interface: Optional[str] = None,
+    doh_url: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
@@ -970,6 +971,9 @@ def set_curl_options(
             else:
                 value = f"host!{interface}"
         c.setopt(CurlOpt.INTERFACE, value.encode())
+
+    if doh_url:
+        c.setopt(CurlOpt.DOH_URL, doh_url.encode())
 
     # max_recv_speed
     # do not check, since 0 is a valid value to disable it
