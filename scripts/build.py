@@ -166,8 +166,8 @@ if is_static:
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
         ]
-    elif system in ("Linux", "Android"):
-        cxx_lib = "-lc++" if is_android else "-lstdc++"
+    elif system in ("FreeBSD", "Linux", "Android"):
+        cxx_lib = "-lc++" if system == "FreeBSD" or is_android else "-lstdc++"
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
