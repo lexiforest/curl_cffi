@@ -15,12 +15,12 @@ else
 endif
 
 $(CURL_VERSION):
-	curl -L https://github.com/curl/curl/archive/$(CURL_VERSION).zip -o curl.zip
+	curl -fL --retry 3 "https://codeload.github.com/curl/curl/zip/refs/tags/$(CURL_VERSION)" -o curl.zip
 	unzip -q -o curl.zip
 	mv curl-$(CURL_VERSION) $(CURL_VERSION)
 
 curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
-	curl -L "https://github.com/lexiforest/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
+	curl -fL --retry 3 "https://codeload.github.com/lexiforest/curl-impersonate/tar.gz/refs/tags/v$(VERSION)" \
 		-o "curl-impersonate-$(VERSION).tar.gz"
 	tar -xf curl-impersonate-$(VERSION).tar.gz
 
