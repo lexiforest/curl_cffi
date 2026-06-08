@@ -9,7 +9,6 @@ import time
 from glob import glob
 from http.client import HTTPException
 from pathlib import Path
-from urllib.error import HTTPError
 from urllib.request import urlretrieve
 
 from cffi import FFI
@@ -98,9 +97,9 @@ def download_libcurl():
             urlretrieve(url, file)
             break
         except (OSError, HTTPException) as e:
-            if (isinstance(e, HTTPError) and e.code < 500) or attempt == retries:
+            if attempt == retries:
                 raise
-            wait = 2 ** (attempt + 2)
+            wait = 2 ** (attempt - 1)
             print(f"Download failed ({e}); retry {attempt}/{retries} in {wait}s...")
             time.sleep(wait)
 

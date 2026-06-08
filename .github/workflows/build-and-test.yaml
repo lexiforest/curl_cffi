@@ -48,7 +48,7 @@ jobs:
         pip install ./dist/*.tar.gz
 
     - name: upload artifacts
-      uses: actions/upload-artifact@v7  # https://github.com/actions/upload-artifact/issues/478
+      uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
         name: curl_cffi-${{ github.sha }}-sdist.zip
         path: ./dist/*.tar.gz
@@ -82,7 +82,7 @@ jobs:
     # - name: Setup tmate session
     #   uses: mxschmitt/action-tmate@v3
 
-    - uses: actions/upload-artifact@v7  # https://github.com/actions/upload-artifact/issues/478
+    - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
         name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
         path: ./wheelhouse/*.whl
@@ -112,7 +112,7 @@ jobs:
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         ANDROID_API_LEVEL: 24
 
-    - uses: actions/upload-artifact@v7  # https://github.com/actions/upload-artifact/issues/478
+    - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
         name: curl_cffi-${{ github.sha }}-android.zip
         path: ./wheelhouse/*.whl
