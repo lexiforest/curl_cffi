@@ -11,6 +11,8 @@ on cffi for interfacing between python and libcurl.
 
 ## Build, Test, and Development Commands
 
+Use `uv` to manage venv and dependencies.
+
 Install editable dependencies with `pip install -e .[test]` and `pip install -e .[dev]`. Use `make preprocess` before source builds; it fetches and patches the bundled libcurl headers. Common commands:
 
 - `make test` runs the unit suite (`python -bb -m pytest tests/unittest`).
@@ -22,6 +24,8 @@ Install editable dependencies with `pip install -e .[test]` and `pip install -e 
 ## Coding Style & Naming Conventions
 
 Target Python 3.10+ and follow existing Python conventions: 4-space indentation, `snake_case` for functions/modules, `CapWords` for classes, and concise docstrings/comments only where they clarify non-obvious logic. Keep line length at 88 characters to match Ruff. Prefer small, focused changes in `curl_cffi/` and keep public API names consistent with the existing `requests`-style surface.
+
+Do not use `import xxx as xxx` style, alway prefer `from xxx import xxx`
 
 ## Testing Guidelines
 

@@ -24,6 +24,24 @@ with suppress(ImportError):
     import readability as rd
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
+# https://www.rfc-editor.org/rfc/rfc7159#section-8.1
+JSON_NATIVE_ENCODINGS = {
+    "utf-8",
+    "utf8",
+    "utf-8-sig",
+    "utf-16",
+    "utf16",
+    "utf-16-be",
+    "utf-16-le",
+    "utf-16be",
+    "utf-16le",
+    "utf-32",
+    "utf32",
+    "utf-32-be",
+    "utf-32-le",
+    "utf-32be",
+    "utf-32le",
+}
 STREAM_END = object()
 
 
@@ -250,6 +268,11 @@ class Response:
 
     def json(self, **kw):
         """return a parsed json object of the content."""
+        charset_encoding = self.charset_encoding
+        if charset_encoding is not None:
+            encoding = charset_encoding.lower().replace("_", "-")
+            if encoding not in JSON_NATIVE_ENCODINGS:
+                return loads(self.text, **kw)
         return loads(self.content, **kw)
 
     def close(self):

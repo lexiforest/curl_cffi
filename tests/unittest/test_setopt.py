@@ -1,5 +1,7 @@
 from unittest.mock import Mock
 
+import pytest
+
 from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests import utils
@@ -137,9 +139,7 @@ def test_set_extra_fp_sets_extra_fingerprint_options():
     assert curl.options[CurlOpt.TLS_GREASE] == 1
     assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 1
     assert curl.options[CurlOpt.SSL_CERT_COMPRESSION] == "zlib"
-    assert curl.options[CurlOpt.TLS_DELEGATED_CREDENTIALS] == (
-        "ecdsa_secp256r1_sha256"
-    )
+    assert curl.options[CurlOpt.TLS_DELEGATED_CREDENTIALS] == ("ecdsa_secp256r1_sha256")
     assert curl.options[CurlOpt.TLS_RECORD_SIZE_LIMIT] == 4001
     assert curl.options[CurlOpt.STREAM_WEIGHT] == 128
     assert curl.options[CurlOpt.STREAM_EXCLUSIVE] == 0
@@ -149,3 +149,63 @@ def test_set_extra_fp_sets_extra_fingerprint_options():
     assert curl.options[CurlOpt.FORM_BOUNDARY] is True
     assert curl.options[CurlOpt.HTTP3_SIG_HASH_ALGS] == "rsa_pss_rsae_sha256"
     assert curl.options[CurlOpt.HTTP3_TLS_EXTENSION_ORDER] == "0-10-13"
+
+
+def test_set_extra_fp_skips_unset_profile_defaults():
+    curl = FakeCurl()
+    extra_fp = ExtraFingerprints(tls_permute_extensions=True)
+
+    utils.set_extra_fp(curl, extra_fp)
+
+    assert curl.options == {CurlOpt.SSL_PERMUTE_EXTENSIONS: 1}
+
+
+def test_set_extra_fp_honors_explicit_false_and_zero_values():
+    curl = FakeCurl()
+    extra_fp = ExtraFingerprints(
+        tls_grease=False,
+        tls_permute_extensions=False,
+        http2_stream_exclusive=0,
+    )
+
+    utils.set_extra_fp(curl, extra_fp)
+
+    assert curl.options[CurlOpt.TLS_GREASE] == 0
+    assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 0
+    assert curl.options[CurlOpt.STREAM_EXCLUSIVE] == 0
+
+
+def _set_interface(interface):
+    curl = FakeCurl()
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        interface=interface,
+    )
+    return curl
+
+
+@pytest.mark.parametrize(
+    "interface,expected",
+    [
+        ("192.0.2.10", b"host!192.0.2.10"),
+        ("2001:db8::1", b"host!2001:db8::1"),
+    ],
+)
+def test_interface_bare_ip_gets_host_prefix(interface, expected):
+    curl = _set_interface(interface)
+
+    assert curl.options[CurlOpt.INTERFACE] == expected
+
+
+@pytest.mark.parametrize("interface", ["eth0", "host!192.0.2.10"])
+def test_interface_name_and_prefixed_values_pass_through(interface):
+    curl = _set_interface(interface)
+
+    assert curl.options[CurlOpt.INTERFACE] == interface.encode()

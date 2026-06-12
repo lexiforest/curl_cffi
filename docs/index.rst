@@ -60,17 +60,6 @@ to register.
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
 
-Residential Proxies
-~~~~~~~~~~~~~~~~~~~
-
-.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png
-   :width: 149
-   :alt: Thordata
-   :target: https://www.thordata.com/?ls=github&lk=curl_
-
-`Thordata <https://www.thordata.com/?ls=github&lk=curl_>`_: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of `residential proxies <https://www.thordata.com/?ls=github&lk=curl_>`_ and receive 2000 free SERP API calls.
-
-
 Features
 --------
 

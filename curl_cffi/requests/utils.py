@@ -4,6 +4,7 @@ __all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
 import asyncio
+import ipaddress
 import math
 import queue
 import warnings
@@ -408,12 +409,18 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
     if fp.tls_signature_algorithms:
         curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, ",".join(fp.tls_signature_algorithms))
 
-    curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
-    curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
-    curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
-    curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
-    curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
-    curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
+    if fp.tls_min_version is not None:
+        curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
+    if fp.tls_grease is not None:
+        curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
+    if fp.tls_permute_extensions is not None:
+        curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
+    if fp.tls_cert_compression is not None:
+        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
+    if fp.http2_stream_weight is not None:
+        curl.setopt(CurlOpt.STREAM_WEIGHT, fp.http2_stream_weight)
+    if fp.http2_stream_exclusive is not None:
+        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, fp.http2_stream_exclusive)
     if fp.tls_delegated_credential:
         curl.setopt(CurlOpt.TLS_DELEGATED_CREDENTIALS, fp.tls_delegated_credential)
     if fp.tls_record_size_limit:
@@ -579,6 +586,23 @@ def _apply_fingerprint(
     if fingerprint.form_boundary:
         curl.setopt(CurlOpt.FORM_BOUNDARY, fingerprint.form_boundary)
 
+    # http3 settings
+    if fingerprint.http3_settings:
+        curl.setopt(CurlOpt.HTTP3_SETTINGS, fingerprint.http3_settings)
+    if fingerprint.http3_pseudo_headers_order:
+        curl.setopt(
+            CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER,
+            fingerprint.http3_pseudo_headers_order.replace(",", ""),
+        )
+    if fingerprint.http3_tls_extension_order:
+        curl.setopt(
+            CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fingerprint.http3_tls_extension_order
+        )
+    if fingerprint.quic_transport_parameters:
+        curl.setopt(
+            CurlOpt.QUIC_TRANSPORT_PARAMETERS, fingerprint.quic_transport_parameters
+        )
+
     # default headers will not override user-defined headers
     if default_headers and fingerprint.headers:
         header_lines = []
@@ -633,6 +657,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
     interface: Optional[str] = None,
+    doh_url: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
@@ -1005,7 +1030,18 @@ def set_curl_options(
 
     # interface
     if interface:
-        c.setopt(CurlOpt.INTERFACE, interface.encode())
+        value = interface
+        if "!" not in interface:
+            try:
+                ipaddress.ip_address(interface)
+            except ValueError:
+                pass
+            else:
+                value = f"host!{interface}"
+        c.setopt(CurlOpt.INTERFACE, value.encode())
+
+    if doh_url:
+        c.setopt(CurlOpt.DOH_URL, doh_url.encode())
 
     # max_recv_speed
     # do not check, since 0 is a valid value to disable it
