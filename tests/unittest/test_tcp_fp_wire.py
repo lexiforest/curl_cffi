@@ -1,4 +1,3 @@
-import os
 import socket
 import struct
 import sys
@@ -13,12 +12,8 @@ from curl_cffi.requests.utils import DEFAULT_TCP_FINGERPRINTS
 
 
 pytestmark = pytest.mark.skipif(
-    sys.platform != "linux"
-    or os.environ.get("CURL_CFFI_RUN_TCP_FP_WIRE_TESTS") != "1",
-    reason=(
-        "wire-level TCP fingerprint tests require Linux raw socket capture; "
-        "set CURL_CFFI_RUN_TCP_FP_WIRE_TESTS=1 to run them"
-    ),
+    sys.platform != "linux",
+    reason="wire-level TCP fingerprint tests require Linux raw socket capture",
 )
 
 
@@ -52,8 +47,8 @@ class OneShotHttpServer:
         return self
 
     def __exit__(self, *args):
-        self._thread.join(timeout=2)
         self._sock.close()
+        self._thread.join(timeout=2)
         if self._error:
             raise self._error
 
