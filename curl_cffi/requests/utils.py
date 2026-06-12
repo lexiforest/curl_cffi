@@ -66,6 +66,16 @@ class NotSetType:
 NOT_SET: Final[NotSetType] = NotSetType()
 
 
+# https://raw.githubusercontent.com/p0f/p0f/master/p0f.fp
+DEFAULT_TCP_FINGERPRINTS: Final[dict[str, str]] = {
+    "windows": "128,64240,8,1460",
+    "linux": "64,29200,7,1460",
+    "macos": "64,65535,4,1460",
+    "android": "64,64240,3,1460",
+    "ios": "64,65535,2,1460",
+}
+
+
 # ruff: noqa: SIM116
 def normalize_http_version(
     version: Union[CurlHttpVersion, HttpVersionLiteral],
@@ -346,7 +356,7 @@ def set_tcp_fp_options(curl: Curl, tcp_fp: str):
 
     Uses setsockopt on the socket fd to set:
     - IP_TTL: Time To Live (Windows=128, Linux/macOS=64)
-    - TCP_WINDOW_CLAMP: TCP window size (Windows=64240, Linux/macOS=65535)
+    - TCP_WINDOW_CLAMP: TCP window size
     - TCP_MAXSEG: Maximum Segment Size (typically 1460 for Ethernet)
 
     Note: TCP_WINDOW_CLAMP and window_scale behavior is OS-dependent.
@@ -358,7 +368,8 @@ def set_tcp_fp_options(curl: Curl, tcp_fp: str):
     parts = tcp_fp.split(",")
     if len(parts) != 4:
         raise ValueError(
-            f"tcp_fp must have 4 comma-separated values: ttl,window_size,window_scale,mss. "
+            "tcp_fp must have 4 comma-separated values: "
+            "ttl,window_size,window_scale,mss. "
             f"Got {len(parts)} values."
         )
     ttl, window_size, window_scale, mss = (int(p.strip()) for p in parts)
@@ -459,6 +470,9 @@ def _normalize_tls_version(version: str) -> CurlSslVersion:
 
 
 NATIVE_TARGET_NAMES = {item["target_name"] for item in NATIVE_IMPERSONATE_TARGETS}
+NATIVE_TARGET_OS = {
+    item["target_name"]: item["os"] for item in NATIVE_IMPERSONATE_TARGETS
+}
 DEPRECATED_NATIVE_TARGET_ALIASES = {
     "safari15_3",
     "safari15_5",
@@ -479,6 +493,83 @@ def _load_named_fingerprint(target: str) -> Optional[Fingerprint]:
 def _is_native_impersonate_target(target: str) -> bool:
     normalized = resolve_latest_browser_type(target)
     return normalized in NATIVE_TARGET_NAMES
+
+
+def _normalize_tcp_fp_os(os_name: str) -> Optional[str]:
+    normalized = os_name.strip().strip('"').lower()
+    if not normalized:
+        return None
+    if "android" in normalized:
+        return "android"
+    if "ios" in normalized or "iphone" in normalized or "ipad" in normalized:
+        return "ios"
+    if "windows" in normalized or normalized.startswith("win"):
+        return "windows"
+    if "linux" in normalized:
+        return "linux"
+    if (
+        "macos" in normalized
+        or "mac os" in normalized
+        or "macintosh" in normalized
+        or "darwin" in normalized
+    ):
+        return "macos"
+    return None
+
+
+def _infer_tcp_fp_os_from_headers(headers: Headers) -> Optional[str]:
+    for name in ("sec-ch-ua-platform", "User-Agent"):
+        value = headers.get(name)
+        if value:
+            os_name = _normalize_tcp_fp_os(value)
+            if os_name:
+                return os_name
+    return None
+
+
+def _infer_tcp_fp_os_from_fingerprint(
+    fingerprint: Optional[Fingerprint]
+) -> Optional[str]:
+    if fingerprint is None:
+        return None
+    os_name = _normalize_tcp_fp_os(fingerprint.os)
+    if os_name:
+        return os_name
+    return _infer_tcp_fp_os_from_headers(Headers(fingerprint.headers))
+
+
+def _infer_tcp_fp_os_from_native_target(target: str) -> Optional[str]:
+    normalized = resolve_latest_browser_type(target)
+    native_os = NATIVE_TARGET_OS.get(normalized)
+    if native_os:
+        return _normalize_tcp_fp_os(native_os)
+    return None
+
+
+def _resolve_tcp_fp(
+    tcp_fp: str,
+    headers: Headers,
+    impersonate: Optional[Union[BrowserTypeLiteral, str, Fingerprint]],
+    applied_fingerprint: Optional[Fingerprint],
+) -> str:
+    if tcp_fp != "auto":
+        return tcp_fp
+
+    os_name = _infer_tcp_fp_os_from_headers(headers)
+    if os_name is None:
+        os_name = _infer_tcp_fp_os_from_fingerprint(applied_fingerprint)
+    if os_name is None and isinstance(impersonate, Fingerprint):
+        os_name = _infer_tcp_fp_os_from_fingerprint(impersonate)
+    if os_name is None and isinstance(impersonate, str):
+        os_name = _infer_tcp_fp_os_from_native_target(impersonate)
+
+    if os_name is None:
+        raise ValueError(
+            'tcp_fp="auto" requires an impersonate target/fingerprint with OS '
+            "metadata or headers that include User-Agent or sec-ch-ua-platform."
+        )
+
+    return DEFAULT_TCP_FINGERPRINTS[os_name]
 
 
 def _strip_padding_extension(extension_order: str) -> str:
@@ -922,8 +1013,10 @@ def set_curl_options(
         c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
     # impersonate
+    applied_fingerprint = None
     if impersonate:
         if isinstance(impersonate, Fingerprint):
+            applied_fingerprint = impersonate
             _apply_fingerprint(c, impersonate, existing_header_names, default_headers)
         else:
             if _is_native_impersonate_target(impersonate):
@@ -939,6 +1032,7 @@ def set_curl_options(
                     raise ImpersonateError(
                         f"Impersonating {impersonate} is not supported"
                     )
+                applied_fingerprint = fingerprint
                 _apply_fingerprint(
                     c, fingerprint, existing_header_names, default_headers
                 )
@@ -992,11 +1086,13 @@ def set_curl_options(
 
     # tcp fingerprint string
     if tcp_fp:
+        tcp_fp = _resolve_tcp_fp(tcp_fp, h, impersonate, applied_fingerprint)
         if proxy is not None:
             warnings.warn(
                 "tcp_fp has no effect when a proxy is set. The TCP connection is to "
                 "the proxy server, so the target sees the proxy's TCP fingerprint, "
-                "not yours. Consider using HTTP/3 (QUIC/UDP) to avoid TCP fingerprinting.",
+                "not yours. Consider using HTTP/3 (QUIC/UDP) to avoid TCP "
+                "fingerprinting.",
                 CurlCffiWarning,
                 stacklevel=1,
             )

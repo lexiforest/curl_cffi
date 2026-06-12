@@ -485,6 +485,8 @@ class Session(BaseSession[R]):
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
             tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
+                Set to "auto" to choose a default TCP fingerprint from the OS implied
+                by ``impersonate`` or request headers.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             interface: interface name or local IP to bind to (bare IP = source address).
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
@@ -975,6 +977,8 @@ class AsyncSession(BaseSession[R]):
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
             tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
+                Set to "auto" to choose a default TCP fingerprint from the OS implied
+                by ``impersonate`` or request headers.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
@@ -1187,6 +1191,8 @@ class AsyncSession(BaseSession[R]):
             akamai: akamai string to impersonate.
             perk: perk string to impersonate.
             tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
+                Set to "auto" to choose a default TCP fingerprint from the OS implied
+                by ``impersonate`` or request headers.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
             quote: Set characters to be quoted, i.e. percent-encoded. Default safe
