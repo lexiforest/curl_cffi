@@ -6,6 +6,7 @@ from curl_cffi.requests.utils import DEFAULT_TCP_FINGERPRINTS
 from curl_cffi.requests.utils import _apply_fingerprint
 from curl_cffi.requests.utils import _resolve_tcp_fp
 from curl_cffi.requests.utils import set_extra_fp
+from curl_cffi.requests.utils import set_tcp_fp_options
 
 
 class FakeCurl:
@@ -106,6 +107,33 @@ def test_set_extra_fp_sets_header_order():
     set_extra_fp(curl, extra_fp)
 
     assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "User-Agent,Host,Connection"
+
+
+def test_set_tcp_fp_options_uses_linux_rcvbuf_half_window(monkeypatch):
+    import socket
+
+    curl = FakeCurl()
+    setsockopt_calls = []
+
+    class FakeSocket:
+        def __init__(self, fileno):
+            self.fileno = fileno
+
+        def setsockopt(self, level, option, value):
+            setsockopt_calls.append((level, option, value))
+
+        def detach(self):
+            return self.fileno
+
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(socket, "socket", FakeSocket)
+
+    set_tcp_fp_options(curl, "64,29200,7,1460")
+    sockopt_cb = curl.options[CurlOpt.SOCKOPTFUNCTION]
+
+    assert sockopt_cb(123, 0) == 0
+    assert (socket.SOL_SOCKET, socket.SO_RCVBUF, 14600) in setsockopt_calls
+    assert (socket.IPPROTO_TCP, 10, 29200) in setsockopt_calls
 
 
 def test_resolve_tcp_fp_auto_from_native_impersonate_target():

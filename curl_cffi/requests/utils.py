@@ -359,8 +359,8 @@ def set_tcp_fp_options(curl: Curl, tcp_fp: str):
     - TCP_WINDOW_CLAMP: TCP window size
     - TCP_MAXSEG: Maximum Segment Size (typically 1460 for Ethernet)
 
-    Note: TCP_WINDOW_CLAMP and window_scale behavior is OS-dependent.
-    window_scale is set indirectly via SO_RCVBUF.
+    Note: TCP_WINDOW_CLAMP is Linux-only. Window scale is not directly settable
+    by portable socket options; SO_RCVBUF only influences the kernel's choice.
     """
     import socket
     import sys
@@ -384,10 +384,10 @@ def set_tcp_fp_options(curl: Curl, tcp_fp: str):
                 if mss > 0:
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG, mss)
 
-                # Set receive buffer to influence window size and scale.
-                # The kernel doubles this value, so we set half.
-                # window_size = (window_size_value) << window_scale
-                rcvbuf = window_size << window_scale
+                # Set receive buffer to influence advertised receive window.
+                # Linux doubles SO_RCVBUF internally for bookkeeping overhead,
+                # so request half of the target value there.
+                rcvbuf = window_size // 2 if sys.platform == "linux" else window_size
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
 
                 # TCP_WINDOW_CLAMP is Linux-only
