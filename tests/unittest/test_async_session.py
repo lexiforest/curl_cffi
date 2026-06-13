@@ -534,3 +534,13 @@ async def test_shared_async_curl_not_closed_by_session(server):
     await s2.close()
 
     await pool.close()
+
+
+async def test_set_curl_options_error_releases_curl(server):
+    async with AsyncSession(max_clients=1) as s:
+        url = str(server.url)
+        for _ in range(3):
+            with pytest.raises(TypeError):
+                await s.post(url, data=object())  # type: ignore[arg-type]
+        r = await asyncio.wait_for(s.get(url), timeout=5)
+        assert r.status_code == 200

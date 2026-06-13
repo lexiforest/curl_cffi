@@ -1088,3 +1088,13 @@ def test_session_auto_raise_for_status_disabled(server):
     r = s.get(str(server.url.copy_with(path="/status/404")))
     assert r.status_code == 404
     # Should not raise an exception
+
+
+def test_set_curl_options_error_does_not_break_session(server):
+    with requests.Session() as s:
+        url = str(server.url)
+        for _ in range(3):
+            with pytest.raises(TypeError):
+                s.post(url, data=object())  # type: ignore[arg-type]
+        r = s.get(url)
+        assert r.status_code == 200
