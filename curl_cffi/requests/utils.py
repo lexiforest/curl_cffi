@@ -838,10 +838,12 @@ def set_curl_options(
     # cert for this single request
     if isinstance(verify, str):
         c.setopt(CurlOpt.CAINFO, verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, verify)
 
     # cert for the session
     if verify in (None, True) and isinstance(base_verify, str):
         c.setopt(CurlOpt.CAINFO, base_verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, base_verify)
 
     # referer
     if referer:
