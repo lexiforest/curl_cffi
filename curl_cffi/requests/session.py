@@ -90,6 +90,7 @@ if TYPE_CHECKING:
         ja3: Optional[str]
         akamai: Optional[str]
         perk: Optional[str]
+        tcp_fp: Optional[str]
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
         default_headers: bool
         default_encoding: Union[str, Callable[[bytes], str]]
@@ -127,6 +128,7 @@ if TYPE_CHECKING:
         ja3: Optional[str]
         akamai: Optional[str]
         perk: Optional[str]
+        tcp_fp: Optional[str]
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]]
         default_headers: Optional[bool]
         default_encoding: Union[str, Callable[[bytes], str]]
@@ -236,6 +238,7 @@ class BaseSession(Generic[R]):
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
+        tcp_fp: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -266,6 +269,7 @@ class BaseSession(Generic[R]):
         self.ja3 = ja3
         self.akamai = akamai
         self.perk = perk
+        self.tcp_fp = tcp_fp
         self.extra_fp = extra_fp
         self.default_headers = default_headers
         self.default_encoding = default_encoding
@@ -480,6 +484,9 @@ class Session(BaseSession[R]):
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
+            tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
+                Set to "auto" to choose a default TCP fingerprint from the OS implied
+                by ``impersonate`` or request headers.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             interface: interface name or local IP to bind to (bare IP = source address).
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
@@ -646,6 +653,7 @@ class Session(BaseSession[R]):
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
+        tcp_fp: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -696,6 +704,7 @@ class Session(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             perk=perk or self.perk,
+            tcp_fp=tcp_fp or self.tcp_fp,
             extra_fp=extra_fp or self.extra_fp,
             default_headers=(
                 self.default_headers if default_headers is None else default_headers
@@ -828,6 +837,7 @@ class Session(BaseSession[R]):
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
+        tcp_fp: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -872,6 +882,7 @@ class Session(BaseSession[R]):
                     ja3=ja3,
                     akamai=akamai,
                     perk=perk,
+                    tcp_fp=tcp_fp,
                     extra_fp=extra_fp,
                     default_headers=default_headers,
                     default_encoding=default_encoding,
@@ -965,6 +976,9 @@ class AsyncSession(BaseSession[R]):
             ja3: ja3 string to impersonate in the session.
             akamai: akamai string to impersonate in the session.
             perk: perk string to impersonate in the session.
+            tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
+                Set to "auto" to choose a default TCP fingerprint from the OS implied
+                by ``impersonate`` or request headers.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
@@ -1127,6 +1141,7 @@ class AsyncSession(BaseSession[R]):
         ja3: str | None = None,
         akamai: str | None = None,
         perk: str | None = None,
+        tcp_fp: str | None = None,
         extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
         default_headers: bool | None = None,
         quote: str | Literal[False] = "",
@@ -1175,6 +1190,9 @@ class AsyncSession(BaseSession[R]):
             ja3: ja3 string to impersonate.
             akamai: akamai string to impersonate.
             perk: perk string to impersonate.
+            tcp_fp: tcp fingerprint string, format: "ttl,window_size,window_scale,mss".
+                Set to "auto" to choose a default TCP fingerprint from the OS implied
+                by ``impersonate`` or request headers.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
             quote: Set characters to be quoted, i.e. percent-encoded. Default safe
@@ -1328,6 +1346,7 @@ class AsyncSession(BaseSession[R]):
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
+        tcp_fp: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -1372,6 +1391,7 @@ class AsyncSession(BaseSession[R]):
             ja3=ja3 or self.ja3,
             akamai=akamai or self.akamai,
             perk=perk or self.perk,
+            tcp_fp=tcp_fp or self.tcp_fp,
             extra_fp=extra_fp or self.extra_fp,
             default_headers=(
                 self.default_headers if default_headers is None else default_headers
@@ -1491,6 +1511,7 @@ class AsyncSession(BaseSession[R]):
         ja3: Optional[str] = None,
         akamai: Optional[str] = None,
         perk: Optional[str] = None,
+        tcp_fp: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
@@ -1535,6 +1556,7 @@ class AsyncSession(BaseSession[R]):
                     ja3=ja3,
                     akamai=akamai,
                     perk=perk,
+                    tcp_fp=tcp_fp,
                     extra_fp=extra_fp,
                     default_headers=default_headers,
                     default_encoding=default_encoding,
