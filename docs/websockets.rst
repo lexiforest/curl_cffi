@@ -224,7 +224,7 @@ You can control the internal buffer sizes to manage backpressure.
 
 *   **recv_queue_size** (default: 128): Max incoming messages to buffer.
 *   **send_queue_size** (default: 128): Max outgoing messages to buffer.
-*   **block_on_recv_queue_full** (default: ``True``): The reader pauses when the queue is full (TCP backpressure). If ``False``, the connection will fail instead (``OUT_OF_MEMORY``) to avoid stalling the reader.
+*   **block_on_recv_queue_full** (default: ``True``): The reader pauses when the queue is full (TCP backpressure). When set to ``False``, the connection will fail instead (``OUT_OF_MEMORY``) to avoid stalling the reader.
 
 .. code-block:: python
 
@@ -321,11 +321,11 @@ Cooperative Multitasking
 To prevent the background I/O tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
 
 *   **recv_time_slice** (default: 0.01s): Max time spent processing incoming messages before yielding (10ms).
-*   **send_time_slice** (default: 0.005s): Max time spent sending messages before yielding (5ms).
+*   **send_time_slice** (default: 0.01s): Max time spent sending messages before yielding (10ms).
 
 .. code-block:: python
 
-    # Force more frequent yields for lower latency in other async tasks
+    # Force more frequent yields for lower latency in other tasks
     ws = await session.ws_connect(url, recv_time_slice=0.001)
 
 Performance Tuning
@@ -343,4 +343,4 @@ Automatic Reassembly
 
 You never need to worry about network fragmentation. If you send or receive a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, and seamlessly reassembles those frames on the other side.
 
-Your application will always receive the data exactly as it was sent — as a single, complete string or bytes.
+Your application will always receive the data exactly as it was sent.
