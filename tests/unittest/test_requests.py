@@ -10,6 +10,7 @@ from charset_normalizer import detect
 
 import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
+from curl_cffi.requests import RetryStrategy
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
@@ -622,6 +623,52 @@ def test_session_retry(server):
         r = s.get(retry_url)
     assert r.status_code == 200
     assert r.content == b"ok"
+
+
+def test_status_forcelist_default_no_retry(retry_status_url):
+    url = retry_status_url(status=503)
+    with requests.Session(retry=2) as s:
+        r = s.get(url)
+    assert r.status_code == 503
+    assert r.headers["x-request-count"] == "1"
+
+
+def test_status_forcelist_exhausts_then_returns(retry_status_url):
+    url = retry_status_url(status=503)
+    strategy = RetryStrategy(count=2, status_forcelist=(503,))
+    with requests.Session(retry=strategy) as s:
+        r = s.get(url)
+    assert r.status_code == 503
+    assert r.headers["x-request-count"] == "3"
+
+
+def test_status_forcelist_stops_on_success(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=3, status_forcelist=(503,))
+    with requests.Session(retry=strategy) as s:
+        r = s.get(url)
+    assert r.status_code == 200
+    assert r.content == b"ok"
+    assert r.headers["x-request-count"] == "2"
+
+
+def test_status_forcelist_invalid_entries():
+    with pytest.raises(ValueError):
+        requests.Session(retry=RetryStrategy(count=1, status_forcelist=(700,)))
+    with pytest.raises(ValueError):
+        requests.Session(retry=RetryStrategy(count=1, status_forcelist=("503",)))
+
+
+def test_status_forcelist_retry_after_header(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1, retry_after="0.3")
+    strategy = RetryStrategy(count=1, delay=0.0, status_forcelist=(503,))
+    with requests.Session(retry=strategy) as s:
+        start = time.time()
+        r = s.get(url)
+        elapsed = time.time() - start
+    assert r.status_code == 200
+    assert r.headers["x-request-count"] == "2"
+    assert elapsed >= 0.25
 
 
 def test_post_timeout(server):

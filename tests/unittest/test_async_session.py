@@ -9,7 +9,7 @@ import pytest
 
 from curl_cffi import AsyncCurl, CurlOpt, Headers
 from curl_cffi.const import CurlECode
-from curl_cffi.requests import AsyncSession, RequestsError
+from curl_cffi.requests import AsyncSession, RequestsError, RetryStrategy
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
     CertificateVerifyError,
@@ -686,6 +686,24 @@ async def test_async_session_auto_raise_for_status_disabled(server):
         r = await s.get(str(server.url.copy_with(path="/status/404")))
         assert r.status_code == 404
         # Should not raise an exception
+
+
+async def test_status_forcelist_default_no_retry(retry_status_url):
+    url = retry_status_url(status=503)
+    async with AsyncSession(retry=2) as s:
+        r = await s.get(url)
+    assert r.status_code == 503
+    assert r.headers["x-request-count"] == "1"
+
+
+async def test_status_forcelist_stops_on_success(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=3, status_forcelist=(503,))
+    async with AsyncSession(retry=strategy) as s:
+        r = await s.get(url)
+    assert r.status_code == 200
+    assert r.content == b"ok"
+    assert r.headers["x-request-count"] == "2"
 
 
 async def test_shared_async_curl_not_closed_by_session(server):
