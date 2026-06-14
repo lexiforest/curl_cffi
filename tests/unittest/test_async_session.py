@@ -19,6 +19,19 @@ async def test_get(server):
         assert r.status_code == 200
 
 
+async def test_custom_async_curl_cacert_is_used_by_pooled_curl():
+    acurl = AsyncCurl(cacert="custom-ca.pem")
+    try:
+        async with AsyncSession(async_curl=acurl) as s:
+            curl = await s.pop_curl()
+            try:
+                assert curl._cacert == "custom-ca.pem"
+            finally:
+                s.push_curl(curl)
+    finally:
+        await acurl.close()
+
+
 def test_create_session_out_of_async(server):
     s = AsyncSession()
 

@@ -1033,7 +1033,7 @@ class AsyncSession(BaseSession[R]):
     async def pop_curl(self) -> Curl:
         curl: Curl | None = await self.pool.get()
         if curl is None:
-            curl = Curl(debug=self.debug)
+            curl = Curl(cacert=self.acurl._cacert, debug=self.debug)
         return curl
 
     def push_curl(self, curl: Curl | None) -> None:

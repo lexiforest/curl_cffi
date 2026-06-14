@@ -458,7 +458,8 @@ def _apply_fingerprint(
         tls_extension_order = _strip_padding_extension(fingerprint.tls_extension_order)
         extension_ids = set(int(e) for e in tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
-        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
+        if not fingerprint.tls_permute_extensions:
+            curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
 
     curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(fingerprint.tls_alpn))
     curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(fingerprint.tls_alps))
@@ -838,10 +839,12 @@ def set_curl_options(
     # cert for this single request
     if isinstance(verify, str):
         c.setopt(CurlOpt.CAINFO, verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, verify)
 
     # cert for the session
     if verify in (None, True) and isinstance(base_verify, str):
         c.setopt(CurlOpt.CAINFO, base_verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, base_verify)
 
     # referer
     if referer:
