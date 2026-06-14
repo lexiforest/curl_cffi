@@ -28,10 +28,17 @@ from typing import (
 )
 from urllib.parse import urlparse
 
+# Unpack introduced in 3.11
+try:
+    from typing import Unpack
+except ImportError:
+    from typing_extensions import Unpack
+
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
+from .cache import CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes, CurlMorsel
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
@@ -91,10 +98,12 @@ if TYPE_CHECKING:
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         debug: bool
         interface: Optional[str]
+        doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         response_class: Optional[type[R]]
         discard_cookies: bool
         raise_for_status: bool
+        cache: Optional[CacheSpec]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -124,6 +133,7 @@ if TYPE_CHECKING:
         quote: Union[str, Literal[False]]
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         interface: Optional[str]
+        doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
         multipart: Optional[CurlMime]
@@ -234,10 +244,12 @@ class BaseSession(Generic[R]):
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         response_class: Optional[type[R]] = None,
         discard_cookies: bool = False,
         raise_for_status: bool = False,
+        cache: Optional[CacheSpec] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -262,7 +274,9 @@ class BaseSession(Generic[R]):
         self.http_version = http_version
         self.debug = debug
         self.interface = interface
+        self.doh_url = doh_url
         self.cert = cert
+        self.cache = normalize_cache_backend(cache)
 
         if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
@@ -384,6 +398,22 @@ class BaseSession(Generic[R]):
         if self._closed:
             raise SessionClosed("Session is closed, cannot send request.")
 
+    def _cache_enabled(
+        self,
+        request,
+        *,
+        stream: Optional[bool],
+        content_callback: Optional[Callable[..., object]],
+    ) -> bool:
+        return bool(
+            self.cache
+            and self.cache.should_cache_request(
+                request,
+                stream=bool(stream),
+                content_callback=content_callback,
+            )
+        )
+
     def _retry_delay(self, attempt: int) -> float:
         strategy = self.retry
         if strategy.backoff == "exponential":
@@ -452,6 +482,7 @@ class Session(BaseSession[R]):
             perk: perk string to impersonate in the session.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             interface: interface name or local IP to bind to (bare IP = source address).
+            doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
                 automatic detection.
@@ -621,6 +652,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -671,6 +703,7 @@ class Session(BaseSession[R]):
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
+            doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
@@ -679,6 +712,19 @@ class Session(BaseSession[R]):
             queue_class=queue.Queue,
             event_class=threading.Event,
         )
+
+        if self._cache_enabled(req, stream=stream, content_callback=content_callback):
+            cached_response = self.cache.get(
+                req,
+                response_class=self.response_class,
+            )  # type: ignore[union-attr]
+            if cached_response is not None:
+                if not (discard_cookies or self.discard_cookies):
+                    self._cookies.update(cached_response.cookies)
+                if self.raise_for_status:
+                    cached_response.raise_for_status()
+                c.reset()
+                return cast(R, cached_response)
 
         if stream:
 
@@ -747,6 +793,10 @@ class Session(BaseSession[R]):
                     c, buffer, header_buffer, default_encoding, discard_cookies
                 )
                 rsp.request = req
+                if self._cache_enabled(
+                    req, stream=stream, content_callback=content_callback
+                ):
+                    self.cache.set(req, rsp)  # type: ignore[union-attr]
                 if self.raise_for_status:
                     rsp.raise_for_status()
                 return rsp
@@ -784,6 +834,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -827,6 +878,7 @@ class Session(BaseSession[R]):
                     quote=quote,
                     http_version=http_version,
                     interface=interface,
+                    doh_url=doh_url,
                     cert=cert,
                     stream=stream,
                     max_recv_speed=max_recv_speed,
@@ -937,6 +989,12 @@ class AsyncSession(BaseSession[R]):
 
             s = AsyncSession()  # it also works.
         """
+        if kwargs.get("cache") is not None:
+            raise NotImplementedError(
+                "AsyncSession does not support cache yet because CacheBackend I/O "
+                "is blocking."
+            )
+
         super().__init__(**kwargs)
         self._loop: asyncio.AbstractEventLoop | None = loop
         self._acurl: AsyncCurl | None = async_curl
@@ -968,7 +1026,7 @@ class AsyncSession(BaseSession[R]):
     async def pop_curl(self) -> Curl:
         curl: Curl | None = await self.pool.get()
         if curl is None:
-            curl = Curl(debug=self.debug)
+            curl = Curl(cacert=self.acurl._cacert, debug=self.debug)
         return curl
 
     def push_curl(self, curl: Curl | None) -> None:
@@ -994,6 +1052,36 @@ class AsyncSession(BaseSession[R]):
                     curl.close()
             except asyncio.QueueEmpty:
                 break
+
+    async def upkeep(self) -> list[int]:
+        """
+        Performs connection upkeep for all idle connections in the pool.
+
+        This is done by calling `curl_easy_upkeep` on each underlying curl handle.
+        This function can be used to keep connections alive. For example, HTTP/2
+        connections can be kept alive by sending PING frames.
+
+        Returns:
+            A list of curl return codes from `curl_easy_upkeep`.
+        """
+        self._check_session_closed()
+
+        pooled_curls = []
+        tasks = []
+        while True:
+            try:
+                curl = self.pool.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            pooled_curls.append(curl)
+            if curl:
+                tasks.append(self.loop.run_in_executor(None, curl.upkeep))
+
+        try:
+            return list(await asyncio.gather(*tasks))
+        finally:
+            for curl in pooled_curls:
+                self.push_curl(curl)
 
     def release_curl(self, curl: Curl) -> None:
         curl.clean_handles_and_buffers()
@@ -1044,6 +1132,7 @@ class AsyncSession(BaseSession[R]):
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
+        doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
         recv_queue_size: int = 128,
@@ -1095,6 +1184,7 @@ class AsyncSession(BaseSession[R]):
                 encode the URL yourself.
             http_version: limiting http version, defaults to http2.
             interface: interface name or local IP to bind to (bare IP = source address).
+            doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             recv_queue_size: The maximum number of incoming WebSocket
@@ -1165,6 +1255,7 @@ class AsyncSession(BaseSession[R]):
                 quote=quote,
                 http_version=http_version or self.http_version,
                 interface=interface or self.interface,
+                doh_url=doh_url or self.doh_url,
                 max_recv_speed=max_recv_speed,
                 cert=cert or self.cert,
                 queue_class=asyncio.Queue,
@@ -1243,6 +1334,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -1287,6 +1379,7 @@ class AsyncSession(BaseSession[R]):
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
+            doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
@@ -1297,6 +1390,7 @@ class AsyncSession(BaseSession[R]):
         )
         if stream:
             task = self.acurl.add_handle(curl)
+            curl_released = False
 
             async def perform() -> None:
                 try:
@@ -1314,7 +1408,10 @@ class AsyncSession(BaseSession[R]):
                     await q.put(STREAM_END)  # type: ignore
 
             def cleanup(fut):
-                self.release_curl(curl)
+                nonlocal curl_released
+                if not curl_released:
+                    self.release_curl(curl)
+                curl_released = True
 
             stream_task = asyncio.create_task(perform())
             stream_task.add_done_callback(cleanup)
@@ -1331,7 +1428,9 @@ class AsyncSession(BaseSession[R]):
 
             first_element = _peek_aio_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
-                self.release_curl(curl)
+                if not curl_released:
+                    self.release_curl(curl)
+                curl_released = True
                 raise first_element
 
             rsp.request = req
@@ -1398,6 +1497,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
@@ -1441,6 +1541,7 @@ class AsyncSession(BaseSession[R]):
                     quote=quote,
                     http_version=http_version,
                     interface=interface,
+                    doh_url=doh_url,
                     cert=cert,
                     stream=stream,
                     max_recv_speed=max_recv_speed,

@@ -40,6 +40,126 @@ For compatibility with ``requests``, we also support using dicts.
    Prefer the single `proxy` parameter, unless you do have different proxies for http and https
 
 
+Response cache
+==============
+
+``Session`` can cache successful responses on disk. This is especially useful for
+tests and local mocks: the first request records a real response, and later
+requests with the same method, URL and request body are served from the cache.
+
+The simplest form is to pass a number of seconds or a ``timedelta``:
+
+.. code-block:: python
+
+    from datetime import timedelta
+    from curl_cffi import Session
+
+    with Session(cache=timedelta(minutes=10)) as s:
+        first = s.get("https://example.com/api/users")
+        second = s.get("https://example.com/api/users")  # served from cache
+
+By default, cached files are stored in a ``curl_cffi_cache`` directory under the
+system temporary directory. Use ``FileCacheBackend`` when you want a stable cache
+directory, for example inside a test fixture:
+
+.. code-block:: python
+
+    from datetime import timedelta
+    from curl_cffi import FileCacheBackend, Session
+
+    cache = FileCacheBackend(
+        path="tests/.cache/http",
+        expires=timedelta(hours=1),
+    )
+
+    with Session(cache=cache) as s:
+        response = s.get("https://api.example.test/items")
+
+Only successful responses are stored by default. Cached responses preserve the
+response body, status code, headers, cookies and common curl metadata. On a cache
+hit, response cookies are also merged into the session cookie jar, matching normal
+``Session`` behavior.
+
+Ignoring query parameters
+-------------------------
+
+You can ignore volatile query parameters when building cache keys. This is useful
+for analytics, cache-busting or nonce parameters that should not create separate
+cache entries.
+
+.. code-block:: python
+
+    from datetime import timedelta
+    from curl_cffi import FileCacheBackend, Session
+
+    cache = FileCacheBackend(
+        expires=timedelta(minutes=10),
+        ignored=["utm_source", "cache_buster"],
+    )
+
+    with Session(cache=cache) as s:
+        s.get("https://example.com/items?item=1&utm_source=a")
+        s.get("https://example.com/items?item=1&utm_source=b")  # same cache entry
+
+
+Clearing cache files
+--------------------
+
+Call ``clear`` to remove cache entries managed by that backend:
+
+.. code-block:: python
+
+    cache.clear()
+
+``FileCacheBackend.clear`` only removes cache-looking files from its own cache
+directory.
+
+
+Custom backends
+---------------
+
+To store responses somewhere other than the filesystem, subclass
+``CacheBackend`` and implement the storage methods:
+
+.. code-block:: python
+
+    from datetime import timedelta
+    from curl_cffi import CacheBackend, Session
+
+    class DictCache(CacheBackend):
+        def __init__(self):
+            super().__init__(expires=timedelta(minutes=10))
+            self.data = {}
+
+        def _read_payload(self, key):
+            return self.data.get(key)
+
+        def _write_payload(self, key, payload):
+            self.data[key] = payload
+
+        def _delete_payload(self, key):
+            self.data.pop(key, None)
+
+        def clear(self):
+            self.data.clear()
+
+    with Session(cache=DictCache()) as s:
+        response = s.get("https://example.com/api")
+
+
+Limitations
+-----------
+
+- The built-in cache currently works with synchronous ``Session`` only.
+  ``AsyncSession`` rejects the ``cache`` option because the backend API is
+  blocking.
+- Streamed responses and requests using ``content_callback`` are not cached.
+- The default key uses request method, normalized URL and request body. Be careful
+  with authenticated or cookie-specific responses; use a custom backend or a
+  separate cache directory when different users may receive different content for
+  the same URL.
+
+
 Low-level curl API
 =========
 
@@ -122,9 +242,18 @@ With http/2, you can optionally send a ping frame to keep the connection alive w
 
 .. code-block:: python
 
-   import curl_cffi
+   from curl_cffi import Session
 
    s = Session()
    s.get("https://example.com")
    s.upkeep()
 
+``AsyncSession`` also exposes ``upkeep`` for idle connections in its pool:
+
+.. code-block:: python
+
+   from curl_cffi import AsyncSession
+
+   async with AsyncSession() as s:
+       await s.get("https://example.com")
+       await s.upkeep()
