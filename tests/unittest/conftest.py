@@ -646,7 +646,7 @@ class TestServer(Server):
 
 @pytest.fixture(scope="session")
 def server():
-    config = Config(app=app, lifespan="off", loop="asyncio", port=8008)
+    config = Config(app=app, lifespan="off", loop="asyncio", port=8008, ws="none")
     server = TestServer(config=config)
     yield from serve_in_thread(server)
 
@@ -672,6 +672,7 @@ def https_server(cert_pem_file, cert_private_key_file):
         ssl_keyfile=cert_private_key_file,
         port=8001,
         loop="asyncio",
+        ws="none",
     )
     server = TestServer(config=config)
     yield from serve_in_thread(server)
@@ -879,7 +880,9 @@ file_app = Litestar(
 
 @pytest.fixture(scope="session")
 def file_server():
-    config = uvicorn.Config(file_app, host="127.0.0.1", port=2952, log_level="info")
+    config = uvicorn.Config(
+        file_app, host="127.0.0.1", port=2952, log_level="info", ws="none"
+    )
     server = FileServer(config=config)
     with server.run_in_thread():
         yield server
