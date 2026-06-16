@@ -111,7 +111,7 @@ All receive methods support an optional ``timeout`` argument (in seconds).
     if flags & CurlWsFlag.TEXT:
         text = content.decode("utf-8")
 
-Concurrent calls to receive methods are fully supported. Messages are distributed to waiters in FIFO order, unlike many other libraries that limit consumption to a single task.
+Concurrent calls to receive methods are fully supported. Messages are distributed to waiters in FIFO order, unlike many other libraries that limit receiving to a single task.
 
 .. note::
 
@@ -122,27 +122,25 @@ Async Iteration
 
 The most pythonic way to consume a stream is iteration.
 
-.. note::
-
-    Iteration yields raw ``bytes``. If you expect text, you must decode it yourself.
-
 .. code-block:: python
 
     async for message in ws:
         print(message.decode("utf-8"))
 
+Iteration always yields ``bytes``. If you expect text, you must decode it yourself.
+
 Heartbeats and Pings
 ====================
 
-Libcurl handles incoming PONGs automatically. If you need to send a manual PING frame (e.g., for application-layer keepalives):
+When a PING frame is received from the server, libcurl automatically sends a PONG frame in response.
+
+To send a PING frame:
 
 .. code-block:: python
 
     await ws.ping(b"keepalive")
 
-.. note::
-
-    PONG frames are consumed internally and are not delivered to your ``recv()`` calls or async iteration.
+Received PONG frames are consumed internally and not delivered to ``recv()`` calls or async iteration.
 
 Lifecycle Management
 ====================
@@ -150,7 +148,7 @@ Lifecycle Management
 Closing
 -------
 
-The context manager handles closing automatically. If you need to close manually, there are two methods available:
+The context manager handles closing **automatically**. If you need to close manually, there are two methods available:
 
 .. code-block:: python
 
@@ -256,12 +254,16 @@ Message Limits
     # Allow large received payloads (e.g. 16MB)
     ws = await session.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
-There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, appearing as a single logical message to the server.
+There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, arriving as a single logical message on the server.
+
+Setting ``0`` does not mean unlimited size - for an effectively unlimited size, set it to 2\ :sup:`63`.
 
 Manual Fragmentation
 --------------------
 
-The library automatically fragments large payloads for you. If you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
+You don't need to worry about frame fragmentation. If you send a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, and seamlessly reassembles those frames on the other side into a single logical message. The same also applies to received messages, you never receive fragments, only complete WebSocket messages.
+
+If you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
 
 .. warning::
 
@@ -280,18 +282,60 @@ The library automatically fragments large payloads for you. If you are generatin
     # Send the final chunk (drops the CONT flag)
     await ws.send("Final part", flags=CurlWsFlag.TEXT)
 
-Frame Coalescing (Throughput)
------------------------------
+Frame Coalescing
+----------------
 
-For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple queued message payloads from the send queue into a single transmission batch to reduce syscall overhead.
+This is an *optional* advanced optimization technique which, when enabled, will merge multiple queued messages from the send queue into a single message. This significantly reduces overhead and boosts throughput for chatty protocols sending many small messages.
+
+.. warning::
+
+    Multiple small messages can arrive as a single large, concatenated payload, so the server must parse concatenated messages.
 
 *   **coalesce_frames** (default: ``False``): Enable batching.
 *   **max_send_batch_size** (default: 64): Max messages to merge.
 
 .. code-block:: python
 
-    # Optimize for throughput over latency
+    # Enable coalescing
     ws = await session.ws_connect(url, coalesce_frames=True)
+
+When coalescing is enabled, a batch of messages are dispatched as soon as the batch size limit is reached or when no more messages are queued for sending in quick succession.
+
+.. code-block:: pycon
+
+    >>> import asyncio
+    >>> from curl_cffi import AsyncSession, Response
+    >>>
+    >>> async def test_coalescing():
+    ...     """Test frame coalescing feature"""
+    ...     async with AsyncSession[Response]() as session:
+    ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
+    ...             await ws.send_str("Hello,")
+    ...             await ws.send_str(" World!")
+    ...             response: str = await ws.recv_str()
+    ...             print(response)
+    ...
+    >>> asyncio.run(test_coalescing())
+    Hello, World!
+
+This library fully supports concurrent sends and receives, so you can take advantage of this combined with coalescing to achieve significant throughput improvements.
+
+.. code-block:: pycon
+
+    >>> async def test_coalescing():
+    ...     """Test frame coalescing feature"""
+    ...     async with AsyncSession[Response]() as session:
+    ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
+    ...             # Take advantage of concurrent sends
+    ...             async with asyncio.TaskGroup() as tg:
+    ...                 tg.create_task(ws.send_str("Concurrent sending"))
+    ...                 tg.create_task(ws.send_str(" is "))
+    ...                 tg.create_task(ws.send_str("so cool!!"))
+    ...             response: str = await ws.recv_str()
+    ...             print(response)
+    ...
+    >>> asyncio.run(test_coalescing())
+    Concurrent sending is so cool!!
 
 Reliability & Retries
 ---------------------
@@ -318,29 +362,24 @@ Reliability & Retries
 Cooperative Multitasking
 ------------------------
 
-To prevent the background I/O tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
+To prevent the background tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
 
 *   **recv_time_slice** (default: 0.01s): Max time spent processing incoming messages before yielding (10ms).
 *   **send_time_slice** (default: 0.01s): Max time spent sending messages before yielding (10ms).
 
 .. code-block:: python
 
-    # Force more frequent yields for lower latency in other tasks
+    # Force more frequent yields for lower latency in other tasks (1ms)
     ws = await session.ws_connect(url, recv_time_slice=0.001)
+
+    # Prioritize throughput over event loop fairness (20ms)
+    ws = await session.ws_connect(url, recv_time_slice=0.02, send_time_slice=0.02)
 
 Performance Tuning
 ==================
 
-The ``curl_cffi`` WebSocket implementation uses a patched version of libcurl enhanced with AVX-512/AVX2/NEON SIMD **hardware acceleration**. It is capable of multi-gigabit throughput.
+The WebSocket protocol requires every client-to-server message to be masked (XOR) according to RFC 6455.
 
-If your application needs to push a massive volume of data (e.g., file uploads, video streaming, or bulk syncing), **you should focus on sending fewer, larger messages rather than many small messages.**
+Curl-CFFI uses a patched version of libcurl enhanced with AVX-512/AVX2/NEON SIMD vectorized masking. It is capable of multi-gigabit throughput in both directions.
 
-*   **The Overhead:** The WebSocket protocol requires every client-to-server message to be masked (XOR) for security. Additionally, every call to ``await ws.send()`` carries a small asyncio overhead.
-*   **The Solution:** Increase queue sizes and condense your data into larger blocks (e.g., 64KB to 1MB per message) before sending. This drastically reduces the framing, masking, and FFI overhead, allowing libcurl to process the data at maximum speed.
-
-Automatic Reassembly
---------------------
-
-You never need to worry about network fragmentation. If you send or receive a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, and seamlessly reassembles those frames on the other side.
-
-Your application will always receive the data exactly as it was sent.
+If your application needs to push a large volume of data, you should increase queue sizes and **focus on sending fewer, larger messages rather than many small messages** (e.g., 64KB to 1MB per message). This significantly reduces the framing, masking, and FFI overhead, allowing libcurl to process the data at maximum speed.
