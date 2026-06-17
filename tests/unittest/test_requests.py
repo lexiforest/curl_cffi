@@ -336,6 +336,28 @@ def test_json_bytes_bom_parse():
     assert r.json()["foo"] == "bar"
 
 
+def test_response_is_redirect():
+    for status_code in (301, 302, 303, 307, 308):
+        r = Response()
+        r.status_code = status_code
+        r.headers["Location"] = "/"
+        assert r.is_redirect
+
+    r = Response()
+    r.status_code = 301
+    assert not r.is_redirect
+
+    r = Response()
+    r.status_code = 304
+    r.headers["Location"] = "/"
+    assert not r.is_redirect
+
+    r = Response()
+    r.status_code = 302
+    r.headers["LOCATION"] = "/"
+    assert r.is_redirect
+
+
 def test_charset_default_encoding(server):
     r = requests.get(
         str(server.url.copy_with(path="/windows1251")), default_encoding="windows-1251"
