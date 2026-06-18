@@ -43,6 +43,7 @@ JSON_NATIVE_ENCODINGS = {
     "utf-32le",
 }
 STREAM_END = object()
+REDIRECT_STATI = (301, 302, 303, 307, 308)
 
 
 def clear_queue(q: queue.Queue):
@@ -209,6 +210,11 @@ class Response:
         """Raise an error if status code is not in [200, 400)"""
         if not self.ok:
             raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
+
+    @property
+    def is_redirect(self) -> bool:
+        """Whether this response is a well-formed redirect."""
+        return "location" in self.headers and self.status_code in REDIRECT_STATI
 
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
