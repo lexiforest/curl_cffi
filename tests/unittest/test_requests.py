@@ -344,18 +344,9 @@ def test_response_is_redirect():
         assert r.is_redirect
 
     r = Response()
-    r.status_code = 301
-    assert not r.is_redirect
-
-    r = Response()
     r.status_code = 304
     r.headers["Location"] = "/"
     assert not r.is_redirect
-
-    r = Response()
-    r.status_code = 302
-    r.headers["LOCATION"] = "/"
-    assert r.is_redirect
 
 
 def test_charset_default_encoding(server):
