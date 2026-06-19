@@ -5,14 +5,16 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 from glob import glob
+from http.client import HTTPException
 from pathlib import Path
 from urllib.request import urlretrieve
 
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "1.5.5"
+__version__ = "2.0.0a5"
 
 
 def is_android_env() -> bool:
@@ -89,7 +91,17 @@ def download_libcurl():
     )
 
     print(f"Downloading libcurl-impersonate from {url}...")
-    urlretrieve(url, file)
+    retries = 3
+    for attempt in range(1, retries + 1):
+        try:
+            urlretrieve(url, file)
+            break
+        except (OSError, HTTPException) as e:
+            if attempt == retries:
+                raise
+            wait = 2 ** (attempt - 1)
+            print(f"Download failed ({e}); retry {attempt}/{retries} in {wait}s...")
+            time.sleep(wait)
 
     print("Unpacking downloaded files...")
     os.makedirs(libdir, exist_ok=True)
@@ -97,9 +109,17 @@ def download_libcurl():
 
     if arch["system"] == "Windows":
         for file in glob(str(libdir / "lib/*.lib")):
-            shutil.move(file, libdir)
-        for file in glob(str(libdir / "bin/*.dll")):
-            shutil.move(file, libdir)
+            src = Path(file)
+            dst = libdir / src.name
+            if dst.exists():
+                dst.unlink()
+            shutil.move(src, dst)
+        for file in glob(str(libdir / "lib/*.dll")):
+            src = Path(file)
+            dst = libdir / src.name
+            if dst.exists():
+                dst.unlink()
+            shutil.move(src, dst)
 
     print("Files after unpacking:")
     print(os.listdir(libdir))
@@ -123,18 +143,7 @@ def get_curl_libraries():
             "Secur32",
             "wldap32",
             "Normaliz",
-            "libcurl-impersonate",
-            "zstd",
-            "zlib",
-            "ssl",
-            "nghttp2",
-            "nghttp3",
-            "ngtcp2",
-            "ngtcp2_crypto_boringssl",
-            "crypto",
-            "brotlienc",
-            "brotlidec",
-            "brotlicommon",
+            "libcurl-impersonate_imp",
             "iphlpapi",
         ]
     elif is_dynamic:

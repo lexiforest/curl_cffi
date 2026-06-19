@@ -1,5 +1,7 @@
 from unittest.mock import Mock
 
+import pytest
+
 from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
 from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests import utils
@@ -171,3 +173,39 @@ def test_set_extra_fp_honors_explicit_false_and_zero_values():
     assert curl.options[CurlOpt.TLS_GREASE] == 0
     assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 0
     assert curl.options[CurlOpt.STREAM_EXCLUSIVE] == 0
+
+
+def _set_interface(interface):
+    curl = FakeCurl()
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        interface=interface,
+    )
+    return curl
+
+
+@pytest.mark.parametrize(
+    "interface,expected",
+    [
+        ("192.0.2.10", b"host!192.0.2.10"),
+        ("2001:db8::1", b"host!2001:db8::1"),
+    ],
+)
+def test_interface_bare_ip_gets_host_prefix(interface, expected):
+    curl = _set_interface(interface)
+
+    assert curl.options[CurlOpt.INTERFACE] == expected
+
+
+@pytest.mark.parametrize("interface", ["eth0", "host!192.0.2.10"])
+def test_interface_name_and_prefixed_values_pass_through(interface):
+    curl = _set_interface(interface)
+
+    assert curl.options[CurlOpt.INTERFACE] == interface.encode()

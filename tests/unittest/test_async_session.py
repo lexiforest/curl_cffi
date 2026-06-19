@@ -5,7 +5,7 @@ from contextlib import suppress
 
 import pytest
 
-from curl_cffi import Headers
+from curl_cffi import AsyncCurl, Headers
 from curl_cffi.const import CurlECode
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
@@ -17,6 +17,19 @@ async def test_get(server):
     async with AsyncSession() as s:
         r = await s.get(str(server.url))
         assert r.status_code == 200
+
+
+async def test_custom_async_curl_cacert_is_used_by_pooled_curl():
+    acurl = AsyncCurl(cacert="custom-ca.pem")
+    try:
+        async with AsyncSession(async_curl=acurl) as s:
+            curl = await s.pop_curl()
+            try:
+                assert curl._cacert == "custom-ca.pem"
+            finally:
+                s.push_curl(curl)
+    finally:
+        await acurl.close()
 
 
 def test_create_session_out_of_async(server):
@@ -505,3 +518,19 @@ async def test_async_session_auto_raise_for_status_disabled(server):
         r = await s.get(str(server.url.copy_with(path="/status/404")))
         assert r.status_code == 404
         # Should not raise an exception
+
+
+async def test_shared_async_curl_not_closed_by_session(server):
+    pool = AsyncCurl()
+
+    s1 = AsyncSession(async_curl=pool)
+    r1 = await s1.get(str(server.url))
+    assert r1.status_code == 200
+    await s1.close()
+
+    s2 = AsyncSession(async_curl=pool)
+    r2 = await s2.get(str(server.url))
+    assert r2.status_code == 200
+    await s2.close()
+
+    await pool.close()

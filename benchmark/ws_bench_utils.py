@@ -86,8 +86,8 @@ class TestConfig:
     large_chunk_size: int = 4 * 1024**2
     server_max_msg: int = 8 * 1024**2
     total_bytes: int = total_gb * 1024**3
-    recv_queue: int = 32
-    send_queue: int = 16
+    recv_queue: int = 256
+    send_queue: int = 256
     cert_file: Path = Path("localhost.crt")
     cert_key: Path = Path("localhost.key")
     data_filename: Path = Path("testdata.bin")

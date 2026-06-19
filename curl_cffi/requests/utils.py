@@ -4,6 +4,7 @@ __all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
 import asyncio
+import ipaddress
 import math
 import queue
 import warnings
@@ -517,7 +518,8 @@ def _apply_fingerprint(
         tls_extension_order = _strip_padding_extension(active_tls.extension_order)
         extension_ids = set(int(e) for e in tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
-        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
+        if not fingerprint.tls_permute_extensions:
+            curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
 
     curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(active_tls.alpn))
     curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(active_tls.alps))
@@ -673,6 +675,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
     interface: Optional[str] = None,
+    doh_url: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
@@ -909,10 +912,12 @@ def set_curl_options(
     # cert for this single request
     if isinstance(verify, str):
         c.setopt(CurlOpt.CAINFO, verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, verify)
 
     # cert for the session
     if verify in (None, True) and isinstance(base_verify, str):
         c.setopt(CurlOpt.CAINFO, base_verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, base_verify)
 
     # referer
     if referer:
@@ -1033,7 +1038,18 @@ def set_curl_options(
 
     # interface
     if interface:
-        c.setopt(CurlOpt.INTERFACE, interface.encode())
+        value = interface
+        if "!" not in interface:
+            try:
+                ipaddress.ip_address(interface)
+            except ValueError:
+                pass
+            else:
+                value = f"host!{interface}"
+        c.setopt(CurlOpt.INTERFACE, value.encode())
+
+    if doh_url:
+        c.setopt(CurlOpt.DOH_URL, doh_url.encode())
 
     # max_recv_speed
     # do not check, since 0 is a valid value to disable it

@@ -322,6 +322,20 @@ def test_charset_parse(server):
     assert r.encoding == "gbk"
 
 
+def test_json_charset_parse():
+    r = Response()
+    r.headers["Content-Type"] = "application/json; charset=gb2312"
+    r.content = b'{"foo":"\xd6\xd0\xce\xc4"}'
+    assert r.json()["foo"] == "\u4e2d\u6587"
+
+
+def test_json_bytes_bom_parse():
+    r = Response()
+    r.headers["Content-Type"] = "application/json"
+    r.content = b'\xef\xbb\xbf{"foo":"bar"}'
+    assert r.json()["foo"] == "bar"
+
+
 def test_charset_default_encoding(server):
     r = requests.get(
         str(server.url.copy_with(path="/windows1251")), default_encoding="windows-1251"
