@@ -68,7 +68,7 @@ def test_costomized_no_impersonate_coexist(server):
 
 @pytest.mark.skip(reason="website is down")
 def test_customized_ja3_chrome126():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     ja3 = (
         "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
         "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
@@ -79,7 +79,7 @@ def test_customized_ja3_chrome126():
 
 @pytest.mark.skip(reason="not working")
 def test_customized_ja3_tls_version():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     ja3 = (
         "770,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
         "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
@@ -91,7 +91,7 @@ def test_customized_ja3_tls_version():
 
 @pytest.mark.skip(reason="website is down")
 def test_customized_ja3_ciphers():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     ja3 = (
         "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171,"
         "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-29-23-24,0"
@@ -104,7 +104,7 @@ def test_customized_ja3_ciphers():
 # TODO: change to parameterized test
 @pytest.mark.skip(reason="website is down")
 def test_customized_ja3_extensions():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     ja3 = (
         "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
         "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"
@@ -150,7 +150,7 @@ def test_customized_ja3_extensions():
 
 @pytest.mark.skip(reason="website is down")
 def test_customized_ja3_curves():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     ja3 = (
         "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
         "0-65037-27-51-13-43-5-18-17513-65281-23-10-45-35-11-16,25497-24-23-29,0"
@@ -162,7 +162,7 @@ def test_customized_ja3_curves():
 
 @pytest.mark.skip(reason="website is down")
 def test_customized_akamai_chrome126():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     akamai = "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p"
     r = requests.get(url, akamai=akamai).json()
     assert r["akamai_text"] == akamai
@@ -170,7 +170,7 @@ def test_customized_akamai_chrome126():
 
 @pytest.mark.skip(reason="website is down")
 def test_customized_akamai_safari():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     akamai = "2:0;4:4194304;3:100|10485760|0|m,s,p,a"
     r = requests.get(url, akamai=akamai).json()
     assert r["akamai_text"] == akamai
@@ -227,7 +227,7 @@ def test_customized_extra_fp_grease():
 
 @pytest.mark.skip(reason="website is down")
 def test_customized_extra_fp_permute():
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
     ja3 = (
         "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
         "65037-65281-0-11-23-5-18-27-16-17513-10-35-43-45-13-51,25497-29-23-24,0"

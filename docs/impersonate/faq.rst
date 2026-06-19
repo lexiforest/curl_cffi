@@ -13,6 +13,7 @@ If it's challenging for you to use WireShark, you can use the following sites fo
 1. https://tls.browserleaks.com/json
 2. https://tls.peet.ws/api/all
 3. https://scrapfly.io/web-scraping-tools/browser-fingerprint
+4. https://fp.impersonate.pro/api/auto
 
 For http/3 fingerprints, use our service:
 
@@ -84,4 +85,3 @@ Why are all the User-Agents macOS?
 Simple, because I primarily use macOS and I copied the headers from my own browser. Fingerprints
 are generally the same across desktop OSes, if you want it to look like Windows, just update the
 user-agent and other related headers to Windows.
-

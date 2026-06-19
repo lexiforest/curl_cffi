@@ -2,7 +2,7 @@ import pytest
 
 from curl_cffi import requests
 
-JA3_URL = "https://tls.browserleaks.com/json"
+JA3_URL = "https://fp.impersonate.pro/api/auto"
 # Copied from my browser on macOS
 CHROME_JA3_HASH = "53ff64ddf993ca882b70e1c82af5da49"
 # Edge 101 is the same as Chrome 101

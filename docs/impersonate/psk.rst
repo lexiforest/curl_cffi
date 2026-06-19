@@ -16,7 +16,7 @@ Usually, when you first visit a website, the PSK extension is not present in the
 list. But when you visit the same website for the second time, in a relatively short time,
 the client may offer a PSK extension with the key from the server.
 
-For example, you can visit ``https://tls.peet.ws/api/all``, and then refresh the page,
+For example, you can visit ``https://fp.impersonate.pro/api/auto``, and then refresh the page,
 the PSK extension will be there.
 
 To correctly implement the PSK extension, the client must have some kind of a session

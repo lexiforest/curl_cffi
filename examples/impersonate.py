@@ -3,7 +3,7 @@ import curl_cffi
 # OKHTTP impersonatation examples
 # credits: https://github.com/bogdanfinn/tls-client/blob/master/profiles/contributed_custom_profiles.go
 
-url = "https://tls.browserleaks.com/json"
+url = "https://fp.impersonate.pro/api/auto"
 
 okhttp4_android10_ja3 = ",".join(
     [

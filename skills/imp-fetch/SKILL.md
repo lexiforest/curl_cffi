@@ -36,7 +36,7 @@ curl-cffi post --form https://httpbin.org/post name=John
 curl-cffi get https://httpbin.org/get X-My-Header:value
 
 # Impersonate Safari instead of Chrome
-curl-cffi get -i safari https://tls.browserleaks.com/json
+curl-cffi get -i safari https://fp.impersonate.pro/api/auto
 
 # HTTP/3
 curl-cffi get --http3 https://fp.impersonate.pro/api/http3

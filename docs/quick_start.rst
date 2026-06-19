@@ -63,10 +63,10 @@ Basic ``GET`` request and using the ``impersonate`` parameter.
 
     import curl_cffi
 
-    url = "https://tls.browserleaks.com/json"
+    url = "https://fp.impersonate.pro/api/auto"
 
     # Notice the impersonate parameter
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110")
+    r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome110")
 
     print(r.json())
     # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -75,14 +75,14 @@ Basic ``GET`` request and using the ``impersonate`` parameter.
     # To keep using the latest browser version as `curl_cffi` updates,
     # simply set impersonate="chrome" without specifying a version.
     # Other similar values are: "safari" and "safari_ios"
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
+    r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome")
 
     # http/socks proxies are supported
     proxies = {"https": "http://localhost:3128"}
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
+    r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome110", proxies=proxies)
 
     proxies = {"https": "socks://localhost:3128"}
-    r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome110", proxies=proxies)
+    r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome110", proxies=proxies)
 
 
 URL params

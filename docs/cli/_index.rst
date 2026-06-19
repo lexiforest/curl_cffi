@@ -70,10 +70,10 @@ Quick examples
     curl-cffi get -v https://httpbin.org/get
 
     # Impersonate chrome by default
-    curl-cffi get tls.browserleaks.com/json
+    curl-cffi get fp.impersonate.pro/api/auto
 
     # Impersonate Safari instead of Chrome
-    curl-cffi get -i safari tls.browserleaks.com/json
+    curl-cffi get -i safari fp.impersonate.pro/api/auto
 
     # http3
     curl-cffi get --http3 https://fp.impersonate.pro/api/http3

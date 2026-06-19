@@ -322,7 +322,7 @@ def set_akamai_options(curl: Curl, akamai: str):
     """
     settings, window_update, streams, header_order = akamai.split("|")
 
-    # For compatibility with tls.peet.ws
+    # For compatibility with fp.impersonate.pro
     settings = settings.replace(",", ";")
 
     curl.setopt(CurlOpt.HTTP_VERSION, CurlHttpVersion.V2_0)

@@ -134,10 +134,10 @@ Browser impersonation
 .. code-block:: bash
 
     # Impersonate Chrome (default)
-    curl-cffi get https://tls.browserleaks.com/json
+    curl-cffi get https://fp.impersonate.pro/api/auto
 
     # Impersonate Safari
-    curl-cffi get -i safari https://tls.browserleaks.com/json
+    curl-cffi get -i safari https://fp.impersonate.pro/api/auto
 
     # Impersonate Firefox
-    curl-cffi get -i firefox https://tls.browserleaks.com/json
+    curl-cffi get -i firefox https://fp.impersonate.pro/api/auto

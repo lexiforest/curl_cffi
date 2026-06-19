@@ -147,11 +147,11 @@ To install unstable version from GitHub:
 ### CLI
 
 ```sh
-curl-cffi get tls.browserleaks.com/json
+curl-cffi get fp.impersonate.pro/api/auto
 
 # curl-cffi can be hard to type, use an alias if you want
 alias imp=curl-cffi
-imp get tls.browserleaks.com/json --impersonate chrome
+imp get fp.impersonate.pro/api/auto --impersonate chrome
 ```
 
 For a complete CLI guide, see [docs](https://curl-cffi.readthedocs.io).
@@ -162,7 +162,7 @@ For a complete CLI guide, see [docs](https://curl-cffi.readthedocs.io).
 import curl_cffi
 
 # Notice the impersonate parameter
-r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
+r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome")
 
 print(r.json())
 # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
@@ -171,7 +171,7 @@ print(r.json())
 # To keep using the latest browser version as `curl_cffi` updates,
 # simply set impersonate="chrome" without specifying a version.
 # Other similar values are: "safari" and "safari_ios"
-r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome")
+r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome")
 
 # Use http/3 with impersonation
 r = curl_cffi.get(
@@ -181,18 +181,18 @@ r = curl_cffi.get(
 )
 
 # To pin a specific version, use version numbers together.
-r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome124")
+r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome124")
 
 # To impersonate other than browsers, bring your own ja3/akamai strings
 # See examples directory for details.
-r = curl_cffi.get("https://tls.browserleaks.com/json", ja3=..., akamai=...)
+r = curl_cffi.get("https://fp.impersonate.pro/api/auto", ja3=..., akamai=...)
 
 # http/socks proxies are supported
 proxies = {"https": "http://localhost:3128"}
-r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome", proxies=proxies)
 
 proxies = {"https": "socks://localhost:3128"}
-r = curl_cffi.get("https://tls.browserleaks.com/json", impersonate="chrome", proxies=proxies)
+r = curl_cffi.get("https://fp.impersonate.pro/api/auto", impersonate="chrome", proxies=proxies)
 ```
 
 ### Sessions

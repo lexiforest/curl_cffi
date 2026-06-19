@@ -189,7 +189,7 @@ def _select_http_header_lines(payload: object) -> tuple[str, object]:
 
 def _normalize_peet_value(value: object) -> object:
     if isinstance(value, str):
-        # tls.peet.ws sometimes double-escapes quoted header values like
+        # fp.impersonate.pro sometimes double-escapes quoted header values like
         # sec-ch-ua-platform, yielding \"Windows\" instead of "Windows".
         value = value.replace('\\"', '"')
         # It can also leave a dangling trailing backslash after the final quoted

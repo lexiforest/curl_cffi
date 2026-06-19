@@ -175,7 +175,7 @@ The curl API is very much like what you may have used -- ``pycurl``, with extra 
 
     buffer = BytesIO()
     c = Curl()
-    c.setopt(CurlOpt.URL, b'https://tls.browserleaks.com/json')
+    c.setopt(CurlOpt.URL, b'https://fp.impersonate.pro/api/auto')
     c.setopt(CurlOpt.WRITEDATA, buffer)
 
     c.impersonate("chrome124")
