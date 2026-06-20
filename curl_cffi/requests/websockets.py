@@ -289,6 +289,22 @@ class WebSocket(BaseWebSocket):
         ws_retry: WebSocketRetryStrategy | None = None,
         max_message_size: int = 4 * 1024 * 1024,
     ) -> None:
+        """
+        Args:
+            curl (Curl | NotSetType, optional): Curl handle.
+            autoclose (bool, optional): Whether to close the WebSocket
+                after receiving a close frame.
+            skip_utf8_validation (bool, optional): Whether to skip UTF-8
+                validation for text frames in run_forever().
+            debug (bool, optional): Print extra curl debug info.
+            on_open (OnOpenType | None, optional): Open callback.
+            on_close (OnCloseType | None, optional): Close callback.
+            on_data (OnDataType | None, optional): Data received callback.
+            on_message (OnMessageType | None, optional): Message received callback.
+            on_error (OnErrorType | None, optional): Error callback.
+            ws_retry (WebSocketRetryStrategy | None, optional): Retry policy.
+            max_message_size (int, optional): Message size limit.
+        """
         super().__init__(
             curl=curl,
             autoclose=autoclose,
@@ -404,7 +420,48 @@ class WebSocket(BaseWebSocket):
         max_recv_speed: int = 0,
         curl_options: dict[CurlOpt, str] | None = None,
     ) -> Self:
-        """Connect to the WebSocket with full auto-complete parameter mapping."""
+        """Connect to the WebSocket.
+
+        libcurl automatically handles pings and pongs.
+        ref: https://curl.se/libcurl/c/libcurl-ws.html
+
+        Args:
+            url: url for the requests.
+            params: query string for the requests.
+            headers: headers to send.
+            cookies: cookies to use.
+            auth: HTTP basic auth, a tuple of (username, password), only basic auth is
+                supported.
+            timeout: how many seconds to wait before giving up.
+            allow_redirects: whether to allow redirection. Can be a bool, a
+                ``CurlFollow`` value, or the string ``"safe"``.
+            max_redirects: max redirect counts, default 30, use -1 for unlimited.
+            proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
+                same. format: ``{"http": proxy_url, "https": proxy_url}``.
+            proxy: proxy to use, format: "http://user@pass:proxy_url".
+                Can't be used with `proxies` parameter.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
+            verify: whether to verify https certs.
+            referer: shortcut for setting referer header.
+            accept_encoding: shortcut for setting accept-encoding header.
+            impersonate: which browser version or fingerprint to impersonate.
+            ja3: ja3 string to impersonate.
+            akamai: akamai string to impersonate.
+            perk: perk string to impersonate.
+            extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
+            default_headers: whether to set default browser headers.
+            default_encoding: Encoding for decoding content if charset is not found.
+                Defaults to "utf-8".
+            quote: Set characters to be quoted (percent-encoded). Default safe
+                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a string, the characters
+                will be removed from the safe string. If set to ``False``, the URL
+                is used as-is (you must encode it yourself).
+            http_version: Limiting http version, defaults to http2.
+            interface: interface name or local IP to bind to (bare IP = source address).
+            cert: a tuple of (cert, key) filenames for client cert.
+            max_recv_speed: maximum receive speed, bytes per second.
+            curl_options: extra curl options to use.
+        """
         curl: Curl = self.curl
         _ = set_curl_options(
             curl=curl,
@@ -737,7 +794,12 @@ class WebSocket(BaseWebSocket):
         dumps: Callable[..., str] = json_dumps,
         timeout: float | None = None,
     ) -> int:
-        """Send a JSON frame."""
+        """Send a JSON frame.
+
+        Args:
+            payload: data to send.
+            dumps: JSON encoder, default is json.dumps.
+        """
         if dumps is json_dumps:
             return self.send_str(
                 json_dumps(payload, separators=(",", ":")), timeout=timeout
@@ -751,14 +813,10 @@ class WebSocket(BaseWebSocket):
         )
 
     def run_forever(self, url: str = "", **kwargs) -> None:
-        """Run the WebSocket forever with highly optimized callback logic.
+        """Run the WebSocket forever. See :meth:`connect` for details on parameters.
 
-        Attempts to read immediately and only registers an event loop reader if
-        the socket returns EAGAIN (empty). It waits for the underlying socket to
-        become readable, and upon being woken by the event loop, it drains all
-        buffered data from libcurl until it receives an EAGAIN error. This error
-        signals that the buffer is empty, and the loop returns to an idle state,
-        waiting for the next readability event. This is "optimistic reading".
+        libcurl automatically handles pings and pongs.
+        ref: https://curl.se/libcurl/c/libcurl-ws.html
         """
         if url:
             _ = self.connect(url, **kwargs)
@@ -913,8 +971,13 @@ class WebSocket(BaseWebSocket):
                     self.close(close_code)
                 raise
 
-    def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
-        """Close the connection."""
+    def close(self, code: int = WsCloseCode.OK, message: bytes = b"") -> None:
+        """Close the connection.
+
+        Args:
+            code: close code.
+            message: close reason.
+        """
         msg: bytes = _pack_close_frame(code, message)
         _ = self.send(msg, CurlWsFlag.CLOSE)
         self.terminate()
