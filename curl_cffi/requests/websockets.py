@@ -5,7 +5,6 @@ The Curl CFFI WebSocket client implementation.
 from __future__ import annotations
 
 import asyncio
-import selectors
 import struct
 import threading
 import time
@@ -18,6 +17,7 @@ from enum import IntEnum
 from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
+from selectors import EVENT_READ, EVENT_WRITE, BaseSelector, DefaultSelector
 from typing import TYPE_CHECKING, Final, Literal, TypeVar, final
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 EventTypeLiteral = Literal["open", "close", "data", "message", "error"]
 
-# High-performance bound struct methods to eliminate C-level compilation/parsing
+# Bound struct methods
 _STRUCT_PACK_CLOSE: Final[Callable[..., bytes]] = struct.Struct("!H").pack
 _STRUCT_UNPACK_CLOSE: Final[Callable[..., tuple[int, ...]]] = struct.Struct(
     "!H"
@@ -185,8 +185,6 @@ class BaseWebSocket:
         "_max_message_size",
         "ws_retry",
         "_sock_fd",
-        "_read_selector",
-        "_write_selector",
     )
 
     _MAX_CURL_FRAME_SIZE: Final[int] = 65536
@@ -210,8 +208,6 @@ class BaseWebSocket:
         self.ws_retry: WebSocketRetryStrategy = ws_retry or WebSocketRetryStrategy()
         self._max_message_size: int = max_message_size
         self._sock_fd: int = -1
-        self._read_selector: selectors.BaseSelector | None = None
-        self._write_selector: selectors.BaseSelector | None = None
 
     @property
     def curl(self) -> Curl:
@@ -231,28 +227,20 @@ class BaseWebSocket:
         return self._close_reason
 
     def _get_sock_fd(self) -> int:
-        """Fetch and cache the active socket file descriptor and native selectors."""
+        """Fetch and cache the active socket file descriptor."""
         sock_fd: int = self._sock_fd
         if sock_fd != -1:
             return sock_fd
 
-        sock_info = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
+        sock_info: bytes | int | float | list[str | int] = self.curl.getinfo(
+            CurlInfo.ACTIVESOCKET
+        )
         if not isinstance(sock_info, int) or sock_info == CURL_SOCKET_BAD:
             raise WebSocketError(
                 "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
             )
 
         self._sock_fd = sock_info
-
-        # Pre-allocate OS-native selectors (epoll/kqueue/select) for polling
-        r_sel = selectors.DefaultSelector()
-        _ = r_sel.register(sock_info, selectors.EVENT_READ)
-        self._read_selector = r_sel
-
-        w_sel = selectors.DefaultSelector()
-        _ = w_sel.register(sock_info, selectors.EVENT_WRITE)
-        self._write_selector = w_sel
-
         return sock_info
 
     def _set_close_state(self, frame: bytes) -> int:
@@ -262,24 +250,15 @@ class BaseWebSocket:
         except WebSocketError as e:
             self._close_code = e.code
 
-        code = self._close_code
-        if code is None or code == WsCloseCode.UNKNOWN:
+        code: int | CurlECode = self._close_code
+        if code == WsCloseCode.UNKNOWN:
             return WsCloseCode.OK
 
         return code
 
     def terminate(self) -> None:
-        """Terminate the underlying connection and clean up native selectors."""
+        """Terminate the underlying connection."""
         self.closed = True
-
-        if self._read_selector is not None:
-            self._read_selector.close()
-            self._read_selector = None
-
-        if self._write_selector is not None:
-            self._write_selector.close()
-            self._write_selector = None
-
         self.curl.close()
 
 
@@ -291,6 +270,8 @@ class WebSocket(BaseWebSocket):
         "skip_utf8_validation",
         "_emitters",
         "keep_running",
+        "_read_selector",
+        "_write_selector",
     )
 
     def __init__(
@@ -317,6 +298,8 @@ class WebSocket(BaseWebSocket):
         )
         self.skip_utf8_validation: bool = skip_utf8_validation
         self.keep_running: bool = False
+        self._read_selector: BaseSelector | None = None
+        self._write_selector: BaseSelector | None = None
 
         self._emitters: dict[EventTypeLiteral, Callable[..., object]] = {}
         if on_open:
@@ -329,6 +312,21 @@ class WebSocket(BaseWebSocket):
             self._emitters["message"] = on_message
         if on_error:
             self._emitters["error"] = on_error
+
+    def _get_sock_fd(self) -> int:  # pyright: ignore[reportImplicitOverride]
+        """Fetch socket and lazily-initialize native selectors for polling."""
+        sock_fd: int = super()._get_sock_fd()
+
+        if self._read_selector is None:
+            r_sel: DefaultSelector = DefaultSelector()
+            _ = r_sel.register(sock_fd, EVENT_READ)
+            self._read_selector = r_sel
+
+            w_sel: DefaultSelector = DefaultSelector()
+            _ = w_sel.register(sock_fd, EVENT_WRITE)
+            self._write_selector = w_sel
+
+        return sock_fd
 
     def __iter__(self) -> WebSocket:
         if self.closed:
@@ -366,7 +364,7 @@ class WebSocket(BaseWebSocket):
 
     def _handle_close_frame(self, message: bytes) -> None:
         """Robustly process a CLOSE frame without loop overhead."""
-        close_code = self._set_close_state(message)
+        close_code: int = self._set_close_state(message)
         if self.autoclose and not self.closed:
             self.close(close_code)
         else:
@@ -448,7 +446,6 @@ class WebSocket(BaseWebSocket):
 
         This method waits for and returns the next complete WebSocket message.
         Attempts to read immediately and only polls the socket if it returns EAGAIN.
-        This is "optimistic reading".
 
         Args:
             timeout: How many seconds to wait for a message before raising
@@ -470,7 +467,7 @@ class WebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket is closed")
 
         _ = self._get_sock_fd()
-        read_selector = self._read_selector
+        read_selector: BaseSelector | None = self._read_selector
         if read_selector is None:
             raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
 
@@ -501,7 +498,7 @@ class WebSocket(BaseWebSocket):
 
         while True:
             try:
-                # Hot path: Read data directly from C buffers (No time.monotonic checks)
+                # Read WebSocket frame from libcurl
                 chunk, frame = curl_ws_recv()
                 if recv_error_retries > 0:
                     recv_error_retries = 0
@@ -573,7 +570,9 @@ class WebSocket(BaseWebSocket):
                 ):
                     recv_error_retries += 1
                     # Formula: base * (2 ^ (attempt - 1))
-                    retry_delay: float = retry_base * (2 ** (recv_error_retries - 1))
+                    retry_delay: float = retry_base * (  # pyright: ignore[reportAny]
+                        2 ** (recv_error_retries - 1)
+                    )
                     # Add Jitter: +/- 10%
                     jitter: float = retry_delay * 0.1
                     time.sleep(max(0.0, retry_delay + uniform(-jitter, jitter)))
@@ -600,7 +599,7 @@ class WebSocket(BaseWebSocket):
         self, *, loads: Callable[[str], T] = json_loads, timeout: float | None = None
     ) -> T:
         """Receive a JSON frame."""
-        data = self.recv_str(timeout=timeout)
+        data: str = self.recv_str(timeout=timeout)
         if not data:
             raise WebSocketError("Empty frame", WsCloseCode.INVALID_DATA)
         try:
@@ -614,9 +613,24 @@ class WebSocket(BaseWebSocket):
         flags: CurlWsFlag | int = CurlWsFlag.BINARY,
         timeout: float | None = None,
     ) -> int:
-        """Send a data frame with zero local-variable allocation overhead.
+        """
+        Send a WebSocket message.
 
-        Optimized low-level sender with fragmentation logic.
+        Args:
+            payload: Data to send (``str``/``bytes``/``bytearray``/``memoryview``).
+            flags: Frame type flags (e.g., ``CurlWsFlag.TEXT`` / ``CurlWsFlag.BINARY``).
+            timeout: Max seconds to wait if the socket is blocked.
+
+        Raises:
+            CurlError: Network related exception occured.
+            WebSocketClosed: The WebSocket has been closed.
+            WebSocketTimeout: The send operation timed out.
+
+        Note:
+            There are no limits on the size of the message that can be sent.
+            Large outbound messages are seamlessly broken down into optimal
+            fragments using the ``CURLWS_CONT`` flag, arriving as a single
+            logical message to the server.
         """
         if flags & CurlWsFlag.CLOSE:
             self.keep_running = False
@@ -628,7 +642,7 @@ class WebSocket(BaseWebSocket):
             payload = payload.encode("utf-8")
 
         _ = self._get_sock_fd()
-        write_selector = self._write_selector
+        write_selector: BaseSelector | None = self._write_selector
         if write_selector is None:
             raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
 
@@ -662,7 +676,6 @@ class WebSocket(BaseWebSocket):
                     current_flags = flags
 
             try:
-                # Hot path: Optimistic write, zero timeout checks
                 # libcurl returns the number of bytes actually sent
                 n_sent: int = curl_ws_send(view[offset:frame_end], current_flags)
 
@@ -670,6 +683,7 @@ class WebSocket(BaseWebSocket):
                     # Handle 0-byte payload (Valid Empty Frame)
                     if frame_end - offset == 0:
                         return offset
+
                     # Raise AGAIN to jump to the existing wait logic below
                     write_retries += 1
                     if write_retries >= max_zero_writes:
@@ -686,14 +700,16 @@ class WebSocket(BaseWebSocket):
 
             except CurlError as e:
                 if e.code == CurlECode.AGAIN:
-                    # Slow path: Only check the clock when the socket chokes
+                    # Check the clock when the socket is blocked
                     if timeout is not None:
                         remain: float = deadline - time_monotonic()
                         if remain <= 0:
                             raise WebSocketTimeout("Socket write timeout") from e
 
-                        events = write_selector.select(remain)
-                        if not events and time_monotonic() > deadline:
+                        if (
+                            not write_selector.select(remain)
+                            and time_monotonic() > deadline
+                        ):
                             raise WebSocketTimeout("Socket write timeout") from e
                     else:
                         _ = write_selector.select(None)
@@ -748,7 +764,7 @@ class WebSocket(BaseWebSocket):
             _ = self.connect(url, **kwargs)
 
         _ = self._get_sock_fd()
-        read_selector = self._read_selector
+        read_selector: BaseSelector | None = self._read_selector
         if read_selector is None:
             raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
 
@@ -778,12 +794,12 @@ class WebSocket(BaseWebSocket):
 
         while self.keep_running:
             try:
-                # Hot path: Read data directly from C buffers
+                # Read WebSocket frame
                 chunk, frame = curl_ws_recv()
                 if recv_error_retries > 0:
                     recv_error_retries = 0
 
-                flags = frame.flags
+                flags: int = frame.flags
                 emit("data", chunk, frame)
 
                 # Data Frames (Text / Binary / Cont)
@@ -809,7 +825,7 @@ class WebSocket(BaseWebSocket):
                         continue
 
                     if has_message_emitter:
-                        msg = chunks[0] if len(chunks) == 1 else b"".join(chunks)
+                        msg: bytes = chunks[0] if len(chunks) == 1 else b"".join(chunks)
 
                         if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
                             try:
@@ -858,7 +874,7 @@ class WebSocket(BaseWebSocket):
                         should_retry = True
                 # Handle Server Disconnect (Empty Reply)
                 elif code == CurlECode.GOT_NOTHING:
-                    e_close = WebSocketClosed(
+                    e_close: WebSocketClosed = WebSocketClosed(
                         "Connection closed unexpectedly by server (EOF)",
                         WsCloseCode.ABNORMAL_CLOSURE,
                     )
@@ -880,7 +896,9 @@ class WebSocket(BaseWebSocket):
                 ):
                     recv_error_retries += 1
                     # Formula: base * (2 ^ (attempt - 1))
-                    retry_delay: float = retry_base * (2 ** (recv_error_retries - 1))
+                    retry_delay: float = retry_base * (  # pyright: ignore[reportAny]
+                        2 ** (recv_error_retries - 1)
+                    )
                     # Add Jitter: +/- 10%
                     jitter: float = retry_delay * 0.1
                     time.sleep(max(0.0, retry_delay + uniform(-jitter, jitter)))
@@ -900,6 +918,18 @@ class WebSocket(BaseWebSocket):
         msg: bytes = _pack_close_frame(code, message)
         _ = self.send(msg, CurlWsFlag.CLOSE)
         self.terminate()
+
+    def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
+        """Terminate the connection and clean up selectors."""
+        if self._read_selector is not None:
+            self._read_selector.close()
+            self._read_selector = None
+
+        if self._write_selector is not None:
+            self._write_selector.close()
+            self._write_selector = None
+
+        super().terminate()
 
 
 @final
