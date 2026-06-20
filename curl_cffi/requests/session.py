@@ -1098,7 +1098,7 @@ class AsyncSession(BaseSession[R]):
         method: HttpMethod,
         url: str,
         **kwargs: Unpack[StreamRequestParams],
-    ) -> AsyncGenerator[R, None, None]:
+    ) -> AsyncGenerator[R, None]:
         """Equivalent to ``async with request(..., stream=True) as r:``"""
         rsp = await self.request(method=method, url=url, **kwargs, stream=True)
         try:

@@ -141,37 +141,6 @@ def _safe_set_result(fut: asyncio.Future[None]) -> None:
         pass
 
 
-def _prepare_ping_payload(payload: str | bytes) -> bytes:
-    """Validate and encode ping payloads with robust isinstance checks."""
-    payload_bytes = (
-        payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
-    )
-    if len(payload_bytes) > 125:  # Inline constant
-        raise WebSocketError(
-            f"Ping frame has invalid length: {len(payload_bytes)}",
-            CurlECode.TOO_LARGE,
-        )
-    return payload_bytes
-
-
-def _pack_close_frame(code: int, reason: bytes) -> bytes:
-    """Pack close code and reason using cached Struct.pack method."""
-    return _STRUCT_PACK_CLOSE(code) + reason
-
-
-def _unpack_close_frame(frame: bytes) -> tuple[int, str]:
-    """Unpack close frame using cached Struct.unpack method."""
-    if len(frame) < 2:
-        return WsCloseCode.UNKNOWN, ""
-
-    try:
-        return _STRUCT_UNPACK_CLOSE(frame)[0], frame[2:].decode("utf-8")
-    except UnicodeDecodeError as e:
-        raise WebSocketError("Invalid close message", WsCloseCode.INVALID_DATA) from e
-    except Exception as e:
-        raise WebSocketError("Invalid close frame", WsCloseCode.PROTOCOL_ERROR) from e
-
-
 class BaseWebSocket:
     """Shared methods and static constants."""
 
@@ -243,10 +212,42 @@ class BaseWebSocket:
         self._sock_fd = sock_info
         return sock_info
 
+    def _prepare_ping_payload(self, payload: str | bytes) -> bytes:
+        """Validate and encode ping payloads with robust isinstance checks."""
+        payload_bytes: bytes = (
+            payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
+        )
+        if len(payload_bytes) > 125:  # Inline constant
+            raise WebSocketError(
+                f"Ping frame has invalid length: {len(payload_bytes)}",
+                CurlECode.TOO_LARGE,
+            )
+        return payload_bytes
+
+    def _pack_close_frame(self, code: int, reason: bytes) -> bytes:
+        """Pack close code and reason using cached Struct.pack method."""
+        return _STRUCT_PACK_CLOSE(code) + reason
+
+    def _unpack_close_frame(self, frame: bytes) -> tuple[int, str]:
+        """Unpack close frame using cached Struct.unpack method."""
+        if len(frame) < 2:
+            return WsCloseCode.UNKNOWN, ""
+
+        try:
+            return _STRUCT_UNPACK_CLOSE(frame)[0], frame[2:].decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise WebSocketError(
+                "Invalid close message", WsCloseCode.INVALID_DATA
+            ) from e
+        except Exception as e:
+            raise WebSocketError(
+                "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
+            ) from e
+
     def _set_close_state(self, frame: bytes) -> int:
         """Unpacks the close frame, sets internal state, and returns fallback code."""
         try:
-            self._close_code, self._close_reason = _unpack_close_frame(frame)
+            self._close_code, self._close_reason = self._unpack_close_frame(frame)
         except WebSocketError as e:
             self._close_code = e.code
 
@@ -809,17 +810,23 @@ class WebSocket(BaseWebSocket):
     def ping(self, payload: str | bytes, *, timeout: float | None = None) -> int:
         """Send a ping frame."""
         return self.send(
-            _prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
+            self._prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
         )
 
-    def run_forever(self, url: str = "", **kwargs) -> None:
+    def run_forever(
+        self,
+        url: str = "",
+        **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+    ) -> None:
         """Run the WebSocket forever. See :meth:`connect` for details on parameters.
 
         libcurl automatically handles pings and pongs.
         ref: https://curl.se/libcurl/c/libcurl-ws.html
         """
         if url:
-            _ = self.connect(url, **kwargs)
+            _ = self.connect(
+                url, **kwargs  # pyright: ignore[reportUnknownArgumentType]
+            )
 
         _ = self._get_sock_fd()
         read_selector: BaseSelector | None = self._read_selector
@@ -978,7 +985,7 @@ class WebSocket(BaseWebSocket):
             code: close code.
             message: close reason.
         """
-        msg: bytes = _pack_close_frame(code, message)
+        msg: bytes = self._pack_close_frame(code, message)
         _ = self.send(msg, CurlWsFlag.CLOSE)
         self.terminate()
 
@@ -1540,7 +1547,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(_prepare_ping_payload(payload), CurlWsFlag.PING)
+        return await self.send(self._prepare_ping_payload(payload), CurlWsFlag.PING)
 
     async def close(
         self,
@@ -1581,7 +1588,7 @@ class AsyncWebSocket(BaseWebSocket):
                         message = message[:123]
 
                     # Send Close Frame and wait for queue to empty
-                    close_frame: bytes = _pack_close_frame(code, message)
+                    close_frame: bytes = self._pack_close_frame(code, message)
                     await asyncio.wait_for(
                         self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
                         timeout=timeout,
@@ -2199,8 +2206,10 @@ class AsyncWebSocket(BaseWebSocket):
             # Close the Curl connection
             super().terminate()
             if (
-                self.session and not self.session._closed
-            ):  # pyright: ignore[reportPrivateUsage]
+                self.session
+                # pylint: disable-next=protected-access
+                and not self.session._closed  # pyright: ignore[reportPrivateUsage]
+            ):
                 # WebSocket curls CANNOT be reused
                 self.session.push_curl(None)
 
