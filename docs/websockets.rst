@@ -256,12 +256,12 @@ Message Limits
 
 There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, arriving as a single logical message on the server.
 
-Setting ``0`` does not mean unlimited size - for an effectively unlimited size, set it to 2\ :sup:`63`.
+Setting ``0`` does not mean unlimited size - for an effectively unlimited size, set it to a large value (up to 2\ :sup:`63` bytes).
 
 Manual Fragmentation
 --------------------
 
-You don't need to worry about frame fragmentation. If you send a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, and seamlessly reassembles those frames on the other side into a single logical message. The same also applies to received messages, you never receive fragments, only complete WebSocket messages.
+You don't need to worry about frame fragmentation. If you send a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, but the server always receives a single logical message. The same also applies to received messages, you never receive fragments, only complete WebSocket messages.
 
 If you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
 
@@ -289,7 +289,7 @@ This is an *optional* advanced optimization technique which, when enabled, will 
 
 .. warning::
 
-    Multiple small messages can arrive as a single large, concatenated payload, so the server must parse concatenated messages.
+    Multiple messages will arrive as a single large, concatenated payload - the server must be able to handle concatenated messages.
 
 *   **coalesce_frames** (default: ``False``): Enable batching.
 *   **max_send_batch_size** (default: 64): Max messages to merge.
@@ -310,6 +310,7 @@ When coalescing is enabled, a batch of messages are dispatched as soon as the ba
     ...     """Test frame coalescing feature"""
     ...     async with AsyncSession[Response]() as session:
     ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
+    ...             # Multiple separate sends become a single message
     ...             await ws.send_str("Hello,")
     ...             await ws.send_str(" World!")
     ...             response: str = await ws.recv_str()
@@ -318,7 +319,7 @@ When coalescing is enabled, a batch of messages are dispatched as soon as the ba
     >>> asyncio.run(test_coalescing())
     Hello, World!
 
-This library fully supports concurrent sends and receives, so you can take advantage of this combined with coalescing to achieve significant throughput improvements.
+This library supports fully concurrent sends and receives, so you can take advantage of this combined with coalescing to achieve significant throughput improvements.
 
 .. code-block:: pycon
 
@@ -326,7 +327,7 @@ This library fully supports concurrent sends and receives, so you can take advan
     ...     """Test frame coalescing feature"""
     ...     async with AsyncSession[Response]() as session:
     ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
-    ...             # Take advantage of concurrent sends
+    ...             # Take advantage of concurrent sends in quick succession
     ...             async with asyncio.TaskGroup() as tg:
     ...                 tg.create_task(ws.send_str("Concurrent sending"))
     ...                 tg.create_task(ws.send_str(" is "))
@@ -340,7 +341,7 @@ This library fully supports concurrent sends and receives, so you can take advan
 Reliability & Retries
 ---------------------
 
-*   **drain_on_error** (default: ``False``): When a network error occurs, ``recv()`` will continue to yield buffered messages in the queue before raising the exception. Helps ensure data integrity on unstable connections.
+*   **drain_on_error** (default: ``False``): Normally, when a fatal network error occurs, an exception is raised on the next call to ``recv()``, discarding buffered messages. When ``drain_on_error`` is ``True``, calls to ``recv()`` will yield all the buffered messages first, then raise the exception.
 *   **ws_retry**: A policy object to configure automatic retries on failed message receive operations.
 
 .. code-block:: python
@@ -362,7 +363,7 @@ Reliability & Retries
 Cooperative Multitasking
 ------------------------
 
-To prevent the background tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
+To adjust the event loop fairness, you can tune the time-based scheduler.
 
 *   **recv_time_slice** (default: 0.01s): Max time spent processing incoming messages before yielding (10ms).
 *   **send_time_slice** (default: 0.01s): Max time spent sending messages before yielding (10ms).
@@ -382,4 +383,4 @@ The WebSocket protocol requires every client-to-server message to be masked (XOR
 
 Curl-CFFI uses a patched version of libcurl enhanced with AVX-512/AVX2/NEON SIMD vectorized masking. It is capable of multi-gigabit throughput in both directions.
 
-If your application needs to push a large volume of data, you should increase queue sizes and **focus on sending fewer, larger messages rather than many small messages** (e.g., 64KB to 1MB per message). This significantly reduces the framing, masking, and FFI overhead, allowing libcurl to process the data at maximum speed.
+If your application needs to send a large volume of data, you should increase queue sizes and **focus on sending fewer, larger messages rather than many small messages** (e.g., 64KB to 1MB per message). This significantly reduces the framing, masking, and FFI overhead, allowing libcurl to process the data at maximum speed.
