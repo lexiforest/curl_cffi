@@ -356,6 +356,24 @@ class WebSocket(BaseWebSocket):
             raise StopIteration
         return msg
 
+    def __enter__(self) -> Self:
+        """Enable context manager usage for automatic session management."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """Close the WebSocket connection on exiting the context manager."""
+        if exc_type is None:
+            self.close()
+        else:
+            # Don't mask existing exception during teardown
+            with suppress(CurlError):
+                self.close()
+
     def _emit(
         self,
         event_type: EventTypeLiteral,
@@ -463,6 +481,16 @@ class WebSocket(BaseWebSocket):
             max_recv_speed: maximum receive speed, bytes per second.
             curl_options: extra curl options to use.
         """
+
+        # Reset socket and selector cache
+        self._sock_fd = -1
+        if self._read_selector is not None:
+            self._read_selector.close()
+            self._read_selector = None
+        if self._write_selector is not None:
+            self._write_selector.close()
+            self._write_selector = None
+
         curl: Curl = self.curl
         _ = set_curl_options(
             curl=curl,
@@ -664,6 +692,25 @@ class WebSocket(BaseWebSocket):
             return loads(data)
         except Exception as e:
             raise WebSocketError(f"Invalid JSON: {e}", WsCloseCode.INVALID_DATA) from e
+
+    def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
+        """This function is deprecated and removed.
+        The new architecture automatically handles frame reassembly.
+        Call :meth:`recv()` directly to get complete, fully assembled frames.
+        """
+        warnings.warn(
+            (
+                "recv_fragment() is deprecated and removed."
+                "Please use recv() to get complete messages."
+            ),
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        raise NotImplementedError(
+            "recv_fragment() is no longer supported. "
+            + "Call recv() directly instead. "
+            + "See docs: https://curl-cffi.readthedocs.io/en/latest/websockets.html"
+        )
 
     def send(
         self,

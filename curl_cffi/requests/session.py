@@ -11,7 +11,7 @@ import time
 import warnings
 from collections.abc import AsyncGenerator, Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager, contextmanager, suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
@@ -26,7 +26,6 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import urlparse
 
 # Unpack introduced in 3.11
 try:
@@ -34,9 +33,11 @@ try:
 except ImportError:
     from typing_extensions import Unpack
 
+from urllib.parse import urlparse
+
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
-from ..curl import Curl, CurlError, CurlMime
+from ..curl import Curl, CurlError, CurlMime, CurlWsFrame
 from ..utils import CurlCffiWarning
 from .cache import CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes, CurlMorsel
@@ -566,39 +567,54 @@ class Session(BaseSession[R]):
     def ws_connect(
         self,
         url: str,
-        on_message=None,
-        on_error=None,
-        on_open=None,
-        on_close=None,
+        autoclose: bool = True,
+        skip_utf8_validation: bool = False,
+        ws_retry: WebSocketRetryStrategy | None = None,
+        max_message_size: int = 4 * 1024 * 1024,
+        on_message: Callable[[WebSocket, bytes | str], None] | None = None,
+        on_error: Callable[[WebSocket, CurlError], None] | None = None,
+        on_open: Callable[[WebSocket], None] | None = None,
+        on_close: Callable[[WebSocket, int, str], None] | None = None,
+        on_data: Callable[[WebSocket, bytes, CurlWsFrame], None] | None = None,
         **kwargs,
     ) -> WebSocket:
         """Connects to a websocket url.
 
-        Note: This method is deprecated, use WebSocket instead.
+        Note: This method is deprecated, use :meth:`WebSocket.connect()` instead.
 
         Args:
             url: the ws url to connect.
-            on_message: message callback, ``def on_message(ws, str)``
+            autoclose: whether to close the WebSocket after receiving a close frame.
+            skip_utf8_validation: Skip UTF-8 check for text frames in run_forever().
+            ws_retry: Retry policy for WebSocket messages.
+            max_message_size: Maximum allowed size for a complete received message.
+            on_message: message callback, ``def on_message(ws, str | bytes)``
             on_error: error callback, ``def on_error(ws, error)``
             on_open: open callback, ``def on_open(ws)``
             on_close: close callback, ``def on_close(ws)``
+            on_data: raw data callback, ``def on_data(ws, bytes, frame)``
 
-        Other parameters are the same as ``.request``
+        Other parameters are the same as :meth:`Session.request()`.
 
         Returns:
-            a WebSocket instance to communicate with the server.
+            A WebSocket instance to communicate with the server.
         """
         self._check_session_closed()
 
         curl = self.curl.duphandle()
-        self.curl.reset()
+        _ = self.curl.reset()
 
         ws: WebSocket = WebSocket(
             curl=curl,
+            autoclose=autoclose,
+            skip_utf8_validation=skip_utf8_validation,
+            ws_retry=ws_retry,
+            max_message_size=max_message_size,
             on_message=on_message,
             on_error=on_error,
             on_open=on_open,
             on_close=on_close,
+            on_data=on_data,
             debug=self.debug,
         )
 
@@ -611,7 +627,7 @@ class Session(BaseSession[R]):
         else:
             kwargs["cookies"] = self.cookies
 
-        ws.connect(url, **kwargs)
+        _ = ws.connect(url, **kwargs)  # pyright: ignore[reportUnknownArgumentType]
         return ws
 
     def upkeep(self) -> int:
@@ -1092,7 +1108,6 @@ class AsyncSession(BaseSession[R]):
         else:
             curl.close()
 
-    @asynccontextmanager
     async def stream(
         self,
         method: HttpMethod,
@@ -1217,6 +1232,9 @@ class AsyncSession(BaseSession[R]):
                 caused the overflow is not delivered; any messages already buffered may
                 still be drained if ``drain_on_error=True``.
             curl_options: extra curl options to use.
+
+        Documentation:
+            https://curl-cffi.readthedocs.io/en/latest/websockets.html
         """
 
         async def _connect_coro() -> AsyncWebSocket:
