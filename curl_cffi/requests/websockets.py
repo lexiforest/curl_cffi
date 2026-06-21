@@ -371,7 +371,7 @@ class WebSocket(BaseWebSocket):
             self.close()
         else:
             # Don't mask existing exception during teardown
-            with suppress(CurlError):
+            with suppress(CurlError, WebSocketTimeout):
                 self.close()
 
     def _emit(
@@ -1025,15 +1025,32 @@ class WebSocket(BaseWebSocket):
                     self.close(close_code)
                 raise
 
-    def close(self, code: int = WsCloseCode.OK, message: bytes = b"") -> None:
+    def close(
+        self,
+        code: int = WsCloseCode.OK,
+        message: str | bytes = b"",
+        timeout: float = 3.0,
+    ) -> None:
         """Close the connection.
 
         Args:
             code: close code.
             message: close reason.
+            timeout: Max seconds to wait for the close frame to send.
         """
+        if self.closed:
+            return
+
+        if isinstance(message, str):
+            message = message.encode("utf-8")
+
+        if len(message) > 123:
+            message = message[:123]
+
         msg: bytes = self._pack_close_frame(code, message)
-        _ = self.send(msg, CurlWsFlag.CLOSE)
+        with suppress(WebSocketError, WebSocketClosed, WebSocketTimeout):
+            _ = self.send(msg, CurlWsFlag.CLOSE, timeout=timeout)
+
         self.terminate()
 
     def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
