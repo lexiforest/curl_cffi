@@ -106,9 +106,15 @@ By default, local files are written to a platform-native config directory:
 Files stored there:
 
 - ``config.json``: API key config
-- ``fingerprints.json``: cached fingerprints
+- ``fingerprints.json``: legacy cached fingerprints
+- ``fingerprints_v2.json``: v2 cached fingerprints. When present, this file is
+  used instead of ``fingerprints.json``.
 
 Environment overrides:
 
 - ``IMPERSONATE_API_KEY``: override the API key loaded from ``config.json``.
+- ``IMPERSONATE_API_VERSION``: choose ``1``/``v1`` or ``2``/``v2`` for
+  fingerprint updates. Defaults to ``v2``.
+- ``IMPERSONATE_API_ROOT``: override the full API endpoint used by
+  fingerprint updates. This takes precedence over ``IMPERSONATE_API_VERSION``.
 - ``IMPERSONATE_CONFIG_DIR``: override the config/cache directory.

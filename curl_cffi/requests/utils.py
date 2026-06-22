@@ -593,7 +593,10 @@ def _apply_fingerprint(
         curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, 1)
 
     if active_http.header_order:
-        curl.setopt(CurlOpt.HTTPHEADER_ORDER, active_http.header_order)
+        header_order = active_http.header_order
+        if isinstance(header_order, list):
+            header_order = ",".join(header_order)
+        curl.setopt(CurlOpt.HTTPHEADER_ORDER, header_order)
     curl.setopt(
         CurlOpt.SPLIT_COOKIES,
         int(getattr(active_http, "split_cookies", False)),

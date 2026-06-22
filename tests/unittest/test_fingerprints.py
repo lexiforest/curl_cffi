@@ -4,7 +4,13 @@ import os
 import pytest
 
 import curl_cffi
-from curl_cffi.fingerprints import FingerprintManager, _get_default_config_dir
+from curl_cffi.fingerprints import (
+    API_ROOT_V1,
+    API_ROOT_V2,
+    Fingerprint,
+    FingerprintManager,
+    _get_default_config_dir,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -53,6 +59,52 @@ def test_get_config_dir_prefers_env_override(monkeypatch, tmp_path):
     assert FingerprintManager.get_config_dir() == str(tmp_path)
 
 
+def test_get_fingerprint_v2_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+
+    assert FingerprintManager.get_fingerprint_v2_path() == str(
+        tmp_path / "fingerprints_v2.json"
+    )
+
+
+def test_get_api_root_defaults_to_v2(monkeypatch):
+    monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
+    monkeypatch.delenv("IMPERSONATE_API_VERSION", raising=False)
+
+    assert FingerprintManager.get_api_root() == API_ROOT_V2
+
+
+@pytest.mark.parametrize("api_version", ["1", "v1", "V1"])
+def test_get_api_root_uses_v1_version_override(monkeypatch, api_version):
+    monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
+    monkeypatch.setenv("IMPERSONATE_API_VERSION", api_version)
+
+    assert FingerprintManager.get_api_root() == API_ROOT_V1
+
+
+@pytest.mark.parametrize("api_version", ["2", "v2", "V2"])
+def test_get_api_root_uses_v2_version_override(monkeypatch, api_version):
+    monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
+    monkeypatch.setenv("IMPERSONATE_API_VERSION", api_version)
+
+    assert FingerprintManager.get_api_root() == API_ROOT_V2
+
+
+def test_get_api_root_prefers_explicit_root_over_version(monkeypatch):
+    monkeypatch.setenv("IMPERSONATE_API_ROOT", "https://api.test/custom")
+    monkeypatch.setenv("IMPERSONATE_API_VERSION", "1")
+
+    assert FingerprintManager.get_api_root() == "https://api.test/custom"
+
+
+def test_get_api_root_rejects_invalid_version(monkeypatch):
+    monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
+    monkeypatch.setenv("IMPERSONATE_API_VERSION", "3")
+
+    with pytest.raises(ValueError, match="IMPERSONATE_API_VERSION"):
+        FingerprintManager.get_api_root()
+
+
 def test_get_api_key_prefers_environment_override(monkeypatch, tmp_path):
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
     config_path = tmp_path / "config.json"
@@ -97,73 +149,100 @@ def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
     ] == ("fingerprint-ua")
 
 
+def test_legacy_fingerprint_fields_are_nested_aliases():
+    fingerprint = Fingerprint(
+        tls_version="1.3",
+        tls_ciphers=["TLS_AES_128_GCM_SHA256"],
+        headers={"User-Agent": "test-agent"},
+        http2_settings="1:65536",
+        http3_settings="1:2",
+    )
+
+    assert fingerprint.http2.tls.version == "1.3"
+    assert fingerprint.http3.tls.version == "1.3"
+    assert fingerprint.tls_version == "1.3"
+    assert fingerprint.http2.headers == {"User-Agent": "test-agent"}
+    assert fingerprint.http3.headers == {"User-Agent": "test-agent"}
+    assert fingerprint.http2.settings == "1:65536"
+    assert fingerprint.http3.settings == "1:2"
+
+    fingerprint.tls_version = "1.2"
+    fingerprint.http2_settings = "1:1"
+
+    assert fingerprint.http2.tls.version == "1.2"
+    assert fingerprint.http3.tls.version == "1.3"
+    assert fingerprint.http2.settings == "1:1"
+
+
 def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_path):
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
-    fingerprint_path = tmp_path / "fingerprints.json"
+    fingerprint_path = tmp_path / "fingerprints_v2.json"
     fingerprint_path.write_text(
         json.dumps(
             {
                 "version": 2,
                 "data": {
                     "chrome_147": {
-                    "http2": {
-                        "tls": {
-                            "version": "1.3",
-                            "ciphers": ["TLS_AES_128_GCM_SHA256"],
-                            "alpn": True,
-                            "alps": True,
-                            "cert_compression": ["brotli"],
-                            "session_ticket": True,
-                            "extension_order": "0-11-10",
-                            "delegated_credentials": ["ecdsa_secp256r1_sha256"],
-                            "record_size_limit": 4001,
-                            "grease": True,
-                            "use_new_alps_codepoint": True,
-                            "signed_cert_timestamps": True,
-                            "ech": "true",
-                            "permute_extensions": True,
-                            "signature_hashes": ["ecdsa_secp256r1_sha256"],
-                            "sig_hash_algs": "ecdsa_secp256r1_sha256",
-                            "supported_groups": ["X25519", "P-256"],
-                            "key_shares_limit": 1,
+                        "http2": {
+                            "tls": {
+                                "version": "1.3",
+                                "ciphers": ["TLS_AES_128_GCM_SHA256"],
+                                "alpn": True,
+                                "alps": True,
+                                "cert_compression": ["brotli"],
+                                "session_ticket": True,
+                                "extension_order": "0-11-10",
+                                "delegated_credentials": [
+                                    "ecdsa_secp256r1_sha256"
+                                ],
+                                "record_size_limit": 4001,
+                                "grease": True,
+                                "use_new_alps_codepoint": True,
+                                "signed_cert_timestamps": True,
+                                "ech": "true",
+                                "permute_extensions": True,
+                                "signature_hashes": ["ecdsa_secp256r1_sha256"],
+                                "sig_hash_algs": "ecdsa_secp256r1_sha256",
+                                "supported_groups": ["X25519", "P-256"],
+                                "key_shares_limit": 1,
+                            },
+                            "settings": "1:65536",
+                            "pseudo_headers_order": "masp",
+                            "header_order": ["user-agent", "accept"],
+                            "headers": [
+                                {"name": "accept", "value": "*/*"},
+                                {"name": "user-agent", "value": "test-agent"},
+                            ],
+                            "header_lang": "en-US,en;q=0.9",
+                            "window_update": 15663105,
+                            "stream_weight": 220,
+                            "stream_exclusive": 1,
+                            "no_priority": False,
+                            "priority_weight": 256,
+                            "priority_exclusive": 1,
+                            "split_cookies": True,
+                            "form_boundary": "webkit",
                         },
-                        "settings": "1:65536",
-                        "pseudo_headers_order": "masp",
-                        "header_order": "user-agent,accept",
-                        "headers": {
-                            "accept": "*/*",
-                            "user-agent": "test-agent",
+                        "http3": {
+                            "tls": {
+                                "version": "1.3",
+                                "ciphers": ["TLS_AES_256_GCM_SHA384"],
+                                "extension_order": "0-10-13",
+                                "signature_hashes": ["rsa_pss_rsae_sha256"],
+                                "sig_hash_algs": "rsa_pss_rsae_sha256",
+                                "supported_groups": ["X25519MLKEM768", "X25519"],
+                                "key_shares_limit": 2,
+                            },
+                            "settings": "1:2",
+                            "pseudo_headers_order": "m,a,s,p",
+                            "header_order": ["user-agent", "priority"],
+                            "headers": [
+                                ["priority", "u=1, i"],
+                                ["user-agent", "test-agent"],
+                            ],
+                            "header_lang": "en-US,en;q=0.9",
+                            "quic_transport_parameters": "3:4",
                         },
-                        "header_lang": "en-US,en;q=0.9",
-                        "window_update": 15663105,
-                        "stream_weight": 220,
-                        "stream_exclusive": 1,
-                        "no_priority": False,
-                        "priority_weight": 256,
-                        "priority_exclusive": 1,
-                        "split_cookies": True,
-                        "form_boundary": "webkit",
-                    },
-                    "http3": {
-                        "tls": {
-                            "version": "1.3",
-                            "ciphers": ["TLS_AES_256_GCM_SHA384"],
-                            "extension_order": "0-10-13",
-                            "signature_hashes": ["rsa_pss_rsae_sha256"],
-                            "sig_hash_algs": "rsa_pss_rsae_sha256",
-                            "supported_groups": ["X25519MLKEM768", "X25519"],
-                            "key_shares_limit": 2,
-                        },
-                        "settings": "1:2",
-                        "pseudo_headers_order": "m,a,s,p",
-                        "header_order": "user-agent,priority",
-                        "headers": {
-                            "priority": "u=1, i",
-                            "user-agent": "test-agent",
-                        },
-                        "header_lang": "en-US,en;q=0.9",
-                        "quic_transport_parameters": "3:4",
-                    },
                     }
                 }
             }
@@ -252,6 +331,42 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     assert fingerprint.http3_pseudo_headers_order == "m,a,s,p"
     assert fingerprint.http3_sig_hash_algs == "rsa_pss_rsae_sha256"
     assert fingerprint.http3_tls_extension_order == "0-10-13"
+
+
+def test_load_fingerprints_prefers_v2_cache_when_present(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    legacy_path = tmp_path / "fingerprints.json"
+    v2_path = tmp_path / "fingerprints_v2.json"
+    legacy_path.write_text(
+        json.dumps(
+            {
+                "legacy_only": {
+                    "client": "legacy",
+                    "headers": {"User-Agent": "legacy-agent"},
+                }
+            }
+        )
+    )
+    v2_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "data": {
+                    "v2_only": {
+                        "client": "v2",
+                        "http2": {
+                            "headers": {"User-Agent": "v2-agent"},
+                        },
+                    }
+                },
+            }
+        )
+    )
+
+    fingerprints = FingerprintManager.load_fingerprints()
+
+    assert "v2_only" in fingerprints
+    assert "legacy_only" not in fingerprints
 
 
 def test_get_fingerprint_maps_legacy_http3_fields(monkeypatch, tmp_path):

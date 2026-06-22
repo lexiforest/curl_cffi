@@ -156,11 +156,11 @@ def test_apply_fingerprint_sets_nested_http3_options():
             },
             "settings": "1:2",
             "pseudo_headers_order": "m,a,s,p",
-            "header_order": "user-agent,accept",
-            "headers": {
-                "user-agent": "test-agent",
-                "accept": "*/*",
-            },
+            "header_order": ["user-agent", "accept"],
+            "headers": [
+                {"name": "user-agent", "value": "test-agent"},
+                {"name": "accept", "value": "*/*"},
+            ],
             "quic_transport_parameters": "3:4",
         },
     )

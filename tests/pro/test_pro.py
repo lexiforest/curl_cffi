@@ -21,6 +21,19 @@ def setup_pro(tmp_path_factory):
     yield
 
 
+@pytest.fixture(autouse=True)
+def clear_fingerprint_files():
+    for path in (
+        FingerprintManager.get_fingerprint_path(),
+        FingerprintManager.get_fingerprint_v2_path(),
+    ):
+        if os.path.exists(path):
+            os.unlink(path)
+    FingerprintManager.load_fingerprints.cache_clear()
+    yield
+    FingerprintManager.load_fingerprints.cache_clear()
+
+
 def test_update_fingerprints(api_server):
     updated = FingerprintManager.update_fingerprints(f"{api_server.url}/v2")
     fingerprints = FingerprintManager.load_fingerprints()
@@ -28,7 +41,8 @@ def test_update_fingerprints(api_server):
     assert "testing100" in fingerprints
     assert "testing101" in fingerprints
 
-    with open(FingerprintManager.get_fingerprint_path()) as f:
+    assert not os.path.exists(FingerprintManager.get_fingerprint_path())
+    with open(FingerprintManager.get_fingerprint_v2_path()) as f:
         cache = json.load(f)
     assert cache["version"] == 2
     assert "testing100" in cache["data"]
@@ -39,10 +53,12 @@ def test_update_fingerprints(api_server):
 
 
 def test_update_fingerprints_reads_legacy_api(api_server):
-    updated = FingerprintManager.update_fingerprints(api_server.url)
+    updated = FingerprintManager.update_fingerprints(f"{api_server.url}/v1")
     fingerprints = FingerprintManager.load_fingerprints()
 
     assert updated == 10
+    assert os.path.exists(FingerprintManager.get_fingerprint_path())
+    assert not os.path.exists(FingerprintManager.get_fingerprint_v2_path())
     assert "legacy100" in fingerprints
     assert "testing100" not in fingerprints
 

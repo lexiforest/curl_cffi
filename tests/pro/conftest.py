@@ -142,12 +142,12 @@ def _build_v2_fingerprint_response() -> dict[str, Any]:
                 },
                 "settings": "1:65536;3:1000;4:6291456;6:262144",
                 "pseudo_headers_order": "masp",
-                "headers": {
-                    "user-agent": "testing-agent",
-                    "accept": "text/html",
-                },
+                "headers": [
+                    {"name": "user-agent", "value": "testing-agent"},
+                    {"name": "accept", "value": "text/html"},
+                ],
                 "header_lang": "en-US,en;q=0.9",
-                "header_order": "user-agent,accept",
+                "header_order": ["user-agent", "accept"],
                 "window_update": 15663105,
                 "stream_weight": None,
                 "stream_exclusive": None,
@@ -180,12 +180,12 @@ def _build_v2_fingerprint_response() -> dict[str, Any]:
                 },
                 "settings": "1:65536;6:262144;7:100",
                 "pseudo_headers_order": "pmsa",
-                "headers": {
-                    "accept": "text/html",
-                    "user-agent": "testing-h3-agent",
-                },
+                "headers": [
+                    {"name": "accept", "value": "text/html"},
+                    {"name": "user-agent", "value": "testing-h3-agent"},
+                ],
                 "header_lang": "en-US,en;q=0.9",
-                "header_order": "accept,user-agent",
+                "header_order": ["accept", "user-agent"],
                 "quic_transport_parameters": "17:1@1;32:65536",
             },
         }
@@ -220,7 +220,7 @@ def _wrap_profiles(profiles: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-@get("/fingerprints", sync_to_thread=False)
+@get("/v1/fingerprints", sync_to_thread=False)
 def get_legacy_fingerprints() -> dict[str, Any]:
     return _build_legacy_fingerprint_response()
 

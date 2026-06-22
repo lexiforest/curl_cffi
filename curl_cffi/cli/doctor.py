@@ -9,8 +9,10 @@ from curl_cffi.fingerprints import FingerprintManager
 def print_doctor() -> None:
     config_path = FingerprintManager.get_config_path()
     fingerprint_path = FingerprintManager.get_fingerprint_path()
+    fingerprint_v2_path = FingerprintManager.get_fingerprint_v2_path()
     config_exists = os.path.exists(config_path)
     fingerprint_exists = os.path.exists(fingerprint_path)
+    fingerprint_v2_exists = os.path.exists(fingerprint_v2_path)
 
     print("curl-cffi doctor")
     print("----------------")
@@ -26,6 +28,8 @@ def print_doctor() -> None:
     print(f"api_key_configured: {FingerprintManager.get_api_key() is not None}")
     print(f"fingerprint_path: {fingerprint_path}")
     print(f"fingerprint_present: {fingerprint_exists}")
+    print(f"fingerprint_v2_path: {fingerprint_v2_path}")
+    print(f"fingerprint_v2_present: {fingerprint_v2_exists}")
     try:
         fingerprints = FingerprintManager.load_fingerprints()
     except FileNotFoundError:

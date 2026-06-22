@@ -331,7 +331,9 @@ NATIVE_IMPERSONATE_TARGETS = [
 ]
 
 
-DEFAULT_API_ROOT = "https://api.impersonate.pro/v2"
+API_ROOT_V1 = "https://api.impersonate.pro/v1"
+API_ROOT_V2 = "https://api.impersonate.pro/v2"
+DEFAULT_API_ROOT = API_ROOT_V2
 
 
 class FingerprintUpdateError(RuntimeError, CurlError):
@@ -382,8 +384,8 @@ class Http2Fingerprint:
     tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
     settings: str = ""
     pseudo_headers_order: str = ""
-    header_order: str = ""
-    headers: dict[str, str] = field(default_factory=dict)
+    header_order: str | list[str] = ""
+    headers: dict[str, str] | list[object] = field(default_factory=dict)
     header_lang: str = ""
     window_update: int = 0
     stream_weight: int | None = None
@@ -397,6 +399,8 @@ class Http2Fingerprint:
     def __post_init__(self):
         if isinstance(self.tls, dict):
             self.tls = _filter_dataclass(TlsFingerprint, self.tls)
+        self.headers = _normalize_headers(self.headers)
+        self.header_order = _normalize_header_order(self.header_order)
 
 
 @dataclass
@@ -404,14 +408,16 @@ class Http3Fingerprint:
     tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
     settings: str = ""
     pseudo_headers_order: str = ""
-    header_order: str = ""
-    headers: dict[str, str] = field(default_factory=dict)
+    header_order: str | list[str] = ""
+    headers: dict[str, str] | list[object] = field(default_factory=dict)
     header_lang: str = ""
     quic_transport_parameters: str = ""
 
     def __post_init__(self):
         if isinstance(self.tls, dict):
             self.tls = _filter_dataclass(TlsFingerprint, self.tls)
+        self.headers = _normalize_headers(self.headers)
+        self.header_order = _normalize_header_order(self.header_order)
 
 
 def _filter_dataclass(cls, value: dict[str, object]):
@@ -419,7 +425,128 @@ def _filter_dataclass(cls, value: dict[str, object]):
     return cls(**{k: v for k, v in value.items() if k in allowed})
 
 
-@dataclass
+def _normalize_header_order(value: str | list[str]) -> str:
+    if isinstance(value, list):
+        return ",".join(value)
+    return value
+
+
+def _normalize_headers(value: dict[str, str] | list[object]) -> dict[str, str]:
+    if isinstance(value, dict):
+        return value
+
+    headers = {}
+    for item in value:
+        if isinstance(item, dict):
+            name = item.get("name", item.get("key"))
+            header_value = item.get("value")
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            name, header_value = item[0], item[1]
+        elif isinstance(item, str) and ":" in item:
+            name, header_value = item.split(":", 1)
+            header_value = header_value.lstrip()
+        else:
+            continue
+
+        if isinstance(name, str) and isinstance(header_value, str):
+            headers[name] = header_value
+
+    return headers
+
+
+LEGACY_FINGERPRINT_FIELDS = {
+    "tls_version",
+    "tls_ciphers",
+    "tls_alpn",
+    "tls_alps",
+    "tls_cert_compression",
+    "tls_signature_hashes",
+    "tls_key_shares_limit",
+    "tls_supported_groups",
+    "tls_session_ticket",
+    "tls_extension_order",
+    "tls_delegated_credentials",
+    "tls_record_size_limit",
+    "tls_grease",
+    "tls_use_new_alps_codepoint",
+    "tls_signed_cert_timestamps",
+    "tls_ech",
+    "tls_permute_extensions",
+    "headers",
+    "header_order",
+    "split_cookies",
+    "form_boundary",
+    "http2_settings",
+    "http2_window_update",
+    "http2_pseudo_headers_order",
+    "http2_stream_weight",
+    "http2_stream_exclusive",
+    "http2_no_priority",
+    "http3_settings",
+    "http3_pseudo_headers_order",
+    "http3_sig_hash_algs",
+    "http3_tls_extension_order",
+    "quic_transport_parameters",
+    "header_lang",
+}
+
+
+_MISSING = object()
+
+
+def _identity(value):
+    return value
+
+
+def _set_if_present(
+    target: object,
+    attr: str,
+    legacy: dict[str, object],
+    key: str,
+    transform=_identity,
+) -> None:
+    value = legacy.get(key)
+    if not getattr(target, attr) and value:
+        setattr(target, attr, transform(value))
+
+
+def _set_if_none(
+    target: object,
+    attr: str,
+    legacy: dict[str, object],
+    key: str,
+    transform=_identity,
+) -> None:
+    value = legacy.get(key)
+    if getattr(target, attr) is None and value is not None:
+        setattr(target, attr, transform(value))
+
+
+def _legacy_property(
+    path: str,
+    none_default: object = _MISSING,
+    setter_transform=_identity,
+) -> property:
+    attrs = path.split(".")
+
+    def getter(self):
+        value = self
+        for attr in attrs:
+            value = getattr(value, attr)
+        if value is None and none_default is not _MISSING:
+            return none_default
+        return value
+
+    def setter(self, value):
+        target = self
+        for attr in attrs[:-1]:
+            target = getattr(target, attr)
+        setattr(target, attrs[-1], setter_transform(value))
+
+    return property(getter, setter)
+
+
+@dataclass(init=False)
 class Fingerprint:
     client: str = ""
     client_version: str = ""
@@ -432,162 +559,196 @@ class Fingerprint:
         default_factory=Http3Fingerprint
     )
 
-    tls_version: str = ""
-    tls_ciphers: list[str] = field(default_factory=list)
-    # the value is [h2, http/1.1], which will be filled by libcurl
-    tls_alpn: bool = False
-    tls_alps: bool = False
-    tls_cert_compression: list[str] = field(default_factory=list)
-    tls_signature_hashes: list[str] = field(default_factory=list)  # .sig_hash_args
-    tls_key_shares_limit: int | None = None
-    tls_supported_groups: list[str] = field(default_factory=list)  # .curves
-    tls_session_ticket: bool = False
-    tls_extension_order: str = ""
-    tls_delegated_credentials: list[str] = field(default_factory=list)
-    tls_record_size_limit: int | None = None
-    tls_grease: bool = False
-    tls_use_new_alps_codepoint: bool = False
-    tls_signed_cert_timestamps: bool = False
-    tls_ech: str | None = None
-    tls_permute_extensions: bool = False
+    def __init__(
+        self,
+        client: str = "",
+        client_version: str = "",
+        os: str = "",
+        os_version: str = "",
+        http2: Http2Fingerprint | dict[str, object] | None = None,
+        http3: Http3Fingerprint | dict[str, object] | None = None,
+        **legacy: object,
+    ):
+        unexpected = set(legacy) - LEGACY_FINGERPRINT_FIELDS
+        if unexpected:
+            unexpected_args = ", ".join(sorted(unexpected))
+            raise TypeError(f"Unexpected fingerprint field(s): {unexpected_args}")
 
-    headers: dict[str, str] = field(default_factory=dict)
-    header_order: str = ""
-    split_cookies: bool = False
-    form_boundary: str = ""
+        self.client = client
+        self.client_version = client_version
+        self.os = os
+        self.os_version = os_version
+        self.http2 = self._coerce_http2(http2)
+        self.http3 = self._coerce_http3(http3)
+        self._apply_legacy_fields(legacy)
 
-    http2_settings: str = ""
-    http2_window_update: int = 0
-    http2_pseudo_headers_order: str = ""
-    http2_stream_weight: int | None = None
-    http2_stream_exclusive: int | None = None
-    http2_no_priority: bool = False
+    @classmethod
+    def from_dict(cls, value: dict[str, object]) -> "Fingerprint":
+        if "http2" in value or "http3" in value:
+            return cls.from_v2_dict(value)
+        return cls.from_legacy_dict(value)
 
-    http3_settings: str = ""
-    http3_pseudo_headers_order: str = ""
-    http3_sig_hash_algs: str = ""
-    http3_tls_extension_order: str = ""
-    quic_transport_parameters: str = ""
+    @classmethod
+    def from_v2_dict(cls, value: dict[str, object]) -> "Fingerprint":
+        return cls(**cls._filter_input_dict(value))
 
-    header_lang: str = ""
+    @classmethod
+    def from_legacy_dict(cls, value: dict[str, object]) -> "Fingerprint":
+        return cls(**cls._filter_input_dict(value))
 
-    def __post_init__(self):
-        if isinstance(self.http2, dict):
-            self.http2 = _filter_dataclass(Http2Fingerprint, self.http2)
-        if isinstance(self.http3, dict):
-            self.http3 = _filter_dataclass(Http3Fingerprint, self.http3)
+    @staticmethod
+    def _filter_input_dict(value: dict[str, object]) -> dict[str, object]:
+        allowed = {
+            "client",
+            "client_version",
+            "os",
+            "os_version",
+            "http2",
+            "http3",
+            *LEGACY_FINGERPRINT_FIELDS,
+        }
+        return {key: item for key, item in value.items() if key in allowed}
 
-        self._map_legacy_fields_to_nested()
-        self._sync_legacy_fields_from_nested()
+    @staticmethod
+    def _coerce_http2(value: Http2Fingerprint | dict[str, object] | None):
+        if value is None:
+            return Http2Fingerprint()
+        if isinstance(value, dict):
+            return _filter_dataclass(Http2Fingerprint, value)
+        return value
 
-    def _map_legacy_fields_to_nested(self):
+    @staticmethod
+    def _coerce_http3(value: Http3Fingerprint | dict[str, object] | None):
+        if value is None:
+            return Http3Fingerprint()
+        if isinstance(value, dict):
+            return _filter_dataclass(Http3Fingerprint, value)
+        return value
+
+    def _apply_legacy_fields(self, legacy: dict[str, object]) -> None:
         for http in (self.http2, self.http3):
-            if not http.tls.version:
-                http.tls.version = self.tls_version
-            if not http.tls.ciphers:
-                http.tls.ciphers = list(self.tls_ciphers)
-            if self.tls_alpn:
-                http.tls.alpn = self.tls_alpn
-            if self.tls_alps:
-                http.tls.alps = self.tls_alps
-            if not http.tls.cert_compression:
-                http.tls.cert_compression = list(self.tls_cert_compression)
-            if self.tls_session_ticket:
-                http.tls.session_ticket = self.tls_session_ticket
-            if not http.tls.signature_hashes:
-                http.tls.signature_hashes = list(self.tls_signature_hashes)
-            if not http.tls.supported_groups:
-                http.tls.supported_groups = list(self.tls_supported_groups)
-            if http.tls.key_shares_limit is None:
-                http.tls.key_shares_limit = self.tls_key_shares_limit
-            if not http.tls.delegated_credentials:
-                http.tls.delegated_credentials = list(self.tls_delegated_credentials)
-            if http.tls.record_size_limit is None:
-                http.tls.record_size_limit = self.tls_record_size_limit
-            if self.tls_grease:
-                http.tls.grease = self.tls_grease
-            if self.tls_use_new_alps_codepoint:
-                http.tls.use_new_alps_codepoint = self.tls_use_new_alps_codepoint
-            if self.tls_signed_cert_timestamps:
-                http.tls.signed_cert_timestamps = self.tls_signed_cert_timestamps
-            if http.tls.ech is None:
-                http.tls.ech = self.tls_ech
-            if self.tls_permute_extensions:
-                http.tls.permute_extensions = self.tls_permute_extensions
-            if not http.headers:
-                http.headers = dict(self.headers)
-            if not http.header_order:
-                http.header_order = self.header_order
-            if not http.header_lang:
-                http.header_lang = self.header_lang
+            tls = http.tls
+            _set_if_present(tls, "version", legacy, "tls_version")
+            _set_if_present(tls, "ciphers", legacy, "tls_ciphers", list)
+            _set_if_present(tls, "alpn", legacy, "tls_alpn", bool)
+            _set_if_present(tls, "alps", legacy, "tls_alps", bool)
+            _set_if_present(
+                tls, "cert_compression", legacy, "tls_cert_compression", list
+            )
+            _set_if_present(tls, "session_ticket", legacy, "tls_session_ticket", bool)
+            _set_if_present(
+                tls, "signature_hashes", legacy, "tls_signature_hashes", list
+            )
+            _set_if_present(
+                tls, "supported_groups", legacy, "tls_supported_groups", list
+            )
+            _set_if_none(tls, "key_shares_limit", legacy, "tls_key_shares_limit")
+            _set_if_present(
+                tls, "delegated_credentials", legacy, "tls_delegated_credentials", list
+            )
+            _set_if_none(tls, "record_size_limit", legacy, "tls_record_size_limit")
+            _set_if_present(tls, "grease", legacy, "tls_grease", bool)
+            _set_if_present(
+                tls,
+                "use_new_alps_codepoint",
+                legacy,
+                "tls_use_new_alps_codepoint",
+                bool,
+            )
+            _set_if_present(
+                tls,
+                "signed_cert_timestamps",
+                legacy,
+                "tls_signed_cert_timestamps",
+                bool,
+            )
+            _set_if_none(tls, "ech", legacy, "tls_ech")
+            _set_if_present(
+                tls, "permute_extensions", legacy, "tls_permute_extensions", bool
+            )
+            _set_if_present(http, "headers", legacy, "headers", _normalize_headers)
+            _set_if_present(
+                http, "header_order", legacy, "header_order", _normalize_header_order
+            )
+            _set_if_present(http, "header_lang", legacy, "header_lang")
 
-        if not self.http2.tls.extension_order:
-            self.http2.tls.extension_order = self.tls_extension_order
-        if not self.http2.settings:
-            self.http2.settings = self.http2_settings
-        if not self.http2.pseudo_headers_order:
-            self.http2.pseudo_headers_order = self.http2_pseudo_headers_order
-        if not self.http2.window_update:
-            self.http2.window_update = self.http2_window_update
-        if self.http2_stream_weight is not None and self.http2.stream_weight is None:
-            self.http2.stream_weight = self.http2_stream_weight
-        if (
-            self.http2_stream_exclusive is not None
-            and self.http2.stream_exclusive is None
-        ):
-            self.http2.stream_exclusive = self.http2_stream_exclusive
-        if self.http2_no_priority:
-            self.http2.no_priority = self.http2_no_priority
-        if self.split_cookies:
-            self.http2.split_cookies = self.split_cookies
-        if self.form_boundary:
-            self.http2.form_boundary = self.form_boundary
+        _set_if_present(
+            self.http2.tls, "extension_order", legacy, "tls_extension_order"
+        )
+        _set_if_present(self.http2, "settings", legacy, "http2_settings")
+        _set_if_present(
+            self.http2,
+            "pseudo_headers_order",
+            legacy,
+            "http2_pseudo_headers_order",
+        )
+        _set_if_present(self.http2, "window_update", legacy, "http2_window_update")
+        _set_if_none(self.http2, "stream_weight", legacy, "http2_stream_weight")
+        _set_if_none(self.http2, "stream_exclusive", legacy, "http2_stream_exclusive")
+        _set_if_present(self.http2, "no_priority", legacy, "http2_no_priority", bool)
+        _set_if_present(self.http2, "split_cookies", legacy, "split_cookies", bool)
+        _set_if_present(self.http2, "form_boundary", legacy, "form_boundary")
 
-        if not self.http3.tls.extension_order:
-            self.http3.tls.extension_order = self.http3_tls_extension_order
-        if not self.http3.tls.sig_hash_algs:
-            self.http3.tls.sig_hash_algs = self.http3_sig_hash_algs
-        if not self.http3.settings:
-            self.http3.settings = self.http3_settings
-        if not self.http3.pseudo_headers_order:
-            self.http3.pseudo_headers_order = self.http3_pseudo_headers_order
-        if not self.http3.quic_transport_parameters:
-            self.http3.quic_transport_parameters = self.quic_transport_parameters
+        _set_if_present(
+            self.http3.tls,
+            "extension_order",
+            legacy,
+            "http3_tls_extension_order",
+        )
+        _set_if_present(self.http3.tls, "sig_hash_algs", legacy, "http3_sig_hash_algs")
+        _set_if_present(self.http3, "settings", legacy, "http3_settings")
+        _set_if_present(
+            self.http3,
+            "pseudo_headers_order",
+            legacy,
+            "http3_pseudo_headers_order",
+        )
+        _set_if_present(
+            self.http3,
+            "quic_transport_parameters",
+            legacy,
+            "quic_transport_parameters",
+        )
 
-    def _sync_legacy_fields_from_nested(self):
-        self.tls_version = self.http2.tls.version
-        self.tls_ciphers = self.http2.tls.ciphers
-        self.tls_alpn = self.http2.tls.alpn
-        self.tls_alps = self.http2.tls.alps
-        self.tls_cert_compression = self.http2.tls.cert_compression
-        self.tls_session_ticket = self.http2.tls.session_ticket
-        self.tls_extension_order = self.http2.tls.extension_order
-        self.tls_signature_hashes = self.http2.tls.signature_hashes
-        self.tls_supported_groups = self.http2.tls.supported_groups
-        self.tls_key_shares_limit = self.http2.tls.key_shares_limit or 0
-        self.tls_delegated_credentials = self.http2.tls.delegated_credentials
-        self.tls_record_size_limit = self.http2.tls.record_size_limit
-        self.tls_grease = self.http2.tls.grease
-        self.tls_use_new_alps_codepoint = self.http2.tls.use_new_alps_codepoint
-        self.tls_signed_cert_timestamps = self.http2.tls.signed_cert_timestamps
-        self.tls_ech = self.http2.tls.ech
-        self.tls_permute_extensions = self.http2.tls.permute_extensions
-        self.headers = self.http2.headers
-        self.header_order = self.http2.header_order
-        self.header_lang = self.http2.header_lang
-        self.split_cookies = self.http2.split_cookies
-        self.form_boundary = self.http2.form_boundary
-        self.http2_settings = self.http2.settings
-        self.http2_pseudo_headers_order = self.http2.pseudo_headers_order
-        self.http2_window_update = self.http2.window_update
-        self.http2_stream_weight = self.http2.stream_weight
-        self.http2_stream_exclusive = self.http2.stream_exclusive
-        self.http2_no_priority = self.http2.no_priority
-        self.http3_settings = self.http3.settings
-        self.http3_pseudo_headers_order = self.http3.pseudo_headers_order
-        self.http3_sig_hash_algs = self.http3.tls.sig_hash_algs
-        self.http3_tls_extension_order = self.http3.tls.extension_order
-        self.quic_transport_parameters = self.http3.quic_transport_parameters
+    tls_version = _legacy_property("http2.tls.version")
+    tls_ciphers = _legacy_property("http2.tls.ciphers")
+    tls_alpn = _legacy_property("http2.tls.alpn")
+    tls_alps = _legacy_property("http2.tls.alps")
+    tls_cert_compression = _legacy_property("http2.tls.cert_compression")
+    tls_signature_hashes = _legacy_property("http2.tls.signature_hashes")
+    tls_key_shares_limit = _legacy_property("http2.tls.key_shares_limit", 0)
+    tls_supported_groups = _legacy_property("http2.tls.supported_groups")
+    tls_session_ticket = _legacy_property("http2.tls.session_ticket")
+    tls_extension_order = _legacy_property("http2.tls.extension_order")
+    tls_delegated_credentials = _legacy_property("http2.tls.delegated_credentials")
+    tls_record_size_limit = _legacy_property("http2.tls.record_size_limit")
+    tls_grease = _legacy_property("http2.tls.grease")
+    tls_use_new_alps_codepoint = _legacy_property(
+        "http2.tls.use_new_alps_codepoint"
+    )
+    tls_signed_cert_timestamps = _legacy_property(
+        "http2.tls.signed_cert_timestamps"
+    )
+    tls_ech = _legacy_property("http2.tls.ech")
+    tls_permute_extensions = _legacy_property("http2.tls.permute_extensions")
+    headers = _legacy_property("http2.headers", setter_transform=_normalize_headers)
+    header_order = _legacy_property(
+        "http2.header_order", setter_transform=_normalize_header_order
+    )
+    header_lang = _legacy_property("http2.header_lang")
+    split_cookies = _legacy_property("http2.split_cookies")
+    form_boundary = _legacy_property("http2.form_boundary")
+    http2_settings = _legacy_property("http2.settings")
+    http2_window_update = _legacy_property("http2.window_update")
+    http2_pseudo_headers_order = _legacy_property("http2.pseudo_headers_order")
+    http2_stream_weight = _legacy_property("http2.stream_weight")
+    http2_stream_exclusive = _legacy_property("http2.stream_exclusive")
+    http2_no_priority = _legacy_property("http2.no_priority")
+    http3_settings = _legacy_property("http3.settings")
+    http3_pseudo_headers_order = _legacy_property("http3.pseudo_headers_order")
+    http3_sig_hash_algs = _legacy_property("http3.tls.sig_hash_algs")
+    http3_tls_extension_order = _legacy_property("http3.tls.extension_order")
+    quic_transport_parameters = _legacy_property("http3.quic_transport_parameters")
 
 
 # fmt: off
@@ -625,10 +786,34 @@ class FingerprintManager:
         return os.path.join(cls.get_config_dir(), "fingerprints.json")
 
     @classmethod
+    def get_fingerprint_v2_path(cls) -> str:
+        return os.path.join(cls.get_config_dir(), "fingerprints_v2.json")
+
+    @staticmethod
+    def _is_v2_api_root(api_root: str) -> bool:
+        return api_root.rstrip("/").endswith("/v2")
+
+    @staticmethod
+    def _normalize_api_version(version: str) -> str:
+        version = version.strip().lower()
+        if version.startswith("v"):
+            version = version[1:]
+        if version not in {"1", "2"}:
+            raise ValueError("IMPERSONATE_API_VERSION must be 1, v1, 2, or v2")
+        return version
+
+    @classmethod
     def get_api_root(cls) -> str:
-        return (
-            os.environ.get("IMPERSONATE_API_ROOT", DEFAULT_API_ROOT) or DEFAULT_API_ROOT
-        )
+        api_root = os.environ.get("IMPERSONATE_API_ROOT")
+        if api_root:
+            return api_root
+
+        api_version = os.environ.get("IMPERSONATE_API_VERSION")
+        if api_version:
+            version = cls._normalize_api_version(api_version)
+            return API_ROOT_V1 if version == "1" else API_ROOT_V2
+
+        return DEFAULT_API_ROOT
 
     @classmethod
     def get_api_key(cls) -> str | None:
@@ -772,7 +957,12 @@ class FingerprintManager:
         config_dir = cls.get_config_dir()
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
-        with open(cls.get_fingerprint_path(), "w") as wf:
+        fingerprint_path = (
+            cls.get_fingerprint_v2_path()
+            if cls._is_v2_api_root(api_root)
+            else cls.get_fingerprint_path()
+        )
+        with open(fingerprint_path, "w") as wf:
             json.dump(
                 {"version": FINGERPRINT_CACHE_VERSION, "data": fingerprints},
                 wf,
@@ -793,13 +983,11 @@ class FingerprintManager:
 
     @staticmethod
     def _parse_fingerprints(payload: dict[str, object]) -> dict[str, Fingerprint]:
-        allowed = {item.name for item in fields(Fingerprint)}
         parsed: dict[str, Fingerprint] = {}
         for key, value in payload.items():
             if not isinstance(value, dict):
                 continue
-            filtered = {k: v for k, v in value.items() if k in allowed}
-            parsed[key] = Fingerprint(**filtered)
+            parsed[key] = Fingerprint.from_dict(value)
         return parsed
 
     @classmethod
@@ -825,7 +1013,10 @@ class FingerprintManager:
     @cache
     def load_fingerprints(cls) -> dict[str, Fingerprint]:
         parsed = cls._load_native_fingerprints()
-        fingerprint_path = cls.get_fingerprint_path()
+        v2_path = cls.get_fingerprint_v2_path()
+        fingerprint_path = (
+            v2_path if os.path.exists(v2_path) else cls.get_fingerprint_path()
+        )
         if os.path.exists(fingerprint_path):
             with open(fingerprint_path) as f:
                 fingerprints = json.loads(f.read())
