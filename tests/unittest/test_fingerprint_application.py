@@ -57,7 +57,7 @@ def test_apply_fingerprint_skips_extension_order_when_permuting(monkeypatch):
     )
 
     toggle_extensions_by_ids.assert_called_once_with(curl, {0, 23, 65281, 11})
-    assert CurlOpt.TLS_EXTENSION_ORDER not in curl.options
+    assert curl.options[CurlOpt.TLS_EXTENSION_ORDER] == "0-23-65281-11"
     assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 1
 
 
@@ -95,12 +95,12 @@ def test_apply_fingerprint_with_tls_extension_order_respects_cert_compression():
 def test_apply_fingerprint_empty_host_uses_curl_generated_host():
     curl = FakeCurl()
     fingerprint = Fingerprint(
-        headers={
-            "User-Agent": "test-agent",
-            "Host": "",
-            "Connection": "Keep-Alive",
-        },
-        header_order="User-Agent,Host,Connection",
+        headers=[
+            {"name": "User-Agent", "value": "test-agent"},
+            {"name": "Host", "value": ""},
+            {"name": "Connection", "value": "Keep-Alive"},
+        ],
+        header_order=["User-Agent", "Host", "Connection"],
     )
 
     _apply_fingerprint(
@@ -132,8 +132,13 @@ def test_apply_fingerprint_sets_http3_sig_hash_algs():
     assert curl.options[CurlOpt.HTTP3_SIG_HASH_ALGS] == "rsa_pss_rsae_sha256"
 
 
-def test_apply_fingerprint_sets_nested_http3_options():
+def test_apply_fingerprint_sets_nested_http3_options(monkeypatch):
     curl = FakeCurl()
+    toggle_extensions_by_ids = Mock()
+    monkeypatch.setattr(
+        "curl_cffi.requests.utils.toggle_extensions_by_ids",
+        toggle_extensions_by_ids,
+    )
     fingerprint = Fingerprint(
         http3={
             "tls": {
@@ -190,10 +195,11 @@ def test_apply_fingerprint_sets_nested_http3_options():
     assert curl.options[CurlOpt.SSL_EC_CURVES] == "X25519MLKEM768:X25519"
     assert curl.options[CurlOpt.TLS_KEY_SHARES_LIMIT] == 2
     assert CurlOpt.TLS_EXTENSION_ORDER not in curl.options
+    toggle_extensions_by_ids.assert_called_once_with(curl, {0, 10, 13})
     assert curl.options[CurlOpt.HTTP3_SETTINGS] == "1:2"
     assert curl.options[CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER] == "masp"
     assert curl.options[CurlOpt.HTTP3_SIG_HASH_ALGS] == "rsa_pss_rsae_sha256"
-    assert CurlOpt.HTTP3_TLS_EXTENSION_ORDER not in curl.options
+    assert curl.options[CurlOpt.HTTP3_TLS_EXTENSION_ORDER] == "0-10-13"
     assert curl.options[CurlOpt.QUIC_TRANSPORT_PARAMETERS] == "3:4"
     assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "user-agent,accept"
     assert curl.options[CurlOpt.HTTPHEADER] == [
@@ -207,8 +213,11 @@ def test_apply_fingerprint_uses_http3_branch_when_http3_is_requested():
     fingerprint = Fingerprint(
         http2={
             "settings": "1:65536",
-            "header_order": "user-agent,accept",
-            "headers": {"user-agent": "h2-agent", "accept": "*/*"},
+            "header_order": ["user-agent", "accept"],
+            "headers": [
+                {"name": "user-agent", "value": "h2-agent"},
+                {"name": "accept", "value": "*/*"},
+            ],
         },
         http3={
             "settings": "1:2",

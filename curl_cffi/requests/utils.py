@@ -358,8 +358,6 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.SSLVERSION, fp.tls_min_version | CurlSslVersion.MAX_DEFAULT)
     if fp.tls_grease is not None:
         curl.setopt(CurlOpt.TLS_GREASE, int(fp.tls_grease))
-    if fp.tls_permute_extensions is not None:
-        curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
     if fp.tls_cert_compression is not None:
         curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, fp.tls_cert_compression)
     if fp.http2_stream_weight is not None:
@@ -380,8 +378,10 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.SPLIT_COOKIES, fp.split_cookies)
     if fp.http3_sig_hash_algs is not None:
         curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.http3_sig_hash_algs)
-    if fp.http3_tls_extension_order is not None and not fp.tls_permute_extensions:
+    if fp.http3_tls_extension_order is not None:
         curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fp.http3_tls_extension_order)
+    if fp.tls_permute_extensions is not None:
+        curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(fp.tls_permute_extensions))
 
 
 def _normalize_tls_version(version: str) -> CurlSslVersion:
@@ -465,13 +465,13 @@ def _apply_fingerprint(
     if active_tls.ciphers:
         curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(active_tls.ciphers))
 
-    # set the http2 extension order
+    # set extension order before enabling permutation
     if active_tls.extension_order:
         tls_extension_order = _strip_padding_extension(active_tls.extension_order)
         extension_ids = set(int(e) for e in tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
         if http3_enabled:
-            curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, active_tls.extension_order)
+            curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, tls_extension_order)
         else:
             curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
 
@@ -496,7 +496,9 @@ def _apply_fingerprint(
         curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, active_tls.key_shares_limit)
 
     if active_tls.cert_compression:
-        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, ",".join(active_tls.cert_compression))
+        curl.setopt(
+            CurlOpt.SSL_CERT_COMPRESSION, ",".join(active_tls.cert_compression)
+        )
     else:
         curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
 
@@ -581,7 +583,9 @@ def _apply_fingerprint(
     # default headers will not override user-defined headers
     if default_headers and active_http.headers:
         header_lines = []
-        for key, value in active_http.headers.items():
+        for header in active_http.headers:
+            key = header["name"]
+            value = header["value"]
             normalized = key.lower()
             if normalized in existing_header_names:
                 continue
@@ -928,9 +932,6 @@ def set_curl_options(
                     default_headers,
                     http_version=http_version,
                 )
-
-        if http_version:
-            c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
     # ja3 string
     if ja3:

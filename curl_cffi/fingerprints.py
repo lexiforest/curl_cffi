@@ -389,8 +389,8 @@ class Http2Fingerprint:
     tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
     settings: str = ""
     pseudo_headers_order: str = ""
-    header_order: str | list[str] = ""
-    headers: dict[str, str] | list[object] = field(default_factory=dict)
+    header_order: list[str] = field(default_factory=list)
+    headers: list[dict[str, str]] = field(default_factory=list)
     header_lang: str = ""
     window_update: int = 0
     stream_weight: int | None = None
@@ -404,8 +404,6 @@ class Http2Fingerprint:
     def __post_init__(self):
         if isinstance(self.tls, dict):
             self.tls = _filter_dataclass(TlsFingerprint, self.tls)
-        self.headers = _normalize_headers(self.headers)
-        self.header_order = _normalize_header_order(self.header_order)
 
 
 @dataclass
@@ -413,8 +411,8 @@ class Http3Fingerprint:
     tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
     settings: str = ""
     pseudo_headers_order: str = ""
-    header_order: str | list[str] = ""
-    headers: dict[str, str] | list[object] = field(default_factory=dict)
+    header_order: list[str] = field(default_factory=list)
+    headers: list[dict[str, str]] = field(default_factory=list)
     header_lang: str = ""
     quic_transport_parameters: str = ""
     split_cookies: bool = False
@@ -423,42 +421,11 @@ class Http3Fingerprint:
     def __post_init__(self):
         if isinstance(self.tls, dict):
             self.tls = _filter_dataclass(TlsFingerprint, self.tls)
-        self.headers = _normalize_headers(self.headers)
-        self.header_order = _normalize_header_order(self.header_order)
 
 
 def _filter_dataclass(cls, value: dict[str, object]):
     allowed = {item.name for item in fields(cls)}
     return cls(**{k: v for k, v in value.items() if k in allowed})
-
-
-def _normalize_header_order(value: str | list[str]) -> str:
-    if isinstance(value, list):
-        return ",".join(value)
-    return value
-
-
-def _normalize_headers(value: dict[str, str] | list[object]) -> dict[str, str]:
-    if isinstance(value, dict):
-        return value
-
-    headers = {}
-    for item in value:
-        if isinstance(item, dict):
-            name = item.get("name", item.get("key"))
-            header_value = item.get("value")
-        elif isinstance(item, (list, tuple)) and len(item) >= 2:
-            name, header_value = item[0], item[1]
-        elif isinstance(item, str) and ":" in item:
-            name, header_value = item.split(":", 1)
-            header_value = header_value.lstrip()
-        else:
-            continue
-
-        if isinstance(name, str) and isinstance(header_value, str):
-            headers[name] = header_value
-
-    return headers
 
 
 LEGACY_FINGERPRINT_FIELDS = {
@@ -673,10 +640,8 @@ class Fingerprint:
             _set_if_present(
                 tls, "permute_extensions", legacy, "tls_permute_extensions", bool
             )
-            _set_if_present(http, "headers", legacy, "headers", _normalize_headers)
-            _set_if_present(
-                http, "header_order", legacy, "header_order", _normalize_header_order
-            )
+            _set_if_present(http, "headers", legacy, "headers")
+            _set_if_present(http, "header_order", legacy, "header_order")
             _set_if_present(http, "header_lang", legacy, "header_lang")
 
         _set_if_present(
@@ -734,10 +699,8 @@ class Fingerprint:
     tls_signed_cert_timestamps = _legacy_property("http2.tls.signed_cert_timestamps")
     tls_ech = _legacy_property("http2.tls.ech")
     tls_permute_extensions = _legacy_property("http2.tls.permute_extensions")
-    headers = _legacy_property("http2.headers", setter_transform=_normalize_headers)
-    header_order = _legacy_property(
-        "http2.header_order", setter_transform=_normalize_header_order
-    )
+    headers = _legacy_property("http2.headers")
+    header_order = _legacy_property("http2.header_order")
     header_lang = _legacy_property("http2.header_lang")
     split_cookies = _legacy_property("http2.split_cookies")
     form_boundary = _legacy_property("http2.form_boundary")

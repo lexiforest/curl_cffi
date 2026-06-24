@@ -130,10 +130,10 @@ def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
         json.dumps(
             {
                 "edge_146_macos_26": {
-                    "headers": {
-                        "User-Agent": "fingerprint-ua",
-                        "Accept": "text/html",
-                    }
+                    "headers": [
+                        {"name": "User-Agent", "value": "fingerprint-ua"},
+                        {"name": "Accept", "value": "text/html"},
+                    ]
                 }
             }
         )
@@ -141,11 +141,11 @@ def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
 
     fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
 
-    assert fingerprint.headers["User-Agent"] == "fingerprint-ua"
-    fingerprint.headers["User-Agent"] = "custom-ua"
-    assert fingerprint.headers["User-Agent"] == "custom-ua"
-    assert FingerprintManager.get_fingerprint("edge_146_macos_26").headers[
-        "User-Agent"
+    assert fingerprint.headers[0]["value"] == "fingerprint-ua"
+    fingerprint.headers[0]["value"] = "custom-ua"
+    assert fingerprint.headers[0]["value"] == "custom-ua"
+    assert FingerprintManager.get_fingerprint("edge_146_macos_26").headers[0][
+        "value"
     ] == ("fingerprint-ua")
 
 
@@ -153,7 +153,7 @@ def test_legacy_fingerprint_fields_are_nested_aliases():
     fingerprint = Fingerprint(
         tls_version="1.3",
         tls_ciphers=["TLS_AES_128_GCM_SHA256"],
-        headers={"User-Agent": "test-agent"},
+        headers=[{"name": "User-Agent", "value": "test-agent"}],
         http2_settings="1:65536",
         http3_settings="1:2",
     )
@@ -161,8 +161,8 @@ def test_legacy_fingerprint_fields_are_nested_aliases():
     assert fingerprint.http2.tls.version == "1.3"
     assert fingerprint.http3.tls.version == "1.3"
     assert fingerprint.tls_version == "1.3"
-    assert fingerprint.http2.headers == {"User-Agent": "test-agent"}
-    assert fingerprint.http3.headers == {"User-Agent": "test-agent"}
+    assert fingerprint.http2.headers == [{"name": "User-Agent", "value": "test-agent"}]
+    assert fingerprint.http3.headers == [{"name": "User-Agent", "value": "test-agent"}]
     assert fingerprint.http2.settings == "1:65536"
     assert fingerprint.http3.settings == "1:2"
 
@@ -235,8 +235,8 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
                             "pseudo_headers_order": "m,a,s,p",
                             "header_order": ["user-agent", "priority"],
                             "headers": [
-                                ["priority", "u=1, i"],
-                                ["user-agent", "test-agent"],
+                                {"name": "priority", "value": "u=1, i"},
+                                {"name": "user-agent", "value": "test-agent"},
                             ],
                             "header_lang": "en-US,en;q=0.9",
                             "quic_transport_parameters": "3:4",
@@ -271,11 +271,11 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     assert fingerprint.http2.tls.key_shares_limit == 1
     assert fingerprint.http2.settings == "1:65536"
     assert fingerprint.http2.pseudo_headers_order == "masp"
-    assert fingerprint.http2.header_order == "user-agent,accept"
-    assert fingerprint.http2.headers == {
-        "accept": "*/*",
-        "user-agent": "test-agent",
-    }
+    assert fingerprint.http2.header_order == ["user-agent", "accept"]
+    assert fingerprint.http2.headers == [
+        {"name": "accept", "value": "*/*"},
+        {"name": "user-agent", "value": "test-agent"},
+    ]
     assert fingerprint.http2.header_lang == "en-US,en;q=0.9"
     assert fingerprint.http2.window_update == 15663105
     assert fingerprint.http2.stream_weight == 220
@@ -295,11 +295,11 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     assert fingerprint.http3.tls.key_shares_limit == 2
     assert fingerprint.http3.settings == "1:2"
     assert fingerprint.http3.pseudo_headers_order == "m,a,s,p"
-    assert fingerprint.http3.header_order == "user-agent,priority"
-    assert fingerprint.http3.headers == {
-        "priority": "u=1, i",
-        "user-agent": "test-agent",
-    }
+    assert fingerprint.http3.header_order == ["user-agent", "priority"]
+    assert fingerprint.http3.headers == [
+        {"name": "priority", "value": "u=1, i"},
+        {"name": "user-agent", "value": "test-agent"},
+    ]
     assert fingerprint.http3.header_lang == "en-US,en;q=0.9"
     assert fingerprint.http3.quic_transport_parameters == "3:4"
     assert fingerprint.http3.split_cookies is True
@@ -344,7 +344,7 @@ def test_load_fingerprints_prefers_v2_cache_when_present(monkeypatch, tmp_path):
             {
                 "legacy_only": {
                     "client": "legacy",
-                    "headers": {"User-Agent": "legacy-agent"},
+                    "headers": [{"name": "User-Agent", "value": "legacy-agent"}],
                 }
             }
         )
@@ -357,7 +357,9 @@ def test_load_fingerprints_prefers_v2_cache_when_present(monkeypatch, tmp_path):
                     "v2_only": {
                         "client": "v2",
                         "http2": {
-                            "headers": {"User-Agent": "v2-agent"},
+                            "headers": [
+                                {"name": "User-Agent", "value": "v2-agent"}
+                            ],
                         },
                     }
                 },
@@ -411,4 +413,4 @@ def test_get_fingerprint_returns_native_target_copy(monkeypatch, tmp_path):
     fingerprint = curl_cffi.get_fingerprint("chrome120")
 
     assert fingerprint.client == "chrome"
-    assert fingerprint.headers == {}
+    assert fingerprint.headers == []
