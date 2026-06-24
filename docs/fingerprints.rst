@@ -113,8 +113,8 @@ Files stored there:
 Environment overrides:
 
 - ``IMPERSONATE_API_KEY``: override the API key loaded from ``config.json``.
-- ``IMPERSONATE_API_VERSION``: choose ``1``/``v1`` or ``2``/``v2`` for
-  fingerprint updates. Defaults to ``v2``.
+- ``IMPERSONATE_API_VERSION``: choose ``v1`` or ``v2`` for fingerprint updates.
+  Defaults to ``v2``.
 - ``IMPERSONATE_API_ROOT``: override the full API endpoint used by
   fingerprint updates. This takes precedence over ``IMPERSONATE_API_VERSION``.
 - ``IMPERSONATE_CONFIG_DIR``: override the config/cache directory.

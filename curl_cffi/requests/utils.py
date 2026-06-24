@@ -502,12 +502,7 @@ def _apply_fingerprint(
     else:
         curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
 
-    if active_tls.sig_hash_algs:
-        if http3_enabled:
-            curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, active_tls.sig_hash_algs)
-        else:
-            curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, active_tls.sig_hash_algs)
-    elif active_tls.signature_hashes:
+    if active_tls.signature_hashes:
         if http3_enabled:
             curl.setopt(
                 CurlOpt.HTTP3_SIG_HASH_ALGS, ",".join(active_tls.signature_hashes)

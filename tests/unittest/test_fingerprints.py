@@ -11,6 +11,7 @@ from curl_cffi.fingerprints import (
     FingerprintManager,
     _get_default_config_dir,
 )
+from curl_cffi.utils import CurlCffiWarning
 
 
 @pytest.fixture(autouse=True)
@@ -74,7 +75,7 @@ def test_get_api_root_defaults_to_v2(monkeypatch):
     assert FingerprintManager.get_api_root() == API_ROOT_V2
 
 
-@pytest.mark.parametrize("api_version", ["1", "v1", "V1"])
+@pytest.mark.parametrize("api_version", ["v1", "V1"])
 def test_get_api_root_uses_v1_version_override(monkeypatch, api_version):
     monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
     monkeypatch.setenv("IMPERSONATE_API_VERSION", api_version)
@@ -82,7 +83,7 @@ def test_get_api_root_uses_v1_version_override(monkeypatch, api_version):
     assert FingerprintManager.get_api_root() == API_ROOT_V1
 
 
-@pytest.mark.parametrize("api_version", ["2", "v2", "V2"])
+@pytest.mark.parametrize("api_version", ["v2", "V2"])
 def test_get_api_root_uses_v2_version_override(monkeypatch, api_version):
     monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
     monkeypatch.setenv("IMPERSONATE_API_VERSION", api_version)
@@ -92,14 +93,15 @@ def test_get_api_root_uses_v2_version_override(monkeypatch, api_version):
 
 def test_get_api_root_prefers_explicit_root_over_version(monkeypatch):
     monkeypatch.setenv("IMPERSONATE_API_ROOT", "https://api.test/custom")
-    monkeypatch.setenv("IMPERSONATE_API_VERSION", "1")
+    monkeypatch.setenv("IMPERSONATE_API_VERSION", "v1")
 
     assert FingerprintManager.get_api_root() == "https://api.test/custom"
 
 
-def test_get_api_root_rejects_invalid_version(monkeypatch):
+@pytest.mark.parametrize("api_version", ["1", "2", "3"])
+def test_get_api_root_rejects_invalid_version(monkeypatch, api_version):
     monkeypatch.delenv("IMPERSONATE_API_ROOT", raising=False)
-    monkeypatch.setenv("IMPERSONATE_API_VERSION", "3")
+    monkeypatch.setenv("IMPERSONATE_API_VERSION", api_version)
 
     with pytest.raises(ValueError, match="IMPERSONATE_API_VERSION"):
         FingerprintManager.get_api_root()
@@ -141,10 +143,10 @@ def test_get_fingerprint_returns_editable_copy(monkeypatch, tmp_path):
 
     fingerprint = curl_cffi.get_fingerprint("edge_146_macos_26")
 
-    assert fingerprint.headers[0]["value"] == "fingerprint-ua"
-    fingerprint.headers[0]["value"] = "custom-ua"
-    assert fingerprint.headers[0]["value"] == "custom-ua"
-    assert FingerprintManager.get_fingerprint("edge_146_macos_26").headers[0][
+    assert fingerprint.http2.headers[0]["value"] == "fingerprint-ua"
+    fingerprint.http2.headers[0]["value"] = "custom-ua"
+    assert fingerprint.http2.headers[0]["value"] == "custom-ua"
+    assert FingerprintManager.get_fingerprint("edge_146_macos_26").http2.headers[0][
         "value"
     ] == ("fingerprint-ua")
 
@@ -153,25 +155,33 @@ def test_legacy_fingerprint_fields_are_nested_aliases():
     fingerprint = Fingerprint(
         tls_version="1.3",
         tls_ciphers=["TLS_AES_128_GCM_SHA256"],
-        headers=[{"name": "User-Agent", "value": "test-agent"}],
+        headers={"User-Agent": "test-agent"},
         http2_settings="1:65536",
         http3_settings="1:2",
     )
 
     assert fingerprint.http2.tls.version == "1.3"
     assert fingerprint.http3.tls.version == "1.3"
-    assert fingerprint.tls_version == "1.3"
     assert fingerprint.http2.headers == [{"name": "User-Agent", "value": "test-agent"}]
     assert fingerprint.http3.headers == [{"name": "User-Agent", "value": "test-agent"}]
     assert fingerprint.http2.settings == "1:65536"
     assert fingerprint.http3.settings == "1:2"
 
-    fingerprint.tls_version = "1.2"
-    fingerprint.http2_settings = "1:1"
+    with pytest.warns(CurlCffiWarning, match="fingerprint.http2.tls.version"):
+        assert fingerprint.tls_version == "1.3"
+    with pytest.warns(CurlCffiWarning, match="fingerprint.http2.headers"):
+        assert fingerprint.headers == {"User-Agent": "test-agent"}
+    with pytest.warns(CurlCffiWarning, match="fingerprint.http2.tls.version"):
+        fingerprint.tls_version = "1.2"
+    with pytest.warns(CurlCffiWarning, match="fingerprint.http2.settings"):
+        fingerprint.http2_settings = "1:1"
+    with pytest.warns(CurlCffiWarning, match="fingerprint.http2.headers"):
+        fingerprint.headers = {"Accept": "text/html"}
 
     assert fingerprint.http2.tls.version == "1.2"
     assert fingerprint.http3.tls.version == "1.3"
     assert fingerprint.http2.settings == "1:1"
+    assert fingerprint.http2.headers == [{"name": "Accept", "value": "text/html"}]
 
 
 def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_path):
@@ -200,7 +210,6 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
                                 "ech": "true",
                                 "permute_extensions": True,
                                 "signature_hashes": ["ecdsa_secp256r1_sha256"],
-                                "sig_hash_algs": "ecdsa_secp256r1_sha256",
                                 "supported_groups": ["X25519", "P-256"],
                                 "key_shares_limit": 1,
                             },
@@ -227,7 +236,6 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
                                 "ciphers": ["TLS_AES_256_GCM_SHA384"],
                                 "extension_order": "0-10-13",
                                 "signature_hashes": ["rsa_pss_rsae_sha256"],
-                                "sig_hash_algs": "rsa_pss_rsae_sha256",
                                 "supported_groups": ["X25519MLKEM768", "X25519"],
                                 "key_shares_limit": 2,
                             },
@@ -266,7 +274,6 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     assert fingerprint.http2.tls.ech == "true"
     assert fingerprint.http2.tls.permute_extensions is True
     assert fingerprint.http2.tls.signature_hashes == ["ecdsa_secp256r1_sha256"]
-    assert fingerprint.http2.tls.sig_hash_algs == "ecdsa_secp256r1_sha256"
     assert fingerprint.http2.tls.supported_groups == ["X25519", "P-256"]
     assert fingerprint.http2.tls.key_shares_limit == 1
     assert fingerprint.http2.settings == "1:65536"
@@ -290,7 +297,6 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     assert fingerprint.http3.tls.ciphers == ["TLS_AES_256_GCM_SHA384"]
     assert fingerprint.http3.tls.extension_order == "0-10-13"
     assert fingerprint.http3.tls.signature_hashes == ["rsa_pss_rsae_sha256"]
-    assert fingerprint.http3.tls.sig_hash_algs == "rsa_pss_rsae_sha256"
     assert fingerprint.http3.tls.supported_groups == ["X25519MLKEM768", "X25519"]
     assert fingerprint.http3.tls.key_shares_limit == 2
     assert fingerprint.http3.settings == "1:2"
@@ -305,34 +311,35 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     assert fingerprint.http3.split_cookies is True
     assert fingerprint.http3.form_boundary == "webkit-h3"
 
-    assert fingerprint.tls_version == "1.3"
-    assert fingerprint.tls_ciphers == ["TLS_AES_128_GCM_SHA256"]
-    assert fingerprint.tls_alpn is True
-    assert fingerprint.tls_alps is True
-    assert fingerprint.tls_cert_compression == ["brotli"]
-    assert fingerprint.tls_session_ticket is True
-    assert fingerprint.tls_extension_order == "0-11-10"
-    assert fingerprint.tls_delegated_credentials == ["ecdsa_secp256r1_sha256"]
-    assert fingerprint.tls_record_size_limit == 4001
-    assert fingerprint.tls_grease is True
-    assert fingerprint.tls_use_new_alps_codepoint is True
-    assert fingerprint.tls_signed_cert_timestamps is True
-    assert fingerprint.tls_ech == "true"
-    assert fingerprint.tls_permute_extensions is True
-    assert fingerprint.tls_signature_hashes == ["ecdsa_secp256r1_sha256"]
-    assert fingerprint.tls_supported_groups == ["X25519", "P-256"]
-    assert fingerprint.http2_settings == "1:65536"
-    assert fingerprint.http2_pseudo_headers_order == "masp"
-    assert fingerprint.header_lang == "en-US,en;q=0.9"
-    assert fingerprint.split_cookies is True
-    assert fingerprint.form_boundary == "webkit"
-    assert fingerprint.http2_window_update == 15663105
-    assert fingerprint.http2_stream_weight == 220
-    assert fingerprint.http2_stream_exclusive == 1
-    assert fingerprint.http3_settings == "1:2"
-    assert fingerprint.http3_pseudo_headers_order == "m,a,s,p"
-    assert fingerprint.http3_sig_hash_algs == "rsa_pss_rsae_sha256"
-    assert fingerprint.http3_tls_extension_order == "0-10-13"
+    with pytest.warns(CurlCffiWarning):
+        assert fingerprint.tls_version == "1.3"
+        assert fingerprint.tls_ciphers == ["TLS_AES_128_GCM_SHA256"]
+        assert fingerprint.tls_alpn is True
+        assert fingerprint.tls_alps is True
+        assert fingerprint.tls_cert_compression == ["brotli"]
+        assert fingerprint.tls_session_ticket is True
+        assert fingerprint.tls_extension_order == "0-11-10"
+        assert fingerprint.tls_delegated_credentials == ["ecdsa_secp256r1_sha256"]
+        assert fingerprint.tls_record_size_limit == 4001
+        assert fingerprint.tls_grease is True
+        assert fingerprint.tls_use_new_alps_codepoint is True
+        assert fingerprint.tls_signed_cert_timestamps is True
+        assert fingerprint.tls_ech == "true"
+        assert fingerprint.tls_permute_extensions is True
+        assert fingerprint.tls_signature_hashes == ["ecdsa_secp256r1_sha256"]
+        assert fingerprint.tls_supported_groups == ["X25519", "P-256"]
+        assert fingerprint.http2_settings == "1:65536"
+        assert fingerprint.http2_pseudo_headers_order == "masp"
+        assert fingerprint.header_lang == "en-US,en;q=0.9"
+        assert fingerprint.split_cookies is True
+        assert fingerprint.form_boundary == "webkit"
+        assert fingerprint.http2_window_update == 15663105
+        assert fingerprint.http2_stream_weight == 220
+        assert fingerprint.http2_stream_exclusive == 1
+        assert fingerprint.http3_settings == "1:2"
+        assert fingerprint.http3_pseudo_headers_order == "m,a,s,p"
+        assert fingerprint.http3_sig_hash_algs == "rsa_pss_rsae_sha256"
+        assert fingerprint.http3_tls_extension_order == "0-10-13"
 
 
 def test_load_fingerprints_prefers_v2_cache_when_present(monkeypatch, tmp_path):
@@ -395,7 +402,7 @@ def test_get_fingerprint_maps_legacy_http3_fields(monkeypatch, tmp_path):
     assert fingerprint.http3.tls.version == ""
     assert fingerprint.http3.settings == "1:2"
     assert fingerprint.http3.pseudo_headers_order == "m,a,s,p"
-    assert fingerprint.http3.tls.sig_hash_algs == "rsa_pss_rsae_sha256"
+    assert fingerprint.http3.tls.signature_hashes == ["rsa_pss_rsae_sha256"]
     assert fingerprint.http3.tls.extension_order == "0-10-13"
     assert fingerprint.http3.quic_transport_parameters == "3:4"
 
@@ -413,4 +420,4 @@ def test_get_fingerprint_returns_native_target_copy(monkeypatch, tmp_path):
     fingerprint = curl_cffi.get_fingerprint("chrome120")
 
     assert fingerprint.client == "chrome"
-    assert fingerprint.headers == []
+    assert fingerprint.http2.headers == []

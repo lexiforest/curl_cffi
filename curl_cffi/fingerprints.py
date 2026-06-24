@@ -1,7 +1,8 @@
 import json
 import os
+import warnings
 from copy import deepcopy
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cache
 from io import BytesIO
@@ -10,6 +11,7 @@ from urllib.parse import urlencode
 
 from .const import CurlInfo, CurlOpt
 from .curl import Curl, CurlError
+from .utils import CurlCffiWarning
 
 __all__ = [
     "Fingerprint",
@@ -379,14 +381,13 @@ class TlsFingerprint:
     ech: str | None = None
     permute_extensions: bool = False
     signature_hashes: list[str] = field(default_factory=list)
-    sig_hash_algs: str = ""
     supported_groups: list[str] = field(default_factory=list)
     key_shares_limit: int | None = None
 
 
 @dataclass
 class Http2Fingerprint:
-    tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
+    tls: TlsFingerprint = field(default_factory=TlsFingerprint)
     settings: str = ""
     pseudo_headers_order: str = ""
     header_order: list[str] = field(default_factory=list)
@@ -403,12 +404,12 @@ class Http2Fingerprint:
 
     def __post_init__(self):
         if isinstance(self.tls, dict):
-            self.tls = _filter_dataclass(TlsFingerprint, self.tls)
+            self.tls = TlsFingerprint(**self.tls)
 
 
 @dataclass
 class Http3Fingerprint:
-    tls: TlsFingerprint | dict[str, object] = field(default_factory=TlsFingerprint)
+    tls: TlsFingerprint = field(default_factory=TlsFingerprint)
     settings: str = ""
     pseudo_headers_order: str = ""
     header_order: list[str] = field(default_factory=list)
@@ -420,12 +421,7 @@ class Http3Fingerprint:
 
     def __post_init__(self):
         if isinstance(self.tls, dict):
-            self.tls = _filter_dataclass(TlsFingerprint, self.tls)
-
-
-def _filter_dataclass(cls, value: dict[str, object]):
-    allowed = {item.name for item in fields(cls)}
-    return cls(**{k: v for k, v in value.items() if k in allowed})
+            self.tls = TlsFingerprint(**self.tls)
 
 
 LEGACY_FINGERPRINT_FIELDS = {
@@ -472,6 +468,26 @@ def _identity(value):
     return value
 
 
+def _headers_to_v2(headers):
+    if isinstance(headers, dict):
+        return [{"name": name, "value": value} for name, value in headers.items()]
+    return headers
+
+
+def _headers_to_v1(headers):
+    return {header["name"]: header["value"] for header in headers}
+
+
+def _sig_hash_algs_to_signature_hashes(value):
+    if isinstance(value, str):
+        return value.split(",") if value else []
+    return value
+
+
+def _signature_hashes_to_sig_hash_algs(value):
+    return ",".join(value)
+
+
 def _set_if_present(
     target: object,
     attr: str,
@@ -496,22 +512,35 @@ def _set_if_none(
         setattr(target, attr, transform(value))
 
 
-def _legacy_property(
+def _legacy_field_proxy(
     path: str,
     none_default: object = _MISSING,
+    getter_transform=_identity,
     setter_transform=_identity,
 ) -> property:
     attrs = path.split(".")
 
+    def warn():
+        warnings.warn(
+            (
+                "The legacy flat Fingerprint field is deprecated; "
+                f"use `fingerprint.{path}` instead."
+            ),
+            CurlCffiWarning,
+            stacklevel=3,
+        )
+
     def getter(self):
+        warn()
         value = self
         for attr in attrs:
             value = getattr(value, attr)
         if value is None and none_default is not _MISSING:
             return none_default
-        return value
+        return getter_transform(value)
 
     def setter(self, value):
+        warn()
         target = self
         for attr in attrs[:-1]:
             target = getattr(target, attr)
@@ -526,12 +555,8 @@ class Fingerprint:
     client_version: str = ""
     os: str = ""
     os_version: str = ""
-    http2: Http2Fingerprint | dict[str, object] = field(
-        default_factory=Http2Fingerprint
-    )
-    http3: Http3Fingerprint | dict[str, object] = field(
-        default_factory=Http3Fingerprint
-    )
+    http2: Http2Fingerprint = field(default_factory=Http2Fingerprint)
+    http3: Http3Fingerprint = field(default_factory=Http3Fingerprint)
 
     def __init__(
         self,
@@ -556,20 +581,6 @@ class Fingerprint:
         self.http3 = self._coerce_http3(http3)
         self._apply_legacy_fields(legacy)
 
-    @classmethod
-    def from_dict(cls, value: dict[str, object]) -> "Fingerprint":
-        if "http2" in value or "http3" in value:
-            return cls.from_v2_dict(value)
-        return cls.from_legacy_dict(value)
-
-    @classmethod
-    def from_v2_dict(cls, value: dict[str, object]) -> "Fingerprint":
-        return cls(**cls._filter_input_dict(value))
-
-    @classmethod
-    def from_legacy_dict(cls, value: dict[str, object]) -> "Fingerprint":
-        return cls(**cls._filter_input_dict(value))
-
     @staticmethod
     def _filter_input_dict(value: dict[str, object]) -> dict[str, object]:
         allowed = {
@@ -584,19 +595,23 @@ class Fingerprint:
         return {key: item for key, item in value.items() if key in allowed}
 
     @staticmethod
-    def _coerce_http2(value: Http2Fingerprint | dict[str, object] | None):
+    def _coerce_http2(
+        value: Http2Fingerprint | dict[str, object] | None,
+    ) -> Http2Fingerprint:
         if value is None:
             return Http2Fingerprint()
         if isinstance(value, dict):
-            return _filter_dataclass(Http2Fingerprint, value)
+            return Http2Fingerprint(**value)
         return value
 
     @staticmethod
-    def _coerce_http3(value: Http3Fingerprint | dict[str, object] | None):
+    def _coerce_http3(
+        value: Http3Fingerprint | dict[str, object] | None,
+    ) -> Http3Fingerprint:
         if value is None:
             return Http3Fingerprint()
         if isinstance(value, dict):
-            return _filter_dataclass(Http3Fingerprint, value)
+            return Http3Fingerprint(**value)
         return value
 
     def _apply_legacy_fields(self, legacy: dict[str, object]) -> None:
@@ -640,7 +655,7 @@ class Fingerprint:
             _set_if_present(
                 tls, "permute_extensions", legacy, "tls_permute_extensions", bool
             )
-            _set_if_present(http, "headers", legacy, "headers")
+            _set_if_present(http, "headers", legacy, "headers", _headers_to_v2)
             _set_if_present(http, "header_order", legacy, "header_order")
             _set_if_present(http, "header_lang", legacy, "header_lang")
 
@@ -667,7 +682,13 @@ class Fingerprint:
             legacy,
             "http3_tls_extension_order",
         )
-        _set_if_present(self.http3.tls, "sig_hash_algs", legacy, "http3_sig_hash_algs")
+        _set_if_present(
+            self.http3.tls,
+            "signature_hashes",
+            legacy,
+            "http3_sig_hash_algs",
+            _sig_hash_algs_to_signature_hashes,
+        )
         _set_if_present(self.http3, "settings", legacy, "http3_settings")
         _set_if_present(
             self.http3,
@@ -682,39 +703,47 @@ class Fingerprint:
             "quic_transport_parameters",
         )
 
-    tls_version = _legacy_property("http2.tls.version")
-    tls_ciphers = _legacy_property("http2.tls.ciphers")
-    tls_alpn = _legacy_property("http2.tls.alpn")
-    tls_alps = _legacy_property("http2.tls.alps")
-    tls_cert_compression = _legacy_property("http2.tls.cert_compression")
-    tls_signature_hashes = _legacy_property("http2.tls.signature_hashes")
-    tls_key_shares_limit = _legacy_property("http2.tls.key_shares_limit", 0)
-    tls_supported_groups = _legacy_property("http2.tls.supported_groups")
-    tls_session_ticket = _legacy_property("http2.tls.session_ticket")
-    tls_extension_order = _legacy_property("http2.tls.extension_order")
-    tls_delegated_credentials = _legacy_property("http2.tls.delegated_credentials")
-    tls_record_size_limit = _legacy_property("http2.tls.record_size_limit")
-    tls_grease = _legacy_property("http2.tls.grease")
-    tls_use_new_alps_codepoint = _legacy_property("http2.tls.use_new_alps_codepoint")
-    tls_signed_cert_timestamps = _legacy_property("http2.tls.signed_cert_timestamps")
-    tls_ech = _legacy_property("http2.tls.ech")
-    tls_permute_extensions = _legacy_property("http2.tls.permute_extensions")
-    headers = _legacy_property("http2.headers")
-    header_order = _legacy_property("http2.header_order")
-    header_lang = _legacy_property("http2.header_lang")
-    split_cookies = _legacy_property("http2.split_cookies")
-    form_boundary = _legacy_property("http2.form_boundary")
-    http2_settings = _legacy_property("http2.settings")
-    http2_window_update = _legacy_property("http2.window_update")
-    http2_pseudo_headers_order = _legacy_property("http2.pseudo_headers_order")
-    http2_stream_weight = _legacy_property("http2.stream_weight")
-    http2_stream_exclusive = _legacy_property("http2.stream_exclusive")
-    http2_no_priority = _legacy_property("http2.no_priority")
-    http3_settings = _legacy_property("http3.settings")
-    http3_pseudo_headers_order = _legacy_property("http3.pseudo_headers_order")
-    http3_sig_hash_algs = _legacy_property("http3.tls.sig_hash_algs")
-    http3_tls_extension_order = _legacy_property("http3.tls.extension_order")
-    quic_transport_parameters = _legacy_property("http3.quic_transport_parameters")
+    tls_version = _legacy_field_proxy("http2.tls.version")
+    tls_ciphers = _legacy_field_proxy("http2.tls.ciphers")
+    tls_alpn = _legacy_field_proxy("http2.tls.alpn")
+    tls_alps = _legacy_field_proxy("http2.tls.alps")
+    tls_cert_compression = _legacy_field_proxy("http2.tls.cert_compression")
+    tls_signature_hashes = _legacy_field_proxy("http2.tls.signature_hashes")
+    tls_key_shares_limit = _legacy_field_proxy("http2.tls.key_shares_limit", 0)
+    tls_supported_groups = _legacy_field_proxy("http2.tls.supported_groups")
+    tls_session_ticket = _legacy_field_proxy("http2.tls.session_ticket")
+    tls_extension_order = _legacy_field_proxy("http2.tls.extension_order")
+    tls_delegated_credentials = _legacy_field_proxy("http2.tls.delegated_credentials")
+    tls_record_size_limit = _legacy_field_proxy("http2.tls.record_size_limit")
+    tls_grease = _legacy_field_proxy("http2.tls.grease")
+    tls_use_new_alps_codepoint = _legacy_field_proxy("http2.tls.use_new_alps_codepoint")
+    tls_signed_cert_timestamps = _legacy_field_proxy("http2.tls.signed_cert_timestamps")
+    tls_ech = _legacy_field_proxy("http2.tls.ech")
+    tls_permute_extensions = _legacy_field_proxy("http2.tls.permute_extensions")
+    headers = _legacy_field_proxy(
+        "http2.headers",
+        getter_transform=_headers_to_v1,
+        setter_transform=_headers_to_v2,
+    )
+    header_order = _legacy_field_proxy("http2.header_order")
+    header_lang = _legacy_field_proxy("http2.header_lang")
+    split_cookies = _legacy_field_proxy("http2.split_cookies")
+    form_boundary = _legacy_field_proxy("http2.form_boundary")
+    http2_settings = _legacy_field_proxy("http2.settings")
+    http2_window_update = _legacy_field_proxy("http2.window_update")
+    http2_pseudo_headers_order = _legacy_field_proxy("http2.pseudo_headers_order")
+    http2_stream_weight = _legacy_field_proxy("http2.stream_weight")
+    http2_stream_exclusive = _legacy_field_proxy("http2.stream_exclusive")
+    http2_no_priority = _legacy_field_proxy("http2.no_priority")
+    http3_settings = _legacy_field_proxy("http3.settings")
+    http3_pseudo_headers_order = _legacy_field_proxy("http3.pseudo_headers_order")
+    http3_sig_hash_algs = _legacy_field_proxy(
+        "http3.tls.signature_hashes",
+        getter_transform=_signature_hashes_to_sig_hash_algs,
+        setter_transform=_sig_hash_algs_to_signature_hashes,
+    )
+    http3_tls_extension_order = _legacy_field_proxy("http3.tls.extension_order")
+    quic_transport_parameters = _legacy_field_proxy("http3.quic_transport_parameters")
 
 
 # fmt: off
@@ -762,10 +791,8 @@ class FingerprintManager:
     @staticmethod
     def _normalize_api_version(version: str) -> str:
         version = version.strip().lower()
-        if version.startswith("v"):
-            version = version[1:]
-        if version not in {"1", "2"}:
-            raise ValueError("IMPERSONATE_API_VERSION must be 1, v1, 2, or v2")
+        if version not in {"v1", "v2"}:
+            raise ValueError("IMPERSONATE_API_VERSION must be v1 or v2")
         return version
 
     @classmethod
@@ -777,7 +804,7 @@ class FingerprintManager:
         api_version = os.environ.get("IMPERSONATE_API_VERSION")
         if api_version:
             version = cls._normalize_api_version(api_version)
-            return API_ROOT_V1 if version == "1" else API_ROOT_V2
+            return API_ROOT_V1 if version == "v1" else API_ROOT_V2
 
         return DEFAULT_API_ROOT
 
@@ -956,7 +983,7 @@ class FingerprintManager:
         for key, value in payload.items():
             if not isinstance(value, dict):
                 continue
-            parsed[key] = Fingerprint.from_dict(value)
+            parsed[key] = Fingerprint(**Fingerprint._filter_input_dict(value))
         return parsed
 
     @classmethod
