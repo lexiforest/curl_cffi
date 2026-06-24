@@ -11,6 +11,8 @@ the WebSocket class across various scenarios including:
 - Callback-driven run_forever() architecture
 - Connection lifecycle management
 - Thread-safety of the C-layer SIMD state
+- High volume performance checks
+- Strict Protocol Spec Compliance
 """
 
 from __future__ import annotations
@@ -19,11 +21,13 @@ import asyncio
 import concurrent.futures
 import queue
 import threading
+import time
 import unittest.mock
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Literal
 from unittest.mock import Mock
 
 import pytest
@@ -303,6 +307,15 @@ class TestWebSocketBasicConnectivity:
             response: str = ws_connection.recv_str(timeout=5.0)
             assert response == msg
 
+    def test_invalid_socket_handle(self) -> None:
+        """Verifies that an uninitialized or broken libcurl socket throws correctly."""
+        mock_curl: Mock = Mock(spec=Curl)
+        mock_curl.getinfo.return_value = -1
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        with pytest.raises(WebSocketError) as exc:
+            _ = ws._get_sock_fd()
+        assert exc.value.code == CurlECode.NO_CONNECTION_AVAILABLE
+
 
 class TestWebSocketMessageTypes:
     def test_send_recv_binary(self, ws_connection: WebSocket) -> None:
@@ -402,6 +415,29 @@ class TestWebSocketTimeouts:
         _ = ws_connection.send_str("quick", timeout=2.0)
         response: str = ws_connection.recv_str(timeout=5.0)
         assert response == "quick"
+
+    def test_send_timeout_during_eagain_loop(self) -> None:
+        """Proves that a timeout properly fires even if stuck mid-EAGAIN loop."""
+        mock_curl: Mock = Mock(spec=Curl)
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws.closed = False
+        ws._sock_fd = 999
+        mock_selector: Mock = Mock()
+        ws._read_selector = mock_selector
+        ws._write_selector = mock_selector
+
+        # Raise EAGAIN every time
+        mock_curl.ws_send.side_effect = CurlError("EAGAIN", CurlECode.AGAIN)
+
+        # Let select mock simulate time passing beyond the timeout
+        def mock_select(timeout) -> Literal[False]:
+            time.sleep(0.06)  # Force clock advance past the 0.05 deadline
+            return False
+
+        mock_selector.select.side_effect = mock_select
+
+        with pytest.raises(WebSocketTimeout):
+            ws.send(b"data", timeout=0.05)
 
 
 class TestWebSocketEdgeCases:
@@ -574,6 +610,68 @@ class TestWebSocketRunForever:
         assert error_triggered
         assert close_code == WsCloseCode.MESSAGE_TOO_BIG
 
+    def test_run_forever_invalid_utf8_closes(self) -> None:
+        """Ensures bad UTF-8 data correctly triggers a protocol drop."""
+        mock_curl: Mock = Mock(spec=Curl)
+        ws: WebSocket = WebSocket(curl=mock_curl, skip_utf8_validation=False)
+        ws.closed = False
+        ws._sock_fd = 999
+        ws._read_selector = Mock()
+        ws._write_selector = Mock()
+
+        class MockFrameMeta:
+            def __init__(self) -> None:
+                self.flags = CurlWsFlag.TEXT
+                self.bytesleft = 0
+
+        # Simulate receiving invalid utf8
+        mock_curl.ws_recv.return_value = (b"\xff\xfe", MockFrameMeta())
+        mock_curl.ws_send.return_value = 0  # Dummy mock for the auto-close call
+
+        close_called = False
+
+        def on_close(w, code, reason) -> None:
+            nonlocal close_called
+            close_called = True
+            assert code == WsCloseCode.INVALID_DATA
+
+        ws._emitters["close"] = on_close
+        ws._emitters["message"] = lambda w, m: None
+
+        with pytest.raises(WebSocketError) as exc:
+            ws.run_forever()
+
+        assert exc.value.code == WsCloseCode.INVALID_DATA
+        assert close_called
+
+    def test_run_forever_exhausts_retries(self) -> None:
+        """Verifies that transient errors exceeding retry limits abort the loop."""
+        mock_curl: Mock = Mock(spec=Curl)
+        strategy: WebSocketRetryStrategy = WebSocketRetryStrategy(
+            retry=True, count=2, delay=0.001
+        )
+        ws: WebSocket = WebSocket(curl=mock_curl, ws_retry=strategy)
+        ws.closed = False
+        ws._sock_fd = 999
+        ws._read_selector = Mock()
+
+        mock_curl.ws_recv.side_effect = CurlError("SSL Error", CurlECode.RECV_ERROR)
+
+        error_called = False
+
+        def on_error(w, exc) -> None:
+            nonlocal error_called
+            error_called = True
+            assert isinstance(exc, CurlError)
+            assert exc.code == CurlECode.RECV_ERROR
+
+        ws._emitters["error"] = on_error
+
+        with pytest.raises(CurlError):
+            ws.run_forever()
+
+        assert error_called
+
 
 class TestWebSocketCloseAndState:
     def test_graceful_close(self, ws_connection: WebSocket) -> None:
@@ -682,6 +780,18 @@ class TestWebSocketCloseAndState:
         finally:
             ws.close()
 
+    def test_unpack_empty_close_frame(self) -> None:
+        ws: WebSocket = WebSocket(curl=Mock())
+        code, reason = ws._unpack_close_frame(b"")
+        assert code == WsCloseCode.UNKNOWN
+        assert reason == ""
+
+    def test_unpack_code_only_close_frame(self) -> None:
+        ws: WebSocket = WebSocket(curl=Mock())
+        code, reason = ws._unpack_close_frame(b"\x03\xe8")
+        assert code == WsCloseCode.OK
+        assert reason == ""
+
 
 class TestWebSocketIterator:
     def test_for_in_loop(
@@ -696,7 +806,6 @@ class TestWebSocketIterator:
         with session.ws_connect(configurable_ws_server.url) as ws:
             received: list[bytes] = []
 
-            # Simplified to cleanly break when we have the expected number of messages
             for msg in ws:
                 received.append(msg)
                 if len(received) == len(messages):
@@ -840,6 +949,35 @@ class TestWebSocketRobustness:
         assert data == b"Chunk 1 Chunk 2"
         assert flags == CurlWsFlag.TEXT
 
+    def test_abrupt_server_eof(self) -> None:
+        """Verifies that an abrupt TCP drop resolves as an ABNORMAL_CLOSURE."""
+        mock_curl: Mock = Mock(spec=Curl)
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws.closed = False
+        ws._sock_fd = 999
+        ws._read_selector = Mock()
+        mock_curl.ws_recv.side_effect = CurlError("EOF", CurlECode.GOT_NOTHING)
+
+        with pytest.raises(WebSocketClosed) as exc:
+            _ = ws.recv(timeout=1.0)
+        assert exc.value.code == WsCloseCode.ABNORMAL_CLOSURE
+
+    def test_send_write_stall_protection(self) -> None:
+        """Prevents infinite spin-loops if the OS buffer refuses to accept bytes."""
+        mock_curl: Mock = Mock(spec=Curl)
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws.closed = False
+        ws._sock_fd = 999
+        ws._read_selector = Mock()
+        ws._write_selector = Mock()
+        mock_curl.ws_send.return_value = 0  # 0 bytes sent repeatedly
+
+        with pytest.raises(WebSocketError) as exc:
+            _ = ws.send(b"data", timeout=1.0)
+
+        assert "Writer stalled" in str(exc.value)
+        assert exc.value.code == CurlECode.WRITE_ERROR
+
 
 class TestWebSocketSIMDEdgeCases:
     """Probes the C-layer SIMD / Scalar XOR boundary behavior via the API."""
@@ -974,3 +1112,15 @@ class TestWebSocketRetryStrategy:
         assert data == b"recovered_message"
         assert flags == CurlWsFlag.TEXT
         assert call_count == 3
+
+
+class TestWebSocketPerformance:
+    def test_high_volume_chatty_protocol(self, ws_connection: WebSocket) -> None:
+        """
+        Sends 2000 tiny frames to ensure the synchronous CFFI boundary remains
+        lightning fast and doesn't leak memory.
+        """
+        for _ in range(2000):
+            _ = ws_connection.send(b"K", timeout=1.0)
+            data, _ = ws_connection.recv(timeout=1.0)
+            assert data == b"K"
