@@ -21,6 +21,11 @@ __all__ = [
 
 FINGERPRINT_PAGE_LIMIT = 100
 FINGERPRINT_CACHE_VERSION = 2
+FINGERPRINT_METADATA_FIELDS = {
+    "source",
+    "http2_source_id",
+    "http3_source_id",
+}
 
 
 """
@@ -941,6 +946,9 @@ class FingerprintManager:
                         item.get("os_version"), str
                     ):
                         raw["os_version"] = item["os_version"]
+                    for key in FINGERPRINT_METADATA_FIELDS:
+                        if key not in raw and isinstance(item.get(key), str):
+                            raw[key] = item[key]
                     fingerprints[name] = raw
 
             pagination = data.get("pagination")

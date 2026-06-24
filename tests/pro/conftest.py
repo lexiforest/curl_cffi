@@ -199,6 +199,8 @@ def _build_v2_fingerprint_response() -> dict[str, Any]:
                 "os_version": "14.0",
                 "min_supported_version": "0.15.1",
                 "status": "pro",
+                "http2_source_id": f"http2-source-{100 + i}",
+                "http3_source_id": f"http3-source-{100 + i}",
                 "created_at": "2026-05-25T00:00:00.000Z",
                 "updated_at": "2026-05-25T00:00:00.000Z",
                 "fingerprint": fingerprint,
@@ -230,7 +232,28 @@ def get_v2_fingerprints() -> dict[str, Any]:
     return _build_v2_fingerprint_response()
 
 
-app = Litestar(route_handlers=[get_legacy_fingerprints, get_v2_fingerprints])
+@get("/raw/{source_id:str}", sync_to_thread=False)
+def get_raw_fingerprint(source_id: str) -> dict[str, Any]:
+    return {
+        "id": source_id,
+        "fingerprint": {
+            "tls": {
+                "ja3": "771,4865-4866,10-23-35,29-23,0",
+            },
+            "http2": {
+                "akamai_fingerprint_hash": source_id,
+            },
+        },
+    }
+
+
+app = Litestar(
+    route_handlers=[
+        get_legacy_fingerprints,
+        get_v2_fingerprints,
+        get_raw_fingerprint,
+    ]
+)
 
 
 @pytest.fixture(scope="session")

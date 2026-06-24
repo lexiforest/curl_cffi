@@ -202,6 +202,41 @@ def test_apply_fingerprint_sets_nested_http3_options():
     ]
 
 
+def test_apply_fingerprint_uses_http3_branch_when_http3_is_requested():
+    curl = FakeCurl()
+    fingerprint = Fingerprint(
+        http2={
+            "settings": "1:65536",
+            "header_order": "user-agent,accept",
+            "headers": {"user-agent": "h2-agent", "accept": "*/*"},
+        },
+        http3={
+            "settings": "1:2",
+            "header_order": ["user-agent", "priority"],
+            "headers": [
+                {"name": "user-agent", "value": "h3-agent"},
+                {"name": "priority", "value": "u=1, i"},
+            ],
+        },
+    )
+
+    _apply_fingerprint(
+        curl,
+        fingerprint,
+        existing_header_names=set(),
+        default_headers=True,
+        http_version=CurlHttpVersion.V3,
+    )
+
+    assert CurlOpt.HTTP_VERSION not in curl.options
+    assert curl.options[CurlOpt.HTTP3_SETTINGS] == "1:2"
+    assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "user-agent,priority"
+    assert curl.options[CurlOpt.HTTPHEADER] == [
+        b"user-agent: h3-agent",
+        b"priority: u=1, i",
+    ]
+
+
 def test_set_extra_fp_sets_header_order():
     curl = FakeCurl()
     extra_fp = ExtraFingerprints(header_order="User-Agent,Host,Connection")

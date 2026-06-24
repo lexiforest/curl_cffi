@@ -1,8 +1,9 @@
 import json
 import os
 import re
+import sys
 from itertools import zip_longest
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from curl_cffi import requests
 from curl_cffi.fingerprints import FingerprintManager, NATIVE_IMPERSONATE_TARGETS
@@ -101,25 +102,75 @@ def _extract_target_payload(payload: object, target: str) -> dict[str, object] |
     return None
 
 
-def _load_raw_fingerprint(target: str, api_root: str) -> dict[str, object]:
+def _load_cached_fingerprint_metadata(target: str) -> dict[str, object]:
+    v2_path = FingerprintManager.get_fingerprint_v2_path()
+    fingerprint_path = (
+        v2_path
+        if os.path.exists(v2_path)
+        else FingerprintManager.get_fingerprint_path()
+    )
+    if not os.path.exists(fingerprint_path):
+        return {}
+
+    with open(fingerprint_path) as f:
+        payload = json.load(f)
+    fingerprints = FingerprintManager._unwrap_fingerprint_cache(payload)
+    value = fingerprints.get(target)
+    return value if isinstance(value, dict) else {}
+
+
+def _raw_fingerprint_sources(
+    metadata: dict[str, object],
+) -> list[tuple[str | None, str | None]]:
+    sources = []
+    for protocol, key in (
+        ("http2", "http2_source_id"),
+        ("http3", "http3_source_id"),
+    ):
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            sources.append((protocol, value))
+    return sources or [(None, None)]
+
+
+def _http_version_for_source(protocol: str | None) -> str | None:
+    if protocol == "http2":
+        return "v2"
+    if protocol == "http3":
+        return "v3"
+    return None
+
+
+def _load_raw_fingerprint(
+    target: str,
+    api_root: str,
+    *,
+    source_id: str | None = None,
+) -> dict[str, object]:
     api_key = _require_live_api_key()
     base_url = f"{api_root.rstrip('/')}{RAW_PATH}"
-    url = f"{base_url}?{urlencode({'name': target})}"
+    url = (
+        f"{base_url}/{quote(source_id, safe='')}"
+        if source_id
+        else f"{base_url}?{urlencode({'name': target})}"
+    )
     try:
         payload = _request_json(url, api_key=api_key)
     except Exception as exc:
+        description = f"source id {source_id!r}" if source_id else f"target {target!r}"
         raise AssertionError(
-            f"Could not load raw fingerprint payload for {target!r}\n"
+            f"Could not load raw fingerprint payload for {description}\n"
             f"{url}: {type(exc).__name__}: {exc}"
         ) from exc
     target_payload = _extract_target_payload(payload, target)
     if target_payload is not None:
         return target_payload
 
+    description = f"source id {source_id!r}" if source_id else f"target {target!r}"
     raise AssertionError(
         "\n".join(
             [
-                f"Could not load raw fingerprint payload for {target!r}",
+                f"Could not load raw fingerprint payload for {description}",
                 f"{url}: target not found in response",
             ]
         )
@@ -569,6 +620,96 @@ def test_mismatch_output_labels_expected_and_captured_values():
     }
 
 
+def test_load_raw_fingerprint_uses_source_id(monkeypatch):
+    monkeypatch.setenv("IMPERSONATE_API_KEY", "imp_test")
+    urls = []
+
+    def request_json(url, *, api_key=None):
+        urls.append((url, api_key))
+        return {
+            "id": "http2-source-123",
+            "fingerprint": {
+                "tls": {"ja3": "771,4865,10,29,0"},
+                "http2": {"akamai_fingerprint_hash": "hash"},
+            },
+        }
+
+    monkeypatch.setattr(sys.modules[__name__], "_request_json", request_json)
+
+    payload = _load_raw_fingerprint(
+        "testing123",
+        "https://api.test/v2",
+        source_id="http2-source-123",
+    )
+
+    assert payload["id"] == "http2-source-123"
+    assert urls == [
+        ("https://api.test/v2/raw/http2-source-123", "imp_test"),
+    ]
+
+
+def test_raw_fingerprint_sources_uses_all_protocol_source_ids():
+    assert _raw_fingerprint_sources(
+        {
+            "http2_source_id": "http2-source-123",
+            "http3_source_id": "http3-source-123",
+        }
+    ) == [
+        ("http2", "http2-source-123"),
+        ("http3", "http3-source-123"),
+    ]
+
+
+def test_raw_fingerprint_sources_uses_name_lookup_only_without_source_ids():
+    assert _raw_fingerprint_sources({}) == [(None, None)]
+
+
+def test_load_cached_fingerprint_metadata_reads_fingerprints_json(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    with open(FingerprintManager.get_fingerprint_path(), "w") as f:
+        json.dump(
+            {
+                "version": 2,
+                "data": {
+                    "testing100": {
+                        "client": "testing",
+                        "http2_source_id": "legacy-http2-source",
+                    }
+                },
+            },
+            f,
+        )
+
+    assert _load_cached_fingerprint_metadata("testing100")["http2_source_id"] == (
+        "legacy-http2-source"
+    )
+
+
+def test_load_cached_fingerprint_metadata_reads_fingerprints_v2_json(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    with open(FingerprintManager.get_fingerprint_v2_path(), "w") as f:
+        json.dump(
+            {
+                "version": 2,
+                "data": {
+                    "testing100": {
+                        "client": "testing",
+                        "http3_source_id": "v2-http3-source",
+                    }
+                },
+            },
+            f,
+        )
+
+    assert _load_cached_fingerprint_metadata("testing100")["http3_source_id"] == (
+        "v2-http3-source"
+    )
+
+
 def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
     api_key = _require_live_api_key()
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
@@ -595,31 +736,41 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
     for target in custom_targets:
         if should_print_target_progress:
             print(f"verifying fingerprint: {target}")
-        raw_payload = _load_raw_fingerprint(target, api_root)
-        if raw_payload.get("source") == "ping":
-            ping_payload = requests.get(
-                PING_FP_URL,
-                impersonate=target,
-                timeout=30,
-            ).json()
-            _verify_ping_fingerprint(
-                target=target,
-                raw_payload=raw_payload,
-                ping_payload=ping_payload,
-                mismatches=mismatches,
+        metadata = _load_cached_fingerprint_metadata(target)
+        for protocol, source_id in _raw_fingerprint_sources(metadata):
+            raw_payload = _load_raw_fingerprint(
+                target,
+                api_root,
+                source_id=source_id,
             )
-        else:
-            peet_payload = requests.get(
-                TLS_PEET_URL,
-                impersonate=target,
-                timeout=30,
-            ).json()
-            _verify_api_fingerprint(
-                target=target,
-                raw_payload=raw_payload,
-                peet_payload=peet_payload,
-                mismatches=mismatches,
-            )
+            mismatch_target = f"{target} ({protocol})" if protocol else target
+            http_version = _http_version_for_source(protocol)
+            if raw_payload.get("source") == "ping":
+                ping_payload = requests.get(
+                    PING_FP_URL,
+                    impersonate=target,
+                    http_version=http_version,
+                    timeout=30,
+                ).json()
+                _verify_ping_fingerprint(
+                    target=mismatch_target,
+                    raw_payload=raw_payload,
+                    ping_payload=ping_payload,
+                    mismatches=mismatches,
+                )
+            else:
+                peet_payload = requests.get(
+                    TLS_PEET_URL,
+                    impersonate=target,
+                    http_version=http_version,
+                    timeout=30,
+                ).json()
+                _verify_api_fingerprint(
+                    target=mismatch_target,
+                    raw_payload=raw_payload,
+                    peet_payload=peet_payload,
+                    mismatches=mismatches,
+                )
 
     if mismatches:
         formatted = []

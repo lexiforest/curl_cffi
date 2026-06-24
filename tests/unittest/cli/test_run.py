@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 
-from curl_cffi.cli import parse_http_file
+from curl_cffi.cli import build_parser, parse_http_file
 
 
 def _run_cli(*args: str, **kwargs) -> subprocess.CompletedProcess:
@@ -85,6 +85,12 @@ def test_parse_http_version_ignored():
     assert len(requests) == 1
     assert requests[0].method == "GET"
     assert requests[0].url == "http://example.com"
+
+
+def test_cli_http3_flag_sets_http_version():
+    args = build_parser().parse_args(["get", "https://example.com", "--http3"])
+
+    assert args.http_version == "v3"
 
 
 def test_parse_multiline_body():

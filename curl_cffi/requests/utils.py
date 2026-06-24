@@ -490,22 +490,40 @@ def _http3_fingerprint_has_data(http3) -> bool:
     )
 
 
+def _http_version_requests_http3(
+    http_version: CurlHttpVersion | HttpVersionLiteral | None,
+) -> bool:
+    if http_version is None:
+        return False
+    normalized = normalize_http_version(http_version)
+    return normalized in {CurlHttpVersion.V3, CurlHttpVersion.V3ONLY}
+
+
 def _apply_fingerprint(
     curl: Curl,
     fingerprint: Fingerprint,
     existing_header_names: set[str],
     default_headers: bool,
+    http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
 ) -> None:
-    http3_enabled = (
-        not _http2_fingerprint_has_data(fingerprint.http2)
-        and _http3_fingerprint_has_data(fingerprint.http3)
+    explicit_http_version = (
+        normalize_http_version(http_version) if http_version else None
     )
+    http3_enabled = _http_version_requests_http3(http_version) and (
+        _http3_fingerprint_has_data(fingerprint.http3)
+    )
+    if not explicit_http_version:
+        http3_enabled = (
+            not _http2_fingerprint_has_data(fingerprint.http2)
+            and _http3_fingerprint_has_data(fingerprint.http3)
+        )
     active_http = fingerprint.http3 if http3_enabled else fingerprint.http2
     active_tls = active_http.tls
-    curl.setopt(
-        CurlOpt.HTTP_VERSION,
-        CurlHttpVersion.V3 if http3_enabled else CurlHttpVersion.V2_0,
-    )
+    if not explicit_http_version:
+        curl.setopt(
+            CurlOpt.HTTP_VERSION,
+            CurlHttpVersion.V3 if http3_enabled else CurlHttpVersion.V2_0,
+        )
 
     if active_tls.version:
         tls_version = _normalize_tls_version(active_tls.version)
@@ -947,7 +965,13 @@ def set_curl_options(
     # impersonate
     if impersonate:
         if isinstance(impersonate, Fingerprint):
-            _apply_fingerprint(c, impersonate, existing_header_names, default_headers)
+            _apply_fingerprint(
+                c,
+                impersonate,
+                existing_header_names,
+                default_headers,
+                http_version=http_version,
+            )
         else:
             if _is_native_impersonate_target(impersonate):
                 normalized = resolve_latest_browser_type(impersonate)
@@ -963,7 +987,11 @@ def set_curl_options(
                         f"Impersonating {impersonate} is not supported"
                     )
                 _apply_fingerprint(
-                    c, fingerprint, existing_header_names, default_headers
+                    c,
+                    fingerprint,
+                    existing_header_names,
+                    default_headers,
+                    http_version=http_version,
                 )
 
     # ja3 string

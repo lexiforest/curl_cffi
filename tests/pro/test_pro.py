@@ -50,6 +50,8 @@ def test_update_fingerprints(api_server):
     assert cache["data"]["testing100"]["http3"]["tls"]["extension_order"] == (
         "0-10-13-16-27-43-45-51"
     )
+    assert cache["data"]["testing100"]["http2_source_id"] == "http2-source-100"
+    assert cache["data"]["testing100"]["http3_source_id"] == "http3-source-100"
 
 
 def test_update_fingerprints_reads_legacy_api(api_server):
@@ -79,6 +81,7 @@ def test_update_fingerprints_reads_paginated_api(monkeypatch):
         items = [
             {
                 "name": f"testing{i}",
+                "http2_source_id": f"http2-source-{i}",
                 "fingerprint": {
                     "client": "testing",
                     "client_version": str(i),
@@ -115,6 +118,9 @@ def test_update_fingerprints_reads_paginated_api(monkeypatch):
     ]
     assert "testing0" in fingerprints
     assert "testing101" in fingerprints
+    with open(FingerprintManager.get_fingerprint_v2_path()) as f:
+        cache = json.load(f)
+    assert cache["data"]["testing0"]["http2_source_id"] == "http2-source-0"
 
 
 def test_single_fingerprint(api_server):
