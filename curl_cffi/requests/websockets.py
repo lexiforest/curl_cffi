@@ -921,6 +921,14 @@ class WebSocket(BaseWebSocket):
                     if msg_size > max_message_size:
                         chunks_clear()
                         self.close(WsCloseCode.MESSAGE_TOO_BIG)
+
+                        # Emit the close event before raising
+                        emit(
+                            "close",
+                            self._close_code or WsCloseCode.MESSAGE_TOO_BIG,
+                            self._close_reason or "",
+                        )
+
                         raise WebSocketError(
                             (
                                 f"Message too large: {msg_size} bytes "
@@ -976,6 +984,7 @@ class WebSocket(BaseWebSocket):
                 # Handle normal cURL EAGAINs
                 if code == CurlECode.AGAIN:
                     should_retry = True
+
                 # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
                 elif code == CurlECode.RECV_ERROR:
                     err_msg: str = str(e).lower()
@@ -984,6 +993,7 @@ class WebSocket(BaseWebSocket):
                         or "resource temporarily unavailable" in err_msg
                     ):
                         should_retry = True
+
                 # Handle Server Disconnect (Empty Reply)
                 elif code == CurlECode.GOT_NOTHING:
                     e_close: WebSocketClosed = WebSocketClosed(
@@ -993,6 +1003,12 @@ class WebSocket(BaseWebSocket):
                     e_close.__suppress_context__ = True
                     self.keep_running = False
                     emit("error", e_close)
+                    self.close(WsCloseCode.ABNORMAL_CLOSURE)
+                    emit(
+                        "close",
+                        self._close_code or WsCloseCode.ABNORMAL_CLOSURE,
+                        self._close_reason or "",
+                    )
                     raise e_close from e
 
                 if should_retry:
@@ -1023,6 +1039,11 @@ class WebSocket(BaseWebSocket):
                     if isinstance(e, WebSocketError):
                         close_code = e.code
                     self.close(close_code)
+                    emit(
+                        "close",
+                        self._close_code or close_code,
+                        self._close_reason or "",
+                    )
                 raise
 
     def close(
@@ -1047,8 +1068,12 @@ class WebSocket(BaseWebSocket):
         if len(message) > 123:
             message = message[:123]
 
+        if self._close_code is None:
+            self._close_code = code
+            self._close_reason = message.decode("utf-8", errors="replace")
+
         msg: bytes = self._pack_close_frame(code, message)
-        with suppress(WebSocketError, WebSocketClosed, WebSocketTimeout):
+        with suppress(CurlError):
             _ = self.send(msg, CurlWsFlag.CLOSE, timeout=timeout)
 
         self.terminate()
