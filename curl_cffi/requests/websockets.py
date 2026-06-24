@@ -971,6 +971,9 @@ class WebSocket(BaseWebSocket):
                             except UnicodeDecodeError as e:
                                 self._close_code = WsCloseCode.INVALID_DATA
                                 self.close(WsCloseCode.INVALID_DATA)
+                                emit(
+                                    "close", self._close_code, self._close_reason or ""
+                                )
                                 raise WebSocketError(
                                     "Invalid UTF-8", WsCloseCode.INVALID_DATA
                                 ) from e
