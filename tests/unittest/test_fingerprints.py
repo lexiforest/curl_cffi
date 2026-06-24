@@ -192,9 +192,7 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
                                 "cert_compression": ["brotli"],
                                 "session_ticket": True,
                                 "extension_order": "0-11-10",
-                                "delegated_credentials": [
-                                    "ecdsa_secp256r1_sha256"
-                                ],
+                                "delegated_credentials": ["ecdsa_secp256r1_sha256"],
                                 "record_size_limit": 4001,
                                 "grease": True,
                                 "use_new_alps_codepoint": True,
@@ -242,9 +240,11 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
                             ],
                             "header_lang": "en-US,en;q=0.9",
                             "quic_transport_parameters": "3:4",
+                            "split_cookies": True,
+                            "form_boundary": "webkit-h3",
                         },
                     }
-                }
+                },
             }
         )
     )
@@ -302,6 +302,8 @@ def test_get_fingerprint_parses_nested_protocol_fingerprints(monkeypatch, tmp_pa
     }
     assert fingerprint.http3.header_lang == "en-US,en;q=0.9"
     assert fingerprint.http3.quic_transport_parameters == "3:4"
+    assert fingerprint.http3.split_cookies is True
+    assert fingerprint.http3.form_boundary == "webkit-h3"
 
     assert fingerprint.tls_version == "1.3"
     assert fingerprint.tls_ciphers == ["TLS_AES_128_GCM_SHA256"]

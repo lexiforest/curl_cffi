@@ -137,7 +137,7 @@ def _http_version_for_source(protocol: str | None) -> str | None:
     if protocol == "http2":
         return "v2"
     if protocol == "http3":
-        return "v3"
+        return "v3only"
     return None
 
 

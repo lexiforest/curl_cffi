@@ -322,7 +322,7 @@ def set_akamai_options(curl: Curl, akamai: str):
     """
     settings, window_update, streams, header_order = akamai.split("|")
 
-    # For compatibility with fp.impersonate.pro
+    # For compatibility with tls.peet.ws
     settings = settings.replace(",", ";")
 
     curl.setopt(CurlOpt.HTTP_VERSION, CurlHttpVersion.V2_0)
@@ -380,7 +380,7 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.SPLIT_COOKIES, fp.split_cookies)
     if fp.http3_sig_hash_algs is not None:
         curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.http3_sig_hash_algs)
-    if fp.http3_tls_extension_order is not None:
+    if fp.http3_tls_extension_order is not None and not fp.tls_permute_extensions:
         curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fp.http3_tls_extension_order)
 
 
@@ -436,95 +436,28 @@ def _normalize_supported_group(group: str) -> str:
     return group
 
 
-def _tls_fingerprint_has_data(tls) -> bool:
-    return bool(
-        tls.version
-        or tls.ciphers
-        or tls.alpn
-        or tls.alps
-        or tls.cert_compression
-        or tls.session_ticket
-        or tls.extension_order
-        or tls.delegated_credentials
-        or tls.record_size_limit is not None
-        or tls.grease
-        or tls.use_new_alps_codepoint
-        or tls.signed_cert_timestamps
-        or tls.ech is not None
-        or tls.permute_extensions
-        or tls.signature_hashes
-        or tls.sig_hash_algs
-        or tls.supported_groups
-        or tls.key_shares_limit is not None
-    )
-
-
-def _http2_fingerprint_has_data(http2) -> bool:
-    return bool(
-        _tls_fingerprint_has_data(http2.tls)
-        or http2.settings
-        or http2.pseudo_headers_order
-        or http2.header_order
-        or http2.headers
-        or http2.header_lang
-        or http2.window_update
-        or http2.stream_weight is not None
-        or http2.stream_exclusive is not None
-        or http2.no_priority
-        or http2.priority_weight is not None
-        or http2.priority_exclusive is not None
-        or http2.split_cookies
-        or http2.form_boundary
-    )
-
-
-def _http3_fingerprint_has_data(http3) -> bool:
-    return bool(
-        _tls_fingerprint_has_data(http3.tls)
-        or http3.settings
-        or http3.pseudo_headers_order
-        or http3.header_order
-        or http3.headers
-        or http3.header_lang
-        or http3.quic_transport_parameters
-    )
-
-
-def _http_version_requests_http3(
-    http_version: CurlHttpVersion | HttpVersionLiteral | None,
-) -> bool:
-    if http_version is None:
-        return False
-    normalized = normalize_http_version(http_version)
-    return normalized in {CurlHttpVersion.V3, CurlHttpVersion.V3ONLY}
-
-
 def _apply_fingerprint(
     curl: Curl,
     fingerprint: Fingerprint,
     existing_header_names: set[str],
     default_headers: bool,
-    http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
+    http_version: CurlHttpVersion | HttpVersionLiteral | None = CurlHttpVersion.V2_0,
 ) -> None:
-    explicit_http_version = (
-        normalize_http_version(http_version) if http_version else None
+    """
+    Applies the Fingerprint class, which can contain http2/http3 fingerprints. The
+    applied fingerprints are selected by given http_version
+    """
+
+    # set the http_version and select active options
+    http_version = (
+        normalize_http_version(http_version) if http_version else CurlHttpVersion.V2_0
     )
-    http3_enabled = _http_version_requests_http3(http_version) and (
-        _http3_fingerprint_has_data(fingerprint.http3)
-    )
-    if not explicit_http_version:
-        http3_enabled = (
-            not _http2_fingerprint_has_data(fingerprint.http2)
-            and _http3_fingerprint_has_data(fingerprint.http3)
-        )
+    http3_enabled = http_version in {CurlHttpVersion.V3, CurlHttpVersion.V3ONLY}
     active_http = fingerprint.http3 if http3_enabled else fingerprint.http2
     active_tls = active_http.tls
-    if not explicit_http_version:
-        curl.setopt(
-            CurlOpt.HTTP_VERSION,
-            CurlHttpVersion.V3 if http3_enabled else CurlHttpVersion.V2_0,
-        )
+    curl.setopt(CurlOpt.HTTP_VERSION, http_version)
 
+    # set tls options
     if active_tls.version:
         tls_version = _normalize_tls_version(active_tls.version)
         curl.setopt(CurlOpt.SSLVERSION, tls_version | CurlSslVersion.MAX_DEFAULT)
@@ -532,12 +465,18 @@ def _apply_fingerprint(
     if active_tls.ciphers:
         curl.setopt(CurlOpt.SSL_CIPHER_LIST, ":".join(active_tls.ciphers))
 
-    if active_tls.extension_order and not http3_enabled:
+    # set the http2 extension order
+    if active_tls.extension_order:
         tls_extension_order = _strip_padding_extension(active_tls.extension_order)
         extension_ids = set(int(e) for e in tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
-        if not fingerprint.tls_permute_extensions:
+        if http3_enabled:
+            curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, active_tls.extension_order)
+        else:
             curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
+
+    # Permute can override explicit extension order.
+    curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(active_tls.permute_extensions))
 
     curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(active_tls.alpn))
     curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(active_tls.alps))
@@ -557,24 +496,28 @@ def _apply_fingerprint(
         curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, active_tls.key_shares_limit)
 
     if active_tls.cert_compression:
-        curl.setopt(
-            CurlOpt.SSL_CERT_COMPRESSION, ",".join(active_tls.cert_compression)
-        )
+        curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, ",".join(active_tls.cert_compression))
     else:
         curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
 
-    if not http3_enabled:
-        if active_tls.sig_hash_algs:
+    if active_tls.sig_hash_algs:
+        if http3_enabled:
+            curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, active_tls.sig_hash_algs)
+        else:
             curl.setopt(CurlOpt.SSL_SIG_HASH_ALGS, active_tls.sig_hash_algs)
-        elif active_tls.signature_hashes:
+    elif active_tls.signature_hashes:
+        if http3_enabled:
+            curl.setopt(
+                CurlOpt.HTTP3_SIG_HASH_ALGS, ",".join(active_tls.signature_hashes)
+            )
+        else:
             curl.setopt(
                 CurlOpt.SSL_SIG_HASH_ALGS, ",".join(active_tls.signature_hashes)
             )
 
     if active_tls.supported_groups:
         normalized_groups = [
-            _normalize_supported_group(group)
-            for group in active_tls.supported_groups
+            _normalize_supported_group(group) for group in active_tls.supported_groups
         ]
         curl.setopt(CurlOpt.SSL_EC_CURVES, ":".join(normalized_groups))
 
@@ -584,31 +527,43 @@ def _apply_fingerprint(
             ":".join(active_tls.delegated_credentials),
         )
 
-    curl.setopt(CurlOpt.SSL_PERMUTE_EXTENSIONS, int(active_tls.permute_extensions))
-
     if active_tls.record_size_limit is not None:
         curl.setopt(CurlOpt.TLS_RECORD_SIZE_LIMIT, active_tls.record_size_limit)
 
     if active_tls.ech is not None:
         curl.setopt(CurlOpt.ECH, active_tls.ech)
 
-    # http2 settings
-    http2 = fingerprint.http2
-    if http2.settings:
-        curl.setopt(CurlOpt.HTTP2_SETTINGS, http2.settings)
-    if http2.window_update:
-        curl.setopt(CurlOpt.HTTP2_WINDOW_UPDATE, int(http2.window_update))
-    if http2.pseudo_headers_order:
-        curl.setopt(
-            CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER,
-            http2.pseudo_headers_order.replace(",", ""),
-        )
-    if http2.stream_weight is not None:
-        curl.setopt(CurlOpt.STREAM_WEIGHT, http2.stream_weight)
-    if http2.stream_exclusive is not None:
-        curl.setopt(CurlOpt.STREAM_EXCLUSIVE, http2.stream_exclusive)
-    if http2.no_priority:
-        curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, 1)
+    # http settings
+    if http3_enabled:
+        http3 = fingerprint.http3
+        if http3.settings:
+            curl.setopt(CurlOpt.HTTP3_SETTINGS, http3.settings)
+        if http3.pseudo_headers_order:
+            curl.setopt(
+                CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER,
+                http3.pseudo_headers_order.replace(",", ""),
+            )
+        if http3.quic_transport_parameters:
+            curl.setopt(
+                CurlOpt.QUIC_TRANSPORT_PARAMETERS, http3.quic_transport_parameters
+            )
+    else:
+        http2 = fingerprint.http2
+        if http2.settings:
+            curl.setopt(CurlOpt.HTTP2_SETTINGS, http2.settings)
+        if http2.window_update:
+            curl.setopt(CurlOpt.HTTP2_WINDOW_UPDATE, int(http2.window_update))
+        if http2.pseudo_headers_order:
+            curl.setopt(
+                CurlOpt.HTTP2_PSEUDO_HEADERS_ORDER,
+                http2.pseudo_headers_order.replace(",", ""),
+            )
+        if http2.stream_weight is not None:
+            curl.setopt(CurlOpt.STREAM_WEIGHT, http2.stream_weight)
+        if http2.stream_exclusive is not None:
+            curl.setopt(CurlOpt.STREAM_EXCLUSIVE, http2.stream_exclusive)
+        if http2.no_priority:
+            curl.setopt(CurlOpt.HTTP2_NO_PRIORITY, 1)
 
     if active_http.header_order:
         header_order = active_http.header_order
@@ -622,26 +577,6 @@ def _apply_fingerprint(
     form_boundary = getattr(active_http, "form_boundary", "")
     if form_boundary:
         curl.setopt(CurlOpt.FORM_BOUNDARY, form_boundary)
-
-    # http3 settings
-    http3 = fingerprint.http3
-    if http3.settings:
-        curl.setopt(CurlOpt.HTTP3_SETTINGS, http3.settings)
-    if http3.pseudo_headers_order:
-        curl.setopt(
-            CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER,
-            http3.pseudo_headers_order.replace(",", ""),
-        )
-    if http3.tls.sig_hash_algs:
-        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, http3.tls.sig_hash_algs)
-    elif http3.tls.signature_hashes:
-        curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, ",".join(http3.tls.signature_hashes))
-    if http3.tls.extension_order:
-        curl.setopt(
-            CurlOpt.HTTP3_TLS_EXTENSION_ORDER, http3.tls.extension_order
-        )
-    if http3.quic_transport_parameters:
-        curl.setopt(CurlOpt.QUIC_TRANSPORT_PARAMETERS, http3.quic_transport_parameters)
 
     # default headers will not override user-defined headers
     if default_headers and active_http.headers:
@@ -993,6 +928,9 @@ def set_curl_options(
                     default_headers,
                     http_version=http_version,
                 )
+
+        if http_version:
+            c.setopt(CurlOpt.HTTP_VERSION, http_version)
 
     # ja3 string
     if ja3:

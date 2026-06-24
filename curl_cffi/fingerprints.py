@@ -417,6 +417,8 @@ class Http3Fingerprint:
     headers: dict[str, str] | list[object] = field(default_factory=dict)
     header_lang: str = ""
     quic_transport_parameters: str = ""
+    split_cookies: bool = False
+    form_boundary: str = ""
 
     def __post_init__(self):
         if isinstance(self.tls, dict):
@@ -728,12 +730,8 @@ class Fingerprint:
     tls_delegated_credentials = _legacy_property("http2.tls.delegated_credentials")
     tls_record_size_limit = _legacy_property("http2.tls.record_size_limit")
     tls_grease = _legacy_property("http2.tls.grease")
-    tls_use_new_alps_codepoint = _legacy_property(
-        "http2.tls.use_new_alps_codepoint"
-    )
-    tls_signed_cert_timestamps = _legacy_property(
-        "http2.tls.signed_cert_timestamps"
-    )
+    tls_use_new_alps_codepoint = _legacy_property("http2.tls.use_new_alps_codepoint")
+    tls_signed_cert_timestamps = _legacy_property("http2.tls.signed_cert_timestamps")
     tls_ech = _legacy_property("http2.tls.ech")
     tls_permute_extensions = _legacy_property("http2.tls.permute_extensions")
     headers = _legacy_property("http2.headers", setter_transform=_normalize_headers)

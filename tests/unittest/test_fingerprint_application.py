@@ -126,6 +126,7 @@ def test_apply_fingerprint_sets_http3_sig_hash_algs():
         fingerprint,
         existing_header_names=set(),
         default_headers=False,
+        http_version=CurlHttpVersion.V3,
     )
 
     assert curl.options[CurlOpt.HTTP3_SIG_HASH_ALGS] == "rsa_pss_rsae_sha256"
@@ -170,6 +171,7 @@ def test_apply_fingerprint_sets_nested_http3_options():
         fingerprint,
         existing_header_names=set(),
         default_headers=True,
+        http_version=CurlHttpVersion.V3,
     )
 
     assert curl.options[CurlOpt.HTTP_VERSION] == CurlHttpVersion.V3
@@ -181,9 +183,7 @@ def test_apply_fingerprint_sets_nested_http3_options():
     assert curl.options[CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT] == 1
     assert curl.options[CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS] == 1
     assert curl.options[CurlOpt.SSL_CERT_COMPRESSION] == "brotli"
-    assert curl.options[CurlOpt.TLS_DELEGATED_CREDENTIALS] == (
-        "ecdsa_secp256r1_sha256"
-    )
+    assert curl.options[CurlOpt.TLS_DELEGATED_CREDENTIALS] == ("ecdsa_secp256r1_sha256")
     assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 1
     assert curl.options[CurlOpt.TLS_RECORD_SIZE_LIMIT] == 4001
     assert curl.options[CurlOpt.ECH] == "true"
@@ -193,7 +193,7 @@ def test_apply_fingerprint_sets_nested_http3_options():
     assert curl.options[CurlOpt.HTTP3_SETTINGS] == "1:2"
     assert curl.options[CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER] == "masp"
     assert curl.options[CurlOpt.HTTP3_SIG_HASH_ALGS] == "rsa_pss_rsae_sha256"
-    assert curl.options[CurlOpt.HTTP3_TLS_EXTENSION_ORDER] == "0-10-13"
+    assert CurlOpt.HTTP3_TLS_EXTENSION_ORDER not in curl.options
     assert curl.options[CurlOpt.QUIC_TRANSPORT_PARAMETERS] == "3:4"
     assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "user-agent,accept"
     assert curl.options[CurlOpt.HTTPHEADER] == [
@@ -228,7 +228,7 @@ def test_apply_fingerprint_uses_http3_branch_when_http3_is_requested():
         http_version=CurlHttpVersion.V3,
     )
 
-    assert CurlOpt.HTTP_VERSION not in curl.options
+    assert curl.options[CurlOpt.HTTP_VERSION] == CurlHttpVersion.V3
     assert curl.options[CurlOpt.HTTP3_SETTINGS] == "1:2"
     assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "user-agent,priority"
     assert curl.options[CurlOpt.HTTPHEADER] == [

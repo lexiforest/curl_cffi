@@ -125,8 +125,7 @@ def _build_v2_fingerprint_response() -> dict[str, Any]:
                         "rsa_pkcs1_sha256",
                     ],
                     "sig_hash_algs": (
-                        "ecdsa_secp256r1_sha256,rsa_pss_rsae_sha256,"
-                        "rsa_pkcs1_sha256"
+                        "ecdsa_secp256r1_sha256,rsa_pss_rsae_sha256,rsa_pkcs1_sha256"
                     ),
                     "key_shares_limit": 2,
                     "supported_groups": ["X25519", "P-256", "P-384", "P-521"],
