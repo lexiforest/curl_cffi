@@ -11,7 +11,7 @@ import time
 import warnings
 from collections.abc import AsyncGenerator, Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager, suppress
+from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
@@ -37,7 +37,7 @@ from urllib.parse import urlparse
 
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
-from ..curl import Curl, CurlError, CurlMime, CurlWsFrame
+from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
 from .cache import CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes, CurlMorsel
@@ -63,6 +63,7 @@ else:
 if TYPE_CHECKING:
     from typing_extensions import Unpack
 
+    from ..curl import CurlWsFrame
     from ..fingerprints import Fingerprint
 
     class ProxySpec(TypedDict, total=False):
@@ -1108,6 +1109,7 @@ class AsyncSession(BaseSession[R]):
         else:
             curl.close()
 
+    @asynccontextmanager
     async def stream(
         self,
         method: HttpMethod,
