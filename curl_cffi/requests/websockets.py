@@ -753,6 +753,9 @@ class WebSocket(BaseWebSocket):
             flags: Frame type flags (e.g., ``CurlWsFlag.TEXT`` / ``CurlWsFlag.BINARY``).
             timeout: Max seconds to wait if the socket is blocked.
 
+        Returns:
+            ``int``: The number of bytes successfully written to the socket.
+
         Raises:
             CurlError: Network related exception occured.
             WebSocketClosed: The WebSocket has been closed.
