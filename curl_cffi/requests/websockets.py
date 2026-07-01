@@ -403,6 +403,7 @@ class WebSocket(BaseWebSocket):
         if callback:
             try:
                 _ = callback(self, *args)
+
             # pylint: disable-next=broad-exception-caught
             except Exception as e:
                 error_callback: Callable[..., object] | None = self._emitters.get(
@@ -543,6 +544,7 @@ class WebSocket(BaseWebSocket):
             curl_options=curl_options,
         )
 
+        _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
         _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         curl.perform()
         return self
@@ -577,21 +579,18 @@ class WebSocket(BaseWebSocket):
         if read_selector is None:
             raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
 
-        # Hoist locals
+        # Cache local variables
         retry_on_error: bool = self.ws_retry.retry
         retry_codes: set[CurlECode] = self.ws_retry.codes
         max_retries: int = self.ws_retry.count
         retry_base: float = float(self.ws_retry.delay)
         recv_error_retries: int = 0
-
         max_message_size: int = self._max_message_size
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
-
         chunks: list[bytes] = []
         chunks_append: Callable[[bytes], None] = chunks.append
         msg_size: int = 0
         flags: int = 0
-
         deadline: float = 0.0
         if timeout is not None:
             deadline = time_monotonic() + timeout
@@ -612,9 +611,12 @@ class WebSocket(BaseWebSocket):
 
                 # Data Frames (Text / Binary / Cont)
                 if flags & data_mask:
+
                     # Perform message size checks
                     msg_size += len(chunk)
                     if msg_size > max_message_size:
+                        chunks.clear()
+                        self.close(WsCloseCode.MESSAGE_TOO_BIG, b"Message too large")
                         raise WebSocketError(
                             f"Message too large: {msg_size} bytes.", CurlECode.TOO_LARGE
                         )
@@ -623,6 +625,7 @@ class WebSocket(BaseWebSocket):
                     # If the message is complete, process and dispatch it
                     if frame.bytesleft == 0 and not (flags & cont_flag):
                         break
+
                     continue
 
                 # If a CLOSE frame is received, the reader is done.
@@ -640,6 +643,7 @@ class WebSocket(BaseWebSocket):
                 # Handle normal cURL EAGAINs
                 if code == CurlECode.AGAIN:
                     should_retry = True
+
                 # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
                 elif code == CurlECode.RECV_ERROR:
                     err_msg: str = str(e).lower()
@@ -648,6 +652,7 @@ class WebSocket(BaseWebSocket):
                         or "resource temporarily unavailable" in err_msg
                     ):
                         should_retry = True
+
                 # Handle Server Disconnect (Empty Reply)
                 elif code == CurlECode.GOT_NOTHING:
                     raise WebSocketClosed(
@@ -674,13 +679,24 @@ class WebSocket(BaseWebSocket):
                     and recv_error_retries < max_retries
                 ):
                     recv_error_retries += 1
-                    # Formula: base * (2 ^ (attempt - 1))
+                    # Formula: base * (2 ^ (attempt - 1)) + jitter (+/- 10%)
                     retry_delay: float = retry_base * (  # pyright: ignore[reportAny]
                         2 ** (recv_error_retries - 1)
                     )
-                    # Add Jitter: +/- 10%
-                    jitter: float = retry_delay * 0.1
-                    sync_sleep(max(0.0, retry_delay + uniform(-jitter, jitter)))
+                    sleep_time: float = max(
+                        0.0,
+                        retry_delay + uniform(-retry_delay * 0.1, retry_delay * 0.1),
+                    )
+
+                    # Check if user timeout is configured
+                    if timeout is not None:
+                        remain = deadline - time_monotonic()
+                        if sleep_time > remain:
+                            # Sleep exactly until the deadline.
+                            sync_sleep(max(0.0, remain))
+                            continue
+
+                    sync_sleep(sleep_time)
                     continue
 
                 # Fatal error - can't retry
@@ -715,19 +731,11 @@ class WebSocket(BaseWebSocket):
     def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
         """This function is deprecated and removed.
         The new architecture automatically handles frame reassembly.
-        Call :meth:`recv()` directly to get complete, fully assembled frames.
+        Call :meth:`recv()` instead to get complete, fully assembled frames.
         """
-        user_warning(
-            (
-                "recv_fragment() is deprecated and removed."
-                "Please use recv() to get complete messages."
-            ),
-            DeprecationWarning,
-            stacklevel=2,
-        )
         raise NotImplementedError(
             "recv_fragment() is no longer supported. "
-            + "Call recv() directly instead. "
+            + "Call recv() instead to get complete messages. "
             + "See docs: https://curl-cffi.readthedocs.io/en/latest/websockets.html"
         )
 
@@ -1593,63 +1601,78 @@ class AsyncWebSocket(BaseWebSocket):
                     "Connection was terminated while waiting to send"
                 ) from exc
 
-    async def send_binary(self, payload: bytes) -> None:
+    async def send_binary(
+        self, payload: bytes, *, timeout: float | None = None
+    ) -> None:
         """Send a binary frame.
 
         Args:
-            payload: binary data to send.
+            payload: Binary data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(payload, CurlWsFlag.BINARY)
+        return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    async def send_bytes(self, payload: bytes) -> None:
+    async def send_bytes(self, payload: bytes, *, timeout: float | None = None) -> None:
         """Send a binary frame, alias of :meth:`send_binary`.
 
         Args:
-            payload: binary data to send.
+            payload: Binary data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(payload, CurlWsFlag.BINARY)
+        return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    async def send_str(self, payload: str) -> None:
+    async def send_str(self, payload: str, *, timeout: float | None = None) -> None:
         """Send a text frame.
 
         Args:
-            payload: text data to send.
+            payload: Text data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(payload, CurlWsFlag.TEXT)
+        return await self.send(payload, CurlWsFlag.TEXT, timeout=timeout)
 
     async def send_json(
-        self, payload: object, *, dumps: Callable[..., str] = json_dumps
+        self,
+        payload: object,
+        *,
+        dumps: Callable[..., str] = json_dumps,
+        timeout: float | None = None,
     ) -> None:
         """Send a JSON frame.
 
         Args:
-            payload: data to send.
+            payload: Data to send.
             dumps: JSON encoder, default is :meth:`json.dumps()`.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
         if dumps is json_dumps:
-            return await self.send_str(json_dumps(payload, separators=(",", ":")))
-        return await self.send_str(dumps(payload))
+            return await self.send_str(
+                json_dumps(payload, separators=(",", ":")), timeout=timeout
+            )
+        return await self.send_str(dumps(payload), timeout=timeout)
 
-    async def ping(self, payload: str | bytes) -> None:
+    async def ping(self, payload: str | bytes, *, timeout: float | None = None) -> None:
         """Send a ping frame.
 
         Args:
-            payload: data to send.
+            payload: Data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         Raises:
             WebSocketError: The payload length is outside specification.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(self._prepare_ping_payload(payload), CurlWsFlag.PING)
+        return await self.send(
+            self._prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
+        )
 
     async def close(
         self,
@@ -2204,6 +2227,20 @@ class AsyncWebSocket(BaseWebSocket):
                 return False
 
         return True
+
+    async def recv_fragment(
+        self, *, timeout: float | None = None
+    ) -> tuple[bytes, CurlWsFrame]:
+        """This function is deprecated and removed.
+        The new architecture automatically handles frame reassembly.
+        Call :meth:`recv()` instead as a direct replacement.
+        """
+        _ = timeout
+        raise NotImplementedError(
+            "recv_fragment() is no longer supported. "
+            + "Call recv() instead to get complete messages. "
+            + "See docs: https://curl-cffi.readthedocs.io/en/latest/websockets.html"
+        )
 
     async def flush(self, timeout: float | None = None) -> None:
         """Waits until all items in the send queue have been processed.
