@@ -127,9 +127,7 @@ class WsCloseCode(IntEnum):
 class WebSocketError(CurlError):
     """WebSocket-specific error."""
 
-    def __init__(
-        self, message: str, code: WsCloseCode | CurlECode | Literal[0] = 0
-    ) -> None:
+    def __init__(self, message: str, code: WsCloseCode | CurlECode | int = 0) -> None:
         super().__init__(message, code)  # pyright: ignore[reportUnknownMemberType]
 
 
@@ -711,6 +709,12 @@ class WebSocket(BaseWebSocket):
     def recv_str(self, *, timeout: float | None = None) -> str:
         """Receive a text frame."""
         data, flags = self.recv(timeout=timeout)
+        if flags & CurlWsFlag.CLOSE:
+            raise WebSocketClosed(
+                f"Received close frame: {self.close_code} {self.close_reason}",
+                self.close_code or WsCloseCode.OK,
+            )
+
         if not (flags & CurlWsFlag.TEXT):
             raise WebSocketError("Not a valid text frame", WsCloseCode.INVALID_DATA)
         try:
@@ -1516,6 +1520,12 @@ class AsyncWebSocket(BaseWebSocket):
             timeout: how many seconds to wait before giving up.
         """
         data, flags = await self.recv(timeout=timeout)
+        if flags & CurlWsFlag.CLOSE:
+            raise WebSocketClosed(
+                f"Received close frame: {self.close_code} {self.close_reason}",
+                self.close_code or WsCloseCode.OK,
+            )
+
         if not (flags & CurlWsFlag.TEXT):
             raise WebSocketError("Not a valid text frame", WsCloseCode.INVALID_DATA)
         try:
