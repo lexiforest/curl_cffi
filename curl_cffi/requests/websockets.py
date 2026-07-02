@@ -2346,6 +2346,10 @@ class AsyncWebSocket(BaseWebSocket):
                 if self._send_queue.empty():
                     return
 
+                # Expose the actual network error that killed the writer
+                if self._transport_exception is not None:
+                    raise self._transport_exception
+
                 raise WebSocketError("Writer task stopped unexpectedly while flushing.")
 
         finally:
