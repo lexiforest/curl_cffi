@@ -86,8 +86,8 @@ class TestConfig:
     large_chunk_size: int = 4 * 1024**2
     server_max_msg: int = 8 * 1024**2
     total_bytes: int = total_gb * 1024**3
-    recv_queue: int = 256
-    send_queue: int = 256
+    recv_queue: int = 64
+    send_queue: int = 32
     cert_file: Path = Path("localhost.crt")
     cert_key: Path = Path("localhost.key")
     data_filename: Path = Path("testdata.bin")
@@ -128,6 +128,32 @@ async def binary_data_generator(
         current_chunk_size: int = min(chunk_size, bytes_to_send - bytes_sent)
 
         # If it's a full-sized chunk, yield the reusable one. Otherwise, yield a slice.
+        if current_chunk_size == chunk_size:
+            yield reusable_chunk
+        else:
+            yield reusable_chunk[:current_chunk_size]
+        bytes_sent += current_chunk_size
+
+
+def binary_data_generator_sync(
+    total_gb: float, chunk_size: int
+) -> Generator[bytes, None, None]:
+    """A synchronous generator that yields chunks of binary data efficiently.
+
+    Args:
+        total_gb (`float`): The total amount of data to generate.
+        chunk_size (`int`): Data should be yielded in chunks of this size.
+
+    Yields:
+        `Generator[bytes, None, None]`: Chunks until total size is reached.
+    """
+    bytes_to_send: int = int(total_gb * 1024**3)
+    bytes_sent = 0
+
+    reusable_chunk: bytes = os.urandom(chunk_size)
+    while bytes_sent < bytes_to_send:
+        current_chunk_size: int = min(chunk_size, bytes_to_send - bytes_sent)
+
         if current_chunk_size == chunk_size:
             yield reusable_chunk
         else:

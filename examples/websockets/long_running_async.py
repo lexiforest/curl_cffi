@@ -11,8 +11,10 @@ async def main() -> None:
             "wss://api.gemini.com/v1/marketdata/BTCUSD",
         ) as ws:
             print(
-                "For websockets, you need to set $wss_proxy environment variable!\n"
-                "$https_proxy will not work!"
+                (
+                    "For websockets, you need to set $wss_proxy environment variable!\n"
+                    "$https_proxy will not work!"
+                )
             )
             print(">>> Websocket open!")
 

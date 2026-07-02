@@ -325,8 +325,8 @@ Queue Sizes (Backpressure)
 
 You can control the internal buffer sizes to manage TCP backpressure.
 
-*   **recv_queue_size** (default: 128): Max incoming messages to buffer internally.
-*   **send_queue_size** (default: 128): Max outgoing messages to buffer before ``send()`` blocks.
+*   **recv_queue_size** (default: 64): Max incoming messages to buffer internally.
+*   **send_queue_size** (default: 32): Max outgoing messages to buffer before ``send()`` blocks.
 *   **block_on_recv_queue_full** (default: ``True``): The background reader pauses when the receive queue is full. When set to ``False``, the connection will fail immediately to avoid silent data loss.
 *   **drain_on_error** (default: ``False``): When a fatal error occurs, calls to ``recv()`` will yield all buffered messages first before raising the exception.
 
@@ -335,8 +335,8 @@ You can control the internal buffer sizes to manage TCP backpressure.
     # Increase queues for high-throughput fast-moving streams (e.g., video/market data)
     ws = await session.ws_connect(
         url,
-        recv_queue_size=2048,
-        send_queue_size=2048
+        recv_queue_size=1024,
+        send_queue_size=1024
     )
 
 Frame Coalescing
@@ -351,10 +351,24 @@ This is an *optional* optimization technique which merges multiple pending messa
 *   **coalesce_frames** (default: ``False``): Enable batching.
 *   **max_send_batch_size** (default: 64): Max messages to merge per frame.
 
-.. code-block:: python
+.. code-block:: pycon
 
-    # Enable coalescing
-    ws = await session.ws_connect(url, coalesce_frames=True)
+    >>> import asyncio
+    >>> from curl_cffi import AsyncSession, Response
+    >>> async def test_coalescing():
+    ...     """Test frame coalescing feature"""
+    ...     async with AsyncSession[Response]() as session:
+    ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
+    ...             # Take advantage of concurrent sends in quick succession
+    ...             async with asyncio.TaskGroup() as tg:
+    ...                 tg.create_task(ws.send_str("Concurrent sending"))
+    ...                 tg.create_task(ws.send_str(" is "))
+    ...                 tg.create_task(ws.send_str("so cool!!"))
+    ...             response: str = await ws.recv_str()
+    ...             print(response)
+    ...
+    >>> asyncio.run(test_coalescing())
+    Concurrent sending is so cool!!
 
 Cooperative Multitasking
 ------------------------

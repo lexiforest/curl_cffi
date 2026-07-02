@@ -833,20 +833,42 @@ class WebSocket(BaseWebSocket):
                 offset += n_sent
 
             except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    # Check the clock when the socket is blocked
-                    if timeout is not None:
-                        remain: float = deadline - time_monotonic()
-                        if remain <= 0:
-                            raise WebSocketTimeout("Socket write timeout") from e
+                code: int = e.code
+                eagain_retry: bool = False
 
-                        if (
-                            not write_selector.select(remain)
-                            and time_monotonic() > deadline
-                        ):
-                            raise WebSocketTimeout("Socket write timeout") from e
-                    else:
-                        _ = write_selector.select(None)
+                # Handle normal cURL EAGAINs
+                if code == CurlECode.AGAIN:
+                    eagain_retry = True
+
+                # EAGAIN ("errno 11") bubbling up as SEND_ERROR from BoringSSL
+                elif code == CurlECode.SEND_ERROR:
+                    err_msg: str = str(e).lower()
+                    if (
+                        "errno 11" in err_msg
+                        or "resource temporarily unavailable" in err_msg
+                    ):
+                        eagain_retry = True
+
+                if eagain_retry:
+                    # Check the clock when the socket is blocked
+                    try:
+                        if timeout is not None:
+                            remain: float = deadline - time_monotonic()
+                            if remain <= 0:
+                                raise WebSocketTimeout("Socket write timeout") from e
+
+                            if (
+                                not write_selector.select(remain)
+                                and time_monotonic() > deadline
+                            ):
+                                raise WebSocketTimeout("Socket write timeout") from e
+                        else:
+                            _ = write_selector.select(None)
+                    except (ValueError, OSError) as exc:
+                        if self.closed:
+                            raise WebSocketClosed("WebSocket is closed") from exc
+                        raise
+
                     continue
                 raise
 
@@ -1156,8 +1178,8 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        recv_queue_size: int = 128,
-        send_queue_size: int = 128,
+        recv_queue_size: int = 64,
+        send_queue_size: int = 32,
         max_send_batch_size: int = 64,
         coalesce_frames: bool = False,
         ws_retry: WebSocketRetryStrategy | None = None,
