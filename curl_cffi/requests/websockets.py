@@ -371,7 +371,11 @@ class WebSocket(BaseWebSocket):
         return self
 
     def __next__(self) -> bytes:
-        msg, flags = self.recv()
+        try:
+            msg, flags = self.recv()
+        except WebSocketClosed:
+            raise StopIteration from None
+
         if flags & CurlWsFlag.CLOSE:
             raise StopIteration
         return msg
@@ -834,11 +838,11 @@ class WebSocket(BaseWebSocket):
 
             except CurlError as e:
                 code: int = e.code
-                eagain_retry: bool = False
+                retry_eagain: bool = False
 
                 # Handle normal cURL EAGAINs
                 if code == CurlECode.AGAIN:
-                    eagain_retry = True
+                    retry_eagain = True
 
                 # EAGAIN ("errno 11") bubbling up as SEND_ERROR from BoringSSL
                 elif code == CurlECode.SEND_ERROR:
@@ -847,9 +851,9 @@ class WebSocket(BaseWebSocket):
                         "errno 11" in err_msg
                         or "resource temporarily unavailable" in err_msg
                     ):
-                        eagain_retry = True
+                        retry_eagain = True
 
-                if eagain_retry:
+                if retry_eagain:
                     # Check the clock when the socket is blocked
                     try:
                         if timeout is not None:
@@ -2163,6 +2167,7 @@ class AsyncWebSocket(BaseWebSocket):
         next_yield: float = loop_time() + time_slice
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
         e_again: int = int(CurlECode.AGAIN)
+        e_send_err: int = int(CurlECode.SEND_ERROR)
         cont_flag: int = int(CurlWsFlag.CONT)
         max_zero_writes: int = 3
 
@@ -2219,7 +2224,23 @@ class AsyncWebSocket(BaseWebSocket):
                     next_yield = loop_time() + time_slice
 
             except CurlError as e:
-                if e.code == e_again:
+                code: int = e.code
+                retry_eagain: bool = False
+
+                # Handle normal cURL EAGAINs
+                if code == e_again:
+                    retry_eagain = True
+
+                # EAGAIN ("errno 11") bubbling up as SEND_ERROR from BoringSSL
+                elif code == e_send_err:
+                    err_msg: str = str(e).lower()
+                    if (
+                        "errno 11" in err_msg
+                        or "resource temporarily unavailable" in err_msg
+                    ):
+                        retry_eagain = True
+
+                if retry_eagain:
                     # Wait for socket to be writable
                     write_future: Future[None] = create_future()
                     try:
