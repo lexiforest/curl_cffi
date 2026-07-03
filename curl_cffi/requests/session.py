@@ -577,7 +577,7 @@ class Session(BaseSession[R]):
         on_open: Callable[[WebSocket], None] | None = None,
         on_close: Callable[[WebSocket, int, str], None] | None = None,
         on_data: Callable[[WebSocket, bytes, CurlWsFrame], None] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> WebSocket:
         """Connects to a websocket url.
 
