@@ -139,7 +139,7 @@ For applications that prefer an event-driven approach over manual iteration, the
 Thread Safety
 -------------
 
-The synchronous ``WebSocket`` relies on ``libcurl``, which is **not thread-safe** at the C level. However, you can generally use multiple threads (e.g., one thread for reading, one for writing) in standard Python because the Global Interpreter Lock (GIL) safely organizes the operations behind the scenes.
+The synchronous ``WebSocket`` relies on ``libcurl``, which is **not thread-safe** at the C level.
 
 If you decide to use multiple threads, you must follow these rules:
 
