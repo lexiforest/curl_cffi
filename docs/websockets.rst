@@ -136,6 +136,18 @@ For applications that prefer an event-driven approach over manual iteration, the
             # Blocks the thread and dispatches events as they arrive
             ws.run_forever()
 
+Thread Safety
+-------------
+
+The synchronous ``WebSocket`` relies on ``libcurl``, which is **not thread-safe** at the C level. However, you can generally use multiple threads (e.g., one thread for reading, one for writing) in standard Python because the Global Interpreter Lock (GIL) safely organizes the operations behind the scenes.
+
+If you decide to use multiple threads, you must follow these rules:
+
+1. **Closing Connections:** Never call ``ws.close()`` or ``ws.terminate()`` from a background thread while another thread is actively reading or writing. Doing so destroys the underlying memory while it is still in use and will likely crash your program (Segmentation Fault). Always let the main thread handle the cleanup.
+2. **Python 3.13+ Free-Threading:** Do not share a synchronous WebSocket across threads if you are running a No-GIL build of Python. Without the GIL's protection, simultaneous reads and writes can crash ``libcurl``.
+
+For highly concurrent, full-duplex streaming, using the **AsyncWebSocket** is the safest and most recommended approach.
+
 Asynchronous Client
 ===================
 
@@ -166,7 +178,7 @@ Because sending is queued, these methods return immediately unless the internal 
     await ws.send_str("Hello")
     await ws.send_json({"action": "subscribe"})
 
-**Flushing**
+**Flushing:**
 If your application logic requires confirmation that messages have been successfully handed off to the underlying network socket before proceeding, use ``flush()``.
 
 .. code-block:: python
@@ -242,7 +254,7 @@ Context managers handle closing **automatically**. If you need to manage the lif
     # Forceful shutdown: cancels all I/O and severs the socket immediately.
     ws.terminate()
 
-These methods are fully idempotent and can be called multiple times.
+These methods are fully idempotent and can be called multiple times. For the ``AsyncWebSocket``, ``ws.terminate()`` is thread-safe and task-safe.
 
 Reliability & Retries
 ---------------------
@@ -281,7 +293,7 @@ You do not need to worry about frame fragmentation for large payloads. However, 
 
 .. warning::
 
-    According to the RFC, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in every chunk, alongside the ``CONT`` flag. The final chunk simply drops the ``CONT`` flag to conclude the message.
+    According to the ``libcurl`` specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in every chunk, alongside the ``CONT`` flag. The final chunk simply drops the ``CONT`` flag to conclude the message.
 
 .. code-block:: python
 
@@ -309,7 +321,7 @@ Network errors are raised as ``WebSocketError`` or its subclasses.
     try:
         msg = ws.recv_str() # Add 'await' in Async
     except WebSocketClosed as e:
-        print(f"Closed: {e.code} - {e.message}")
+        print(f"Closed: {e.code} - {e}")
     except WebSocketTimeout:
         print("Did not receive a message in time.")
     except WebSocketError as e:
