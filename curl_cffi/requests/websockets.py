@@ -570,6 +570,8 @@ class WebSocket(BaseWebSocket):
             WebSocketError: If a network-level transport error occurs.
 
         Notes:
+            This method is NOT thread-safe.
+
             Message fragmentation and reassembly are handled automatically by the
             implementation, so callers will always receive complete messages.
         """
@@ -770,6 +772,8 @@ class WebSocket(BaseWebSocket):
             WebSocketTimeout: The send operation timed out.
 
         Note:
+            This method is NOT thread-safe.
+
             There are no limits on the size of the message that can be sent.
             Large outbound messages are seamlessly broken down into optimal
             fragments using the ``CURLWS_CONT`` flag, arriving as a single
