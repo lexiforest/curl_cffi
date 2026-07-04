@@ -235,7 +235,7 @@ class BaseWebSocket:
         payload_bytes: bytes = (
             payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
         )
-        if len(payload_bytes) > 125:  # Inline constant
+        if len(payload_bytes) > self._MAX_CONTROL_FRAME_SIZE:
             raise WebSocketError(
                 f"Ping frame has invalid length: {len(payload_bytes)}",
                 CurlECode.TOO_LARGE,
@@ -503,6 +503,10 @@ class WebSocket(BaseWebSocket):
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             curl_options: extra curl options to use.
+
+        Note:
+            The ``WebSocket`` is NOT thread-safe, add your own locking
+            or use ``AsyncWebSocket`` for concurrent sending and receiving.
         """
 
         # Reset socket and selector cache
@@ -546,6 +550,7 @@ class WebSocket(BaseWebSocket):
             curl_options=curl_options,
         )
 
+        # Magic number defined in: https://curl.se/docs/websocket.html
         _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
         _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         curl.perform()
@@ -665,13 +670,11 @@ class WebSocket(BaseWebSocket):
 
                 if should_retry:
                     if timeout is not None:
-                        remain: float = deadline - time_monotonic()
-                        if remain <= 0:
+                        if not read_selector.select(deadline - time_monotonic()):
                             raise WebSocketTimeout(
                                 "WebSocket recv() timed out",
                                 CurlECode.OPERATION_TIMEDOUT,
-                            ) from e
-                        _ = read_selector.select(remain)
+                            ) from None
                     else:
                         _ = read_selector.select(None)
                     continue
@@ -865,15 +868,10 @@ class WebSocket(BaseWebSocket):
                     # Check the clock when the socket is blocked
                     try:
                         if timeout is not None:
-                            remain: float = deadline - time_monotonic()
-                            if remain <= 0:
-                                raise WebSocketTimeout("Socket write timeout") from e
-
-                            if (
-                                not write_selector.select(remain)
-                                and time_monotonic() > deadline
-                            ):
-                                raise WebSocketTimeout("Socket write timeout") from e
+                            if not write_selector.select(deadline - time_monotonic()):
+                                raise WebSocketTimeout(
+                                    "Socket write timeout", CurlECode.OPERATION_TIMEDOUT
+                                ) from None
                         else:
                             _ = write_selector.select(None)
                     except (ValueError, OSError) as exc:
@@ -1131,8 +1129,9 @@ class WebSocket(BaseWebSocket):
         if isinstance(message, str):
             message = message.encode("utf-8")
 
-        if len(message) > 123:
-            message = message[:123]
+        max_msg_size: int = self._MAX_CONTROL_FRAME_SIZE - 2
+        if len(message) > max_msg_size:
+            message = message[:max_msg_size]
 
         if self._close_code is None:
             self._close_code = code
@@ -1630,7 +1629,8 @@ class AsyncWebSocket(BaseWebSocket):
                     await wait_for(self._send_queue.put((payload, flags)), timeout)
                 except AsyncTimeout as e:
                     raise WebSocketTimeout(
-                        "Send queue full (network slow) - hit timeout enqueuing message"
+                        "Send queue full (network slow) - timed out enqueuing message",
+                        code=CurlECode.OPERATION_TIMEDOUT,
                     ) from e
             else:
                 await self._send_queue.put((payload, flags))
@@ -1746,8 +1746,9 @@ class AsyncWebSocket(BaseWebSocket):
                 message = message.encode("utf-8")
 
             # 125 bytes (Spec) - 2 bytes for close code
-            if len(message) > 123:
-                message = message[:123]
+            max_msg_size: int = self._MAX_CONTROL_FRAME_SIZE - 2
+            if len(message) > max_msg_size:
+                message = message[:max_msg_size]
 
             # Store the code and reason
             if self._close_code is None:
@@ -2333,7 +2334,10 @@ class AsyncWebSocket(BaseWebSocket):
             )
 
             if not done:
-                raise WebSocketTimeout("Timed out waiting for send queue to flush.")
+                raise WebSocketTimeout(
+                    "Timed out waiting for send queue to flush.",
+                    CurlECode.OPERATION_TIMEDOUT,
+                )
 
             # Fast path: queue drained
             if join_task in done:
