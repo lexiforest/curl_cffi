@@ -23,7 +23,7 @@ with suppress(ImportError):
     from markdownify import markdownify as md
     import readability as rd
 
-CHARSET_RE = re.compile(r"charset=([\w-]+)")
+CHARSET_RE = re.compile(r"""charset\s*=\s*["']?([\w-]+)["']?""", re.IGNORECASE)
 # https://www.rfc-editor.org/rfc/rfc7159#section-8.1
 JSON_NATIVE_ENCODINGS = {
     "utf-8",
