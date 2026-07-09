@@ -16,3 +16,11 @@ int _curl_easy_setopt(void* curl, int option, void* parameter) {
     }
     return (int)curl_easy_setopt(curl, (CURLoption)option, parameter);
 }
+
+int _curl_share_setopt(void* share, int option, void* parameter) {
+    // SHARE/UNSHARE read an int via va_arg; callbacks and userdata are pointers.
+    if (option == CURLSHOPT_SHARE || option == CURLSHOPT_UNSHARE) {
+        return (int)curl_share_setopt((CURLSH*)share, (CURLSHoption)option, *(int*)parameter);
+    }
+    return (int)curl_share_setopt((CURLSH*)share, (CURLSHoption)option, parameter);
+}

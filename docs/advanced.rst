@@ -257,3 +257,37 @@ With http/2, you can optionally send a ping frame to keep the connection alive w
    async with AsyncSession() as s:
        await s.get("https://example.com")
        await s.upkeep()
+
+
+Connection reuse across threads
+===============================
+
+A synchronous ``Session`` keeps one curl handle per thread (``use_thread_local_curl``,
+on by default), because a curl handle is not safe to use from several threads at once.
+The connection pool lives inside each handle, so connections — and options that act on
+the pool such as ``MAXCONNECTS`` — are only reused *within* a thread. Reusing the same
+``Session`` from a thread pool therefore opens at least one connection per thread.
+
+libcurl does **not** support sharing the connection cache between concurrent threads,
+so there is no safe way to pool the actual connections across the thread-local handles.
+If you need real connection reuse across workers, use one ``Session`` per worker, or the
+``AsyncSession``, whose connections are shared within its event loop.
+
+What you *can* share across threads is the DNS cache and the TLS session cache, which
+cuts the cost of reconnecting to the same host (DNS lookups and TLS handshakes). Pass a
+``CurlShare`` to the session:
+
+.. code-block:: python
+
+   from curl_cffi import CurlShare, Session
+
+   share = CurlShare()  # shares DNS + TLS sessions, safe across threads
+   with Session(curl_share=share) as s:
+       s.get("https://example.com")
+
+The share is attached to every handle the session creates, including the ones used for
+streaming and WebSocket responses. ``AsyncSession`` accepts the same ``curl_share=``
+argument, sharing the DNS and TLS caches across the handles in its pool.
+
+``CurlShare`` can also share the connection cache (``CurlShare(connect=True)``), but that
+is only safe when the handles are used serially, never from multiple concurrent threads.

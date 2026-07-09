@@ -627,3 +627,47 @@ class CurlFollow(IntEnum):
     # curl-impersonate: Follow redirects, but reject redirects to
     # internal/private IP addresses (SSRF protection)
     SAFE = 4
+
+
+class CurlSHOpt(IntEnum):
+    """``CURLSHOPT_`` constants from libcurl,
+    see: https://curl.se/libcurl/c/curl_share_setopt.html"""
+
+    NONE = 0
+    SHARE = 1
+    UNSHARE = 2
+    LOCKFUNC = 3
+    UNLOCKFUNC = 4
+    USERDATA = 5
+
+
+class CurlLockData(IntEnum):
+    """``CURL_LOCK_DATA_`` constants from libcurl, the data a share may hold."""
+
+    NONE = 0
+    SHARE = 1
+    COOKIE = 2
+    DNS = 3
+    SSL_SESSION = 4
+    CONNECT = 5
+    PSL = 6
+    HSTS = 7
+
+
+class CurlLockAccess(IntEnum):
+    """``CURL_LOCK_ACCESS_`` constants passed to the share lock callback."""
+
+    NONE = 0
+    SHARED = 1
+    SINGLE = 2
+
+
+class CurlSHCode(IntEnum):
+    """``CURLSHE_`` return codes from ``curl_share_*`` functions."""
+
+    OK = 0
+    BAD_OPTION = 1
+    IN_USE = 2
+    INVALID = 3
+    NOMEM = 4
+    NOT_BUILT_IN = 5
