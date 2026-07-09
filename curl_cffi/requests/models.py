@@ -3,6 +3,7 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
+from json import loads as _stdlib_loads
 from typing import Any, Optional, Union
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
@@ -13,11 +14,12 @@ from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
 
-# Use orjson if present
+# Use orjson if present. orjson.loads() is faster but accepts no keyword
+# arguments, so Response.json() falls back to stdlib json when kwargs are given.
 try:
     from orjson import loads
 except ImportError:
-    from json import loads
+    loads = _stdlib_loads
 
 with suppress(ImportError):
     from markdownify import markdownify as md
@@ -274,12 +276,15 @@ class Response:
 
     def json(self, **kw):
         """return a parsed json object of the content."""
+        # orjson.loads() takes no keyword arguments, so fall back to the stdlib
+        # json parser whenever the caller passes any (e.g. parse_float). See #639.
+        _loads = _stdlib_loads if kw else loads
         charset_encoding = self.charset_encoding
         if charset_encoding is not None:
             encoding = charset_encoding.lower().replace("_", "-")
             if encoding not in JSON_NATIVE_ENCODINGS:
-                return loads(self.text, **kw)
-        return loads(self.content, **kw)
+                return _loads(self.text, **kw)
+        return _loads(self.content, **kw)
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
