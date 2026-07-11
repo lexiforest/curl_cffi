@@ -417,7 +417,7 @@ class WebSocket(BaseWebSocket):
             self.close()
         else:
             # Don't mask existing exception during teardown
-            with suppress(CurlError, WebSocketTimeout):
+            with suppress(CurlError):
                 self.close()
 
     def _emit(
@@ -449,8 +449,6 @@ class WebSocket(BaseWebSocket):
         close_code: int = self._set_close_state(message)
         if self.autoclose and not self.closed:
             self.close(close_code)
-        else:
-            self.terminate()
 
     def connect(
         self,
@@ -1585,10 +1583,6 @@ class AsyncWebSocket(BaseWebSocket):
 
         try:
             return loads(data)
-        except UnicodeDecodeError as e:
-            raise WebSocketError(
-                "Invalid UTF-8 in JSON text frame", WsCloseCode.INVALID_DATA
-            ) from e
         except Exception as e:
             raise WebSocketError(
                 f"Invalid JSON payload: {e}", WsCloseCode.INVALID_DATA
