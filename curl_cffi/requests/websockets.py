@@ -247,12 +247,26 @@ class BaseWebSocket:
         return _STRUCT_PACK_CLOSE(code) + reason
 
     def _unpack_close_frame(self, frame: bytes) -> tuple[int, str]:
-        """Unpack close frame using cached Struct.unpack method."""
+        """Unpack close frame, decode reason, and validate close status codes.
+
+        Args:
+            frame (bytes): The WebSocket close frame.
+
+        Raises:
+            WebSocketError: The close frame is invalid.
+            WebSocketError: The close frame code is outside the protocol range.
+            WebSocketError: The close frame message is not UTF-8 encoded.
+
+        Returns:
+            tuple[int, str]: The close code and reason.
+        """
+
         if len(frame) < 2:
             return WsCloseCode.UNKNOWN, ""
 
         try:
-            return _STRUCT_UNPACK_CLOSE(frame)[0], frame[2:].decode("utf-8")
+            code: int = _STRUCT_UNPACK_CLOSE(frame)[0]
+            reason: str = frame[2:].decode("utf-8")
         except UnicodeDecodeError as e:
             raise WebSocketError(
                 "Invalid close message", WsCloseCode.INVALID_DATA
@@ -261,6 +275,15 @@ class BaseWebSocket:
             raise WebSocketError(
                 "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
             ) from e
+
+        # RFC 6455 Section 7.4 Close Status Code Validation
+        if code < 1000 or code >= 5000 or code in {1004, 1005, 1006, 1015}:
+            raise WebSocketError(
+                f"Invalid close status code received on wire: {code}",
+                WsCloseCode.PROTOCOL_ERROR,
+            )
+
+        return code, reason
 
     def _set_close_state(self, frame: bytes) -> int:
         """Unpacks the close frame, sets internal state, and returns fallback code."""
