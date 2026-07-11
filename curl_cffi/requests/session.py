@@ -568,37 +568,97 @@ class Session(BaseSession[R]):
     def ws_connect(
         self,
         url: str,
-        autoclose: bool = True,
-        skip_utf8_validation: bool = False,
-        ws_retry: WebSocketRetryStrategy | None = None,
-        max_message_size: int = 4 * 1024 * 1024,
         on_message: Callable[[WebSocket, bytes | str], None] | None = None,
         on_error: Callable[[WebSocket, CurlError], None] | None = None,
         on_open: Callable[[WebSocket], None] | None = None,
         on_close: Callable[[WebSocket, int, str], None] | None = None,
         on_data: Callable[[WebSocket, bytes, CurlWsFrame], None] | None = None,
-        **kwargs: Any,
+        *,
+        autoclose: bool = True,
+        skip_utf8_validation: bool = False,
+        ws_retry: WebSocketRetryStrategy | None = None,
+        max_message_size: int = 4 * 1024 * 1024,
+        params: (
+            dict[str, object]
+            | list[object]
+            | tuple[str, int | list[str] | dict[str, str | int]]
+            | None
+        ) = None,
+        headers: HeaderTypes | None = None,
+        cookies: CookieTypes | None = None,
+        auth: tuple[str, str] | None = None,
+        timeout: float | tuple[float, float] | object | None = NOT_SET,
+        allow_redirects: bool | CurlFollow | str = True,
+        max_redirects: int = 30,
+        proxies: ProxySpec | None = None,
+        proxy: str | None = None,
+        proxy_auth: tuple[str, str] | None = None,
+        verify: bool | None = None,
+        referer: str | None = None,
+        accept_encoding: str | None = "gzip, deflate, br",
+        impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
+        ja3: str | None = None,
+        akamai: str | None = None,
+        perk: str | None = None,
+        extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
+        default_headers: bool = True,
+        quote: str | Literal[False] = "",
+        http_version: CurlHttpVersion | None = None,
+        interface: str | None = None,
+        cert: str | tuple[str, str] | None = None,
+        max_recv_speed: int = 0,
+        curl_options: dict[CurlOpt, str] | None = None,
     ) -> WebSocket:
-        """Connects to a websocket url.
+        """Connects to a WebSocket URL using the session's configuration.
 
-        Note: This method is deprecated, use :meth:`WebSocket.connect()` instead.
+        libcurl automatically handles pings and pongs under the hood.
+        Ref: https://curl.se/libcurl/c/libcurl-ws.html
 
         Args:
-            url: the ws url to connect.
-            autoclose: whether to close the WebSocket after receiving a close frame.
-            skip_utf8_validation: Skip UTF-8 check for text frames in run_forever().
-            ws_retry: Retry policy for WebSocket messages.
-            max_message_size: Maximum allowed size for a complete received message.
-            on_message: message callback, ``def on_message(ws, str | bytes)``
-            on_error: error callback, ``def on_error(ws, error)``
-            on_open: open callback, ``def on_open(ws)``
-            on_close: close callback, ``def on_close(ws)``
-            on_data: raw data callback, ``def on_data(ws, bytes, frame)``
-
-        Other parameters are the same as :meth:`Session.request()`.
+            url: The WebSocket URL to connect to.
+            on_message: Message received callback: ``def on_message(ws, msg)``.
+            on_error: Error callback: ``def on_error(ws, error)``.
+            on_open: Open callback: ``def on_open(ws)``.
+            on_close: Close callback: ``def on_close(ws, code, reason)``.
+            on_data: Raw data frame callback: ``def on_data(ws, bytes, frame)``.
+            autoclose: Whether to automatically close on CLOSE frame.
+            skip_utf8_validation: Skip UTF-8 check during ``run_forever()``.
+            ws_retry: Custom retry strategy for failed network receives.
+            max_message_size: Maximum allowed message size in bytes (default ``4MB``).
+            params: Query string parameters to attach to the handshake URL.
+            headers: Handshake request headers (merges with session defaults).
+            cookies: Handshake request cookies (merges with session defaults).
+            auth: HTTP basic auth, a tuple of (username, password).
+            timeout: Handshake connection phase timeout in seconds.
+            allow_redirects: Allow redirects. Can be a bool, ``CurlFollow``, or "safe".
+            max_redirects: Max redirect counts (default 30). Use -1 for unlimited.
+            proxies: Dictionary of proxies, e.g. ``{"http": proxy_url}``.
+            proxy: Proxy URL. Cannot be used concurrently with `proxies`.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
+            verify: Whether to verify SSL/TLS certificates.
+            referer: Shortcut for setting the HTTP Referer header.
+            accept_encoding: Shortcut for setting the Accept-Encoding header.
+            impersonate: Which browser version or fingerprint to impersonate.
+            ja3: JA3 TLS client fingerprint string to impersonate.
+            akamai: Akamai HTTP/2 fingerprint string to impersonate.
+            perk: Perk fingerprint option to impersonate.
+            extra_fp: Extra fingerprint options complementing ja3 and akamai.
+            default_headers: Whether to set default browser headers.
+            quote: Quote (percent-encode) characters. Default safe string is
+                ``!#$%&'()*+,/:;=?@[]~``. Set to a string to quote more, or ``False``
+                to bypass automatic encoding.
+            http_version: Limiting HTTP version to use during the handshake.
+            interface: Interface name or local IP to bind to.
+            cert: Tuple of (cert, key) filenames for client certificate auth.
+            max_recv_speed: Maximum receive speed in bytes per second.
+            curl_options: Dictionary of extra low-level curl options to apply.
 
         Returns:
-            A WebSocket instance to communicate with the server.
+            WebSocket: A fully-connected synchronous WebSocket instance.
+
+        Note:
+            The ``WebSocket`` is NOT thread-safe, add your own locking
+            or use ``AsyncWebSocket`` for concurrent sending and receiving.
         """
         self._check_session_closed()
 
@@ -619,16 +679,43 @@ class Session(BaseSession[R]):
             debug=self.debug,
         )
 
-        # Fix session cookies being ignored
-        user_cookies = cast(Cookies | None, kwargs.get("cookies"))
-        if user_cookies is not None:
-            merged_cookies = Cookies(self.cookies)
-            merged_cookies.update(user_cookies)
-            kwargs["cookies"] = merged_cookies
+        # Merge session cookies with call-specific cookies safely
+        if cookies is not None:
+            merged_cookies: Cookies = Cookies(self.cookies)
+            merged_cookies.update(cookies)
+            final_cookies: Cookies = merged_cookies
         else:
-            kwargs["cookies"] = self.cookies
+            final_cookies = self.cookies
 
-        _ = ws.connect(url, **kwargs)  # pyright: ignore[reportUnknownArgumentType]
+        # Invoke the explicit connection protocol on the WebSocket instance
+        _ = ws.connect(
+            url,
+            params=params,
+            headers=headers,
+            cookies=final_cookies,
+            auth=auth,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+            max_redirects=max_redirects,
+            proxies=proxies,
+            proxy=proxy,
+            proxy_auth=proxy_auth,
+            verify=verify,
+            referer=referer,
+            accept_encoding=accept_encoding,
+            impersonate=impersonate,
+            ja3=ja3,
+            akamai=akamai,
+            perk=perk,
+            extra_fp=extra_fp,
+            default_headers=default_headers,
+            quote=quote,
+            http_version=http_version,
+            interface=interface,
+            cert=cert,
+            max_recv_speed=max_recv_speed,
+            curl_options=curl_options,
+        )
         return ws
 
     def upkeep(self) -> int:

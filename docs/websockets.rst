@@ -100,7 +100,7 @@ All sending and receiving methods are blocking. Sending methods return the numbe
     # Send data
     ws.send_str("Hello", timeout=5.0)
     ws.send_bytes(b"\x00\x01\x02")
-    ws.send_json({"action": "subscribe"})
+    ws.send_json({"action": "subscribe"}, timeout=5.0)
 
     # Receive data (decodes utf-8 automatically)
     msg = ws.recv_str(timeout=5.0)
@@ -194,6 +194,11 @@ Concurrent calls to receive methods are fully supported. Messages are distribute
     # Iteration (yields raw bytes)
     async for message in ws:
         print(message.decode("utf-8"))
+
+    # Receive raw binary and flags
+    payload, flags = await ws.recv(timeout=5.0)  # Omit 'await' in Sync
+    if flags & CurlWsFlag.BINARY:
+        print(f"Received binary data: {payload}")
 
 
 Shared Features
@@ -390,6 +395,14 @@ To adjust event loop fairness during extremely high-volume streams, you can tune
     # Force more frequent yields for lower latency in other tasks (1ms)
     ws = await session.ws_connect(url, recv_time_slice=0.001)
 
+Upgrading from Earlier Versions
+===============================
+
+**Auto-Reassembly & recv_fragment**:
+The WebSocket clients now handle message fragmentation and reassembly automatically. You are guaranteed to receive complete logical messages when calling ``recv()``, ``recv_str()``, or ``recv_json()``.
+
+As a result, the ``recv_fragment()`` method has been deprecated and removed. If your existing code relied on ``recv_fragment()`` to manually stitch together ``CONT`` frames, you can now safely remove that logic and simply use ``recv()``.
+
 Performance Tuning
 ==================
 
@@ -397,4 +410,4 @@ The WebSocket protocol requires every client-to-server message to be masked (XOR
 
 Curl-CFFI uses a highly customized version of libcurl enhanced with AVX-512/AVX2/NEON SIMD vectorized masking. It is capable of multi-gigabit throughput in both directions.
 
-If your application needs to send massive volumes of data, you should **focus on sending fewer, larger messages** (e.g., 64KB to 1MB per message). This minimizes the framing and FFI overhead, allowing the C-layer SIMD instructions to process the payload at hardware limits.
+If your application needs to send large volumes of data, you should **focus on sending fewer, larger messages** (e.g., 64KB to 1MB per message). This minimizes the framing and FFI overhead, allowing the C-layer SIMD instructions to process the payload at hardware limits.

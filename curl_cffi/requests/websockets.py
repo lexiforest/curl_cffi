@@ -301,6 +301,7 @@ class BaseWebSocket:
     def terminate(self) -> None:
         """Terminate the underlying connection."""
         self.closed = True
+        self._sock_fd = -1
         self.curl.close()
 
 
