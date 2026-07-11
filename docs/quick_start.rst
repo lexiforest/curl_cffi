@@ -95,7 +95,7 @@ Messing with the URLs:
     import curl_cffi
 
     >>> params = {"foo": "bar"}
-    >>> r = requests.get("http://httpbin.org/get", params=params)
+    >>> r = curl_cffi.get("http://httpbin.org/get", params=params)
     >>> r.url
     'http://httpbin.org/get?foo=bar'
 
