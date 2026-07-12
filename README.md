@@ -286,8 +286,6 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 
 `curl_cffi` provides highly optimized, feature-rich WebSocket clients for both synchronous and asynchronous contexts.
 
-See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
-
 #### Synchronous WebSockets
 
 ```python
@@ -332,6 +330,8 @@ async def main():
 
 asyncio.run(main())
 ```
+
+See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
 
 ## Ecosystem
 
