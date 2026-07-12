@@ -216,10 +216,10 @@ print(r.json())
 `curl_cffi` supports the same browser versions preset as supported by our [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
 The open source version of `curl_cffi` includes versions when we are adding new capabilities for impersonating.
-If you see a version, e.g. `chrome135`, was skipped, it's simply because there's nothing new or we were busy at that time. 
+If you see a version, e.g. `chrome135`, was skipped, it's simply because there's nothing new or we were busy at that time.
 You can simply impersonate it with your own headers and the previous browser target.
 
-For a full list of preset fingerprints, see the [curl-impersonate docs](https://curl-impersonate.readthedocs.io/en/latest/fingerprints.html). 
+For a full list of preset fingerprints, see the [curl-impersonate docs](https://curl-impersonate.readthedocs.io/en/latest/fingerprints.html).
 We will no longer put duplicated and outdated info here.
 
 If you don't want to look up the headers/etc by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro).
@@ -231,7 +231,7 @@ We offer the Safari, Chrome, Firefox updates for free and others as part of the 
 The current number of fingerprints:
 
 ![Preset](https://img.shields.io/badge/Preset_Fingerprints-37-blue)
-![Free](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.free&label=Free%20Fingerprints) 
+![Free](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.free&label=Free%20Fingerprints)
 ![Pro](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.all&label=Pro%20Fingerprints)
 
 To see the current list of fingerprints on your device, use the command line:
@@ -284,9 +284,29 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 
 ### WebSockets
 
-```python
-from curl_cffi import WebSocket
+`curl_cffi` provides highly optimized, feature-rich WebSocket clients for both synchronous and asynchronous contexts.
 
+See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
+
+#### Synchronous WebSockets
+
+```python
+from curl_cffi import Session, WebSocket
+
+with Session() as session:
+    # Session parameters are automatically inherited
+    with session.ws_connect("wss://echo.websocket.org") as ws:
+        ws.send_str("Hello, World!", timeout=5.0)
+
+        # Direct blocking read
+        message = ws.recv_str(timeout=5.0)
+        print(f"Direct: {message}")
+
+        # Or iterate over incoming messages
+        for msg in ws:
+            print(f"Stream: {msg}")
+
+# Use event-driven callback style
 def on_message(ws: WebSocket, message: str | bytes):
     print(message)
 
@@ -294,20 +314,24 @@ ws = WebSocket(on_message=on_message)
 ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 ```
 
-### Asyncio WebSockets
+#### Asyncio WebSockets
 
 ```python
 import asyncio
 from curl_cffi import AsyncSession
 
-async with AsyncSession() as session:
-    async with session.ws_connect("wss://echo.websocket.org") as ws:
-        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-        async for message in ws:
-            print(message)
-```
+async def main():
+    async with AsyncSession() as session:
+        async with session.ws_connect("wss://echo.websocket.org") as ws:
+            # Concurrent sends
+            await asyncio.gather(*[ws.send_str(f"Msg {i}") for i in range(10)])
 
-See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
+            # Non-blocking message streams
+            async for message in ws:
+                print(f"Stream: {message}")
+
+asyncio.run(main())
+```
 
 ## Ecosystem
 

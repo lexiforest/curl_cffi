@@ -28,7 +28,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Literal
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 import websockets
@@ -977,6 +977,117 @@ class TestWebSocketRobustness:
 
         assert "Writer stalled" in str(exc.value)
         assert exc.value.code == CurlECode.WRITE_ERROR
+
+    def test_fragmented_reassembly_resumption_after_timeout(self) -> None:
+        """
+        Test that if a read timeout occurs in the middle of a fragmented message,
+        the accumulated chunks are safely persisted, and the message can be fully
+        reassembled on subsequent recv() calls.
+        """
+
+        mock_curl: MagicMock = MagicMock()
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws._sock_fd = 12  # Mock socket descriptor to bypass _get_sock_fd check
+        ws._read_selector = MagicMock()  # Mock selector
+
+        # Simulate a fragmented message:
+        # Fragment 1 (TEXT + CONT), then Fragment 2 (TEXT final)
+        # We use MagicMock to simulate the read-only C struct returned by libcurl
+        frame1: MagicMock = MagicMock()
+        frame1.flags = CurlWsFlag.TEXT | CurlWsFlag.CONT
+        frame1.bytesleft = 0
+
+        frame2: MagicMock = MagicMock()
+        frame2.flags = CurlWsFlag.TEXT
+        frame2.bytesleft = 0
+
+        # ws_recv will return Fragment 1 first. On the second iteration, it raises
+        # a transient EAGAIN, causing the selector to select and time out.
+        # On the next call to recv(), it returns the final Fragment 2.
+        call_count = 0
+
+        def mock_ws_recv() -> (
+            tuple[Literal[b"hello_"], MagicMock] | tuple[Literal[b"world"], MagicMock]
+        ):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return b"hello_", frame1
+            elif call_count == 2:
+                raise CurlError("Transient EAGAIN", CurlECode.AGAIN)
+            elif call_count == 3:
+                return b"world", frame2
+            raise AssertionError("Unexpected call to ws_recv")
+
+        mock_curl.ws_recv.side_effect = mock_ws_recv
+
+        # Mock the selector to return empty list, simulating a select timeout
+        ws._read_selector.select.return_value = []
+
+        # 1. First attempt: Call recv() with a timeout. It should read Fragment 1,
+        # hit EAGAIN, block on select(), time out, and raise WebSocketTimeout.
+        with pytest.raises(WebSocketTimeout) as exc_info:
+            _ = ws.recv(timeout=0.1)
+
+        assert "recv() timed out" in str(exc_info.value)
+
+        # VERIFY STATE PRESERVATION: Option B must have safely saved the partial state
+        assert len(ws._recv_chunks) == 1
+        assert ws._recv_chunks[0] == b"hello_"
+        assert ws._recv_msg_size == 6
+
+        # 2. Second attempt: Call recv() again. It should resume cleanly,
+        # bypass select, read Fragment 2, and return the complete reassembled payload.
+        msg, flags = ws.recv()
+
+        assert msg == b"hello_world"
+        assert flags == CurlWsFlag.TEXT
+
+        # VERIFY STATE CLEANUP: The instance states must be completely cleared
+        # on success
+        assert len(ws._recv_chunks) == 0
+        assert ws._recv_msg_size == 0
+
+    def test_fragmented_reassembly_aborted_on_server_eof(self) -> None:
+        """
+        Test that if the server disconnects (EOF/GOT_NOTHING) in the middle
+        of a fragmented message, the connection is forcefully closed, state
+        is discarded, and a WebSocketClosed exception is raised.
+        """
+
+        mock_curl: MagicMock = MagicMock()
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws._sock_fd = 12
+        ws._read_selector = MagicMock()
+
+        frame1: MagicMock = MagicMock()
+        frame1.flags = CurlWsFlag.TEXT | CurlWsFlag.CONT
+        frame1.bytesleft = 0
+
+        call_count = 0
+
+        def mock_ws_recv() -> tuple[Literal[b"partial_data"], MagicMock]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return b"partial_data", frame1
+            elif call_count == 2:
+                raise CurlError("Server EOF", CurlECode.GOT_NOTHING)
+            raise AssertionError("Unexpected call to ws_recv")
+
+        mock_curl.ws_recv.side_effect = mock_ws_recv
+
+        # Attempt to read the fragmented message
+        with pytest.raises(WebSocketClosed) as exc_info:
+            _ = ws.recv()
+
+        assert "Server EOF" in str(exc_info.value)
+
+        # VERIFY LEAK PREVENTION: The connection must be closed
+        # and the partial buffer cleared
+        assert ws.closed is True
+        assert len(ws._recv_chunks) == 0
+        assert ws._recv_msg_size == 0
 
 
 class TestWebSocketSIMDEdgeCases:

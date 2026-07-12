@@ -298,6 +298,31 @@ class BaseWebSocket:
 
         return code
 
+    def _is_transient_error(self, exc: CurlError) -> bool:
+        """Check if a CurlError represents a transient
+        blocking socket state (``EAGAIN``/``EWOULDBLOCK``)."""
+        code: int | CurlECode | Literal[0] = exc.code
+        if code == CurlECode.AGAIN:
+            return True
+
+        if code in (CurlECode.RECV_ERROR, CurlECode.SEND_ERROR):
+            err_msg: str = str(exc).lower()
+            return (
+                "errno 11" in err_msg or "resource temporarily unavailable" in err_msg
+            )
+
+        return False
+
+    def _get_retry_delay(self, attempt: int) -> float:
+        """Calculate the next retry delay using exponential backoff and jitter.
+        Formula: base * (2 ^ (attempt - 1)) + jitter (+/- 10%)
+        """
+        retry_delay: float = self.ws_retry.delay * (  # pyright: ignore[reportAny]
+            2 ** (attempt - 1)
+        )
+        jitter: float = retry_delay * 0.1
+        return max(0.0, retry_delay + uniform(-jitter, jitter))
+
     def terminate(self) -> None:
         """Terminate the underlying connection."""
         self.closed = True
@@ -315,6 +340,8 @@ class WebSocket(BaseWebSocket):
         "keep_running",
         "_read_selector",
         "_write_selector",
+        "_recv_chunks",
+        "_recv_msg_size",
     )
 
     def __init__(
@@ -359,6 +386,8 @@ class WebSocket(BaseWebSocket):
         self.keep_running: bool = False
         self._read_selector: BaseSelector | None = None
         self._write_selector: BaseSelector | None = None
+        self._recv_chunks: list[bytes] = []
+        self._recv_msg_size: int = 0
 
         self._emitters: dict[EventTypeLiteral, Callable[..., object]] = {}
         if on_open:
@@ -435,17 +464,17 @@ class WebSocket(BaseWebSocket):
                 error_callback: Callable[..., object] | None = self._emitters.get(
                     "error"
                 )
-                if error_callback:
+                if error_callback and event_type != "error":
                     _ = error_callback(self, e)
                 else:
                     user_warning(
-                        f"WebSocket callback '{event_type}' failed",
+                        f"WebSocket callback '{event_type}' failed: {e}",
                         CurlCffiWarning,
                         stacklevel=2,
                     )
 
     def _handle_close_frame(self, message: bytes) -> None:
-        """Robustly process a CLOSE frame without loop overhead."""
+        """Process a CLOSE frame."""
         close_code: int = self._set_close_state(message)
         if self.autoclose and not self.closed:
             self.close(close_code)
@@ -614,13 +643,16 @@ class WebSocket(BaseWebSocket):
         retry_on_error: bool = self.ws_retry.retry
         retry_codes: set[CurlECode] = self.ws_retry.codes
         max_retries: int = self.ws_retry.count
-        retry_base: float = float(self.ws_retry.delay)
         recv_error_retries: int = 0
         max_message_size: int = self._max_message_size
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
-        chunks: list[bytes] = []
+
+        # Fetch reassembly state from the instance
+        chunks: list[bytes] = self._recv_chunks
         chunks_append: Callable[[bytes], None] = chunks.append
-        msg_size: int = 0
+        msg_size: int = self._recv_msg_size
+        message_completed: bool = False
+
         flags: int = 0
         deadline: float = 0.0
         if timeout is not None:
@@ -631,107 +663,101 @@ class WebSocket(BaseWebSocket):
         cont_flag: int = int(CurlWsFlag.CONT)
         data_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
 
-        while True:
-            try:
-                # Read WebSocket frame from libcurl
-                chunk, frame = curl_ws_recv()
-                if recv_error_retries > 0:
-                    recv_error_retries = 0
+        try:
+            while True:
+                try:
+                    # Read WebSocket frame from libcurl
+                    chunk, frame = curl_ws_recv()
+                    if recv_error_retries > 0:
+                        recv_error_retries = 0
 
-                flags = frame.flags
+                    flags = frame.flags
 
-                # Data Frames (Text / Binary / Cont)
-                if flags & data_mask:
+                    # Data Frames (Text / Binary / Cont)
+                    if flags & data_mask:
 
-                    # Perform message size checks
-                    msg_size += len(chunk)
-                    if msg_size > max_message_size:
-                        chunks.clear()
-                        self.close(WsCloseCode.MESSAGE_TOO_BIG, b"Message too large")
-                        raise WebSocketError(
-                            f"Message too large: {msg_size} bytes.", CurlECode.TOO_LARGE
-                        )
-                    chunks_append(chunk)
+                        # Perform message size checks
+                        msg_size += len(chunk)
+                        if msg_size > max_message_size:
+                            chunks.clear()
+                            self.close(
+                                WsCloseCode.MESSAGE_TOO_BIG, b"Message too large"
+                            )
+                            raise WebSocketError(
+                                f"Message too large: {msg_size} bytes.",
+                                CurlECode.TOO_LARGE,
+                            )
 
-                    # If the message is complete, process and dispatch it
-                    if frame.bytesleft == 0 and not (flags & cont_flag):
-                        break
+                        chunks_append(chunk)
 
+                        # If the message is complete, process and return
+                        if frame.bytesleft == 0 and not (flags & cont_flag):
+                            message_completed = True
+                            return (
+                                chunks[0] if len(chunks) == 1 else b"".join(chunks)
+                            ), flags
+
+                        continue
+
+                    # If a CLOSE frame is received, the reader is done.
+                    if flags & close_flag:
+                        self._handle_close_frame(chunk)
+                        return chunk, flags
+
+                    # Silently consume PING/PONG and loop again
                     continue
 
-                # If a CLOSE frame is received, the reader is done.
-                if flags & close_flag:
-                    self._handle_close_frame(chunk)
-                    return chunk, flags
+                except CurlError as e:
+                    code: int = e.code
 
-                # Silently consume PING/PONG and loop again
-                continue
+                    # Handle Server Disconnect (Empty Reply)
+                    if code == CurlECode.GOT_NOTHING:
+                        self.terminate()
+                        raise WebSocketClosed(
+                            "Server EOF", WsCloseCode.ABNORMAL_CLOSURE
+                        ) from e
 
-            except CurlError as e:
-                code: int = e.code
-                should_retry: bool = False
+                    if self._is_transient_error(e):
+                        if timeout is not None:
+                            if not read_selector.select(
+                                max(0.0, deadline - time_monotonic())
+                            ):
+                                raise WebSocketTimeout(
+                                    "WebSocket recv() timed out",
+                                    CurlECode.OPERATION_TIMEDOUT,
+                                ) from None
+                        else:
+                            _ = read_selector.select(None)
+                        continue
 
-                # Handle normal cURL EAGAINs
-                if code == CurlECode.AGAIN:
-                    should_retry = True
-
-                # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
-                elif code == CurlECode.RECV_ERROR:
-                    err_msg: str = str(e).lower()
+                    # Apply the user-configured retry logic
                     if (
-                        "errno 11" in err_msg
-                        or "resource temporarily unavailable" in err_msg
+                        retry_on_error
+                        and code in retry_codes
+                        and recv_error_retries < max_retries
                     ):
-                        should_retry = True
+                        recv_error_retries += 1
+                        sleep_time: float = self._get_retry_delay(recv_error_retries)
 
-                # Handle Server Disconnect (Empty Reply)
-                elif code == CurlECode.GOT_NOTHING:
-                    raise WebSocketClosed(
-                        "Server EOF", WsCloseCode.ABNORMAL_CLOSURE
-                    ) from e
+                        if timeout is not None:
+                            remain: float = deadline - time_monotonic()
+                            if sleep_time > remain:
+                                sync_sleep(max(0.0, remain))
+                                continue
 
-                if should_retry:
-                    if timeout is not None:
-                        if not read_selector.select(deadline - time_monotonic()):
-                            raise WebSocketTimeout(
-                                "WebSocket recv() timed out",
-                                CurlECode.OPERATION_TIMEDOUT,
-                            ) from None
-                    else:
-                        _ = read_selector.select(None)
-                    continue
+                        sync_sleep(sleep_time)
+                        continue
 
-                # Apply the user-configured retry logic
-                if (
-                    retry_on_error
-                    and code in retry_codes
-                    and recv_error_retries < max_retries
-                ):
-                    recv_error_retries += 1
-                    # Formula: base * (2 ^ (attempt - 1)) + jitter (+/- 10%)
-                    retry_delay: float = retry_base * (  # pyright: ignore[reportAny]
-                        2 ** (recv_error_retries - 1)
-                    )
-                    sleep_time: float = max(
-                        0.0,
-                        retry_delay + uniform(-retry_delay * 0.1, retry_delay * 0.1),
-                    )
-
-                    # Check if user timeout is configured
-                    if timeout is not None:
-                        remain = deadline - time_monotonic()
-                        if sleep_time > remain:
-                            # Sleep exactly until the deadline.
-                            sync_sleep(max(0.0, remain))
-                            continue
-
-                    sync_sleep(sleep_time)
-                    continue
-
-                # Fatal error - can't retry
-                raise
-
-        return chunks[0] if len(chunks) == 1 else b"".join(chunks), flags
+                    # Fatal error - can't retry
+                    raise
+        finally:
+            if self.closed or message_completed:
+                # Clear stashed states on clean completions or connection shutdowns
+                chunks.clear()
+                self._recv_msg_size = 0
+            else:
+                # Save the immutable size back to the instance ONLY upon early exit
+                self._recv_msg_size = msg_size
 
     def recv_str(self, *, timeout: float | None = None) -> str:
         """Receive a text frame."""
@@ -870,27 +896,13 @@ class WebSocket(BaseWebSocket):
                 offset += n_sent
 
             except CurlError as e:
-                code: int = e.code
-                retry_eagain: bool = False
-
-                # Handle normal cURL EAGAINs
-                if code == CurlECode.AGAIN:
-                    retry_eagain = True
-
-                # EAGAIN ("errno 11") bubbling up as SEND_ERROR from BoringSSL
-                elif code == CurlECode.SEND_ERROR:
-                    err_msg: str = str(e).lower()
-                    if (
-                        "errno 11" in err_msg
-                        or "resource temporarily unavailable" in err_msg
-                    ):
-                        retry_eagain = True
-
-                if retry_eagain:
+                if self._is_transient_error(e):
                     # Check the clock when the socket is blocked
                     try:
                         if timeout is not None:
-                            if not write_selector.select(deadline - time_monotonic()):
+                            if not write_selector.select(
+                                max(0.0, deadline - time_monotonic())
+                            ):
                                 raise WebSocketTimeout(
                                     "Socket write timeout", CurlECode.OPERATION_TIMEDOUT
                                 ) from None
@@ -975,7 +987,6 @@ class WebSocket(BaseWebSocket):
         retry_on_error: bool = self.ws_retry.retry
         retry_codes: set[CurlECode] = self.ws_retry.codes
         max_retries: int = self.ws_retry.count
-        retry_base: float = float(self.ws_retry.delay)
         recv_error_retries: int = 0
 
         max_message_size: int = self._max_message_size
@@ -1064,24 +1075,10 @@ class WebSocket(BaseWebSocket):
                     continue
 
             except CurlError as e:
-                should_retry: bool = False
                 code: int = e.code
 
-                # Handle normal cURL EAGAINs
-                if code == CurlECode.AGAIN:
-                    should_retry = True
-
-                # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
-                elif code == CurlECode.RECV_ERROR:
-                    err_msg: str = str(e).lower()
-                    if (
-                        "errno 11" in err_msg
-                        or "resource temporarily unavailable" in err_msg
-                    ):
-                        should_retry = True
-
                 # Handle Server Disconnect (Empty Reply)
-                elif code == CurlECode.GOT_NOTHING:
+                if code == CurlECode.GOT_NOTHING:
                     e_close: WebSocketClosed = WebSocketClosed(
                         "Connection closed unexpectedly by server (EOF)",
                         WsCloseCode.ABNORMAL_CLOSURE,
@@ -1097,7 +1094,7 @@ class WebSocket(BaseWebSocket):
                     )
                     raise e_close from e
 
-                if should_retry:
+                if self._is_transient_error(e):
                     _ = read_selector.select(0.5)
                     continue
 
@@ -1109,13 +1106,7 @@ class WebSocket(BaseWebSocket):
                     and recv_error_retries < max_retries
                 ):
                     recv_error_retries += 1
-                    # Formula: base * (2 ^ (attempt - 1))
-                    retry_delay: float = retry_base * (  # pyright: ignore[reportAny]
-                        2 ** (recv_error_retries - 1)
-                    )
-                    # Add Jitter: +/- 10%
-                    jitter: float = retry_delay * 0.1
-                    sync_sleep(max(0.0, retry_delay + uniform(-jitter, jitter)))
+                    sync_sleep(self._get_retry_delay(recv_error_retries))
                     continue
 
                 # Fatal error
@@ -1130,6 +1121,7 @@ class WebSocket(BaseWebSocket):
                         self._close_code or close_code,
                         self._close_reason or "",
                     )
+
                 raise
 
     def close(
@@ -1879,9 +1871,6 @@ class AsyncWebSocket(BaseWebSocket):
         retry_on_error: bool = self.ws_retry.retry
         retry_codes: set[CurlECode] = self.ws_retry.codes
         max_retries: int = self.ws_retry.count
-        retry_base: float = float(self.ws_retry.delay)
-        e_again: int = int(CurlECode.AGAIN)
-        e_recv_err: int = int(CurlECode.RECV_ERROR)
         e_nothing: int = int(CurlECode.GOT_NOTHING)
         close_flag: int = int(CurlWsFlag.CLOSE)
         cont_flag: int = int(CurlWsFlag.CONT)
@@ -1906,23 +1895,8 @@ class AsyncWebSocket(BaseWebSocket):
                     chunk, frame = curl_ws_recv()
 
                 except CurlError as e:
-                    should_retry: bool = False
-
-                    # Handle normal cURL EAGAINs
-                    if e.code == e_again:
-                        should_retry = True
-
-                    # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
-                    elif e.code == e_recv_err:
-                        err_msg: str = str(e).lower()
-                        if (
-                            "errno 11" in err_msg
-                            or "resource temporarily unavailable" in err_msg
-                        ):
-                            should_retry = True
-
                     # Handle Server Disconnect (Empty Reply)
-                    elif e.code == e_nothing:
+                    if e.code == e_nothing:
                         final_exc: WebSocketClosed = WebSocketClosed(
                             "Connection closed unexpectedly by server (EOF)",
                             WsCloseCode.ABNORMAL_CLOSURE,
@@ -1932,7 +1906,7 @@ class AsyncWebSocket(BaseWebSocket):
                         self._finalize_connection(final_exc)
                         return
 
-                    if should_retry:
+                    if self._is_transient_error(e):
                         read_future: Future[None] = create_future()
                         try:
                             add_reader(self._sock_fd, set_fut_result, read_future)
@@ -1966,14 +1940,7 @@ class AsyncWebSocket(BaseWebSocket):
                         and recv_error_retries < max_retries
                     ):
                         recv_error_retries += 1
-                        # Formula: base * (2 ^ (attempt - 1))
-                        retry_delay: float = (  # pyright: ignore[reportAny]
-                            retry_base * (2 ** (recv_error_retries - 1))
-                        )
-                        # Add Jitter: +/- 10%
-                        jitter: float = retry_delay * 0.1
-                        retry_delay += uniform(-jitter, jitter)
-                        await sleep(max(0.0, retry_delay))
+                        await sleep(max(0.0, self._get_retry_delay(recv_error_retries)))
                         continue
 
                     # Fatal error - can't retry
@@ -2200,7 +2167,6 @@ class AsyncWebSocket(BaseWebSocket):
         next_yield: float = loop_time() + time_slice
         max_frame_size: int = self._MAX_CURL_FRAME_SIZE
         e_again: int = int(CurlECode.AGAIN)
-        e_send_err: int = int(CurlECode.SEND_ERROR)
         cont_flag: int = int(CurlWsFlag.CONT)
         max_zero_writes: int = 3
 
@@ -2257,23 +2223,7 @@ class AsyncWebSocket(BaseWebSocket):
                     next_yield = loop_time() + time_slice
 
             except CurlError as e:
-                code: int = e.code
-                retry_eagain: bool = False
-
-                # Handle normal cURL EAGAINs
-                if code == e_again:
-                    retry_eagain = True
-
-                # EAGAIN ("errno 11") bubbling up as SEND_ERROR from BoringSSL
-                elif code == e_send_err:
-                    err_msg: str = str(e).lower()
-                    if (
-                        "errno 11" in err_msg
-                        or "resource temporarily unavailable" in err_msg
-                    ):
-                        retry_eagain = True
-
-                if retry_eagain:
+                if self._is_transient_error(e):
                     # Wait for socket to be writable
                     write_future: Future[None] = create_future()
                     try:

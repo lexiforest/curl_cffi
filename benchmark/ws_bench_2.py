@@ -8,140 +8,19 @@ import hashlib
 import mmap
 import time
 from argparse import ArgumentParser, Namespace
-from collections.abc import AsyncGenerator
-from secrets import compare_digest
 from typing import cast
 
 from aiohttp import web
-from ws_bench_utils import config, generate_random_chunks, get_loop, logger
+from ws_bench_utils import (
+    compare_hash,
+    config,
+    generate_files,
+    get_loop,
+    logger,
+    stream_test_data,
+)
 
 from curl_cffi import AsyncSession, AsyncWebSocket, Response
-
-
-def compare_hash(source_hash: str, received_hash: str) -> None:
-    """Compare two hashes and log a message"""
-    if compare_digest(source_hash, received_hash):
-        logger.info("✅ Hash Verification SUCCESSFUL")
-        return
-
-    logger.warning("Received data hash: %s", received_hash)
-    logger.warning("❌ Hash Verification FAILED")
-
-
-def generate_files() -> None:
-    """
-    Generate the testing data file and its hash, save it to disk.
-    """
-    logger.info(
-        "Generating %d GiB test file: '%s'", config.total_gb, config.data_filename
-    )
-
-    if config.data_filename.is_file() and config.data_filename.stat().st_size > 0:
-        logger.info("File already exists, skipping generation")
-        return
-
-    try:
-        # Pre-allocate the disk space
-        logger.info("Pre-allocating disk space")
-        with config.data_filename.open("wb") as fp:
-            _ = fp.seek(config.total_bytes - 1)
-            _ = fp.write(b"\0")
-
-        logger.info("Disk space allocation complete")
-        hash_object = hashlib.sha256()
-        start_time: float = time.perf_counter()
-
-        # Write file to disk
-        with (
-            config.data_filename.open("r+b") as fpath,
-            mmap.mmap(
-                fpath.fileno(), config.total_bytes, access=mmap.ACCESS_WRITE
-            ) as mm,
-        ):
-            offset: int = 0
-            if hasattr(mm, "madvise"):
-                mm.madvise(mmap.MADV_SEQUENTIAL, 0, config.total_bytes)
-
-            logger.info(
-                "Writing data in %d chunks",
-                config.total_bytes // config.large_chunk_size,
-            )
-            for chunk in generate_random_chunks():
-                hash_object.update(chunk)
-                chunk_len = len(chunk)
-                mm[offset : offset + chunk_len] = chunk
-                offset += chunk_len
-
-            mm.flush()
-
-        end_time: float = time.perf_counter()
-        elapsed_time: float = end_time - start_time
-
-        # Write the hashes to file
-        final_hash: str = hash_object.hexdigest()
-        _ = config.hash_filename.write_text(final_hash, encoding="utf-8")
-        logger.info("Hash saved to '%s': %s", config.hash_filename, final_hash)
-
-        if elapsed_time > 0:
-            logger.info(
-                "Wrote '%s' in %.2fs. Average Speed: %.2f MiB/s",
-                config.data_filename,
-                elapsed_time,
-                (config.total_bytes / (1024 * 1024)) / elapsed_time,
-            )
-
-    except Exception:
-        logger.exception("Failed to generate file '%s'", config.data_filename)
-        return
-
-
-async def stream_test_data() -> AsyncGenerator[bytes]:
-    """Asynchronously yield test file data in chunks using mmap.
-
-    Returns:
-        AsyncGenerator[bytes]: Yields chunks of the test file.
-    """
-    drop_interval: int = 512 * 1024 * 1024  # 512 MiB
-    file_size: int = config.data_filename.stat().st_size
-    logger.info(
-        "Streaming '%s' in %d chunks",
-        config.data_filename,
-        file_size // config.large_chunk_size,
-    )
-
-    with (
-        config.data_filename.open("rb") as fp,
-        mmap.mmap(fp.fileno(), file_size, access=mmap.ACCESS_READ) as mm,
-    ):
-        can_madvise: bool = hasattr(mm, "madvise")
-        if can_madvise:
-            mm.madvise(mmap.MADV_SEQUENTIAL, 0, file_size)
-        last_drop: int = 0
-        start_time: float = time.perf_counter()
-        for offset in range(0, file_size, config.large_chunk_size):
-            chunk: bytes = mm[offset : offset + config.large_chunk_size]
-            yield chunk
-            if can_madvise and offset - last_drop >= drop_interval:
-                mm.madvise(
-                    mmap.MADV_DONTNEED,
-                    last_drop,
-                    offset - last_drop,
-                )
-                last_drop = offset
-
-        end_time: float = time.perf_counter()
-        if can_madvise and last_drop < file_size:
-            mm.madvise(mmap.MADV_DONTNEED, last_drop, file_size - last_drop)
-
-    elapsed_time: float = end_time - start_time
-    if elapsed_time > 0:
-        disk_speed = (file_size / (1024 * 1024)) / elapsed_time
-        logger.info(
-            "Streaming '%s' completed in %.2fs. Speed: %.2f MiB/s",
-            config.data_filename,
-            elapsed_time,
-            disk_speed,
-        )
 
 
 async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> None:
@@ -174,12 +53,12 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
 
                     if msg.type is web.WSMsgType.BINARY:
                         msg_len: int = len(msg.data)
-                        testdata_buffer[offset : offset + msg_len] = msg.data
+                        testdata_buffer[offset: offset + msg_len] = msg.data
                         offset += msg_len
             else:
                 async for msg in ws:
                     msg_len = len(msg)
-                    testdata_buffer[offset : offset + msg_len] = msg
+                    testdata_buffer[offset: offset + msg_len] = msg
                     offset += msg_len
 
             elapsed_time = time.perf_counter() - start_time
