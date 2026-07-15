@@ -224,6 +224,8 @@ class Curl:
         """
         self._curl = handle if handle else lib.curl_easy_init()
         self._headers = ffi.NULL
+        self._http3_headers = ffi.NULL
+        self._ws_headers = ffi.NULL
         self._proxy_headers = ffi.NULL
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
@@ -383,10 +385,18 @@ class Curl:
         else:
             raise NotImplementedError(f"Option unsupported: {option}")
 
-        if option == CurlOpt.HTTPHEADER:
+        header_options = {
+            CurlOpt.HTTPHEADER: "_headers",
+            CurlOpt.HTTP3_HTTPHEADER: "_http3_headers",
+            CurlOpt.WS_HTTPHEADER: "_ws_headers",
+        }
+        if option in header_options:
+            headers_attr = header_options[option]
+            headers = getattr(self, headers_attr)
             for header in value:
-                self._headers = lib.curl_slist_append(self._headers, header)
-            ret = lib._curl_easy_setopt(self._curl, option, self._headers)
+                headers = lib.curl_slist_append(headers, header)
+            setattr(self, headers_attr, headers)
+            ret = lib._curl_easy_setopt(self._curl, option, headers)
         elif option == CurlOpt.PROXYHEADER:
             for proxy_header in value:
                 self._proxy_headers = lib.curl_slist_append(
@@ -529,13 +539,17 @@ class Curl:
             self._resolve = ffi.NULL
 
         if clear_headers:
-            if self._headers != ffi.NULL:
-                lib.curl_slist_free_all(self._headers)
-            self._headers = ffi.NULL
-
-            if self._proxy_headers != ffi.NULL:
-                lib.curl_slist_free_all(self._proxy_headers)
-            self._proxy_headers = ffi.NULL
+            header_attrs = (
+                "_headers",
+                "_http3_headers",
+                "_ws_headers",
+                "_proxy_headers",
+            )
+            for header_attr in header_attrs:
+                headers = getattr(self, header_attr)
+                if headers != ffi.NULL:
+                    lib.curl_slist_free_all(headers)
+                setattr(self, header_attr, ffi.NULL)
 
     def duphandle(self) -> Curl:
         """Wrapper for ``curl_easy_duphandle``.

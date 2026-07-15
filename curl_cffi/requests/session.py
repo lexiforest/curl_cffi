@@ -39,7 +39,7 @@ from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
 from .cache import CacheSpec, normalize_cache_backend
-from .cookies import Cookies, CookieTypes, CurlMorsel
+from .cookies import Cookies, CookieTypes
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
@@ -361,13 +361,11 @@ class BaseSession(Generic[R]):
             except Exception:
                 continue
 
-        # Session cookies - from full cookie store
+        # Session cookies - accepted changes from all responses in the transfer
         discard_cookies = discard_cookies or self.discard_cookies
         if not discard_cookies:
-            morsels = [
-                CurlMorsel.from_curl_format(c) for c in c.getinfo(CurlInfo.COOKIELIST)
-            ]
-            self._cookies.update_cookies_from_curl(morsels)
+            changes = cast(list[bytes], c.getinfo(CurlInfo.COOKIECHANGES))
+            self._cookies.update_cookies_from_curl_changes(changes)
 
         rsp.primary_ip = cast(bytes, c.getinfo(CurlInfo.PRIMARY_IP)).decode()
         rsp.primary_port = cast(int, c.getinfo(CurlInfo.PRIMARY_PORT))
