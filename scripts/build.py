@@ -166,13 +166,21 @@ if is_static:
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
         ]
-    elif system in ("Linux", "Android"):
-        cxx_lib = "-lc++" if is_android else "-lstdc++"
+    elif is_android:
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
-            cxx_lib,
+            "-lc++",
+        ]
+    elif system == "Linux":
+        extra_link_args = [
+            "-Wl,--whole-archive",
+            static_libs[0],
+            "-Wl,--no-whole-archive",
+            "-Wl,-Bstatic",
+            "-lstdc++",  # boringssl requires libstdc++
+            "-Wl,-Bdynamic",
         ]
 
 libraries = get_curl_libraries()
