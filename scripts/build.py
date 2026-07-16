@@ -14,7 +14,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "2.0.0rc1"
+__version__ = "2.0.0rc2"
 
 
 def is_android_env() -> bool:
@@ -166,21 +166,13 @@ if is_static:
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
         ]
-    elif is_android:
+    elif system in ("Linux", "Android"):
+        cxx_lib = "-lc++" if is_android else "-lstdc++"
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
-            "-lc++",
-        ]
-    elif system == "Linux":
-        extra_link_args = [
-            "-Wl,--whole-archive",
-            static_libs[0],
-            "-Wl,--no-whole-archive",
-            "-Wl,-Bstatic",
-            "-lstdc++",  # boringssl requires libstdc++
-            "-Wl,-Bdynamic",
+            cxx_lib,
         ]
 
 libraries = get_curl_libraries()
