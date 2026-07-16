@@ -11,7 +11,11 @@ import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import HTTPError, TooManyRedirects
+from curl_cffi.requests.exceptions import (
+    CertificateVerifyError,
+    HTTPError,
+    TooManyRedirects,
+)
 from curl_cffi.requests.models import Response
 from curl_cffi.utils import CurlCffiWarning
 
@@ -506,29 +510,33 @@ def test_too_many_redirects(server):
     assert e.value.response.status_code == 301
 
 
-def test_safe_redirect_blocks_private_ip(server):
+def test_safe_redirect_blocks_private_ip(server, https_server):
     """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
-    target = str(server.url.copy_with(path="/"))
-    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
-    r = requests.get(url, allow_redirects=True)
+    public_redirect = str(server.url.copy_with(path="/redirect_to"))
+    target = str(https_server.url.copy_with(path="/"))
+    url = public_redirect + f"?to={target}"
+    r = requests.get(url, allow_redirects=True, verify=False)
     assert r.status_code == 200
     assert r.redirect_count == 1
 
-    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
-    with pytest.raises(requests.RequestsError, match="SSRF"):
-        requests.get(url, allow_redirects=CurlFollow.SAFE)
+    with pytest.raises(requests.RequestsError) as exc_info:
+        requests.get(url, allow_redirects=CurlFollow.SAFE, verify=False)
+    assert exc_info.value.code == CurlECode.COULDNT_CONNECT
 
 
-def test_safe_redirect_string(server):
+def test_safe_redirect_string(server, https_server):
     """The string 'safe' should behave the same as CurlFollow.SAFE."""
-    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
-    with pytest.raises(requests.RequestsError, match="SSRF"):
-        requests.get(url, allow_redirects="safe")
+    target = str(https_server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    with pytest.raises(requests.RequestsError) as exc_info:
+        requests.get(url, allow_redirects="safe", verify=False)
+    assert exc_info.value.code == CurlECode.COULDNT_CONNECT
 
 
 def test_verify(https_server):
-    with pytest.raises(requests.RequestsError, match="SSL certificate problem"):
+    with pytest.raises(CertificateVerifyError) as exc_info:
         requests.get(str(https_server.url), verify=True)
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 def test_verify_false(https_server):
@@ -700,6 +708,15 @@ def test_delete_cookies(server):
     s.get(str(server.url.copy_with(path="/set_cookies")))
     assert s.cookies["foo"] == "bar"
     s.get(str(server.url.copy_with(path="/delete_cookies")))
+    assert not s.cookies.get("foo")
+
+
+def test_delete_cookies_before_redirect(server):
+    s = requests.Session()
+    s.get(str(server.url.copy_with(path="/set_cookies")))
+    assert s.cookies["foo"] == "bar"
+    r = s.get(str(server.url.copy_with(path="/delete_cookies_then_redirect")))
+    assert "foo" not in r.json()
     assert not s.cookies.get("foo")
 
 

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt, _wrapper
+from curl_cffi import Curl, CurlECode, CurlError, CurlInfo, CurlOpt, _wrapper
 from curl_cffi.curl import _default_cacert
 
 #######################################################################################
@@ -79,6 +79,23 @@ def test_headers(server):
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
     assert headers["Foo"][0] == "baz"
+
+
+def test_protocol_specific_header_lists():
+    c = Curl()
+    try:
+        c.setopt(CurlOpt.HTTP3_HTTPHEADER, [b"X-H3: yes"])
+        c.setopt(CurlOpt.WS_HTTPHEADER, [b"X-WS: yes"])
+
+        assert _wrapper.ffi.string(c._http3_headers.data) == b"X-H3: yes"
+        assert _wrapper.ffi.string(c._ws_headers.data) == b"X-WS: yes"
+
+        c.clean_handles_and_buffers()
+
+        assert c._http3_headers == _wrapper.ffi.NULL
+        assert c._ws_headers == _wrapper.ffi.NULL
+    finally:
+        c.close()
 
 
 def test_proxy_headers(server):
@@ -257,8 +274,9 @@ def test_verify(https_server):
     c = Curl()
     url = str(https_server.url)
     c.setopt(CurlOpt.URL, url.encode())
-    with pytest.raises(CurlError, match="SSL certificate problem"):
+    with pytest.raises(CurlError) as exc_info:
         c.perform()
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 def test_verify_false(https_server):
