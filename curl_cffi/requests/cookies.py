@@ -7,6 +7,7 @@ __all__ = ["Cookies"]
 import re
 import time
 import warnings
+from contextlib import suppress
 from dataclasses import dataclass
 from http.cookiejar import Cookie, CookieJar
 from http.cookies import _unquote
@@ -186,6 +187,31 @@ class Cookies(MutableMapping[str, str]):
         for morsel in morsels:
             cookie = morsel.to_cookiejar_cookie()
             self.jar.set_cookie(cookie)
+        self.jar.clear_expired_cookies()
+
+    def _delete_curl_morsel(self, morsel: CurlMorsel) -> None:
+        domains = [morsel.hostname]
+        if morsel.subdomains:
+            domain = morsel.hostname.lstrip(".")
+            domains = [domain, f".{domain}"]
+
+        for domain in domains:
+            with suppress(KeyError):
+                self.jar.clear(domain, morsel.path, morsel.name)
+
+    def update_cookies_from_curl_changes(self, changes: list[bytes]) -> None:
+        for change in changes:
+            action, separator, curl_format = change.partition(b"\t")
+            if not separator or action not in (b"SET", b"DELETE"):
+                raise ValueError(f"Invalid curl cookie change: {change!r}")
+
+            morsel = CurlMorsel.from_curl_format(curl_format)
+            if action == b"SET":
+                self._delete_curl_morsel(morsel)
+                self.jar.set_cookie(morsel.to_cookiejar_cookie())
+            else:
+                self._delete_curl_morsel(morsel)
+
         self.jar.clear_expired_cookies()
 
     def set(
