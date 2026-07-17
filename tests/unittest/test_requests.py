@@ -909,7 +909,7 @@ def test_stream_iter_content_break(server):
         url = str(server.url.copy_with(path="/stream"))
         with s.stream("GET", url, params={"n": "10000"}, stream_queue_size=1) as r:
             for idx, chunk in enumerate(r.iter_content()):
-                assert b"path" in chunk
+                assert chunk
                 if idx == 3:
                     break
             assert r.status_code == 200

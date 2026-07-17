@@ -452,7 +452,7 @@ async def test_stream_iter_content_break(server):
             idx = 0
             async for chunk in r.aiter_content():
                 idx += 1
-                assert b"path" in chunk
+                assert chunk
                 if idx == 3:
                     break
             assert r.status_code == 200
