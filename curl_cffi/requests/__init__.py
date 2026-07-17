@@ -132,6 +132,7 @@ def request(
         cert: a tuple of (cert, key) filenames for client cert.
         stream: streaming the response, default False.
         max_recv_speed: maximum receive speed, bytes per second.
+        stream_queue_size: maximum number of response chunks buffered while streaming.
         multipart: upload files using the multipart format, see examples for details.
         discard_cookies: discard cookies from server. Default to False.
 

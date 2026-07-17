@@ -1,8 +1,12 @@
+import asyncio
+import queue
+import threading
 from unittest.mock import Mock
 
 import pytest
 
 from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from curl_cffi.curl import CURL_WRITEFUNC_ERROR, CURL_WRITEFUNC_PAUSE, CURLPAUSE_CONT
 from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests import utils
 
@@ -10,9 +14,92 @@ from curl_cffi.requests import utils
 class FakeCurl:
     def __init__(self):
         self.options = {}
+        self.pause_calls = []
 
     def setopt(self, option, value):
         self.options[option] = value
+
+    def pause(self, action):
+        self.pause_calls.append(action)
+        return 0
+
+
+def _set_stream_options(curl, queue_class, event_class):
+    return utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        stream=True,
+        stream_queue_size=1,
+        queue_class=queue_class,
+        event_class=event_class,
+    )
+
+
+def test_sync_stream_queue_applies_interruptible_backpressure():
+    curl = FakeCurl()
+    _, _, _, q, _, _, control = _set_stream_options(curl, queue.Queue, threading.Event)
+    write = curl.options[CurlOpt.WRITEFUNCTION]
+
+    assert q.maxsize == 1
+    assert write(b"first") == len(b"first")
+
+    result = []
+    started = threading.Event()
+
+    def write_second_chunk():
+        started.set()
+        result.append(write(b"second"))
+
+    writer = threading.Thread(target=write_second_chunk)
+    writer.start()
+    assert started.wait(timeout=1)
+    writer.join(timeout=0.05)
+    assert writer.is_alive()
+
+    control.abort()
+    writer.join(timeout=1)
+    assert result == [CURL_WRITEFUNC_ERROR]
+
+
+def test_async_stream_queue_pauses_and_resumes_curl():
+    curl = FakeCurl()
+    _, _, _, q, _, _, control = _set_stream_options(curl, asyncio.Queue, asyncio.Event)
+    write = curl.options[CurlOpt.WRITEFUNCTION]
+
+    assert q.maxsize == 1
+    assert write(b"first") == len(b"first")
+    assert write(b"second") == CURL_WRITEFUNC_PAUSE
+    assert q.get_nowait() == b"first"
+
+    control.resume()
+    assert curl.pause_calls == [CURLPAUSE_CONT]
+    assert write(b"second") == len(b"second")
+
+
+def test_stream_queue_size_must_be_positive():
+    curl = FakeCurl()
+
+    with pytest.raises(ValueError, match="stream_queue_size"):
+        utils.set_curl_options(
+            curl,
+            "GET",
+            "https://example.com/",
+            params_list=[None, None],
+            headers_list=[None, None],
+            cookies_list=[None, None],
+            proxies_list=[None, None],
+            verify_list=[True, None],
+            stream=True,
+            stream_queue_size=0,
+            queue_class=queue.Queue,
+            event_class=threading.Event,
+        )
 
 
 def test_set_curl_options_routes_perk_to_perk_options(monkeypatch):

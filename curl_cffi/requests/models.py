@@ -1,3 +1,4 @@
+from asyncio import CancelledError
 from contextlib import suppress
 import queue
 import re
@@ -135,6 +136,7 @@ class Response:
         self.stream_task: Optional[Future] = None
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
+        self.stream_control = None
         self._stream_closed = False
         self.download_size: int = 0
         self.upload_size: int = 0
@@ -291,7 +293,9 @@ class Response:
         if self.queue is None and self.stream_task is None and self.quit_now is None:
             return
         self._stream_closed = True
-        if self.quit_now:
+        if self.stream_control:
+            self.stream_control.abort()
+        elif self.quit_now:
             self.quit_now.set()
         if self.stream_task:
             self.stream_task.result()
@@ -342,6 +346,8 @@ class Response:
 
         while True:
             chunk = await self.queue.get()
+            if self.stream_control:
+                self.stream_control.resume()
 
             # re-raise the exception if something wrong happened.
             if isinstance(chunk, RequestException):
@@ -370,9 +376,22 @@ class Response:
 
     async def aclose(self):
         """Close the streaming connection, only valid in stream mode."""
-
+        if self._stream_closed:
+            return
+        if self.queue is None and self.astream_task is None and self.quit_now is None:
+            return
+        self._stream_closed = True
+        if self.stream_control:
+            self.stream_control.abort()
+        elif self.quit_now:
+            self.quit_now.set()
         if self.astream_task:
-            await self.astream_task
+            cancel = getattr(self.astream_task, "cancel", None)
+            done = getattr(self.astream_task, "done", None)
+            if cancel and (done is None or not done()):
+                cancel()
+            with suppress(CancelledError):
+                await self.astream_task
 
     # It prints the status code of the response instead of the object's memory location.
     def __repr__(self) -> str:

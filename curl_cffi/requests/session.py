@@ -44,7 +44,13 @@ from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import STREAM_END, Response
-from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
+from .utils import (
+    DEFAULT_STREAM_QUEUE_SIZE,
+    NOT_SET,
+    HttpVersionLiteral,
+    NotSetType,
+    set_curl_options,
+)
 from .websockets import (
     AsyncWebSocket,
     AsyncWebSocketContext,
@@ -136,6 +142,7 @@ if TYPE_CHECKING:
         doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
+        stream_queue_size: int
         multipart: Optional[CurlMime]
         discard_cookies: bool
 
@@ -654,6 +661,7 @@ class Session(BaseSession[R]):
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
+        stream_queue_size: int = DEFAULT_STREAM_QUEUE_SIZE,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
@@ -664,7 +672,15 @@ class Session(BaseSession[R]):
         else:
             c = self.curl
 
-        req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+        (
+            req,
+            buffer,
+            header_buffer,
+            q,
+            header_recved,
+            quit_now,
+            stream_control,
+        ) = set_curl_options(
             c,
             method=method,
             url=url,
@@ -704,6 +720,7 @@ class Session(BaseSession[R]):
             doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
+            stream_queue_size=stream_queue_size,
             multipart=multipart,
             cert=cert or self.cert,
             curl_options=self.curl_options,
@@ -730,16 +747,21 @@ class Session(BaseSession[R]):
                 try:
                     c.perform()
                 except CurlError as e:
-                    rsp = self._parse_response(
-                        c, buffer, header_buffer, default_encoding, discard_cookies
-                    )
-                    rsp.request = req
-                    error = code2error(e.code, str(e))
-                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
+                    if not stream_control.quit_now.is_set():
+                        rsp = self._parse_response(
+                            c,
+                            buffer,
+                            header_buffer,
+                            default_encoding,
+                            discard_cookies,
+                        )
+                        rsp.request = req
+                        error = code2error(e.code, str(e))
+                        stream_control.put(error(str(e), e.code, rsp))
                 finally:
                     if not cast(threading.Event, header_recved).is_set():
                         cast(threading.Event, header_recved).set()
-                    q.put(STREAM_END)  # type: ignore
+                    stream_control.put(STREAM_END)
 
             stream_task = self.executor.submit(perform)
 
@@ -752,8 +774,7 @@ class Session(BaseSession[R]):
             # Raise the exception if something wrong happens when receiving the header.
             first_element = _peek_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
-                if quit_now:
-                    quit_now.set()
+                stream_control.abort()
                 stream_task.result()
                 c.close()
                 raise first_element
@@ -761,9 +782,14 @@ class Session(BaseSession[R]):
             rsp.request = req
             rsp.stream_task = stream_task
             rsp.quit_now = quit_now
+            rsp.stream_control = stream_control
             rsp.queue = q
             if self.raise_for_status:
-                rsp.raise_for_status()
+                try:
+                    rsp.raise_for_status()
+                except RequestException:
+                    rsp.close()
+                    raise
             return rsp
         else:
             try:
@@ -836,6 +862,7 @@ class Session(BaseSession[R]):
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
+        stream_queue_size: int = DEFAULT_STREAM_QUEUE_SIZE,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ):
@@ -880,6 +907,7 @@ class Session(BaseSession[R]):
                     cert=cert,
                     stream=stream,
                     max_recv_speed=max_recv_speed,
+                    stream_queue_size=stream_queue_size,
                     multipart=multipart,
                     discard_cookies=discard_cookies,
                 )
@@ -1336,11 +1364,20 @@ class AsyncSession(BaseSession[R]):
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
+        stream_queue_size: int = DEFAULT_STREAM_QUEUE_SIZE,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
         curl = await self.pop_curl()
-        req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+        (
+            req,
+            buffer,
+            header_buffer,
+            q,
+            header_recved,
+            quit_now,
+            stream_control,
+        ) = set_curl_options(
             curl=curl,
             method=method,
             url=url,
@@ -1380,6 +1417,7 @@ class AsyncSession(BaseSession[R]):
             doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
+            stream_queue_size=stream_queue_size,
             multipart=multipart,
             cert=cert or self.cert,
             curl_options=self.curl_options,
@@ -1394,16 +1432,22 @@ class AsyncSession(BaseSession[R]):
                 try:
                     await task
                 except CurlError as e:
-                    rsp = self._parse_response(
-                        curl, buffer, header_buffer, default_encoding, discard_cookies
-                    )
-                    rsp.request = req
-                    error = code2error(e.code, str(e))
-                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
+                    if not stream_control.quit_now.is_set():
+                        rsp = self._parse_response(
+                            curl,
+                            buffer,
+                            header_buffer,
+                            default_encoding,
+                            discard_cookies,
+                        )
+                        rsp.request = req
+                        error = code2error(e.code, str(e))
+                        await q.put(error(str(e), e.code, rsp))
                 finally:
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
-                    await q.put(STREAM_END)  # type: ignore
+                    if not stream_control.quit_now.is_set():
+                        await q.put(STREAM_END)
 
             def cleanup(fut):
                 nonlocal curl_released
@@ -1426,17 +1470,26 @@ class AsyncSession(BaseSession[R]):
 
             first_element = _peek_aio_queue(q)  # type: ignore
             if isinstance(first_element, RequestException):
+                stream_control.abort()
                 if not curl_released:
                     self.release_curl(curl)
                 curl_released = True
+                stream_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await stream_task
                 raise first_element
 
             rsp.request = req
             rsp.astream_task = stream_task
             rsp.quit_now = quit_now
+            rsp.stream_control = stream_control
             rsp.queue = q
             if self.raise_for_status:
-                rsp.raise_for_status()
+                try:
+                    rsp.raise_for_status()
+                except RequestException:
+                    await rsp.aclose()
+                    raise
             return rsp
         else:
             try:
@@ -1499,6 +1552,7 @@ class AsyncSession(BaseSession[R]):
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
         max_recv_speed: int = 0,
+        stream_queue_size: int = DEFAULT_STREAM_QUEUE_SIZE,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
@@ -1543,6 +1597,7 @@ class AsyncSession(BaseSession[R]):
                     cert=cert,
                     stream=stream,
                     max_recv_speed=max_recv_speed,
+                    stream_queue_size=stream_queue_size,
                     multipart=multipart,
                     discard_cookies=discard_cookies,
                 )

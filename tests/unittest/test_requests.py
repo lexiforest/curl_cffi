@@ -907,7 +907,7 @@ def test_stream_iter_content(server):
 def test_stream_iter_content_break(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/stream"))
-        with s.stream("GET", url, params={"n": "20"}) as r:
+        with s.stream("GET", url, params={"n": "10000"}, stream_queue_size=1) as r:
             for idx, chunk in enumerate(r.iter_content()):
                 assert b"path" in chunk
                 if idx == 3:

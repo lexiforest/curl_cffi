@@ -446,7 +446,9 @@ async def test_stream_iter_content(server):
 async def test_stream_iter_content_break(server):
     async with AsyncSession() as s:
         url = str(server.url.copy_with(path="/stream"))
-        async with s.stream("GET", url, params={"n": "20"}) as r:
+        async with s.stream(
+            "GET", url, params={"n": "10000"}, stream_queue_size=1
+        ) as r:
             idx = 0
             async for chunk in r.aiter_content():
                 idx += 1
