@@ -94,10 +94,14 @@ def _store_callback_error(return_value: int):
     return onerror
 
 
-@ffi.def_extern(onerror=_store_callback_error(1))
+# debug function should return 0 as error code
+@ffi.def_extern(onerror=_store_callback_error(0))
 def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     """ffi callback for curl debug info"""
-    callback = ffi.from_handle(clientp).callback
+    context = ffi.from_handle(clientp)
+    if context.exception is not None:
+        return 0
+    callback = context.callback
     text = ffi.buffer(data, size)[:]
     callback(type_, text)
     return 0
