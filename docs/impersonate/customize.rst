@@ -157,6 +157,31 @@ For a complete list of options and explanation, see the `curl-impersonate README
 .. _curl-impersonate README: https://github.com/lexiforest/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
 
 
+TCP fingerprints
+~~~~~~~~~~~~~~~~
+
+``tcp_fp`` can be set explicitly with ``"ttl,window_size,window_scale,mss"``, or
+set to ``"auto"`` to choose a default TCP fingerprint for the OS implied by
+``impersonate`` or the request headers.
+
+.. code-block:: python
+
+   r = curl_cffi.get(
+       "https://example.com",
+       impersonate="chrome",
+       tcp_fp="auto",
+   )
+
+When headers are provided, ``sec-ch-ua-platform`` and ``User-Agent`` are checked
+before the impersonation target, so a Windows User-Agent can select the Windows
+TCP fingerprint even when the native target is otherwise macOS. The built-in
+defaults cover Windows, Linux, macOS, Android, and iOS. The Linux, Android,
+macOS, and iOS defaults are based on p0f request signatures; they are best-effort
+presets because TCP fingerprints can vary by OS version, kernel settings, and
+network path. TCP fingerprinting is not visible to the origin server when using a
+proxy, because the origin sees the proxy's TCP connection.
+
+
 How to toggle firefox-specific extensions?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -187,4 +212,3 @@ Extension 28: record size limit
    ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
 
    r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
-
