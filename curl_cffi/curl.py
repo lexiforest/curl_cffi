@@ -74,10 +74,35 @@ CURL_READFUNC_PAUSE = 0x10000001
 CURLPAUSE_CONT = 0
 
 
-@ffi.def_extern()
+class _CallbackContext:
+    def __init__(self, callback: Any) -> None:
+        self.callback = callback
+        self.exception: BaseException | None = None
+
+
+def _store_callback_error(return_value: int):
+    def onerror(exc_type, exc_value, traceback):
+        if traceback is not None:
+            # CFFI cannot propagate exceptions through C, but exposes the callback
+            # arguments through this frame so the owning handle can retain it.
+            callback_args = traceback.tb_frame.f_locals
+            userdata = callback_args.get("userdata", callback_args.get("clientp"))
+            if userdata is not None:
+                context = ffi.from_handle(userdata)
+                context.exception = exc_value
+        return return_value
+
+    return onerror
+
+
+# debug function should return 0 as error code
+@ffi.def_extern(onerror=_store_callback_error(0))
 def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     """ffi callback for curl debug info"""
-    callback = ffi.from_handle(clientp)
+    context = ffi.from_handle(clientp)
+    if context.exception is not None:
+        return 0
+    callback = context.callback
     text = ffi.buffer(data, size)[:]
     callback(type_, text)
     return 0
@@ -123,11 +148,11 @@ def debug_function_default(type_: int, data: bytes) -> None:
             sys.stderr.write(f"{prefix} [{len(data)} bytes]: {hex_str}{postfix}\n")
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_WRITEFUNC_ERROR))
 def buffer_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl write function, directly writes to a buffer"""
     # assert size == 1
-    buffer = ffi.from_handle(userdata)
+    buffer = ffi.from_handle(userdata).callback
     buffer.write(ffi.buffer(ptr, nmemb)[:])
     return nmemb * size
 
@@ -138,11 +163,11 @@ def ensure_int(s):
     return int(s)
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_WRITEFUNC_ERROR))
 def write_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl write function, calls the callback python function"""
     # although similar enough to the function above, kept here for performance reasons
-    callback = ffi.from_handle(userdata)
+    callback = ffi.from_handle(userdata).callback
     wrote = callback(ffi.buffer(ptr, nmemb)[:])
     wrote = ensure_int(wrote)
     if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:  # noqa: SIM109
@@ -153,10 +178,10 @@ def write_callback(ptr, size, nmemb, userdata):
     return nmemb * size
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_READFUNC_ABORT))
 def read_buffer_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl read function, reads from a buffer/file-like object"""
-    buffer = ffi.from_handle(userdata)
+    buffer = ffi.from_handle(userdata).callback
     max_len = size * nmemb
     data = buffer.read(max_len)
     if data is None:
@@ -175,10 +200,10 @@ def read_buffer_callback(ptr, size, nmemb, userdata):
     return len(data)
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_READFUNC_ABORT))
 def read_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl read function, calls the callback python function"""
-    callback = ffi.from_handle(userdata)
+    callback = ffi.from_handle(userdata).callback
     max_len = size * nmemb
     data = callback(max_len)
     if data is None:
@@ -282,6 +307,19 @@ class Curl:
                 code=cast(CurlECode, errcode),
             )
 
+    def _get_callback_exception(self) -> BaseException | None:
+        for handle in (
+            self._write_handle,
+            self._header_handle,
+            self._debug_handle,
+            self._read_handle,
+        ):
+            if handle is not None:
+                exception = ffi.from_handle(handle).exception
+                if exception is not None:
+                    return exception
+        return None
+
     def setopt(self, option: CurlOpt, value: Any) -> int:
         """Wrapper for ``curl_easy_setopt``.
 
@@ -310,44 +348,44 @@ class Curl:
         if value_type == "long*" or value_type == "int64_t*":
             c_value = ffi.new(value_type, value)
         elif option == CurlOpt.WRITEDATA:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._write_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
             )
         elif option == CurlOpt.HEADERDATA:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._header_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
             )
         elif option == CurlOpt.READDATA:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._read_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.READFUNCTION, lib.read_buffer_callback
             )
         elif option == CurlOpt.WRITEFUNCTION:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._write_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
             option = CurlOpt.WRITEDATA
         elif option == CurlOpt.HEADERFUNCTION:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._header_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
             )
             option = CurlOpt.HEADERDATA
         elif option == CurlOpt.READFUNCTION:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._read_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.READFUNCTION, lib.read_callback)
             option = CurlOpt.READDATA
         elif option == CurlOpt.DEBUGFUNCTION:
             if value is True:
                 value = debug_function_default
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._debug_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
             option = CurlOpt.DEBUGDATA
@@ -513,6 +551,9 @@ class Curl:
         ret = lib.curl_easy_perform(self._curl)
 
         try:
+            callback_exception = self._get_callback_exception()
+            if callback_exception is not None:
+                raise callback_exception
             self._check_error(ret, "perform")
         finally:
             # cleaning
