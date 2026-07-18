@@ -66,6 +66,14 @@ def test_callback(server):
     assert buffer.getvalue() == b"foo=bar"
 
 
+def test_callback_keyboard_interrupt(server):
+    def callback(data: bytes):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        requests.get(str(server.url), content_callback=callback)
+
+
 def test_post_large_body(server):
     bar = "a" * 100000
     r = requests.post(str(server.url.copy_with(path="/echo_body")), json={"foo": bar})
