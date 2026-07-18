@@ -142,6 +142,41 @@ class Response:
         self.request_size: int = 0
         self.response_size: int = 0
 
+    def __getstate__(self) -> dict[str, Any]:
+        if any(
+            value is not None
+            for value in (
+                self.queue,
+                self.stream_task,
+                self.astream_task,
+                self.quit_now,
+            )
+        ):
+            raise TypeError(
+                "Streaming responses cannot be pickled; make the request without "
+                "stream=True before pickling the response."
+            )
+
+        state = self.__dict__.copy()
+        for attribute in (
+            "curl",
+            "queue",
+            "stream_task",
+            "astream_task",
+            "quit_now",
+        ):
+            state.pop(attribute, None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self.curl = None
+        self.queue = None
+        self.stream_task = None
+        self.astream_task = None
+        self.quit_now = None
+        self._stream_closed = True
+
     @property
     def charset(self) -> str:
         """Alias for encoding."""
