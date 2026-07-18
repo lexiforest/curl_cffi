@@ -1,5 +1,6 @@
 import base64
 import json
+import pickle
 import time
 from io import BytesIO
 from uuid import uuid4
@@ -53,6 +54,27 @@ def test_response_request_body(server):
     r = requests.get(str(server.url))
     assert r.request is not None
     assert r.request.body is None
+
+
+def test_response_pickle(server):
+    url = str(server.url.copy_with(path="/set_cookies"))
+    response = requests.get(url)
+    expected_text = response.text
+
+    restored = pickle.loads(pickle.dumps(response))
+
+    assert restored.url == response.url
+    assert restored.content == response.content
+    assert restored.text == expected_text
+    assert restored.status_code == response.status_code
+    assert restored.headers == response.headers
+    assert restored.cookies["foo"] == "bar"
+    assert restored.request.url == response.request.url
+    assert restored.curl is None
+    assert restored.queue is None
+    assert restored.stream_task is None
+    assert restored.astream_task is None
+    assert restored.quit_now is None
 
 
 def test_callback(server):
@@ -910,6 +932,16 @@ def test_stream_iter_content(server):
         with s.stream("GET", url, params={"n": "20"}) as r:
             for chunk in r.iter_content():
                 assert b"path" in chunk
+
+
+def test_stream_response_pickle_raises(server):
+    url = str(server.url.copy_with(path="/stream"))
+    with (
+        requests.Session() as session,
+        session.stream("GET", url, params={"n": "1"}) as response,
+        pytest.raises(TypeError, match="Streaming responses cannot be pickled"),
+    ):
+        pickle.dumps(response)
 
 
 def test_stream_iter_content_break(server):
