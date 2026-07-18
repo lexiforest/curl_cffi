@@ -397,7 +397,15 @@ class Fingerprint:
     http3_settings: str = ""
     http3_pseudo_headers_order: str = ""
     http3_tls_extension_order: str = ""
+    http3_headers: dict[str, str] = field(default_factory=dict)
+    http3_header_order: str = ""
+    http3_tls_supported_groups: list[str] = field(default_factory=list)
     quic_transport_parameters: str = ""
+
+    ws_headers: dict[str, str] = field(default_factory=dict)
+    ws_header_order: str = ""
+    ws_disable_session_ticket: bool = False
+    ws_tls_cert_compression: list[str] | None = None
 
     header_lang: str = ""
 

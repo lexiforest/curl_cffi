@@ -9,7 +9,7 @@ from curl_cffi import AsyncCurl, Headers
 from curl_cffi.const import CurlECode
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import TooManyRedirects
+from curl_cffi.requests.exceptions import CertificateVerifyError, TooManyRedirects
 from curl_cffi.requests.models import Response
 
 
@@ -17,6 +17,19 @@ async def test_get(server):
     async with AsyncSession() as s:
         r = await s.get(str(server.url))
         assert r.status_code == 200
+
+
+async def test_custom_async_curl_cacert_is_used_by_pooled_curl():
+    acurl = AsyncCurl(cacert="custom-ca.pem")
+    try:
+        async with AsyncSession(async_curl=acurl) as s:
+            curl = await s.pop_curl()
+            try:
+                assert curl._cacert == "custom-ca.pem"
+            finally:
+                s.push_curl(curl)
+    finally:
+        await acurl.close()
 
 
 def test_create_session_out_of_async(server):
@@ -206,8 +219,9 @@ async def test_too_many_redirects(server):
 
 async def test_verify(https_server):
     async with AsyncSession() as s:
-        with pytest.raises(RequestsError, match="SSL certificate problem"):
+        with pytest.raises(CertificateVerifyError) as exc_info:
             await s.get(str(https_server.url), verify=True)
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 async def test_verify_false(https_server):
