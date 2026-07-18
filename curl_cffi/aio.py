@@ -208,9 +208,12 @@ class AsyncCurl:
 
         # Close all pending futures
         for curl, future in self._curl2future.items():
-            lib.curl_multi_remove_handle(self._curlm, curl._curl)
+            if curl._curl is not None:
+                lib.curl_multi_remove_handle(self._curlm, curl._curl)
             if not future.done() and not future.cancelled():
                 future.set_result(None)
+        self._curl2future.clear()
+        self._curl2curl.clear()
 
         # Cleanup curl_multi handle
         lib.curl_multi_cleanup(self._curlm)
@@ -296,16 +299,23 @@ class AsyncCurl:
                 )
 
     def _pop_future(self, curl: Curl):
-        errcode = lib.curl_multi_remove_handle(self._curlm, curl._curl)
-        self._check_error(errcode)
-        self._curl2curl.pop(curl._curl, None)
-        return self._curl2future.pop(curl, None)
+        curl_handle = curl._curl
+        try:
+            errcode = lib.curl_multi_remove_handle(self._curlm, curl_handle)
+            self._check_error(errcode)
+        finally:
+            self._curl2curl.pop(curl_handle, None)
+            future = self._curl2future.pop(curl, None)
+        return future
 
     def remove_handle(self, curl: Curl):
         """Cancel a future for given curl handle."""
-        future = self._pop_future(curl)
-        if future and not future.done() and not future.cancelled():
-            future.cancel()
+        future = self._curl2future.get(curl)
+        try:
+            self._pop_future(curl)
+        finally:
+            if future and not future.done() and not future.cancelled():
+                future.cancel()
 
     def set_result(self, curl: Curl):
         """Mark a future as done for given curl handle."""
