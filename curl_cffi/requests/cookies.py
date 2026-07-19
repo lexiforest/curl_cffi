@@ -5,6 +5,7 @@
 __all__ = ["Cookies"]
 
 import re
+import threading
 import time
 import warnings
 from contextlib import suppress
@@ -148,6 +149,24 @@ class Cookies(MutableMapping[str, str]):
                 self.jar.set_cookie(cookie)
         else:
             self.jar = cookies
+
+    def __getstate__(self) -> dict:
+        state = self.__dict__.copy()
+        jar = state.pop("jar")
+        jar_state = jar.__dict__.copy()
+        jar_state.pop("_cookies_lock", None)
+        state["_jar_type"] = type(jar)
+        state["_jar_state"] = jar_state
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        jar_type = state.pop("_jar_type")
+        jar_state = state.pop("_jar_state")
+        jar = object.__new__(jar_type)
+        jar.__dict__.update(jar_state)
+        jar._cookies_lock = threading.RLock()
+        self.__dict__.update(state)
+        self.jar = jar
 
     def _eff_request_host(self, request) -> str:
         """

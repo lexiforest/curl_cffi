@@ -12,6 +12,14 @@ into a bdist wheel, which is a binary package format used by PyPI. However, the
 right way is to download curl and curl-impersonate sources on our side and compile
 them all together.
 
+By default, source builds download the platform-specific library into a temporary
+directory. Set ``IMPERSONATE_BUILD_DIR`` to reuse an existing download or choose
+where it is downloaded and unpacked. The directory must contain the library filename
+configured for the current platform, such as ``libcurl-impersonate.so`` or
+``libcurl-impersonate.a``::
+
+    IMPERSONATE_BUILD_DIR=/path/to/lib pip install .
+
 macOS
 
 To install the local editable build:
