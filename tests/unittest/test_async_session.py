@@ -277,16 +277,21 @@ async def test_not_follow_redirects(server):
         )
         assert r.status_code == 301
         assert r.redirect_count == 0
+        assert r.history == []
         assert r.content == b"Redirecting..."
 
 
 async def test_follow_redirects(server):
     async with AsyncSession() as s:
-        r = await s.get(
-            str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
-        )
+        url = str(server.url.copy_with(path="/redirect_301"))
+        r = await s.get(url, allow_redirects=True)
         assert r.status_code == 200
         assert r.redirect_count == 1
+        assert len(r.history) == 1
+        assert isinstance(r.history[0], Response)
+        assert r.history[0].url == url
+        assert r.history[0].status_code == 301
+        assert r.history[0].headers["location"] == "/"
 
 
 async def test_too_many_redirects(server):
@@ -299,6 +304,7 @@ async def test_too_many_redirects(server):
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
+    assert len(e.value.response.history) == 2
 
 
 async def test_verify(https_server):

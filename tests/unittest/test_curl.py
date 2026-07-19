@@ -261,6 +261,7 @@ def test_follow_redirect(server):
     c.setopt(CurlOpt.FOLLOWLOCATION, 1)
     c.perform()
     assert c.getinfo(CurlInfo.RESPONSE_CODE) == 200
+    assert c.getinfo(CurlInfo.REDIRECT_HISTORY) == [f"301\t{url}".encode()]
 
 
 def test_not_follow_redirect(server):
@@ -269,6 +270,7 @@ def test_not_follow_redirect(server):
     c.setopt(CurlOpt.URL, url.encode())
     c.perform()
     assert c.getinfo(CurlInfo.RESPONSE_CODE) == 301
+    assert c.getinfo(CurlInfo.REDIRECT_HISTORY) == []
 
 
 def test_http_proxy_changed_path(server):

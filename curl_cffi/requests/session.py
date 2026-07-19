@@ -333,14 +333,23 @@ class BaseSession(Generic[R]):
         rsp.ok = 200 <= rsp.status_code < 400
         header_lines = header_buffer.getvalue().splitlines()
 
-        # TODO: history urls
         header_list: list[bytes] = []
+        header_blocks: list[tuple[int, str, list[bytes]]] = []
+        header_status = 0
+        header_reason = ""
         for header_line in header_lines:
             if not header_line.strip():
                 continue
             if header_line.startswith(b"HTTP/"):
-                # read header from last response
-                rsp.reason = c.get_reason_phrase(header_line).decode()
+                if header_status:
+                    header_blocks.append((header_status, header_reason, header_list))
+                try:
+                    header_status = int(header_line.split(maxsplit=2)[1])
+                except (IndexError, ValueError):
+                    header_status = 0
+                header_reason = c.get_reason_phrase(header_line).decode(
+                    errors="replace"
+                )
                 # empty header list for new redirected response
                 header_list = []
                 continue
@@ -348,7 +357,40 @@ class BaseSession(Generic[R]):
                 header_list[-1] += header_line
                 continue
             header_list.append(header_line)
+        if header_status:
+            header_blocks.append((header_status, header_reason, header_list))
+        if header_blocks:
+            _, rsp.reason, header_list = header_blocks[-1]
         rsp.headers = Headers(header_list)
+
+        redirect_history = cast(list[bytes], c.getinfo(CurlInfo.REDIRECT_HISTORY))
+        block_index = 0
+        for item in redirect_history:
+            try:
+                status_bytes, history_url_bytes = item.split(b"\t", 1)
+                history_status = int(status_bytes)
+            except (TypeError, ValueError):
+                continue
+
+            history_url = history_url_bytes.decode(errors="replace")
+            history_reason = ""
+            history_headers = Headers()
+            for index in range(block_index, len(header_blocks)):
+                status, reason, headers = header_blocks[index]
+                if status == history_status:
+                    history_reason = reason
+                    history_headers = Headers(headers)
+                    block_index = index + 1
+                    break
+
+            history_response = cast(R, self.response_class(None))
+            history_response.url = history_url
+            history_response.status_code = history_status
+            history_response.reason = history_reason
+            history_response.ok = 200 <= history_status < 400
+            history_response.headers = history_headers
+            history_response.default_encoding = default_encoding
+            rsp.history.append(history_response)
 
         # Response cookies - only from Set-Cookie headers
         rsp.cookies = Cookies()
