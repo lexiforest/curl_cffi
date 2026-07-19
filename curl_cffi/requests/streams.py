@@ -4,12 +4,22 @@ import asyncio
 import queue
 from collections.abc import AsyncIterable, Iterable, Iterator
 from contextlib import suppress
-from io import SEEK_SET
-from typing import Any, cast, final
+from io import SEEK_SET, BytesIO
+from typing import IO, Any, Union, cast, final
 
 from ..curl import CURL_READFUNC_PAUSE, CURLPAUSE_SEND_CONT, Curl
 from .exceptions import UnrewindableBodyError
 
+
+RequestData = Union[
+    dict[str, str],
+    list[tuple],
+    str,
+    BytesIO,
+    bytes,
+]
+SyncRequestContent = Union[str, bytes, bytearray, IO[bytes], Iterable[bytes]]
+RequestContent = Union[SyncRequestContent, AsyncIterable[bytes]]
 
 STREAM_END = object()
 _BODY_NOT_REWINDABLE = object()

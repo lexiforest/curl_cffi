@@ -31,7 +31,7 @@ from .impersonate import (
     toggle_extension,
 )
 from .models import Request
-from .streams import _FileReader, _IterableReader
+from .streams import RequestContent, RequestData, _FileReader, _IterableReader
 
 if TYPE_CHECKING:
     from ..curl import Curl
@@ -613,16 +613,8 @@ def set_curl_options(
         Union[dict[str, object], list[object], tuple[object, ...], None]
     ] = [],  # noqa: B006
     base_url: Optional[str] = None,
-    data: Optional[
-        Union[
-            dict[str, str],
-            list[tuple[object]],
-            str,
-            BytesIO,
-            bytes,
-        ]
-    ] = None,
-    content: Any = None,
+    data: Optional[RequestData] = None,
+    content: Optional[RequestContent] = None,
     json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006

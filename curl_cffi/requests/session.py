@@ -14,7 +14,6 @@ from collections.abc import (
     AsyncIterable,
     Callable,
     Generator,
-    Iterable,
 )
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
@@ -25,7 +24,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Generic,
-    IO,
     Literal,
     Optional,
     TypedDict,
@@ -57,6 +55,9 @@ from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Response
 from .streams import (
     STREAM_END,
+    RequestContent,
+    RequestData,
+    SyncRequestContent,
     _AsyncIterableReader,
     _capture_body_position,
     _peek_aio_queue,
@@ -77,16 +78,6 @@ if sys.version_info >= (3, 13):
     R = TypeVar("R", bound=Response, default=Response)
 else:
     R = TypeVar("R", bound=Response)
-
-RequestData = Union[
-    dict[str, str],
-    list[tuple],
-    str,
-    BytesIO,
-    bytes,
-]
-SyncRequestContent = Union[str, bytes, bytearray, IO[bytes], Iterable[bytes]]
-RequestContent = Union[SyncRequestContent, AsyncIterable[bytes]]
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
