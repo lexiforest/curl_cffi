@@ -9,7 +9,12 @@ import sys
 import threading
 import time
 import warnings
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    Callable,
+    Generator,
+)
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
@@ -40,10 +45,25 @@ from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
 from .cache import CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes
-from .exceptions import RequestException, SessionClosed, code2error
+from .exceptions import (
+    RequestException,
+    SessionClosed,
+    code2error,
+)
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
-from .models import STREAM_END, Response
+from .models import Response
+from .streams import (
+    STREAM_END,
+    RequestContent,
+    RequestData,
+    SyncRequestContent,
+    _AsyncIterableReader,
+    _capture_body_position,
+    _peek_aio_queue,
+    _peek_queue,
+    _rewind_body,
+)
 from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
 from .websockets import (
     AsyncWebSocket,
@@ -107,7 +127,8 @@ if TYPE_CHECKING:
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]]
+        data: Optional[RequestData]
+        content: Optional[RequestContent]
         json: Optional[dict | list]
         headers: Optional[HeaderTypes]
         cookies: Optional[CookieTypes]
@@ -165,20 +186,6 @@ def _is_absolute_url(url: str) -> bool:
     """Check if the provided url is an absolute url"""
     parsed_url = urlparse(url)
     return bool(parsed_url.scheme and parsed_url.hostname)
-
-
-def _peek_queue(q: queue.Queue, default=None):
-    try:
-        return q.queue[0]
-    except IndexError:
-        return default
-
-
-def _peek_aio_queue(q: asyncio.Queue, default=None):
-    try:
-        return q._queue[0]  # type: ignore
-    except IndexError:
-        return default
 
 
 RetryBackoff = Literal["linear", "exponential"]
@@ -622,9 +629,8 @@ class Session(BaseSession[R]):
         params: Optional[
             Union[dict[str, object], list[object], tuple[object, ...]]
         ] = None,
-        data: Optional[
-            Union[dict[str, str], list[tuple[object, ...]], str, BytesIO, bytes]
-        ] = None,
+        data: Optional[RequestData] = None,
+        content: Optional[SyncRequestContent] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -671,6 +677,7 @@ class Session(BaseSession[R]):
             params_list=[self.params, params],
             base_url=self.base_url,
             data=data,
+            content=content,
             json=json,
             headers_list=[self.headers, headers],
             cookies_list=[self._cookies, cookies],
@@ -806,7 +813,8 @@ class Session(BaseSession[R]):
         method: HttpMethod,
         url: str,
         params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        data: Optional[RequestData] = None,
+        content: Optional[SyncRequestContent] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -843,14 +851,19 @@ class Session(BaseSession[R]):
 
         self._check_session_closed()
 
+        body = content if content is not None else data
+        body_position = _capture_body_position(data, content)
         strategy = self.retry
         for attempt in range(strategy.count + 1):
+            if attempt > 0:
+                _rewind_body(body, body_position)
             try:
                 return self._request_once(
                     method=method,
                     url=url,
                     params=params,
                     data=data,
+                    content=content,
                     json=json,
                     headers=headers,
                     cookies=cookies,
@@ -1306,7 +1319,8 @@ class AsyncSession(BaseSession[R]):
         method: HttpMethod,
         url: str,
         params: Optional[Union[dict, list, tuple]] = None,
-        data: Optional[Union[dict[str, str], list[tuple], str, BytesIO, bytes]] = None,
+        data: Optional[RequestData] = None,
+        content: Optional[RequestContent] = None,
         json: Optional[dict | list] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -1340,52 +1354,65 @@ class AsyncSession(BaseSession[R]):
         discard_cookies: bool = False,
     ) -> R:
         curl = await self.pop_curl()
-        req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
-            curl=curl,
-            method=method,
-            url=url,
-            params_list=[self.params, params],
-            base_url=self.base_url,
-            data=data,
-            json=json,
-            headers_list=[self.headers, headers],
-            cookies_list=[self.cookies, cookies],
-            files=files,
-            auth=auth or self.auth,
-            timeout=self.timeout if timeout is NOT_SET else timeout,
-            allow_redirects=(
-                self.allow_redirects if allow_redirects is None else allow_redirects
-            ),
-            max_redirects=(
-                self.max_redirects if max_redirects is None else max_redirects
-            ),
-            proxies_list=[self.proxies, proxies],
-            proxy=proxy,
-            proxy_auth=proxy_auth or self.proxy_auth,
-            verify_list=[self.verify, verify],
-            referer=referer,
-            accept_encoding=accept_encoding,
-            content_callback=content_callback,
-            impersonate=impersonate or self.impersonate,
-            ja3=ja3 or self.ja3,
-            akamai=akamai or self.akamai,
-            perk=perk or self.perk,
-            extra_fp=extra_fp or self.extra_fp,
-            default_headers=(
-                self.default_headers if default_headers is None else default_headers
-            ),
-            quote=quote,
-            http_version=http_version or self.http_version,
-            interface=interface or self.interface,
-            doh_url=doh_url or self.doh_url,
-            stream=stream,
-            max_recv_speed=max_recv_speed,
-            multipart=multipart,
-            cert=cert or self.cert,
-            curl_options=self.curl_options,
-            queue_class=asyncio.Queue,
-            event_class=asyncio.Event,
-        )
+        async_reader: _AsyncIterableReader | None = None
+        request_content = content
+        if isinstance(content, AsyncIterable):
+            async_reader = _AsyncIterableReader(content, curl)
+            request_content = cast(SyncRequestContent, async_reader)
+        try:
+            req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+                curl=curl,
+                method=method,
+                url=url,
+                params_list=[self.params, params],
+                base_url=self.base_url,
+                data=data,
+                content=request_content,
+                json=json,
+                headers_list=[self.headers, headers],
+                cookies_list=[self.cookies, cookies],
+                files=files,
+                auth=auth or self.auth,
+                timeout=self.timeout if timeout is NOT_SET else timeout,
+                allow_redirects=(
+                    self.allow_redirects if allow_redirects is None else allow_redirects
+                ),
+                max_redirects=(
+                    self.max_redirects if max_redirects is None else max_redirects
+                ),
+                proxies_list=[self.proxies, proxies],
+                proxy=proxy,
+                proxy_auth=proxy_auth or self.proxy_auth,
+                verify_list=[self.verify, verify],
+                referer=referer,
+                accept_encoding=accept_encoding,
+                content_callback=content_callback,
+                impersonate=impersonate or self.impersonate,
+                ja3=ja3 or self.ja3,
+                akamai=akamai or self.akamai,
+                perk=perk or self.perk,
+                extra_fp=extra_fp or self.extra_fp,
+                default_headers=(
+                    self.default_headers if default_headers is None else default_headers
+                ),
+                quote=quote,
+                http_version=http_version or self.http_version,
+                interface=interface or self.interface,
+                doh_url=doh_url or self.doh_url,
+                stream=stream,
+                max_recv_speed=max_recv_speed,
+                multipart=multipart,
+                cert=cert or self.cert,
+                curl_options=self.curl_options,
+                queue_class=asyncio.Queue,
+                event_class=asyncio.Event,
+            )
+        # Catch BaseException so asyncio.CancelledError also returns the handle.
+        except BaseException:
+            self.release_curl(curl)
+            raise
+        if async_reader is not None:
+            async_reader.start()
         if stream:
             task = self.acurl.add_handle(curl)
             curl_released = False
@@ -1401,6 +1428,8 @@ class AsyncSession(BaseSession[R]):
                     error = code2error(e.code, str(e))
                     q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
                 finally:
+                    if async_reader is not None:
+                        await async_reader.close()
                     if not cast(asyncio.Event, header_recved).is_set():
                         cast(asyncio.Event, header_recved).set()
                     await q.put(STREAM_END)  # type: ignore
@@ -1458,6 +1487,8 @@ class AsyncSession(BaseSession[R]):
                     rsp.raise_for_status()
                 return rsp
             finally:
+                if async_reader is not None:
+                    await async_reader.close()
                 self.release_curl(curl)
 
     async def request(
@@ -1467,9 +1498,8 @@ class AsyncSession(BaseSession[R]):
         params: Optional[
             Union[dict[str, str], list[tuple[str, str]], tuple[tuple[str, str], ...]]
         ] = None,
-        data: Optional[
-            Union[dict[str, str], list[tuple[str, str]], str, BytesIO, bytes]
-        ] = None,
+        data: Optional[RequestData] = None,
+        content: Optional[RequestContent] = None,
         json: Optional[Union[dict[str, Any], list[Any]]] = None,
         headers: Optional[HeaderTypes] = None,
         cookies: Optional[CookieTypes] = None,
@@ -1506,14 +1536,19 @@ class AsyncSession(BaseSession[R]):
 
         self._check_session_closed()
 
+        body = content if content is not None else data
+        body_position = _capture_body_position(data, content)
         strategy = self.retry
         for attempt in range(strategy.count + 1):
+            if attempt:
+                _rewind_body(body, body_position)
             try:
                 return await self._request_once(
                     method=method,
                     url=url,
                     params=params,
                     data=data,
+                    content=content,
                     json=json,
                     headers=headers,
                     cookies=cookies,

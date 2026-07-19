@@ -118,6 +118,10 @@ async def app(scope, receive, send):
         await set_special_cookies(scope, receive, send)
     elif scope["path"].startswith("/retry_once"):
         await retry_once(scope, receive, send)
+    elif scope["path"].startswith("/retry_body"):
+        await retry_body(scope, receive, send)
+    elif scope["path"].startswith("/redirect_307"):
+        await redirect_307(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
         await redirect_301(scope, receive, send)
     elif scope["path"].startswith("/redirect_to"):
@@ -498,6 +502,47 @@ async def retry_once(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+_retry_body_counts: dict[str, int] = defaultdict(int)
+
+
+async def retry_body(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode(), keep_blank_values=True)
+    key = params.get("key", ["default"])[0]
+    body = b""
+    more_body = True
+    while more_body:
+        message = await receive()
+        body += message.get("body", b"")
+        more_body = message.get("more_body", False)
+
+    count = _retry_body_counts[key]
+    _retry_body_counts[key] = count + 1
+    status = 500 if count == 0 else 200
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [[b"content-type", b"application/octet-stream"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+async def redirect_307(scope, receive, send):
+    more_body = True
+    while more_body:
+        message = await receive()
+        more_body = message.get("more_body", False)
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 307,
+            "headers": [[b"location", b"/echo_body"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Redirecting..."})
 
 
 async def redirect_301(scope, receive, send):
