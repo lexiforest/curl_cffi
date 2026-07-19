@@ -53,12 +53,12 @@ async def recv_benchmark_handler(ws: web.WebSocketResponse | AsyncWebSocket) -> 
 
                     if msg.type is web.WSMsgType.BINARY:
                         msg_len: int = len(msg.data)
-                        testdata_buffer[offset: offset + msg_len] = msg.data
+                        testdata_buffer[offset : offset + msg_len] = msg.data
                         offset += msg_len
             else:
                 async for msg in ws:
                     msg_len = len(msg)
-                    testdata_buffer[offset: offset + msg_len] = msg
+                    testdata_buffer[offset : offset + msg_len] = msg
                     offset += msg_len
 
             elapsed_time = time.perf_counter() - start_time

@@ -128,12 +128,10 @@ def run_benchmark() -> None:
                         ws_sender(ws)
 
                     case BenchmarkDirection.CONCURRENT:
-                        t1: Thread = Thread(target=ws_counter, args=(ws,))
-                        t2: Thread = Thread(target=ws_sender, args=(ws,))
-                        t1.start()
-                        t2.start()
-                        t1.join()
-                        t2.join()
+                        logger.critical(
+                            "Sync WebSocket isn't thread-safe"
+                            + " and doesn't support concurrent benchmarks."
+                        )
 
     except Exception:
         logger.exception("curl-cffi benchmark failed")
