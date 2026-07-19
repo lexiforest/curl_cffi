@@ -71,6 +71,12 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         help="Print request and response headers and body",
     )
     output_group.add_argument(
+        "--quiet",
+        "-q",
+        action="store_true",
+        help="Suppress all output except errors",
+    )
+    output_group.add_argument(
         "--print",
         "-p",
         dest="print_spec",
