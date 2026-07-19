@@ -9,7 +9,7 @@ import math
 import queue
 import warnings
 from collections import Counter
-from collections.abc import AsyncIterable, Callable, Iterable
+from collections.abc import Callable, Iterable
 from io import BytesIO
 from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
@@ -652,33 +652,40 @@ def set_curl_options(
 
     method = method.upper()  # type: ignore
 
-    if content is not None and any(
-        value is not None for value in (data, json, files, multipart)
-    ):
-        raise ValueError(
-            "content cannot be combined with data, json, files, or multipart"
-        )
-    if isinstance(content, AsyncIterable):
-        raise TypeError(
-            "AsyncIterable content requires AsyncSession; Session cannot stream "
-            "an async request body"
-        )
-
+    # data/body/json
     body_data = content if content is not None else data
-    is_stream_body = (
-        content is not None
-        and body_data is not None
-        and (
-            hasattr(body_data, "read")
-            or (
-                isinstance(body_data, (AsyncIterable, Iterable))
-                and not isinstance(body_data, (str, bytes, bytearray))
-            )
-        )
+    stream_reader: object | None = None
+    if content is not None:
+        if isinstance(content, str):
+            body = content.encode()
+        elif isinstance(content, (bytes, bytearray)):
+            body = bytes(content)
+        elif hasattr(content, "read"):
+            stream_reader = _FileReader(content)
+            body = b""
+        else:
+            stream_reader = _IterableReader(cast(Iterable[bytes], content))
+            body = b""
+    elif isinstance(data, dict | list | tuple):
+        body = urlencode(data).encode()
+    elif isinstance(data, str):
+        body = data.encode()
+    elif isinstance(data, BytesIO):
+        body = data.read()
+    elif data is None:
+        body = b""
+    else:
+        body = data
+
+    if json is not None:
+        body = dumps(json, separators=(",", ":")).encode()
+    body_provided = body_data is not None or json is not None
+    request_body = (
+        body if body_provided and multipart is None and stream_reader is None else None
     )
 
     # method
-    if method == "POST" and not is_stream_body:
+    if method == "POST" and stream_reader is None:
         c.setopt(CurlOpt.POST, 1)
     elif method != "GET":
         c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
@@ -698,41 +705,6 @@ def set_curl_options(
     if quote is not False:
         url = requote_uri(url)
     c.setopt(CurlOpt.URL, url.encode())
-
-    # data/body/json
-    stream_reader: object | None = None
-    if is_stream_body:
-        if hasattr(body_data, "read"):
-            stream_reader = _FileReader(body_data)
-        elif isinstance(body_data, Iterable):
-            stream_reader = _IterableReader(body_data)
-        else:
-            raise TypeError(
-                "content must be str, bytes, a file-like object, or an iterable "
-                "of bytes"
-            )
-        body = b""
-    elif isinstance(body_data, dict | list | tuple):
-        body = urlencode(body_data).encode()
-    elif isinstance(body_data, str):
-        body = body_data.encode()
-    elif isinstance(body_data, BytesIO):
-        body = body_data.read()
-    elif isinstance(body_data, (bytes, bytearray)):
-        body = bytes(body_data)
-    elif body_data is None:
-        body = b""
-    else:
-        raise TypeError(
-            "request body must be form data, str, bytes, a file-like object, "
-            "or an iterable of bytes"
-        )
-    if json is not None:
-        body = dumps(json, separators=(",", ":")).encode()
-    body_provided = body_data is not None or json is not None
-    request_body = (
-        body if body_provided and multipart is None and stream_reader is None else None
-    )
 
     # Tell libcurl to be aware of bodies and related headers when,
     # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do

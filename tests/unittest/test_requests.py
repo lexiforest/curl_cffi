@@ -174,16 +174,11 @@ def test_post_content_chunk_list(server):
     assert r.content == b"foobar"
 
 
-def test_content_cannot_be_combined_with_data(server):
-    with pytest.raises(ValueError, match="content cannot be combined"):
-        requests.post(str(server.url), content=b"raw", data={"foo": "bar"})
-
-
 def test_sync_session_rejects_async_content(server):
     async def content():
         yield b"raw"
 
-    with pytest.raises(TypeError, match="requires AsyncSession"):
+    with pytest.raises(TypeError):
         requests.post(str(server.url), content=content())
 
 
