@@ -16,6 +16,7 @@ __all__ = [
     "Cookies",
     "Headers",
     "Request",
+    "PreparedRequest",
     "Response",
     "AsyncWebSocket",
     "WebSocket",
@@ -41,7 +42,7 @@ from .cookies import Cookies, CookieTypes
 from .errors import RequestsError
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints
-from .models import Request, Response
+from .models import PreparedRequest, Request, Response
 from .session import (
     AsyncSession,
     HttpMethod,

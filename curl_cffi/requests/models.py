@@ -3,15 +3,16 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
+from io import BytesIO
 from typing import Any, Optional, Union
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
-from .cookies import Cookies
+from .cookies import Cookies, CookieTypes
 from .exceptions import HTTPError, RequestException
-from .headers import Headers
+from .headers import Headers, HeaderTypes
 
 # Use orjson if present
 try:
@@ -54,7 +55,64 @@ def clear_queue(q: queue.Queue):
 
 
 class Request:
-    """Representing a sent request.
+    """A user-created request that can be prepared before sending."""
+
+    def __init__(
+        self,
+        method: Optional[str] = None,
+        url: Optional[str] = None,
+        headers: Optional[HeaderTypes] = None,
+        files: Optional[dict] = None,
+        data: Optional[
+            Union[dict[str, str], list[tuple], tuple[tuple, ...], str, BytesIO, bytes]
+        ] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
+        auth: Optional[tuple[str, str]] = None,
+        cookies: Optional[CookieTypes] = None,
+        hooks: Optional[dict] = None,
+        json: Optional[Union[dict, list]] = None,
+        body: Optional[bytes] = None,
+    ) -> None:
+        if isinstance(url, Headers) and isinstance(headers, str):
+            method, url, headers, files, body = (
+                headers,
+                method,
+                url,
+                None,
+                files,  # type: ignore[assignment]
+            )
+        self.method = method
+        self.url = url
+        self.headers = headers
+        self.files = files
+        self.data = body if body is not None else data
+        self.params = params
+        self.auth = auth
+        self.cookies = cookies
+        self.hooks = hooks
+        self.json = json
+
+    @property
+    def body(self) -> Optional[object]:
+        """Backward-compatible alias for the unprepared request data."""
+        return self.data
+
+    @body.setter
+    def body(self, value: Optional[object]) -> None:
+        self.data = value
+
+    def prepare(self) -> "PreparedRequest":
+        """Prepare this request without applying any session-level settings."""
+        from .utils import prepare_request
+
+        return prepare_request(self)
+
+    def __repr__(self) -> str:
+        return f"<Request [{self.method}]>"
+
+
+class PreparedRequest(Request):
+    """A request with its method, URL, headers, and body ready to send.
 
     Attributes:
         url: request url.
@@ -65,15 +123,27 @@ class Request:
 
     def __init__(
         self,
-        url: str,
-        headers: Headers,
-        method: str,
+        method: str = "GET",
+        url: str = "",
+        headers: Optional[Headers] = None,
         body: Optional[bytes] = None,
-    ):
+    ) -> None:
         self.url = url
-        self.headers = headers
+        self.headers = headers if headers is not None else Headers()
         self.method = method
         self.body = body
+
+    @property
+    def content(self) -> Optional[bytes]:
+        """HTTPX-compatible alias for :attr:`body`."""
+        return self.body
+
+    @content.setter
+    def content(self, value: Optional[bytes]) -> None:
+        self.body = value
+
+    def __repr__(self) -> str:
+        return f"<PreparedRequest [{self.method}]>"
 
 
 class Response:
@@ -110,7 +180,11 @@ class Response:
         response_size: download_size + header_size
     """
 
-    def __init__(self, curl: Optional[Curl] = None, request: Optional[Request] = None):
+    def __init__(
+        self,
+        curl: Optional[Curl] = None,
+        request: Optional[PreparedRequest] = None,
+    ):
         self.curl = curl
         self.request = request
         self.url = ""

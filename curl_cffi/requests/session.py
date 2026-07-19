@@ -43,8 +43,14 @@ from .cookies import Cookies, CookieTypes
 from .exceptions import RequestException, SessionClosed, code2error
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
-from .models import STREAM_END, Response
-from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
+from .models import STREAM_END, PreparedRequest, Request, Response
+from .utils import (
+    NOT_SET,
+    HttpVersionLiteral,
+    NotSetType,
+    prepare_request,
+    set_curl_options,
+)
 from .websockets import (
     AsyncWebSocket,
     AsyncWebSocketContext,
@@ -307,6 +313,52 @@ class BaseSession(Generic[R]):
                 or os.environ.get("CURL_CA_BUNDLE")
                 or self.verify
             )
+
+    def prepare_request(self, request: Request) -> PreparedRequest:
+        """Prepare a :class:`Request`, applying session-level settings."""
+        if not isinstance(request, Request):
+            raise TypeError("request must be an instance of Request")
+        return prepare_request(
+            request,
+            base_url=self.base_url,
+            params_list=[self.params],
+            headers_list=[self.headers],
+            cookies_list=[self._cookies],
+            auth=self.auth,
+        )
+
+    def build_request(
+        self,
+        method: str,
+        url: str,
+        *,
+        content: Optional[Union[str, bytes]] = None,
+        data: Optional[
+            Union[dict[str, str], list[tuple], tuple[tuple, ...], str, BytesIO, bytes]
+        ] = None,
+        json: Optional[Union[dict, list]] = None,
+        params: Optional[Union[dict, list, tuple]] = None,
+        headers: Optional[HeaderTypes] = None,
+        cookies: Optional[CookieTypes] = None,
+        files: Optional[dict] = None,
+        auth: Optional[tuple[str, str]] = None,
+    ) -> PreparedRequest:
+        """Build a prepared request using this session's settings."""
+        if content is not None and data is not None:
+            raise TypeError("Cannot specify both 'content' and 'data'")
+        return self.prepare_request(
+            Request(
+                method=method,
+                url=url,
+                headers=headers,
+                files=files,
+                data=content if content is not None else data,
+                params=params,
+                auth=auth,
+                cookies=cookies,
+                json=json,
+            )
+        )
 
     def _parse_response(
         self,
@@ -656,6 +708,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        prepared_request: Optional[PreparedRequest] = None,
     ) -> R:
         # clone a new curl instance for streaming response
         if stream:
@@ -709,6 +762,7 @@ class Session(BaseSession[R]):
             curl_options=self.curl_options,
             queue_class=queue.Queue,
             event_class=threading.Event,
+            prepared_request=prepared_request,
         )
 
         if self._cache_enabled(req, stream=stream, content_callback=content_callback):
@@ -800,6 +854,34 @@ class Session(BaseSession[R]):
                 return rsp
             finally:
                 c.reset()
+
+    def send(self, request: PreparedRequest, **kwargs: Any) -> R:
+        """Send a prepared request.
+
+        Transport options such as ``stream``, ``timeout``, ``verify``, ``cert``,
+        ``proxies``, and ``allow_redirects`` may be supplied as keyword arguments.
+        """
+        self._check_session_closed()
+        if not isinstance(request, PreparedRequest):
+            raise TypeError("request must be an instance of PreparedRequest")
+
+        strategy = self.retry
+        for attempt in range(strategy.count + 1):
+            try:
+                return self._request_once(
+                    method=cast(HttpMethod, request.method),
+                    url=request.url,
+                    prepared_request=request,
+                    **kwargs,
+                )
+            except RequestException:
+                if attempt == strategy.count:
+                    raise
+                delay = self._retry_delay(attempt + 1)
+                if delay:
+                    time.sleep(delay)
+
+        raise RuntimeError("unreachable")
 
     def request(
         self,
@@ -1338,6 +1420,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        prepared_request: Optional[PreparedRequest] = None,
     ) -> R:
         curl = await self.pop_curl()
         req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
@@ -1385,6 +1468,7 @@ class AsyncSession(BaseSession[R]):
             curl_options=self.curl_options,
             queue_class=asyncio.Queue,
             event_class=asyncio.Event,
+            prepared_request=prepared_request,
         )
         if stream:
             task = self.acurl.add_handle(curl)
@@ -1459,6 +1543,30 @@ class AsyncSession(BaseSession[R]):
                 return rsp
             finally:
                 self.release_curl(curl)
+
+    async def send(self, request: PreparedRequest, **kwargs: Any) -> R:
+        """Send a prepared request asynchronously."""
+        self._check_session_closed()
+        if not isinstance(request, PreparedRequest):
+            raise TypeError("request must be an instance of PreparedRequest")
+
+        strategy = self.retry
+        for attempt in range(strategy.count + 1):
+            try:
+                return await self._request_once(
+                    method=cast(HttpMethod, request.method),
+                    url=request.url,
+                    prepared_request=request,
+                    **kwargs,
+                )
+            except RequestException:
+                if attempt == strategy.count:
+                    raise
+                delay = self._retry_delay(attempt + 1)
+                if delay:
+                    await asyncio.sleep(delay)
+
+        raise RuntimeError("unreachable")
 
     async def request(
         self,

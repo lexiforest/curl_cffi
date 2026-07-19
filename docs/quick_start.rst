@@ -343,6 +343,39 @@ Response headers is a case-insensitive dict.
 
 For a complete list of response attributes, see the :doc:`api`.
 
+Prepared requests
+-----------------
+
+As with ``requests``, a request can be prepared, inspected, modified, and then
+sent. Use ``Session.prepare_request`` when session headers, cookies, parameters,
+and authentication should be applied:
+
+.. code-block:: python
+
+    from curl_cffi.requests import Request, Session
+
+    with Session(headers={"X-Session": "yes"}) as session:
+        request = Request("GET", "https://httpbin.org/anything")
+        prepared = session.prepare_request(request)
+        prepared.method = "POST"
+        prepared.body = b'{"hello":"world"}'
+        prepared.headers["Content-Type"] = "application/json"
+        response = session.send(prepared)
+
+``Session.build_request`` is also available as an HTTPX-style shortcut. It returns
+the same mutable ``PreparedRequest`` object and provides ``content`` as an alias for
+``body``:
+
+.. code-block:: python
+
+    with Session() as session:
+        prepared = session.build_request(
+            "POST",
+            "https://httpbin.org/anything",
+            json={"hello": "world"},
+        )
+        response = session.send(prepared)
+
 Streaming response
 ------------------
 

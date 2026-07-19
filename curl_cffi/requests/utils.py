@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-__all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
+__all__ = ["HttpVersionLiteral", "set_curl_options", "prepare_request", "NOT_SET"]
 
 
 import asyncio
+import base64
 import ipaddress
 import math
 import queue
@@ -14,6 +15,7 @@ from io import BytesIO
 from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
+from urllib.request import Request as UrlRequest
 
 from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
 from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
@@ -30,7 +32,7 @@ from .impersonate import (
     resolve_latest_browser_type,
     toggle_extension,
 )
-from .models import Request
+from .models import PreparedRequest, Request
 
 if TYPE_CHECKING:
     from ..curl import Curl
@@ -64,6 +66,92 @@ class NotSetType:
 
 
 NOT_SET: Final[NotSetType] = NotSetType()
+
+
+def prepare_request(
+    request: Request,
+    *,
+    base_url: Optional[str] = None,
+    params_list: list[object | None] = [],  # noqa: B006
+    headers_list: list[object | None] = [],  # noqa: B006
+    cookies_list: list[object | None] = [],  # noqa: B006
+    auth: Optional[tuple[str, str]] = None,
+    quote_str: str | Literal[False] = "",
+) -> PreparedRequest:
+    """Prepare a request, optionally merging settings supplied by a session."""
+    if request.method is None:
+        raise ValueError("Request method is required")
+    if request.url is None:
+        raise ValueError("Request URL is required")
+    if request.files:
+        raise NotImplementedError(
+            "files is not supported, use `multipart`. See examples here: "
+            "https://github.com/lexiforest/curl_cffi/blob/main/examples/upload.py"
+        )
+
+    method = request.method.upper()
+    url = request.url
+    for params in [*params_list, request.params]:
+        if params:
+            url = update_url_params(url, params)  # type: ignore[arg-type]
+    if base_url:
+        url = urljoin(base_url, url)
+    if quote_str:
+        url = quote_path_and_params(url, quote_str=quote_str)
+    if quote_str is not False:
+        url = requote_uri(url)
+
+    encoding = (
+        request.headers.encoding if isinstance(request.headers, Headers) else None
+    )
+    headers = Headers(encoding=encoding)
+    for values in [*headers_list, request.headers]:
+        headers.update(values)  # type: ignore[arg-type]
+
+    data = request.data
+    if isinstance(data, dict | list | tuple):
+        body = urlencode(data).encode()
+    elif isinstance(data, str):
+        body = data.encode()
+    elif isinstance(data, BytesIO):
+        body = data.read()
+    elif isinstance(data, bytes):
+        body = data
+    elif data is None:
+        body = None
+    else:
+        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
+
+    if request.json is not None:
+        body = dumps(request.json, separators=(",", ":")).encode()
+        if "Content-Type" not in headers:
+            headers["Content-Type"] = "application/json"
+    elif isinstance(data, dict | list | tuple):
+        if "Content-Type" not in headers:
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+    elif isinstance(data, str | bytes) and data and "Content-Type" not in headers:
+        headers["Content-Type"] = "application/octet-stream"
+
+    prepared = PreparedRequest(method=method, url=url, headers=headers, body=body)
+
+    merged_cookies = Cookies()
+    for values in [*cookies_list, request.cookies]:
+        if values:
+            merged_cookies.update(values)  # type: ignore[arg-type]
+    if merged_cookies and "Cookie" not in headers:
+        cookie_request = UrlRequest(url)
+        merged_cookies.jar.add_cookie_header(cookie_request)
+        cookie_header = cookie_request.get_header("Cookie")
+        if cookie_header:
+            headers["Cookie"] = cookie_header
+
+    request_auth = request.auth if request.auth is not None else auth
+    if request_auth is not None:
+        username, password = request_auth
+        token = base64.b64encode(f"{username}:{password}".encode()).decode()
+        headers["Authorization"] = f"Basic {token}"
+
+    return prepared
 
 
 # ruff: noqa: SIM116
@@ -647,8 +735,21 @@ def set_curl_options(
     queue_class: Any = None,
     event_class: Any = None,
     curl_options: Optional[dict[CurlOpt, str]] = None,
+    prepared_request: Optional[PreparedRequest] = None,
 ):
     c = curl
+
+    if prepared_request is not None:
+        method = prepared_request.method  # type: ignore[assignment]
+        url = prepared_request.url
+        data = prepared_request.body
+        json = None
+        params_list = [None, None]
+        base_url = None
+        quote = False
+        headers_list = [None, prepared_request.headers]
+        cookies_list = [None, None]
+        auth = None
 
     method = method.upper()  # type: ignore
 
@@ -746,7 +847,14 @@ def set_curl_options(
     else:
         existing_header_names = set()
 
-    req = Request(url, h, method, request_body)
+    if prepared_request is None:
+        req = PreparedRequest(method=method, url=url, headers=h, body=request_body)
+    else:
+        prepared_request.method = method
+        prepared_request.url = url
+        prepared_request.headers = h
+        prepared_request.body = request_body
+        req = prepared_request
 
     # cookies
     c.setopt(CurlOpt.COOKIEFILE, b"")  # always enable the curl cookie engine first
@@ -761,6 +869,8 @@ def set_curl_options(
         temp_cookies = Cookies(cookies)
         for morsel in temp_cookies.get_cookies_for_curl(req):
             curl.setopt(CurlOpt.COOKIELIST, morsel.to_curl_format())
+    if prepared_request is not None and (cookie_header := req.headers.get("Cookie")):
+        curl.setopt(CurlOpt.COOKIE, cookie_header.encode())
 
     # files
     if files:
