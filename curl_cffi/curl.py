@@ -71,6 +71,7 @@ CURL_WRITEFUNC_PAUSE = 0x10000001
 CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
 CURL_READFUNC_ABORT = 0x10000000
 CURL_READFUNC_PAUSE = 0x10000001
+CURLPAUSE_CONT = 0
 
 
 class _CallbackContext:
@@ -562,6 +563,14 @@ class Curl:
         if self._curl is None:
             return 0  # silently ignore if curl handle is None
         return lib.curl_easy_upkeep(self._curl)
+
+    def pause(self, action: int) -> int:
+        """Pause or unpause a transfer, wrapping ``curl_easy_pause``."""
+        if self._curl is None:
+            raise CurlError("Cannot pause a closed handle.")
+        ret = lib.curl_easy_pause(self._curl, action)
+        self._check_error(ret, "pause")
+        return ret
 
     def clean_handles_and_buffers(
         self, clear_headers: bool = True, clear_resolve: bool = True

@@ -10,13 +10,20 @@ import queue
 import warnings
 from collections import Counter
 from collections.abc import Callable
+from contextlib import suppress
 from io import BytesIO
 from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
-from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
+from ..curl import (
+    CURL_WRITEFUNC_ERROR,
+    CURL_WRITEFUNC_PAUSE,
+    CURLPAUSE_CONT,
+    CurlError,
+    CurlMime,
+)
 from ..utils import CurlCffiWarning, HttpVersionLiteral
 from ..fingerprints import Fingerprint, FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 from .cookies import Cookies
@@ -64,6 +71,59 @@ class NotSetType:
 
 
 NOT_SET: Final[NotSetType] = NotSetType()
+DEFAULT_STREAM_QUEUE_SIZE = 128
+
+
+class StreamControl:
+    """Coordinate backpressure and cancellation for a streaming transfer."""
+
+    def __init__(self, curl, q, quit_now, *, asynchronous: bool) -> None:
+        self.curl = curl
+        self.q = q
+        self.quit_now = quit_now
+        self.asynchronous = asynchronous
+        self.paused = False
+
+    def write(self, chunk: bytes) -> int:
+        if self.quit_now.is_set():
+            return CURL_WRITEFUNC_ERROR
+
+        if self.asynchronous:
+            if self.q.full():
+                self.paused = True
+                return CURL_WRITEFUNC_PAUSE
+            self.q.put_nowait(chunk)
+            return len(chunk)
+
+        while not self.quit_now.is_set():
+            try:
+                self.q.put(chunk, timeout=0.1)
+                return len(chunk)
+            except queue.Full:
+                pass
+        return CURL_WRITEFUNC_ERROR
+
+    def put(self, item: object) -> bool:
+        """Put a terminal item into a synchronous queue unless it was aborted."""
+        while not self.quit_now.is_set():
+            try:
+                self.q.put(item, timeout=0.1)
+                return True
+            except queue.Full:
+                pass
+        return False
+
+    def resume(self) -> None:
+        if not self.paused:
+            return
+        self.paused = False
+        self.curl.pause(CURLPAUSE_CONT)
+
+    def abort(self) -> None:
+        self.quit_now.set()
+        # A paused write callback returns CURL_WRITEFUNC_ERROR while aborting.
+        with suppress(CurlError):
+            self.resume()
 
 
 # ruff: noqa: SIM116
@@ -643,6 +703,7 @@ def set_curl_options(
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
+    stream_queue_size: int = DEFAULT_STREAM_QUEUE_SIZE,
     multipart: Optional[CurlMime] = None,
     queue_class: Any = None,
     event_class: Any = None,
@@ -978,18 +1039,24 @@ def set_curl_options(
     q = None
     header_recved = None
     quit_now = None
+    stream_control = None
     if stream:
-        q = queue_class()
+        if stream_queue_size < 1:
+            raise ValueError("stream_queue_size must be greater than 0")
+        q = queue_class(maxsize=stream_queue_size)
         header_recved = event_class()
         quit_now = event_class()
+        stream_control = StreamControl(
+            c,
+            q,
+            quit_now,
+            asynchronous=queue_class is asyncio.Queue,
+        )
 
         def qput(chunk):
             if not header_recved.is_set():
                 header_recved.set()
-            if quit_now.is_set():
-                return CURL_WRITEFUNC_ERROR
-            q.put_nowait(chunk)
-            return len(chunk)
+            return stream_control.write(chunk)
 
         c.setopt(CurlOpt.WRITEFUNCTION, qput)
     elif content_callback is not None:
@@ -1024,4 +1091,4 @@ def set_curl_options(
         for option, setting in curl_options.items():
             c.setopt(option, setting)
 
-    return req, buffer, header_buffer, q, header_recved, quit_now
+    return req, buffer, header_buffer, q, header_recved, quit_now, stream_control
