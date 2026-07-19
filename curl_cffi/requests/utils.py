@@ -9,7 +9,7 @@ import math
 import queue
 import warnings
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from io import BytesIO
 from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
@@ -31,6 +31,7 @@ from .impersonate import (
     toggle_extension,
 )
 from .models import Request
+from .streams import RequestContent, RequestData, _FileReader, _IterableReader
 
 if TYPE_CHECKING:
     from ..curl import Curl
@@ -612,9 +613,8 @@ def set_curl_options(
         Union[dict[str, object], list[object], tuple[object, ...], None]
     ] = [],  # noqa: B006
     base_url: Optional[str] = None,
-    data: Optional[
-        Union[dict[str, str], list[tuple[object]], str, BytesIO, bytes]
-    ] = None,
+    data: Optional[RequestData] = None,
+    content: Optional[RequestContent] = None,
     json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
@@ -652,8 +652,47 @@ def set_curl_options(
 
     method = method.upper()  # type: ignore
 
+    # content/data/body/json
+    body_data = content if content is not None else data
+    stream_reader: object | None = None
+    if content is not None:
+        if isinstance(content, str):
+            body = content.encode()
+        elif isinstance(content, (bytes, bytearray)):
+            body = bytes(content)
+        elif hasattr(content, "read"):
+            stream_reader = _FileReader(content)
+            body = b""
+        else:
+            stream_reader = _IterableReader(cast(Iterable[bytes], content))
+            body = b""
+    elif isinstance(data, dict | list | tuple):
+        body = urlencode(data).encode()
+    elif isinstance(data, str):
+        body = data.encode()
+    elif isinstance(data, BytesIO):
+        body = data.read()
+    elif isinstance(data, bytes):
+        body = data
+    elif data is None:
+        body = b""
+    else:
+        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
+
+    if json is not None:
+        body = dumps(json, separators=(",", ":")).encode()
+
+    if (
+        (content is not None or data is not None or json is not None)
+        and multipart is None
+        and stream_reader is None
+    ):
+        request_body = body
+    else:
+        request_body = None
+
     # method
-    if method == "POST":
+    if method == "POST" and stream_reader is None:
         c.setopt(CurlOpt.POST, 1)
     elif method != "GET":
         c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
@@ -674,29 +713,17 @@ def set_curl_options(
         url = requote_uri(url)
     c.setopt(CurlOpt.URL, url.encode())
 
-    # data/body/json
-    if isinstance(data, dict | list | tuple):
-        body = urlencode(data).encode()
-    elif isinstance(data, str):
-        body = data.encode()
-    elif isinstance(data, BytesIO):
-        body = data.read()
-    elif isinstance(data, bytes):
-        body = data
-    elif data is None:
-        body = b""
-    else:
-        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
-    if json is not None:
-        body = dumps(json, separators=(",", ":")).encode()
-    body_provided = data is not None or json is not None
-    request_body = body if body_provided and multipart is None else None
-
     # Tell libcurl to be aware of bodies and related headers when,
     # 1. POST/PUT/PATCH, even if the body is empty, it's up to curl to decide what to do
     # 2. GET/DELETE with body, although it's against the RFC, some applications.
     #   e.g. Elasticsearch, use this.
-    if body or method in ("POST", "PUT", "PATCH"):
+    if stream_reader is not None:
+        c.setopt(CurlOpt.UPLOAD, 1)
+        c.setopt(CurlOpt.READDATA, stream_reader)
+        if isinstance(stream_reader, _FileReader) and stream_reader.rewindable:
+            c.setopt(CurlOpt.SEEKDATA, stream_reader)
+        c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
+    elif body or method in ("POST", "PUT", "PATCH"):
         c.setopt(CurlOpt.POSTFIELDS, body)
         # necessary if body contains '\0'
         c.setopt(CurlOpt.POSTFIELDSIZE, len(body))
@@ -710,6 +737,16 @@ def set_curl_options(
     encoding = headers.encoding if isinstance(headers, Headers) else None
     h = Headers(base_headers, encoding=encoding)
     h.update(headers)
+
+    # set the uploading size if it's known
+    if stream_reader is not None:
+        if isinstance(stream_reader, _FileReader) and stream_reader.length is not None:
+            content_length = str(stream_reader.length)
+            h["Content-Length"] = content_length
+        else:
+            content_length = h.get("content-length")
+        if content_length is not None:
+            c.setopt(CurlOpt.INFILESIZE_LARGE, int(content_length))
 
     # Previously we removed Host for https://github.com/lexiforest/curl_cffi/issues/119
     # Since curl-impersonate 1.5.0, curl always use Host parsed from url as cookiehost
@@ -728,11 +765,11 @@ def set_curl_options(
     # Add content-type if missing
     if json is not None:
         update_header_line(header_lines, "Content-Type", "application/json")
-    if isinstance(data, dict) and method != "POST":
+    if content is None and isinstance(data, dict) and method != "POST":
         update_header_line(
             header_lines, "Content-Type", "application/x-www-form-urlencoded"
         )
-    if isinstance(data, str | bytes) and data:
+    if isinstance(body_data, (str, bytes, bytearray)) and body_data:
         update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
     # Never send `Expect` header.

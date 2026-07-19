@@ -49,7 +49,9 @@ def detect_arch():
             and arch["pointer_size"] == pointer_size
             and ("libc" not in arch or arch.get("libc") == libc)
         ):
-            if arch.get("libdir"):
+            if build_dir := os.environ.get("IMPERSONATE_BUILD_DIR"):
+                arch["libdir"] = os.path.expanduser(build_dir)
+            elif arch.get("libdir"):
                 arch["libdir"] = os.path.expanduser(arch["libdir"])
             else:
                 if "CI" in os.environ:

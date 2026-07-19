@@ -68,8 +68,20 @@ CURLINFO_SSL_DATA_OUT = 6
 
 CURL_WRITEFUNC_PAUSE = 0x10000001
 CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
+
 CURL_READFUNC_ABORT = 0x10000000
 CURL_READFUNC_PAUSE = 0x10000001
+
+CURL_SEEKFUNC_OK = 0
+CURL_SEEKFUNC_FAIL = 1
+CURL_SEEKFUNC_CANTSEEK = 2
+
+CURLPAUSE_RECV = 1 << 0
+CURLPAUSE_RECV_CONT = 0
+CURLPAUSE_SEND = 1 << 2
+CURLPAUSE_SEND_CONT = 0
+CURLPAUSE_ALL = CURLPAUSE_RECV | CURLPAUSE_SEND
+CURLPAUSE_CONT = CURLPAUSE_RECV_CONT | CURLPAUSE_SEND_CONT
 
 
 class _CallbackContext:
@@ -220,6 +232,17 @@ def read_callback(ptr, size, nmemb, userdata):
     return len(data)
 
 
+@ffi.def_extern(onerror=_store_callback_error(CURL_SEEKFUNC_FAIL))
+def seek_buffer_callback(userdata, offset: int, origin: int) -> int:
+    """ffi callback for curl seek function, seeks a file-like upload source"""
+    source = ffi.from_handle(userdata).callback
+    try:
+        source.seek(offset, origin)
+    except (AttributeError, OSError):
+        return CURL_SEEKFUNC_CANTSEEK
+    return CURL_SEEKFUNC_OK
+
+
 # Credits: @alexio777 on https://github.com/lexiforest/curl_cffi/issues/4
 def slist_to_list(head) -> list[bytes]:
     """Converts curl slist to a python list."""
@@ -260,6 +283,7 @@ class Curl:
         self._debug_handle: Any = None
         self._body_handle: Any = None
         self._read_handle: Any = None
+        self._seek_handle: Any = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
@@ -311,6 +335,7 @@ class Curl:
             self._header_handle,
             self._debug_handle,
             self._read_handle,
+            self._seek_handle,
         ):
             if handle is not None:
                 exception = ffi.from_handle(handle).exception
@@ -362,6 +387,12 @@ class Curl:
             self._read_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.READFUNCTION, lib.read_buffer_callback
+            )
+        elif option == CurlOpt.SEEKDATA:
+            c_value = ffi.new_handle(_CallbackContext(value))
+            self._seek_handle = c_value
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.SEEKFUNCTION, lib.seek_buffer_callback
             )
         elif option == CurlOpt.WRITEFUNCTION:
             c_value = ffi.new_handle(_CallbackContext(value))
@@ -562,6 +593,14 @@ class Curl:
             return 0  # silently ignore if curl handle is None
         return lib.curl_easy_upkeep(self._curl)
 
+    def pause(self, action: int) -> int:
+        """Pause or resume data transfer on this handle."""
+        if self._curl is None:
+            return 0
+        ret = lib.curl_easy_pause(self._curl, action)
+        self._check_error(ret, "pause")
+        return ret
+
     def clean_handles_and_buffers(
         self, clear_headers: bool = True, clear_resolve: bool = True
     ) -> None:
@@ -572,6 +611,7 @@ class Curl:
         self._debug_handle = None
         self._body_handle = None
         self._read_handle = None
+        self._seek_handle = None
 
         if clear_resolve:
             if self._resolve != ffi.NULL:

@@ -12,6 +12,7 @@ from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
+from .streams import STREAM_END
 
 # Use orjson if present
 try:
@@ -42,15 +43,7 @@ JSON_NATIVE_ENCODINGS = {
     "utf-32be",
     "utf-32le",
 }
-STREAM_END = object()
 REDIRECT_STATI = (301, 302, 303, 307, 308)
-
-
-def clear_queue(q: queue.Queue):
-    with q.mutex:
-        q.queue.clear()
-        q.all_tasks_done.notify_all()
-        q.unfinished_tasks = 0
 
 
 class Request:
