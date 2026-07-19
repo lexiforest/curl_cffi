@@ -43,6 +43,7 @@ JSON_NATIVE_ENCODINGS = {
     "utf-32le",
 }
 STREAM_END = object()
+REDIRECT_STATI = (301, 302, 303, 307, 308)
 
 
 def clear_queue(q: queue.Queue):
@@ -141,6 +142,41 @@ class Response:
         self.request_size: int = 0
         self.response_size: int = 0
 
+    def __getstate__(self) -> dict[str, Any]:
+        if any(
+            value is not None
+            for value in (
+                self.queue,
+                self.stream_task,
+                self.astream_task,
+                self.quit_now,
+            )
+        ):
+            raise TypeError(
+                "Streaming responses cannot be pickled; make the request without "
+                "stream=True before pickling the response."
+            )
+
+        state = self.__dict__.copy()
+        for attribute in (
+            "curl",
+            "queue",
+            "stream_task",
+            "astream_task",
+            "quit_now",
+        ):
+            state.pop(attribute, None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self.curl = None
+        self.queue = None
+        self.stream_task = None
+        self.astream_task = None
+        self.quit_now = None
+        self._stream_closed = True
+
     @property
     def charset(self) -> str:
         """Alias for encoding."""
@@ -209,6 +245,11 @@ class Response:
         """Raise an error if status code is not in [200, 400)"""
         if not self.ok:
             raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
+
+    @property
+    def is_redirect(self) -> bool:
+        """Whether this response is a well-formed redirect."""
+        return "location" in self.headers and self.status_code in REDIRECT_STATI
 
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """

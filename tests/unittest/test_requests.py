@@ -1,5 +1,6 @@
 import base64
 import json
+import pickle
 import time
 from io import BytesIO
 from uuid import uuid4
@@ -11,7 +12,11 @@ import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import HTTPError, TooManyRedirects
+from curl_cffi.requests.exceptions import (
+    CertificateVerifyError,
+    HTTPError,
+    TooManyRedirects,
+)
 from curl_cffi.requests.models import Response
 from curl_cffi.utils import CurlCffiWarning
 
@@ -51,6 +56,27 @@ def test_response_request_body(server):
     assert r.request.body is None
 
 
+def test_response_pickle(server):
+    url = str(server.url.copy_with(path="/set_cookies"))
+    response = requests.get(url)
+    expected_text = response.text
+
+    restored = pickle.loads(pickle.dumps(response))
+
+    assert restored.url == response.url
+    assert restored.content == response.content
+    assert restored.text == expected_text
+    assert restored.status_code == response.status_code
+    assert restored.headers == response.headers
+    assert restored.cookies["foo"] == "bar"
+    assert restored.request.url == response.request.url
+    assert restored.curl is None
+    assert restored.queue is None
+    assert restored.stream_task is None
+    assert restored.astream_task is None
+    assert restored.quit_now is None
+
+
 def test_callback(server):
     buffer = BytesIO()
     r = requests.post(
@@ -60,6 +86,14 @@ def test_callback(server):
     )
     assert r.status_code == 200
     assert buffer.getvalue() == b"foo=bar"
+
+
+def test_callback_keyboard_interrupt(server):
+    def callback(data: bytes):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        requests.get(str(server.url), content_callback=callback)
 
 
 def test_post_large_body(server):
@@ -357,6 +391,19 @@ def test_json_bytes_bom_parse():
     assert r.json()["foo"] == "bar"
 
 
+def test_response_is_redirect():
+    for status_code in (301, 302, 303, 307, 308):
+        r = Response()
+        r.status_code = status_code
+        r.headers["Location"] = "/"
+        assert r.is_redirect
+
+    r = Response()
+    r.status_code = 304
+    r.headers["Location"] = "/"
+    assert not r.is_redirect
+
+
 def test_charset_default_encoding(server):
     r = requests.get(
         str(server.url.copy_with(path="/windows1251")), default_encoding="windows-1251"
@@ -514,29 +561,33 @@ def test_too_many_redirects(server):
     assert e.value.response.status_code == 301
 
 
-def test_safe_redirect_blocks_private_ip(server):
+def test_safe_redirect_blocks_private_ip(server, https_server):
     """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
-    target = str(server.url.copy_with(path="/"))
-    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
-    r = requests.get(url, allow_redirects=True)
+    public_redirect = str(server.url.copy_with(path="/redirect_to"))
+    target = str(https_server.url.copy_with(path="/"))
+    url = public_redirect + f"?to={target}"
+    r = requests.get(url, allow_redirects=True, verify=False)
     assert r.status_code == 200
     assert r.redirect_count == 1
 
-    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
-    with pytest.raises(requests.RequestsError, match="SSRF"):
-        requests.get(url, allow_redirects=CurlFollow.SAFE)
+    with pytest.raises(requests.RequestsError) as exc_info:
+        requests.get(url, allow_redirects=CurlFollow.SAFE, verify=False)
+    assert exc_info.value.code == CurlECode.COULDNT_CONNECT
 
 
-def test_safe_redirect_string(server):
+def test_safe_redirect_string(server, https_server):
     """The string 'safe' should behave the same as CurlFollow.SAFE."""
-    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
-    with pytest.raises(requests.RequestsError, match="SSRF"):
-        requests.get(url, allow_redirects="safe")
+    target = str(https_server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    with pytest.raises(requests.RequestsError) as exc_info:
+        requests.get(url, allow_redirects="safe", verify=False)
+    assert exc_info.value.code == CurlECode.COULDNT_CONNECT
 
 
 def test_verify(https_server):
-    with pytest.raises(requests.RequestsError, match="SSL certificate problem"):
+    with pytest.raises(CertificateVerifyError) as exc_info:
         requests.get(str(https_server.url), verify=True)
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 def test_verify_false(https_server):
@@ -708,6 +759,15 @@ def test_delete_cookies(server):
     s.get(str(server.url.copy_with(path="/set_cookies")))
     assert s.cookies["foo"] == "bar"
     s.get(str(server.url.copy_with(path="/delete_cookies")))
+    assert not s.cookies.get("foo")
+
+
+def test_delete_cookies_before_redirect(server):
+    s = requests.Session()
+    s.get(str(server.url.copy_with(path="/set_cookies")))
+    assert s.cookies["foo"] == "bar"
+    r = s.get(str(server.url.copy_with(path="/delete_cookies_then_redirect")))
+    assert "foo" not in r.json()
     assert not s.cookies.get("foo")
 
 
@@ -893,6 +953,16 @@ def test_stream_iter_content(server):
         with s.stream("GET", url, params={"n": "20"}) as r:
             for chunk in r.iter_content():
                 assert b"path" in chunk
+
+
+def test_stream_response_pickle_raises(server):
+    url = str(server.url.copy_with(path="/stream"))
+    with (
+        requests.Session() as session,
+        session.stream("GET", url, params={"n": "1"}) as response,
+        pytest.raises(TypeError, match="Streaming responses cannot be pickled"),
+    ):
+        pickle.dumps(response)
 
 
 def test_stream_iter_content_break(server):

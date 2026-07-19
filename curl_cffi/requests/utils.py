@@ -458,7 +458,8 @@ def _apply_fingerprint(
         tls_extension_order = _strip_padding_extension(fingerprint.tls_extension_order)
         extension_ids = set(int(e) for e in tls_extension_order.split("-"))
         toggle_extensions_by_ids(curl, extension_ids)
-        curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
+        if not fingerprint.tls_permute_extensions:
+            curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
 
     curl.setopt(CurlOpt.SSL_ENABLE_ALPN, int(fingerprint.tls_alpn))
     curl.setopt(CurlOpt.SSL_ENABLE_ALPS, int(fingerprint.tls_alps))
@@ -543,9 +544,28 @@ def _apply_fingerprint(
         curl.setopt(
             CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fingerprint.http3_tls_extension_order
         )
+    if fingerprint.http3_header_order:
+        curl.setopt(CurlOpt.HTTP3_HTTPHEADER_ORDER, fingerprint.http3_header_order)
+    if fingerprint.http3_tls_supported_groups:
+        normalized_groups = [
+            _normalize_supported_group(group)
+            for group in fingerprint.http3_tls_supported_groups
+        ]
+        curl.setopt(CurlOpt.HTTP3_SSL_EC_CURVES, ":".join(normalized_groups))
     if fingerprint.quic_transport_parameters:
         curl.setopt(
             CurlOpt.QUIC_TRANSPORT_PARAMETERS, fingerprint.quic_transport_parameters
+        )
+
+    # websocket settings
+    if fingerprint.ws_header_order:
+        curl.setopt(CurlOpt.WS_HTTPHEADER_ORDER, fingerprint.ws_header_order)
+    if fingerprint.ws_disable_session_ticket:
+        curl.setopt(CurlOpt.WS_SSL_DISABLE_TICKET, 1)
+    if fingerprint.ws_tls_cert_compression is not None:
+        curl.setopt(
+            CurlOpt.WS_SSL_CERT_COMPRESSION,
+            ",".join(fingerprint.ws_tls_cert_compression),
         )
 
     # default headers will not override user-defined headers
@@ -563,6 +583,24 @@ def _apply_fingerprint(
             header_lines.append(f"{key}: {value}")
         if header_lines:
             curl.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
+
+    if default_headers and fingerprint.http3_headers:
+        curl.setopt(
+            CurlOpt.HTTP3_HTTPHEADER,
+            [
+                f"{key}: {value}".encode()
+                for key, value in fingerprint.http3_headers.items()
+            ],
+        )
+
+    if default_headers and fingerprint.ws_headers:
+        curl.setopt(
+            CurlOpt.WS_HTTPHEADER,
+            [
+                f"{key}: {value}".encode()
+                for key, value in fingerprint.ws_headers.items()
+            ],
+        )
 
 
 @final
@@ -632,6 +670,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
     interface: Optional[str] = None,
+    doh_url: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
     max_recv_speed: int = 0,
@@ -900,10 +939,12 @@ def set_curl_options(
     # cert for this single request
     if isinstance(verify, str):
         c.setopt(CurlOpt.CAINFO, verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, verify)
 
     # cert for the session
     if verify in (None, True) and isinstance(base_verify, str):
         c.setopt(CurlOpt.CAINFO, base_verify)
+        c.setopt(CurlOpt.PROXY_CAINFO, base_verify)
 
     # referer
     if referer:
@@ -1033,6 +1074,9 @@ def set_curl_options(
             else:
                 value = f"host!{interface}"
         c.setopt(CurlOpt.INTERFACE, value.encode())
+
+    if doh_url:
+        c.setopt(CurlOpt.DOH_URL, doh_url.encode())
 
     # max_recv_speed
     # do not check, since 0 is a valid value to disable it

@@ -5,14 +5,16 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 from glob import glob
+from http.client import HTTPException
 from pathlib import Path
 from urllib.request import urlretrieve
 
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "2.0.0a5"
+__version__ = "2.0.0rc3"
 
 
 def is_android_env() -> bool:
@@ -47,7 +49,9 @@ def detect_arch():
             and arch["pointer_size"] == pointer_size
             and ("libc" not in arch or arch.get("libc") == libc)
         ):
-            if arch.get("libdir"):
+            if build_dir := os.environ.get("IMPERSONATE_BUILD_DIR"):
+                arch["libdir"] = os.path.expanduser(build_dir)
+            elif arch.get("libdir"):
                 arch["libdir"] = os.path.expanduser(arch["libdir"])
             else:
                 if "CI" in os.environ:
@@ -89,7 +93,17 @@ def download_libcurl():
     )
 
     print(f"Downloading libcurl-impersonate from {url}...")
-    urlretrieve(url, file)
+    retries = 3
+    for attempt in range(1, retries + 1):
+        try:
+            urlretrieve(url, file)
+            break
+        except (OSError, HTTPException) as e:
+            if attempt == retries:
+                raise
+            wait = 2 ** (attempt - 1)
+            print(f"Download failed ({e}); retry {attempt}/{retries} in {wait}s...")
+            time.sleep(wait)
 
     print("Unpacking downloaded files...")
     os.makedirs(libdir, exist_ok=True)
@@ -154,13 +168,18 @@ if is_static:
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
         ]
-    elif system in ("Linux", "Android"):
-        cxx_lib = "-lc++" if is_android else "-lstdc++"
+    elif is_android:
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
-            cxx_lib,
+            "-lc++",
+        ]
+    elif system == "Linux":
+        extra_link_args = [
+            "-Wl,--whole-archive",
+            static_libs[0],
+            "-Wl,--no-whole-archive",
         ]
 
 libraries = get_curl_libraries()
