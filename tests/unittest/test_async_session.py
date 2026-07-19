@@ -90,6 +90,22 @@ async def test_post_async_iterable_content(server):
     assert r.content == b"foo" + b"x" * 200000 + b"bar"
 
 
+async def test_file_like_content_overrides_content_length(server, tmp_path):
+    path = tmp_path / "body.bin"
+    path.write_bytes(b"streamed-from-file")
+
+    with path.open("rb") as f:
+        async with AsyncSession() as s:
+            r = await s.post(
+                str(server.url.copy_with(path="/echo_body")),
+                content=f,
+                headers={"Content-Length": "1"},
+            )
+
+    assert r.request.headers["Content-Length"] == str(len(b"streamed-from-file"))
+    assert r.content == b"streamed-from-file"
+
+
 async def test_async_iterable_content_error_propagates(server):
     async def content():
         yield b"partial"

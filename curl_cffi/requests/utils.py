@@ -652,7 +652,7 @@ def set_curl_options(
 
     method = method.upper()  # type: ignore
 
-    # data/body/json
+    # content/data/body/json
     body_data = content if content is not None else data
     stream_reader: object | None = None
     if content is not None:
@@ -672,17 +672,24 @@ def set_curl_options(
         body = data.encode()
     elif isinstance(data, BytesIO):
         body = data.read()
+    elif isinstance(data, bytes):
+        body = data
     elif data is None:
         body = b""
     else:
-        body = data
+        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
 
     if json is not None:
         body = dumps(json, separators=(",", ":")).encode()
-    body_provided = body_data is not None or json is not None
-    request_body = (
-        body if body_provided and multipart is None and stream_reader is None else None
-    )
+
+    if (
+        (content is not None or data is not None or json is not None)
+        and multipart is None
+        and stream_reader is None
+    ):
+        request_body = body
+    else:
+        request_body = None
 
     # method
     if method == "POST" and stream_reader is None:
@@ -731,8 +738,13 @@ def set_curl_options(
     h = Headers(base_headers, encoding=encoding)
     h.update(headers)
 
+    # set the uploading size if it's known
     if stream_reader is not None:
-        content_length = h.get("content-length")
+        if isinstance(stream_reader, _FileReader) and stream_reader.length is not None:
+            content_length = str(stream_reader.length)
+            h["Content-Length"] = content_length
+        else:
+            content_length = h.get("content-length")
         if content_length is not None:
             c.setopt(CurlOpt.INFILESIZE_LARGE, int(content_length))
 

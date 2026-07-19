@@ -4,7 +4,7 @@ import asyncio
 import queue
 from collections.abc import AsyncIterable, Iterable, Iterator
 from contextlib import suppress
-from io import SEEK_SET, BytesIO
+from io import SEEK_END, SEEK_SET, BytesIO
 from typing import IO, Any, Union, cast, final
 
 from ..curl import CURL_READFUNC_PAUSE, CURLPAUSE_SEND_CONT, Curl
@@ -99,16 +99,33 @@ class _IterableReader:
 class _FileReader:
     """Keep the starting offset of a file-like upload so libcurl can replay it."""
 
-    __slots__ = ("_file", "_start")
+    __slots__ = ("_file", "_length", "_start")
 
     def __init__(self, file: Any) -> None:
         self._file = file
+        self._length: int | None = None
         try:
             if hasattr(file, "seekable") and not file.seekable():
                 raise OSError
             self._start: int | None = file.tell()
         except (AttributeError, OSError):
             self._start = None
+        if self._start is not None:
+            try:
+                file.seek(0, SEEK_END)
+                self._length = max(0, file.tell() - self._start)
+            except (AttributeError, OSError):
+                pass
+            finally:
+                try:
+                    file.seek(self._start)
+                except (AttributeError, OSError):
+                    self._start = None
+                    self._length = None
+
+    @property
+    def length(self) -> int | None:
+        return self._length
 
     @property
     def rewindable(self) -> bool:

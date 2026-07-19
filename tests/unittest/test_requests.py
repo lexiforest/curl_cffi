@@ -166,6 +166,21 @@ def test_post_file_like_body(server, tmp_path):
     assert r.content == b"streamed-from-file"
 
 
+def test_file_like_content_overrides_content_length(server, tmp_path):
+    path = tmp_path / "body.bin"
+    path.write_bytes(b"streamed-from-file")
+
+    with path.open("rb") as f:
+        r = requests.post(
+            str(server.url.copy_with(path="/echo_body")),
+            content=f,
+            headers={"Content-Length": "1"},
+        )
+
+    assert r.request.headers["Content-Length"] == str(len(b"streamed-from-file"))
+    assert r.content == b"streamed-from-file"
+
+
 def test_post_content_chunk_list(server):
     r = requests.post(
         str(server.url.copy_with(path="/echo_body")),
