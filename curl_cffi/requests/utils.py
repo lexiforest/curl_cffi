@@ -21,7 +21,6 @@ from ..utils import CurlCffiWarning, HttpVersionLiteral
 from ..fingerprints import Fingerprint, FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
-from .files import _FileReader, _IterableReader
 from .headers import Headers
 from .impersonate import (
     TLS_CIPHER_NAME_MAP,
@@ -32,6 +31,7 @@ from .impersonate import (
     toggle_extension,
 )
 from .models import Request
+from .streams import _FileReader, _IterableReader
 
 if TYPE_CHECKING:
     from ..curl import Curl

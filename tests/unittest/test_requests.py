@@ -18,8 +18,8 @@ from curl_cffi.requests.exceptions import (
     TooManyRedirects,
     UnrewindableBodyError,
 )
-from curl_cffi.requests.files import _IterableReader
 from curl_cffi.requests.models import Response
+from curl_cffi.requests.streams import _IterableReader
 from curl_cffi.utils import CurlCffiWarning
 
 

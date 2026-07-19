@@ -1,12 +1,62 @@
 from __future__ import annotations
 
 import asyncio
+import queue
 from collections.abc import AsyncIterable, Iterable, Iterator
 from contextlib import suppress
 from io import SEEK_SET
 from typing import Any, cast, final
 
 from ..curl import CURL_READFUNC_PAUSE, CURLPAUSE_SEND_CONT, Curl
+from .exceptions import UnrewindableBodyError
+
+
+STREAM_END = object()
+_BODY_NOT_REWINDABLE = object()
+
+
+def _peek_queue(q: queue.Queue, default=None):
+    try:
+        return q.queue[0]
+    except IndexError:
+        return default
+
+
+def _peek_aio_queue(q: asyncio.Queue, default=None):
+    try:
+        return q._queue[0]  # type: ignore
+    except IndexError:
+        return default
+
+
+def _capture_body_position(data: object | None, content: object | None):
+    """Capture enough state to safely replay a request body after a failed attempt."""
+    body = content if content is not None else data
+    if not hasattr(body, "read"):
+        if content is not None and isinstance(body, AsyncIterable):
+            return None if body.__aiter__() is not body else _BODY_NOT_REWINDABLE
+        if content is not None and isinstance(body, Iterable):
+            return None if iter(body) is not body else _BODY_NOT_REWINDABLE
+        return None
+    try:
+        if hasattr(body, "seekable") and not body.seekable():
+            raise OSError
+        return body.tell()
+    except (AttributeError, OSError):
+        return _BODY_NOT_REWINDABLE
+
+
+def _rewind_body(body: object | None, position: object) -> None:
+    if position is None:
+        return
+    if position is _BODY_NOT_REWINDABLE:
+        raise UnrewindableBodyError("Unable to rewind streamed request body for retry")
+    try:
+        body.seek(position)
+    except (AttributeError, OSError) as exc:
+        raise UnrewindableBodyError(
+            "Unable to rewind streamed request body for retry"
+        ) from exc
 
 
 @final
