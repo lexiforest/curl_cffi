@@ -8,6 +8,7 @@ void curl_easy_reset(void *curl);
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
 void *curl_easy_duphandle(void *curl);
 int curl_easy_upkeep(void *curl);
+int curl_easy_pause(void *curl, int action);
 
 char *curl_version();
 
@@ -24,6 +25,7 @@ extern "Python" size_t buffer_callback(void *ptr, size_t size, size_t nmemb, voi
 extern "Python" size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" size_t read_buffer_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" size_t read_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
+extern "Python" int seek_buffer_callback(void *userdata, int64_t offset, int origin);
 extern "Python" int debug_function(void *curl, int type, char *data, size_t size, void *clientp);
 
 // multi interfaces

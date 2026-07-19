@@ -16,7 +16,9 @@ from curl_cffi.requests.exceptions import (
     CertificateVerifyError,
     HTTPError,
     TooManyRedirects,
+    UnrewindableBodyError,
 )
+from curl_cffi.requests.files import _IterableReader
 from curl_cffi.requests.models import Response
 from curl_cffi.utils import CurlCffiWarning
 
@@ -149,7 +151,7 @@ def test_post_iterable_body(server):
         yield b"x" * 200000
         yield b"bar"
 
-    r = requests.post(str(server.url.copy_with(path="/echo_body")), data=gen())
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), content=gen())
     assert r.status_code == 200
     assert r.content == b"foo" + b"x" * 200000 + b"bar"
 
@@ -159,9 +161,91 @@ def test_post_file_like_body(server, tmp_path):
     path.write_bytes(b"streamed-from-file")
 
     with path.open("rb") as f:
-        r = requests.post(str(server.url.copy_with(path="/echo_body")), data=f)
+        r = requests.post(str(server.url.copy_with(path="/echo_body")), content=f)
     assert r.status_code == 200
     assert r.content == b"streamed-from-file"
+
+
+def test_post_content_chunk_list(server):
+    r = requests.post(
+        str(server.url.copy_with(path="/echo_body")),
+        content=[b"foo", b"bar"],
+    )
+    assert r.content == b"foobar"
+
+
+def test_content_cannot_be_combined_with_data(server):
+    with pytest.raises(ValueError, match="content cannot be combined"):
+        requests.post(str(server.url), content=b"raw", data={"foo": "bar"})
+
+
+def test_sync_session_rejects_async_content(server):
+    async def content():
+        yield b"raw"
+
+    with pytest.raises(TypeError, match="requires AsyncSession"):
+        requests.post(str(server.url), content=content())
+
+
+def test_iterable_reader_returns_available_chunk_immediately():
+    consumed = []
+
+    def chunks():
+        consumed.append("first")
+        yield b"foo"
+        consumed.append("second")
+        yield b"bar"
+
+    reader = _IterableReader(chunks())
+    assert reader.read(65536) == b"foo"
+    assert consumed == ["first"]
+    assert reader.read(65536) == b"bar"
+
+
+def test_seekable_content_rewinds_for_redirect(server, tmp_path):
+    path = tmp_path / "redirect-body.bin"
+    path.write_bytes(b"skip-streamed-body")
+
+    with path.open("rb") as f:
+        f.seek(5)
+        r = requests.post(
+            str(server.url.copy_with(path="/redirect_307")),
+            content=f,
+            allow_redirects=True,
+        )
+    assert r.content == b"streamed-body"
+
+
+def test_one_shot_content_redirect_is_unrewindable(server):
+    with pytest.raises(UnrewindableBodyError):
+        requests.post(
+            str(server.url.copy_with(path="/redirect_307")),
+            content=iter([b"streamed-body"]),
+            allow_redirects=True,
+        )
+
+
+def test_seekable_content_rewinds_for_retry(server, tmp_path):
+    path = tmp_path / "retry-body.bin"
+    path.write_bytes(b"retry-file-body")
+    url = server.url.copy_with(path="/retry_body", query=f"key={uuid4().hex}".encode())
+
+    with (
+        path.open("rb") as f,
+        requests.Session(retry=1, raise_for_status=True) as session,
+    ):
+        r = session.post(str(url), content=f)
+    assert r.content == b"retry-file-body"
+
+
+def test_one_shot_content_is_not_retried(server):
+    url = server.url.copy_with(path="/retry_body", query=f"key={uuid4().hex}".encode())
+
+    with (
+        requests.Session(retry=1, raise_for_status=True) as session,
+        pytest.raises(UnrewindableBodyError),
+    ):
+        session.post(str(url), content=iter([b"important-body"]))
 
 
 def test_post_redirect_to_get(server):

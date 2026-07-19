@@ -3,6 +3,7 @@ import base64
 import json
 import pickle
 from contextlib import suppress
+from uuid import uuid4
 
 import pytest
 
@@ -10,7 +11,11 @@ from curl_cffi import AsyncCurl, CurlOpt, Headers
 from curl_cffi.const import CurlECode
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import CertificateVerifyError, TooManyRedirects
+from curl_cffi.requests.exceptions import (
+    CertificateVerifyError,
+    TooManyRedirects,
+    UnrewindableBodyError,
+)
 from curl_cffi.requests.models import Response
 
 
@@ -68,6 +73,68 @@ async def test_post_json(server):
         )
         assert r.status_code == 200
         assert r.content == b'{"foo":"bar"}'
+
+
+async def test_post_async_iterable_content(server):
+    async def content():
+        yield b"foo"
+        await asyncio.sleep(0)
+        yield b"x" * 200000
+        await asyncio.sleep(0)
+        yield b"bar"
+
+    async with AsyncSession() as s:
+        r = await s.post(
+            str(server.url.copy_with(path="/echo_body")), content=content()
+        )
+    assert r.content == b"foo" + b"x" * 200000 + b"bar"
+
+
+async def test_async_iterable_content_error_propagates(server):
+    async def content():
+        yield b"partial"
+        raise ValueError("upload failed")
+
+    async with AsyncSession() as s:
+        with pytest.raises(ValueError, match="upload failed"):
+            await s.post(
+                str(server.url.copy_with(path="/echo_body")), content=content()
+            )
+
+
+async def test_async_iterable_content_is_closed_on_cancellation(server):
+    started = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def content():
+        try:
+            yield b"partial"
+            started.set()
+            while True:
+                await asyncio.sleep(1)
+                yield b"more"
+        finally:
+            closed.set()
+
+    async with AsyncSession() as s:
+        task = asyncio.create_task(
+            s.post(str(server.url.copy_with(path="/echo_body")), content=content())
+        )
+        await asyncio.wait_for(started.wait(), 1)
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        await asyncio.wait_for(closed.wait(), 1)
+
+
+async def test_one_shot_async_content_is_not_retried(server):
+    async def content():
+        yield b"important-body"
+
+    url = server.url.copy_with(path="/retry_body", query=f"key={uuid4().hex}".encode())
+    async with AsyncSession(retry=1, raise_for_status=True) as s:
+        with pytest.raises(UnrewindableBodyError):
+            await s.post(str(url), content=content())
 
 
 async def test_put_json(server):

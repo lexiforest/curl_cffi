@@ -9,7 +9,7 @@ import math
 import queue
 import warnings
 from collections import Counter
-from collections.abc import AsyncIterable, Callable, Iterable, Iterator
+from collections.abc import AsyncIterable, Callable, Iterable
 from io import BytesIO
 from json import dumps
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, final
@@ -21,6 +21,7 @@ from ..utils import CurlCffiWarning, HttpVersionLiteral
 from ..fingerprints import Fingerprint, FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 from .cookies import Cookies
 from .exceptions import ImpersonateError, InvalidURL
+from .files import _FileReader, _IterableReader
 from .headers import Headers
 from .impersonate import (
     TLS_CIPHER_NAME_MAP,
@@ -603,29 +604,6 @@ def _apply_fingerprint(
         )
 
 
-@final
-class _IterableReader:
-    """Adapt a sync ``Iterable[bytes]`` to the ``read(size)`` interface that
-    libcurl's read callback expects, buffering and slicing chunks to ``size``."""
-
-    __slots__ = ("_it", "_buf")
-
-    def __init__(self, iterable: Iterable[bytes]) -> None:
-        self._it: Iterator[bytes] = iter(iterable)
-        self._buf: bytearray = bytearray()
-
-    def read(self, size: int) -> bytes:
-        buf = self._buf
-        while len(buf) < size:
-            try:
-                buf += next(self._it)
-            except StopIteration:
-                break
-        chunk = bytes(buf[:size])
-        del buf[:size]
-        return chunk
-
-
 def set_curl_options(
     curl: Curl,
     method: HttpMethod,
@@ -642,10 +620,9 @@ def set_curl_options(
             str,
             BytesIO,
             bytes,
-            Iterable[bytes],
-            AsyncIterable[bytes],
         ]
     ] = None,
+    content: Any = None,
     json: Optional[dict[object, object] | list[object]] = None,
     headers_list: list[Optional[HeaderTypes]] = [],  # noqa: B006
     cookies_list: list[Optional[CookieTypes]] = [],  # noqa: B006
@@ -683,8 +660,29 @@ def set_curl_options(
 
     method = method.upper()  # type: ignore
 
-    is_stream_body = data is not None and not isinstance(
-        data, (str, bytes, bytearray, dict, list, tuple, BytesIO)
+    if content is not None and any(
+        value is not None for value in (data, json, files, multipart)
+    ):
+        raise ValueError(
+            "content cannot be combined with data, json, files, or multipart"
+        )
+    if isinstance(content, AsyncIterable):
+        raise TypeError(
+            "AsyncIterable content requires AsyncSession; Session cannot stream "
+            "an async request body"
+        )
+
+    body_data = content if content is not None else data
+    is_stream_body = (
+        content is not None
+        and body_data is not None
+        and (
+            hasattr(body_data, "read")
+            or (
+                isinstance(body_data, (AsyncIterable, Iterable))
+                and not isinstance(body_data, (str, bytes, bytearray))
+            )
+        )
     )
 
     # method
@@ -712,36 +710,34 @@ def set_curl_options(
     # data/body/json
     stream_reader: object | None = None
     if is_stream_body:
-        if hasattr(data, "read"):
-            stream_reader = data
-        elif isinstance(data, AsyncIterable):
-            raise TypeError(
-                "AsyncIterable body requires AsyncSession; the sync client cannot "
-                "stream an async body."
-            )
-        elif isinstance(data, Iterable):
-            stream_reader = _IterableReader(data)
+        if hasattr(body_data, "read"):
+            stream_reader = _FileReader(body_data)
+        elif isinstance(body_data, Iterable):
+            stream_reader = _IterableReader(body_data)
         else:
             raise TypeError(
-                "data must be dict/list/tuple, str, BytesIO, bytes, a file-like "
-                "object, or an Iterable[bytes]"
+                "content must be str, bytes, a file-like object, or an iterable "
+                "of bytes"
             )
         body = b""
-    elif isinstance(data, dict | list | tuple):
-        body = urlencode(data).encode()
-    elif isinstance(data, str):
-        body = data.encode()
-    elif isinstance(data, BytesIO):
-        body = data.read()
-    elif isinstance(data, bytes):
-        body = data
-    elif data is None:
+    elif isinstance(body_data, dict | list | tuple):
+        body = urlencode(body_data).encode()
+    elif isinstance(body_data, str):
+        body = body_data.encode()
+    elif isinstance(body_data, BytesIO):
+        body = body_data.read()
+    elif isinstance(body_data, (bytes, bytearray)):
+        body = bytes(body_data)
+    elif body_data is None:
         body = b""
     else:
-        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
+        raise TypeError(
+            "request body must be form data, str, bytes, a file-like object, "
+            "or an iterable of bytes"
+        )
     if json is not None:
         body = dumps(json, separators=(",", ":")).encode()
-    body_provided = data is not None or json is not None
+    body_provided = body_data is not None or json is not None
     request_body = (
         body if body_provided and multipart is None and stream_reader is None else None
     )
@@ -753,6 +749,8 @@ def set_curl_options(
     if stream_reader is not None:
         c.setopt(CurlOpt.UPLOAD, 1)
         c.setopt(CurlOpt.READDATA, stream_reader)
+        if isinstance(stream_reader, _FileReader) and stream_reader.rewindable:
+            c.setopt(CurlOpt.SEEKDATA, stream_reader)
         c.setopt(CurlOpt.CUSTOMREQUEST, method.encode())
     elif body or method in ("POST", "PUT", "PATCH"):
         c.setopt(CurlOpt.POSTFIELDS, body)
@@ -791,11 +789,11 @@ def set_curl_options(
     # Add content-type if missing
     if json is not None:
         update_header_line(header_lines, "Content-Type", "application/json")
-    if isinstance(data, dict) and method != "POST":
+    if content is None and isinstance(data, dict) and method != "POST":
         update_header_line(
             header_lines, "Content-Type", "application/x-www-form-urlencoded"
         )
-    if isinstance(data, str | bytes) and data:
+    if isinstance(body_data, (str, bytes, bytearray)) and body_data:
         update_header_line(header_lines, "Content-Type", "application/octet-stream")
 
     # Never send `Expect` header.
