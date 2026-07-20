@@ -635,15 +635,32 @@ def test_not_follow_redirects(server):
     )
     assert r.status_code == 301
     assert r.redirect_count == 0
+    assert r.history == []
     assert r.content == b"Redirecting..."
 
 
 def test_follow_redirects(server):
-    r = requests.get(
-        str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
-    )
+    url = str(server.url.copy_with(path="/redirect_301"))
+    r = requests.get(url, allow_redirects=True)
     assert r.status_code == 200
     assert r.redirect_count == 1
+    assert len(r.history) == 1
+    assert isinstance(r.history[0], Response)
+    assert r.history[0].url == url
+    assert r.history[0].status_code == 301
+    assert r.history[0].headers["location"] == "/"
+    assert r.history[0].is_redirect
+    assert r.history[0].content == b""
+
+
+def test_multiple_redirect_history(server):
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=/redirect_301"
+    intermediate_url = str(server.url.copy_with(path="/redirect_301"))
+    r = requests.get(url)
+
+    assert [response.status_code for response in r.history] == [301, 301]
+    assert [response.url for response in r.history] == [url, intermediate_url]
+    assert all(response.history == [] for response in r.history)
 
 
 def test_too_many_redirects(server):
@@ -653,6 +670,7 @@ def test_too_many_redirects(server):
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
+    assert len(e.value.response.history) == 2
 
 
 def test_safe_redirect_blocks_private_ip(server, https_server):

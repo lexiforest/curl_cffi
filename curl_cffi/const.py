@@ -437,7 +437,8 @@ class CurlInfo(IntEnum):
     PROXYAUTH_USED = 0x200000 + 70
     SIZE_DELIVERED = 0x600000 + 71
     COOKIECHANGES = 0x400000 + 1000
-    LASTONE = 1000
+    REDIRECT_HISTORY = 0x400000 + 1001
+    LASTONE = 1001
 
     if locals().get("RESPONSE_CODE"):
         HTTP_CODE = locals().get("RESPONSE_CODE")

@@ -95,7 +95,8 @@ class Response:
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
-        history: history redirections, only headers are available.
+        history: redirect responses, in request order. Response bodies are not
+            available.
         download_size: total downloaded bytes (body).
         upload_size: total uploaded bytes (body).
         header_size: total header size.
@@ -122,7 +123,7 @@ class Response:
         self.primary_port: int = 0
         self.local_ip: str = ""
         self.local_port: int = 0
-        self.history: list[dict[str, Any]] = []
+        self.history: list[Response] = []
         self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task: Optional[Future] = None
