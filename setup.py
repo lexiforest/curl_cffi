@@ -1,5 +1,10 @@
 from setuptools import setup
-from wheel.bdist_wheel import bdist_wheel
+
+try:
+    # integrated since setuptools 70.1, avoids wheel's bdist_wheel FutureWarning
+    from setuptools.command.bdist_wheel import bdist_wheel
+except ImportError:
+    from wheel.bdist_wheel import bdist_wheel
 
 
 class bdist_wheel_abi3(bdist_wheel):
