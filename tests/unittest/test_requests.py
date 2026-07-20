@@ -485,6 +485,21 @@ def test_json_bytes_bom_parse():
     assert r.json()["foo"] == "bar"
 
 
+def test_json_kwargs_with_orjson():
+    # Regression test for gh #639: Response.json() forwards kwargs to loads(),
+    # but orjson.loads() takes no keyword arguments. When orjson is installed
+    # this used to raise TypeError, making behavior depend on whether orjson
+    # happens to be present. Passing kwargs must fall back to stdlib json.
+    from decimal import Decimal
+
+    r = Response()
+    r.headers["Content-Type"] = "application/json"
+    r.content = b'{"price": 1.1}'
+    parsed = r.json(parse_float=Decimal)
+    assert parsed["price"] == Decimal("1.1")
+    assert isinstance(parsed["price"], Decimal)
+
+
 def test_response_is_redirect():
     for status_code in (301, 302, 303, 307, 308):
         r = Response()
