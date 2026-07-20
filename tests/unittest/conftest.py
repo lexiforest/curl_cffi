@@ -118,6 +118,8 @@ async def app(scope, receive, send):
         await set_special_cookies(scope, receive, send)
     elif scope["path"].startswith("/retry_once"):
         await retry_once(scope, receive, send)
+    elif scope["path"].startswith("/retry_status"):
+        await retry_status(scope, receive, send)
     elif scope["path"].startswith("/retry_body"):
         await retry_body(scope, receive, send)
     elif scope["path"].startswith("/redirect_307"):
@@ -504,6 +506,35 @@ async def retry_once(scope, receive, send):
     await send({"type": "http.response.body", "body": body})
 
 
+_retry_status_counts: dict[str, int] = defaultdict(int)
+
+
+async def retry_status(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode(), keep_blank_values=True)
+    key = params.get("key", ["default"])[0]
+    fail_status = int(params.get("status", ["503"])[0])
+    fail_times = int(params.get("fail_times", ["999"])[0])
+    retry_after = params.get("retry_after", [None])[0]
+
+    _retry_status_counts[key] += 1
+    count = _retry_status_counts[key]
+
+    headers = [
+        [b"content-type", b"text/plain"],
+        [b"x-request-count", str(count).encode()],
+    ]
+    if retry_after is not None:
+        headers.append([b"retry-after", retry_after.encode()])
+
+    if count <= fail_times:
+        status, body = fail_status, b"fail"
+    else:
+        status, body = 200, b"ok"
+
+    await send({"type": "http.response.start", "status": status, "headers": headers})
+    await send({"type": "http.response.body", "body": body})
+
+
 _retry_body_counts: dict[str, int] = defaultdict(int)
 
 
@@ -710,6 +741,18 @@ def server():
     config = Config(app=app, lifespan="off", loop="asyncio", port=8008)
     server = TestServer(config=config)
     yield from serve_in_thread(server)
+
+
+@pytest.fixture
+def retry_status_url(server):
+    """Build a /retry_status URL with a unique key per call."""
+
+    def _make(**params):
+        params.setdefault("key", uuid4().hex)
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        return str(server.url.copy_with(path="/retry_status", query=query.encode()))
+
+    return _make
 
 
 def serve_in_thread(server: Server):
