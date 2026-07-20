@@ -443,11 +443,6 @@ def _apply_fingerprint(
     existing_header_names: set[str],
     default_headers: bool,
 ) -> None:
-    if fingerprint.http_version:
-        curl.setopt(
-            CurlOpt.HTTP_VERSION, normalize_http_version(fingerprint.http_version)
-        )
-
     if fingerprint.tls_version:
         tls_version = _normalize_tls_version(fingerprint.tls_version)
         curl.setopt(CurlOpt.SSLVERSION, tls_version | CurlSslVersion.MAX_DEFAULT)

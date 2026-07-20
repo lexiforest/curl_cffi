@@ -361,6 +361,8 @@ class Fingerprint:
     os: str = ""
     os_version: str = ""
 
+    # Describes the default HTTP version associated with this fingerprint. The
+    # version used for a request is selected separately with ``http_version``.
     http_version: str = "v2"
 
     tls_version: str = "1.2"

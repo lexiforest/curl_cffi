@@ -15,6 +15,20 @@ class FakeCurl:
         self.options[option] = value
 
 
+def test_apply_fingerprint_does_not_select_http_version():
+    curl = FakeCurl()
+    fingerprint = Fingerprint(http_version="v2")
+
+    _apply_fingerprint(
+        curl,
+        fingerprint,
+        existing_header_names=set(),
+        default_headers=False,
+    )
+
+    assert CurlOpt.HTTP_VERSION not in curl.options
+
+
 def test_apply_fingerprint_strips_padding_extension_from_tls_extension_order(
     monkeypatch,
 ):

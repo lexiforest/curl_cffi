@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from curl_cffi.const import CurlHttpVersion, CurlOpt, CurlSslVersion
+from curl_cffi.fingerprints import Fingerprint
 from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests import utils
 
@@ -38,6 +39,31 @@ def test_set_curl_options_routes_perk_to_perk_options(monkeypatch):
 
     set_perk_options.assert_called_once_with(curl, perk)
     set_akamai_options.assert_not_called()
+
+
+def test_explicit_http_version_is_not_changed_by_cached_fingerprint(monkeypatch):
+    curl = FakeCurl()
+    monkeypatch.setattr(utils, "_is_native_impersonate_target", lambda target: False)
+    monkeypatch.setattr(
+        utils,
+        "_load_named_fingerprint",
+        lambda target: Fingerprint(http_version="v2"),
+    )
+
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        impersonate="chrome_150_macos_26.0",
+        http_version="v3only",
+    )
+
+    assert curl.options[CurlOpt.HTTP_VERSION] == CurlHttpVersion.V3ONLY
 
 
 def test_set_ja3_options_sets_tls_options(monkeypatch):
