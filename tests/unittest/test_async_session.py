@@ -44,6 +44,7 @@ def test_create_session_out_of_async(server):
     async def get():
         r = await s.get(str(server.url))
         assert r.status_code == 200
+        await s.close()
 
     asyncio.run(get())
 
