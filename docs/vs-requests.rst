@@ -6,7 +6,7 @@ Here are a list of known incompatibilities:
 
 - files API are slightly different, but more error-proof.
 - retries are not supported yet, tracked in [#24](https://github.com/lexiforest/curl_cffi/issues/24)
-- redirect history are not supported, tracked in [#82](https://github.com/lexiforest/curl_cffi/issues/82)
+- redirect response bodies are not retained in ``Response.history``
 - empty-domains cookies may lost during redirects, tracked in [#55](https://github.com/lexiforest/curl_cffi/issues/55)
 - streaming response objects cannot be pickled; non-streaming responses can.
 - The ``requests`` proxies dict is supported, but we prefer ``proxy=...``, unless you really use different proxies for http and https.

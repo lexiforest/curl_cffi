@@ -437,9 +437,14 @@ Redirection and history
     >>> r.status_code
     302
 
-.. warning::
+Redirect responses are available in request order. Their status, URL, and headers
+are populated, but their response bodies are not available.
 
-    History is not implemented.
+.. code-block:: python
+
+    >>> r = curl_cffi.get("https://httpbin.org/redirect-to?url=/")
+    >>> r.history[0].status_code
+    302
 
 
 Authenticate
