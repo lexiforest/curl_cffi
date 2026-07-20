@@ -50,6 +50,9 @@ local-curl: $(CURL_VERSION)
 gen-const:
 	$(PYTHON) scripts/generate_consts.py $(CURL_VERSION)
 
+check-browsers:
+	$(PYTHON) scripts/check_browsers.py $(VERSION)
+
 preprocess: .preprocessed
 	@echo generating patched libcurl header files
 
@@ -76,4 +79,4 @@ clean:
 	rm -rf .preprocessed $(CURL_VERSION).tar.xz curl-impersonate-$(VERSION).tar.gz
 	rm -rf include/
 
-.PHONY: clean build test install-editable preprocess gen-const
+.PHONY: clean build test install-editable preprocess gen-const check-browsers

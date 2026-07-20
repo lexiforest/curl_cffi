@@ -29,6 +29,8 @@ jobs:
       run: |
         pip install mypy ruff
         ruff check --exclude issues
+    - name: Check impersonate targets
+      run: python scripts/check_browsers.py
 
   sdist:
     name: Build sdist wheel
