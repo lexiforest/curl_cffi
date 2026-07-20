@@ -910,6 +910,81 @@ class TestWebSocketFragmentationFix:
             assert data == payload
             assert call_count == 3
 
+    def test_send_timeout_partial_write_terminates_connection(self) -> None:
+        """
+        Verifies that if a send() operation times out after writing a partial
+        amount of bytes (offset > 0), the connection is forcefully terminated
+        (closed = True) and a terminal WebSocketError is raised instead of
+        a standard transient timeout.
+        """
+        mock_curl: Mock = Mock(spec=Curl)
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws.closed = False
+        ws._sock_fd = 999
+
+        mock_selector: Mock = Mock()
+        ws._read_selector = mock_selector
+        ws._write_selector = mock_selector
+
+        # Simulate a partial write followed by a transient block
+        call_count = 0
+
+        def mock_ws_send(chunk: memoryview, flags: int) -> int:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return 10000  # Partial write
+            raise CurlError("EAGAIN", CurlECode.AGAIN)
+
+        mock_curl.ws_send.side_effect = mock_ws_send
+
+        # Simulate write selector timing out (returns empty list)
+        mock_selector.select.return_value = []
+
+        # We attempt to send a 100,000-byte payload
+        with pytest.raises(WebSocketError) as exc_info:
+            _ = ws.send(b"X" * 100000, timeout=0.05)
+
+        # Ensure we raised the unrecoverable wrapped exception instead of a bare timeout
+        assert not isinstance(exc_info.value, WebSocketTimeout)
+        assert "unrecoverable" in str(exc_info.value).lower()
+        assert exc_info.value.code == CurlECode.OPERATION_TIMEDOUT
+
+        # The connection must have been forcefully terminated to prevent frame desync
+        assert ws.closed is True
+
+        # Subsequent calls to send must immediately fail with WebSocketClosed
+        with pytest.raises(WebSocketClosed):
+            _ = ws.send(b"data", timeout=1.0)
+
+    def test_send_timeout_zero_write_keeps_connection_open(self) -> None:
+        """
+        Verifies that if a send() operation times out before writing a single byte
+        (offset == 0), the connection remains open (closed = False) since the
+        frame was never initiated and no C-side frame state was corrupted.
+        """
+        mock_curl: Mock = Mock(spec=Curl)
+        ws: WebSocket = WebSocket(curl=mock_curl)
+        ws.closed = False
+        ws._sock_fd = 999
+
+        mock_selector: Mock = Mock()
+        ws._read_selector = mock_selector
+        ws._write_selector = mock_selector
+
+        # Simulate socket blocking immediately (no bytes written)
+        mock_curl.ws_send.side_effect = CurlError("EAGAIN", CurlECode.AGAIN)
+
+        # Simulate write selector timing out (returns empty list)
+        mock_selector.select.return_value = []
+
+        # Since offset == 0, it raises a standard WebSocketTimeout
+        with pytest.raises(WebSocketTimeout):
+            _ = ws.send(b"X" * 100000, timeout=0.05)
+
+        # Connection must remain open because offset was 0
+        assert ws.closed is False
+
 
 class TestWebSocketRobustness:
     def test_raw_fragment_assembly_with_interleaved_control_frames(self) -> None:

@@ -821,6 +821,8 @@ class WebSocket(BaseWebSocket):
             CurlError: Network related exception occured.
             WebSocketClosed: The WebSocket has been closed.
             WebSocketTimeout: The send operation timed out.
+            WebSocketError: The socket stalled while sending.
+            WebSocketError: Timed out while sending (unrecoverable).
 
         Note:
             This method is NOT thread-safe.
@@ -903,8 +905,21 @@ class WebSocket(BaseWebSocket):
                             if not write_selector.select(
                                 max(0.0, deadline - time_monotonic())
                             ):
+                                if offset > 0:
+                                    # If we timeout after already sending some data,
+                                    # framing alignment is lost. Close connection.
+                                    self.terminate()
+                                    raise WebSocketError(
+                                        (
+                                            "Timed out before complete "
+                                            "message sent (unrecoverable)"
+                                        ),
+                                        CurlECode.OPERATION_TIMEDOUT,
+                                    ) from None
+
                                 raise WebSocketTimeout(
-                                    "Socket write timeout", CurlECode.OPERATION_TIMEDOUT
+                                    "Socket write timeout before message sent",
+                                    CurlECode.OPERATION_TIMEDOUT,
                                 ) from None
                         else:
                             _ = write_selector.select(None)
@@ -1794,13 +1809,13 @@ class AsyncWebSocket(BaseWebSocket):
         """
         Immediately terminates the connection without a graceful handshake.
 
-        This method is a forceful shutdown that cancels all background I/O tasks
+        This method is thread-safe, task-safe, and idempotent.
+
+        This is a forceful shutdown that cancels all background I/O tasks
         and cleans up resources. It should be used for final cleanup or after an
         unrecoverable error. Unlike ``close()``, it does not attempt to send a close
         frame or wait for pending messages. It schedules the cleanup to run on the
         event loop and returns immediately. It does not wait for cleanup completion.
-
-        This method is thread-safe, task-safe, and idempotent.
         """
 
         with self._terminate_lock:
@@ -2021,6 +2036,11 @@ class AsyncWebSocket(BaseWebSocket):
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
             self._finalize_connection(e)
+
+        finally:
+            # Ensure any sudden reader exit terminates the connection
+            if not self.closed:
+                self.terminate()
 
     async def _write_loop(self) -> None:
         """
