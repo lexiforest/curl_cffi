@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import http.cookies
+import math
 import os
 import queue
 import random
@@ -508,11 +509,14 @@ class BaseSession(Generic[R]):
         retry_after = resp.headers.get("Retry-After")
         if retry_after:
             try:
-                # Only delta-seconds form; HTTP-date falls back to backoff.
+                # Only finite delta-seconds; HTTP-date falls back to backoff.
                 # Clamp >= 0 so a negative value can't make sleep raise.
-                return max(0.0, float(retry_after.strip()))
+                delay = float(retry_after.strip())
             except (TypeError, ValueError):
                 pass
+            else:
+                if math.isfinite(delay):
+                    return max(0.0, delay)
         return self._retry_delay(attempt)
 
     @property

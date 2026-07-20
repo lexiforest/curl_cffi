@@ -671,6 +671,25 @@ def test_status_forcelist_retry_after_header(retry_status_url):
     assert elapsed >= 0.25
 
 
+def test_status_forcelist_nonfinite_retry_after(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1, retry_after="inf")
+    strategy = RetryStrategy(count=1, status_forcelist=(503,))
+    with requests.Session(retry=strategy) as s:
+        r = s.get(url)
+    assert r.status_code == 200
+    assert r.headers["x-request-count"] == "2"
+
+
+def test_status_forcelist_stream(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=2, status_forcelist=(503,))
+    with requests.Session(retry=strategy) as s, s.stream("GET", url) as r:
+        content = b"".join(r.iter_content())
+    assert r.status_code == 200
+    assert content == b"ok"
+    assert r.headers["x-request-count"] == "2"
+
+
 def test_post_timeout(server):
     with pytest.raises(requests.RequestsError):
         requests.post(str(server.url.copy_with(path="/slow_response")), timeout=0.1)

@@ -706,6 +706,20 @@ async def test_status_forcelist_stops_on_success(retry_status_url):
     assert r.headers["x-request-count"] == "2"
 
 
+async def test_status_forcelist_stream(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=2, status_forcelist=(503,))
+    async with AsyncSession(retry=strategy, max_clients=1) as s:
+        r = await s.get(url, stream=True)
+        assert r.status_code == 200
+        assert r.headers["x-request-count"] == "2"
+        content = await r.acontent()
+        assert content == b"ok"
+
+        r2 = await s.get(retry_status_url(fail_times=0))
+        assert r2.status_code == 200
+
+
 async def test_shared_async_curl_not_closed_by_session(server):
     pool = AsyncCurl()
 
