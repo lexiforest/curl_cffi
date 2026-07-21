@@ -82,6 +82,7 @@ Use ``ws_connect`` from a ``Session``. This method accepts the same network para
         # Session cookies are automatically injected into the WebSocket handshake
         session.cookies.set("session_id", "xyz")
 
+        # Context manager (recommended)
         with session.ws_connect(
             "wss://api.example.com/v1/stream",
             impersonate="chrome",
@@ -89,6 +90,11 @@ Use ``ws_connect`` from a ``Session``. This method accepts the same network para
             timeout=10  # Connection phase timeout
         ) as ws:
             pass
+
+        # Manual lifecycle management
+        ws = session.ws_connect("wss://api.example.com")
+        ws.send_str("Hello")
+        ws.close()  # Explicit Close is required
 
 Sending & Receiving
 -------------------
@@ -154,13 +160,26 @@ The ``AsyncWebSocket`` client uses a highly optimized **Background I/O Architect
 Connecting
 ----------
 
-Use ``ws_connect`` from an ``AsyncSession``.
+Use the ``ws_connect`` context manager from an ``AsyncSession``.
 
 .. code-block:: python
 
     async with AsyncSession() as session:
         async with session.ws_connect("wss://api.example.com/v1/stream") as ws:
-            pass
+            ...
+
+These connection styles are also supported:
+
+.. code-block:: python
+
+    # Manual connection management
+    ws = await session.ws_connect("wss://api.example.com")
+    await ws.send_str("Hello")
+    await ws.close()  # Explicit Close is required
+
+    # Same as context manager, alternate style
+    async with await session.ws_connect("wss://api.example.com") as ws:
+        await ws.send_str("Hello")
 
 Sending Data
 ------------
@@ -179,7 +198,7 @@ If your application logic requires confirmation that messages have been successf
 .. code-block:: python
 
     await ws.send_str("Critical Data")
-    await ws.flush()  # Awaits until all queued messages are transmitted
+    await ws.flush()  # Waits until all queued messages are transmitted
 
 Receiving Data
 --------------
