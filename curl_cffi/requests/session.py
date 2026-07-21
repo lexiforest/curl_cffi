@@ -283,7 +283,9 @@ class BaseSession(Generic[R]):
         self.interface = interface
         self.doh_url = doh_url
         self.cert = cert
-        self.cache = normalize_cache_backend(cache)
+        cache_backend = normalize_cache_backend(cache)
+        if cache_backend is not None:
+            self.cache = cache_backend
 
         if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
@@ -452,9 +454,10 @@ class BaseSession(Generic[R]):
         stream: Optional[bool],
         content_callback: Optional[Callable[..., object]],
     ) -> bool:
+        cache = getattr(self, "cache", None)
         return bool(
-            self.cache
-            and self.cache.should_cache_request(
+            cache
+            and cache.should_cache_request(
                 request,
                 stream=bool(stream),
                 content_callback=content_callback,

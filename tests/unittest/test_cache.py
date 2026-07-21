@@ -152,6 +152,31 @@ def test_async_session_rejects_cache_shorthand():
         AsyncSession(cache=timedelta(seconds=60))
 
 
+def test_session_without_cache_has_no_cache_attribute():
+    with Session() as session:
+        assert not hasattr(session, "cache")
+
+
+def test_session_with_cache_exposes_cache_attribute(tmp_path):
+    cache = FileCacheBackend(expires=timedelta(seconds=60), path=tmp_path)
+
+    with Session(cache=cache) as session:
+        assert session.cache is cache
+
+
+def test_cache_assigned_after_construction(server, tmp_path):
+    cache = FileCacheBackend(expires=timedelta(seconds=60), path=tmp_path)
+    url = str(server.url.copy_with(path="/unique_cookie"))
+
+    with Session() as session:
+        session.cache = cache
+        first = session.get(url)
+        second = session.get(url)
+
+    assert first.cookies["foo"] == second.cookies["foo"]
+    assert len(list(tmp_path.glob("*.json"))) == 1
+
+
 def test_session_accepts_int_cache_shorthand():
     session = Session(cache=60)
     try:
