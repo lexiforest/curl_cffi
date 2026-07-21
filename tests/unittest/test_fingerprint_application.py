@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-
 from curl_cffi.const import CurlOpt
 from curl_cffi.fingerprints import Fingerprint
 from curl_cffi.requests.impersonate import ExtraFingerprints
@@ -29,16 +27,9 @@ def test_apply_fingerprint_does_not_select_http_version():
     assert CurlOpt.HTTP_VERSION not in curl.options
 
 
-def test_apply_fingerprint_strips_padding_extension_from_tls_extension_order(
-    monkeypatch,
-):
+def test_apply_fingerprint_strips_padding_extension_from_tls_extension_order():
     curl = FakeCurl()
     fingerprint = Fingerprint(tls_extension_order="0-21-11")
-    toggle_extensions_by_ids = Mock()
-    monkeypatch.setattr(
-        "curl_cffi.requests.utils.toggle_extensions_by_ids",
-        toggle_extensions_by_ids,
-    )
 
     _apply_fingerprint(
         curl,
@@ -47,22 +38,15 @@ def test_apply_fingerprint_strips_padding_extension_from_tls_extension_order(
         default_headers=False,
     )
 
-    toggle_extensions_by_ids.assert_called_once_with(curl, {0, 11})
     assert curl.options[CurlOpt.TLS_EXTENSION_ORDER] == "0-11"
 
 
-def test_apply_fingerprint_skips_extension_order_when_permuting(monkeypatch):
+def test_apply_fingerprint_skips_extension_order_when_permuting():
     curl = FakeCurl()
     fingerprint = Fingerprint(
         tls_extension_order="0-23-65281-11",
         tls_permute_extensions=True,
     )
-    toggle_extensions_by_ids = Mock()
-    monkeypatch.setattr(
-        "curl_cffi.requests.utils.toggle_extensions_by_ids",
-        toggle_extensions_by_ids,
-    )
-
     _apply_fingerprint(
         curl,
         fingerprint,
@@ -70,7 +54,6 @@ def test_apply_fingerprint_skips_extension_order_when_permuting(monkeypatch):
         default_headers=False,
     )
 
-    toggle_extensions_by_ids.assert_called_once_with(curl, {0, 23, 65281, 11})
     assert CurlOpt.TLS_EXTENSION_ORDER not in curl.options
     assert curl.options[CurlOpt.SSL_PERMUTE_EXTENSIONS] == 1
 
@@ -136,6 +119,7 @@ def test_apply_fingerprint_sets_http3_and_websocket_options():
     fingerprint = Fingerprint(
         http3_headers={"User-Agent": "h3-agent", "Accept": "text/html"},
         http3_header_order="User-Agent,Accept",
+        http3_tls_extension_order="10-45-13-16-65037-51-17613-27-57-43-0",
         http3_tls_supported_groups=["X25519Kyber768", "P-256"],
         ws_headers={"User-Agent": "ws-agent", "Origin": "https://example.com"},
         ws_header_order="User-Agent,Origin",
@@ -155,6 +139,9 @@ def test_apply_fingerprint_sets_http3_and_websocket_options():
         b"Accept: text/html",
     ]
     assert curl.options[CurlOpt.HTTP3_HTTPHEADER_ORDER] == "User-Agent,Accept"
+    assert curl.options[CurlOpt.HTTP3_TLS_EXTENSION_ORDER] == (
+        "10-45-13-16-65037-51-17613-27-57-43-0"
+    )
     assert curl.options[CurlOpt.HTTP3_SSL_EC_CURVES] == "X25519Kyber768Draft00:P-256"
     assert curl.options[CurlOpt.WS_HTTPHEADER] == [
         b"User-Agent: ws-agent",

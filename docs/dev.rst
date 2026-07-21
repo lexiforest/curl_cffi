@@ -20,6 +20,17 @@ configured for the current platform, such as ``libcurl-impersonate.so`` or
 
     IMPERSONATE_BUILD_DIR=/path/to/lib pip install .
 
+The default link type is configured per platform. Set ``IMPERSONATE_LINK_TYPE``
+to ``dynamic`` or ``static`` to override it. A dynamic local build can be used
+without merging its static dependency archives::
+
+    IMPERSONATE_BUILD_DIR=/path/to/lib \
+        IMPERSONATE_LINK_TYPE=dynamic pip install -e .
+
+On macOS, the directory must contain ``libcurl-impersonate.dylib`` and any
+versioned symlinks required by its install name. The directory is recorded as a
+runtime search path in the extension module.
+
 macOS
 
 To install the local editable build:

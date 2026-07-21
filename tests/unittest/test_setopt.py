@@ -66,16 +66,43 @@ def test_explicit_http_version_is_not_changed_by_cached_fingerprint(monkeypatch)
     assert curl.options[CurlOpt.HTTP_VERSION] == CurlHttpVersion.V3ONLY
 
 
-def test_set_ja3_options_sets_tls_options(monkeypatch):
+def test_explicit_http3_uses_cached_extension_order(monkeypatch):
     curl = FakeCurl()
-    ja3 = "771,4865-4866,0-11-10,29-23,0"
-    toggle_extensions_by_ids = Mock()
-
+    http3_extension_order = "10-45-13-16-65037-51-17613-27-57-43-0"
+    monkeypatch.setattr(utils, "_is_native_impersonate_target", lambda target: False)
     monkeypatch.setattr(
         utils,
-        "toggle_extensions_by_ids",
-        toggle_extensions_by_ids,
+        "_load_named_fingerprint",
+        lambda target: Fingerprint(
+            tls_extension_order=(
+                "0-10-11-13-16-23-35-43-45-51-65281-5-18"
+            ),
+            tls_signed_cert_timestamps=True,
+            http3_tls_extension_order=http3_extension_order,
+        ),
     )
+
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        impersonate="chrome_150_macos_26.0",
+        http_version="v3only",
+    )
+
+    assert curl.options[CurlOpt.HTTP3_TLS_EXTENSION_ORDER] == http3_extension_order
+    assert curl.options[CurlOpt.TLS_STATUS_REQUEST] == 1
+    assert curl.options[CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS] == 1
+
+
+def test_set_ja3_options_sets_tls_options():
+    curl = FakeCurl()
+    ja3 = "771,4865-4866,0-11-10,29-23,0"
 
     utils.set_ja3_options(curl, ja3)
 
@@ -85,15 +112,12 @@ def test_set_ja3_options_sets_tls_options(monkeypatch):
     assert curl.options[CurlOpt.SSL_CIPHER_LIST] == (
         "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
     )
-    toggle_extensions_by_ids.assert_called_once_with(curl, {0, 10, 11})
     assert curl.options[CurlOpt.TLS_EXTENSION_ORDER] == "0-11-10"
     assert curl.options[CurlOpt.SSL_EC_CURVES] == "X25519:P-256"
 
 
-def test_set_ja3_options_with_permutation_skips_extension_order(monkeypatch):
+def test_set_ja3_options_with_permutation_skips_extension_order():
     curl = FakeCurl()
-
-    monkeypatch.setattr(utils, "toggle_extensions_by_ids", Mock())
 
     utils.set_ja3_options(
         curl,

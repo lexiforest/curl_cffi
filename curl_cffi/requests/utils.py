@@ -28,7 +28,6 @@ from .impersonate import (
     TLS_VERSION_MAP,
     ExtraFingerprints,
     resolve_latest_browser_type,
-    toggle_extension,
 )
 from .models import Request
 from .streams import RequestContent, RequestData, _FileReader, _IterableReader
@@ -254,23 +253,6 @@ def peek_aio_queue(q: asyncio.Queue, default=None):
         return default
 
 
-def toggle_extensions_by_ids(curl: Curl, extension_ids):
-    # TODO: find a better representation, rather than magic numbers
-    default_enabled = {0, 10, 11, 13, 16, 23, 35, 43, 45, 51, 65281}
-
-    to_enable_ids = extension_ids - default_enabled
-    for ext_id in to_enable_ids:
-        toggle_extension(curl, ext_id, enable=True)
-
-    # print("to_enable: ", to_enable_ids)
-
-    to_disable_ids = default_enabled - extension_ids
-    for ext_id in to_disable_ids:
-        toggle_extension(curl, ext_id, enable=False)
-
-    # print("to_disable: ", to_disable_ids)
-
-
 def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
     """
     Detailed explanation: https://engineering.salesforce.com/tls-fingerprinting-with-ja3-and-ja3s-247362855967/
@@ -300,9 +282,6 @@ def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
             CurlCffiWarning,
             stacklevel=1,
         )
-    extension_ids = set(int(e) for e in extensions.split("-"))
-    toggle_extensions_by_ids(curl, extension_ids)
-
     if not permute:
         curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, extensions)
 
@@ -452,8 +431,6 @@ def _apply_fingerprint(
 
     if fingerprint.tls_extension_order:
         tls_extension_order = _strip_padding_extension(fingerprint.tls_extension_order)
-        extension_ids = set(int(e) for e in tls_extension_order.split("-"))
-        toggle_extensions_by_ids(curl, extension_ids)
         if not fingerprint.tls_permute_extensions:
             curl.setopt(CurlOpt.TLS_EXTENSION_ORDER, tls_extension_order)
 
@@ -467,9 +444,10 @@ def _apply_fingerprint(
             CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT,
             int(fingerprint.tls_use_new_alps_codepoint),
         )
-    curl.setopt(
-        CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(fingerprint.tls_signed_cert_timestamps)
-    )
+    # Explicit extension orders are also allowlists in our BoringSSL fork, so
+    # enable browser capabilities here and let the selected order suppress them.
+    curl.setopt(CurlOpt.TLS_STATUS_REQUEST, 1)
+    curl.setopt(CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, 1)
     curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, fingerprint.tls_key_shares_limit)
 
     if fingerprint.tls_cert_compression:
