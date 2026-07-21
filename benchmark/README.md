@@ -24,16 +24,16 @@ Target
 
 All the clients run with session/client enabled.
 
-Async WebSocket
+WebSocket
 ------
 
-Two distinct benchmarks are provided to evaluate the performance of the `AsyncWebSocket` implementation under different conditions.
+Two distinct benchmarks are provided to evaluate the performance of the WebSocket implementation under different conditions.
 
-1. Simple Throughput Test ([`client`](ws_bench_1_client.py), [`server`](ws_bench_1_server.py))
+1. Simple Throughput Test ([client](ws_bench_1_client.py), [sync client](ws_bench_1_client_sync.py), [server](ws_bench_1_server.py))
 
     This is a lightweight, in-memory benchmark designed to measure the raw throughput and overhead of the WebSocket client. The server sends a repeating chunk of random bytes from memory, and the client receives it. This test is useful for quick sanity checks and detecting performance regressions under ideal, CPU-cached conditions.
 
-2. Verified Streaming Test ([`code`](ws_bench_2.py))
+2. Verified Streaming Test ([async](ws_bench_2.py), [sync](ws_bench_2_sync.py))
 
     This is a rigorous, end-to-end test. It first generates a multi-gigabyte file of random data and its SHA256 hash. The benchmark then streams this file from disk over the WebSocket connection. The receiving end calculates the hash of the incoming stream and verifies it against the original, ensuring complete data integrity.
 
@@ -85,7 +85,11 @@ Benchmark 1: Simple Throughput Test
 2. Run the Client:
 
     ```bash
+    # Async
     python ws_bench_1_client.py
+
+    # Sync
+    python ws_bench_1_client_sync.py
     ```
 
 Benchmark 2: Verified Streaming Test
@@ -105,6 +109,9 @@ Benchmark 2: Verified Streaming Test
 
     ```bash
     python ws_bench_2.py server
+
+    # Sync
+    python ws_bench_2_sync.py server
     ```
 
 3. Run the Client (Choose one):
@@ -115,12 +122,18 @@ Benchmark 2: Verified Streaming Test
 
     ```bash
     python ws_bench_2.py client --test download
+
+    # Sync
+    python ws_bench_2_sync.py client --test download
     ```
 
     - To test upload speed (client sends, server receives):
 
     ```bash
     python ws_bench_2.py client --test upload
+
+    # Sync
+    python ws_bench_2_sync.py client --test upload
     ```
 
 Performance Considerations
@@ -154,6 +167,6 @@ Benchmark results can vary significantly based on system-level factors. The foll
     start /affinity 2 python ws_bench_1_client.py
     ```
 
-- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L100) enum. A concurrent test completes when both directions finish.
+- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) / [`ws_bench_1_client_sync.py`](ws_bench_1_client_sync.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L100) enum. A concurrent test completes when both directions finish.
 
-- **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L90) and [`recv_queue`](ws_bench_utils.py#L89) sizes within the [`TestConfig`](ws_bench_utils.py#L76) class to observe the impact on performance and backpressure.
+- **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L90) and [`recv_queue`](ws_bench_utils.py#L89) sizes within the [`TestConfig`](ws_bench_utils.py#L76) class to observe the impact on performance and backpressure for the async implementation.

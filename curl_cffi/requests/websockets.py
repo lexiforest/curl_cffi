@@ -4,11 +4,29 @@ The Curl CFFI WebSocket client implementation.
 
 from __future__ import annotations
 
-import asyncio
-import struct
-import threading
-import warnings
-from asyncio import InvalidStateError
+from asyncio import (
+    ALL_COMPLETED,
+    FIRST_COMPLETED,
+    AbstractEventLoop,
+    CancelledError,
+    Event,
+    Future,
+    InvalidStateError,
+    Lock,
+    Queue,
+    QueueEmpty,
+    QueueFull,
+    Task,
+)
+from asyncio import TimeoutError as AsyncTimeout
+from asyncio import (
+    create_task,
+    get_running_loop,
+    run_coroutine_threadsafe,
+    sleep,
+    wait,
+    wait_for,
+)
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -16,8 +34,13 @@ from enum import IntEnum
 from json import dumps as json_dumps
 from json import loads as json_loads
 from random import uniform
-from select import select
-from typing import TYPE_CHECKING, Final, Literal, TypeVar, cast, final
+from selectors import EVENT_READ, EVENT_WRITE, BaseSelector, DefaultSelector
+from struct import Struct
+from threading import Lock as ThreadLock
+from time import monotonic as time_monotonic
+from time import sleep as sync_sleep
+from typing import TYPE_CHECKING, Final, Literal, TypeVar, final
+from warnings import warn as user_warning
 
 from ..aio import CURL_SOCKET_BAD, get_selector
 from ..const import CurlECode, CurlFollow, CurlInfo, CurlOpt, CurlWsFlag
@@ -40,13 +63,19 @@ if TYPE_CHECKING:
 
     T = TypeVar("T")
 
-    ON_DATA_T = Callable[["WebSocket", bytes, CurlWsFrame], None]
-    ON_MESSAGE_T = Callable[["WebSocket", bytes | str], None]
-    ON_ERROR_T = Callable[["WebSocket", CurlError], None]
-    ON_OPEN_T = Callable[["WebSocket"], None]
-    ON_CLOSE_T = Callable[["WebSocket", int, str], None]
-    RECV_QUEUE_ITEM = tuple[bytes, int]
-    SEND_QUEUE_ITEM = tuple[bytes | bytearray | memoryview, CurlWsFlag | int]
+    OnDataType = Callable[["WebSocket", bytes, CurlWsFrame], None]
+    OnMessageType = Callable[["WebSocket", bytes | str], None]
+    OnErrorType = Callable[["WebSocket", CurlError], None]
+    OnOpenType = Callable[["WebSocket"], None]
+    OnCloseType = Callable[["WebSocket", int, str], None]
+    RecvQueueItem = tuple[bytes, int]
+    SendQueueItem = tuple[bytes | bytearray | memoryview, CurlWsFlag | int]
+
+EventTypeLiteral = Literal["open", "close", "data", "message", "error"]
+
+# Bound struct methods
+_STRUCT_PACK_CLOSE: Final[Callable[..., bytes]] = Struct("!H").pack
+_STRUCT_UNPACK_CLOSE: Final[Callable[..., tuple[int, ...]]] = Struct("!H").unpack_from
 
 
 @dataclass
@@ -98,9 +127,7 @@ class WsCloseCode(IntEnum):
 class WebSocketError(CurlError):
     """WebSocket-specific error."""
 
-    def __init__(
-        self, message: str, code: WsCloseCode | CurlECode | Literal[0] = 0
-    ) -> None:
+    def __init__(self, message: str, code: WsCloseCode | CurlECode | int = 0) -> None:
         super().__init__(message, code)  # pyright: ignore[reportUnknownMemberType]
 
 
@@ -116,7 +143,7 @@ class WebSocketTimeout(  # pyright: ignore[reportUnsafeMultipleInheritance]
     """WebSocket operation timed out."""
 
 
-def _safe_set_result(fut: asyncio.Future[None]) -> None:
+def _safe_set_result(fut: Future[None]) -> None:
     """
     Called by the event loop when fd becomes readable/writable.
 
@@ -133,6 +160,8 @@ def _safe_set_result(fut: asyncio.Future[None]) -> None:
 
 
 class BaseWebSocket:
+    """Shared methods and static constants."""
+
     __slots__: tuple[str, ...] = (
         "_curl",
         "autoclose",
@@ -140,10 +169,22 @@ class BaseWebSocket:
         "_close_reason",
         "debug",
         "closed",
+        "_max_message_size",
+        "ws_retry",
+        "_sock_fd",
     )
 
+    _MAX_CURL_FRAME_SIZE: Final[int] = 65536
+    _MAX_CONTROL_FRAME_SIZE: Final[int] = 125
+
     def __init__(
-        self, curl: Curl | NotSetType, *, autoclose: bool = True, debug: bool = False
+        self,
+        curl: Curl | NotSetType = NOT_SET,
+        *,
+        autoclose: bool = True,
+        debug: bool = False,
+        ws_retry: WebSocketRetryStrategy | None = None,
+        max_message_size: int = 4 * 1024 * 1024,
     ) -> None:
         self._curl: Curl | NotSetType = curl
         self.autoclose: bool = autoclose
@@ -151,6 +192,9 @@ class BaseWebSocket:
         self._close_reason: str | None = None
         self.debug: bool = debug
         self.closed: bool = False
+        self.ws_retry: WebSocketRetryStrategy = ws_retry or WebSocketRetryStrategy()
+        self._max_message_size: int = max_message_size
+        self._sock_fd: int = -1
 
     @property
     def curl(self) -> Curl:
@@ -169,52 +213,135 @@ class BaseWebSocket:
         """The WebSocket close reason, if the connection has been closed."""
         return self._close_reason
 
-    @staticmethod
-    def _pack_close_frame(code: int, reason: bytes) -> bytes:
-        return struct.pack("!H", code) + reason
+    def _get_sock_fd(self) -> int:
+        """Fetch and cache the active socket file descriptor."""
+        sock_fd: int = self._sock_fd
+        if sock_fd != -1:
+            return sock_fd
 
-    @staticmethod
-    def _unpack_close_frame(frame: bytes) -> tuple[int, str]:
+        sock_info: bytes | int | float | list[str | int] = self.curl.getinfo(
+            CurlInfo.ACTIVESOCKET
+        )
+        if not isinstance(sock_info, int) or sock_info == CURL_SOCKET_BAD:
+            raise WebSocketError(
+                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            )
+
+        self._sock_fd = sock_info
+        return sock_info
+
+    def _prepare_ping_payload(self, payload: str | bytes) -> bytes:
+        """Validate and encode ping payloads with robust isinstance checks."""
+        payload_bytes: bytes = (
+            payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
+        )
+        if len(payload_bytes) > self._MAX_CONTROL_FRAME_SIZE:
+            raise WebSocketError(
+                f"Ping frame has invalid length: {len(payload_bytes)}",
+                CurlECode.TOO_LARGE,
+            )
+        return payload_bytes
+
+    def _pack_close_frame(self, code: int, reason: bytes) -> bytes:
+        """Pack close code and reason using cached Struct.pack method."""
+        return _STRUCT_PACK_CLOSE(code) + reason
+
+    def _unpack_close_frame(self, frame: bytes) -> tuple[int, str]:
+        """Unpack close frame, decode reason, and validate close status codes.
+
+        Args:
+            frame (bytes): The WebSocket close frame.
+
+        Raises:
+            WebSocketError: The close frame is invalid.
+            WebSocketError: The close frame code is outside the protocol range.
+            WebSocketError: The close frame message is not UTF-8 encoded.
+
+        Returns:
+            tuple[int, str]: The close code and reason.
+        """
+
         if len(frame) < 2:
-            code: int = WsCloseCode.UNKNOWN
-            reason = ""
-        else:
-            try:
-                code = struct.unpack_from("!H", frame)[0]
-                reason = frame[2:].decode()
-            except UnicodeDecodeError as e:
-                raise WebSocketError(
-                    "Invalid close message", WsCloseCode.INVALID_DATA
-                ) from e
-            except Exception as e:
-                raise WebSocketError(
-                    "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
-                ) from e
+            return WsCloseCode.UNKNOWN, ""
 
-            if code == WsCloseCode.UNKNOWN or code < 1000 or code >= 5000:
-                raise WebSocketError(
-                    f"Invalid close code: {code}", WsCloseCode.PROTOCOL_ERROR
-                )
+        try:
+            code: int = _STRUCT_UNPACK_CLOSE(frame)[0]
+            reason: str = frame[2:].decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise WebSocketError(
+                "Invalid close message", WsCloseCode.INVALID_DATA
+            ) from e
+        except Exception as e:
+            raise WebSocketError(
+                "Invalid close frame", WsCloseCode.PROTOCOL_ERROR
+            ) from e
+
+        # RFC 6455 Section 7.4 Close Status Code Validation
+        if code < 1000 or code >= 5000 or code in {1004, 1005, 1006, 1015}:
+            raise WebSocketError(
+                f"Invalid close status code received on wire: {code}",
+                WsCloseCode.PROTOCOL_ERROR,
+            )
 
         return code, reason
+
+    def _set_close_state(self, frame: bytes) -> int:
+        """Unpacks the close frame, sets internal state, and returns fallback code."""
+        try:
+            self._close_code, self._close_reason = self._unpack_close_frame(frame)
+        except WebSocketError as e:
+            self._close_code = e.code
+
+        code: int | CurlECode = self._close_code
+        if code == WsCloseCode.UNKNOWN:
+            return WsCloseCode.OK
+
+        return code
+
+    def _is_transient_error(self, exc: CurlError) -> bool:
+        """Check if a CurlError represents a transient
+        blocking socket state (``EAGAIN``/``EWOULDBLOCK``)."""
+        code: int | CurlECode | Literal[0] = exc.code
+        if code == CurlECode.AGAIN:
+            return True
+
+        if code in (CurlECode.RECV_ERROR, CurlECode.SEND_ERROR):
+            err_msg: str = str(exc).lower()
+            return (
+                "errno 11" in err_msg or "resource temporarily unavailable" in err_msg
+            )
+
+        return False
+
+    def _get_retry_delay(self, attempt: int) -> float:
+        """Calculate the next retry delay using exponential backoff and jitter.
+        Formula: base * (2 ^ (attempt - 1)) + jitter (+/- 10%)
+        """
+        retry_delay: float = self.ws_retry.delay * (  # pyright: ignore[reportAny]
+            2 ** (attempt - 1)
+        )
+        jitter: float = retry_delay * 0.1
+        return max(0.0, retry_delay + uniform(-jitter, jitter))
 
     def terminate(self) -> None:
         """Terminate the underlying connection."""
         self.closed = True
+        self._sock_fd = -1
         self.curl.close()
-
-
-EventTypeLiteral = Literal["open", "close", "data", "message", "error"]
 
 
 @final
 class WebSocket(BaseWebSocket):
-    """A WebSocket implementation using libcurl."""
+    """A high-performance synchronous WebSocket implementation using libcurl."""
 
     __slots__ = (
         "skip_utf8_validation",
         "_emitters",
         "keep_running",
+        "_read_selector",
+        "_write_selector",
+        "_recv_chunks",
+        "_recv_msg_size",
     )
 
     def __init__(
@@ -224,28 +351,43 @@ class WebSocket(BaseWebSocket):
         autoclose: bool = True,
         skip_utf8_validation: bool = False,
         debug: bool = False,
-        on_open: ON_OPEN_T | None = None,
-        on_close: ON_CLOSE_T | None = None,
-        on_data: ON_DATA_T | None = None,
-        on_message: ON_MESSAGE_T | None = None,
-        on_error: ON_ERROR_T | None = None,
+        on_open: OnOpenType | None = None,
+        on_close: OnCloseType | None = None,
+        on_data: OnDataType | None = None,
+        on_message: OnMessageType | None = None,
+        on_error: OnErrorType | None = None,
+        ws_retry: WebSocketRetryStrategy | None = None,
+        max_message_size: int = 4 * 1024 * 1024,
     ) -> None:
         """
         Args:
-            autoclose: whether to close the WebSocket after receiving a close frame.
-            skip_utf8_validation: whether to skip UTF-8 validation for text frames in
-                run_forever().
-            debug: print extra curl debug info.
-
-            on_open: open callback, ``def on_open(ws)``
-            on_close: close callback, ``def on_close(ws, code, reason)``
-            on_data: raw data receive callback, ``def on_data(ws, data, frame)``
-            on_message: message receive callback, ``def on_message(ws, message)``
-            on_error: error callback, ``def on_error(ws, exception)``
+            curl (Curl | NotSetType, optional): Curl handle.
+            autoclose (bool, optional): Whether to close the WebSocket
+                after receiving a close frame.
+            skip_utf8_validation (bool, optional): Whether to skip UTF-8
+                validation for text frames in run_forever().
+            debug (bool, optional): Print extra curl debug info.
+            on_open (OnOpenType | None, optional): Open callback.
+            on_close (OnCloseType | None, optional): Close callback.
+            on_data (OnDataType | None, optional): Data received callback.
+            on_message (OnMessageType | None, optional): Message received callback.
+            on_error (OnErrorType | None, optional): Error callback.
+            ws_retry (WebSocketRetryStrategy | None, optional): Retry policy.
+            max_message_size (int, optional): Message size limit.
         """
-        super().__init__(curl=curl, autoclose=autoclose, debug=debug)
+        super().__init__(
+            curl=curl,
+            autoclose=autoclose,
+            debug=debug,
+            ws_retry=ws_retry,
+            max_message_size=max_message_size,
+        )
         self.skip_utf8_validation: bool = skip_utf8_validation
         self.keep_running: bool = False
+        self._read_selector: BaseSelector | None = None
+        self._write_selector: BaseSelector | None = None
+        self._recv_chunks: list[bytes] = []
+        self._recv_msg_size: int = 0
 
         self._emitters: dict[EventTypeLiteral, Callable[..., object]] = {}
         if on_open:
@@ -259,16 +401,53 @@ class WebSocket(BaseWebSocket):
         if on_error:
             self._emitters["error"] = on_error
 
+    def _get_sock_fd(self) -> int:  # pyright: ignore[reportImplicitOverride]
+        """Fetch socket and lazily-initialize native selectors for polling."""
+        sock_fd: int = super()._get_sock_fd()
+
+        if self._read_selector is None:
+            r_sel: DefaultSelector = DefaultSelector()
+            _ = r_sel.register(sock_fd, EVENT_READ)
+            self._read_selector = r_sel
+
+            w_sel: DefaultSelector = DefaultSelector()
+            _ = w_sel.register(sock_fd, EVENT_WRITE)
+            self._write_selector = w_sel
+
+        return sock_fd
+
     def __iter__(self) -> WebSocket:
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
         return self
 
     def __next__(self) -> bytes:
-        msg, flags = self.recv()
+        try:
+            msg, flags = self.recv()
+        except WebSocketClosed:
+            raise StopIteration from None
+
         if flags & CurlWsFlag.CLOSE:
             raise StopIteration
         return msg
+
+    def __enter__(self) -> Self:
+        """Enable context manager usage for automatic session management."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """Close the WebSocket connection on exiting the context manager."""
+        if exc_type is None:
+            self.close()
+        else:
+            # Don't mask existing exception during teardown
+            with suppress(CurlError):
+                self.close()
 
     def _emit(
         self,
@@ -285,14 +464,20 @@ class WebSocket(BaseWebSocket):
                 error_callback: Callable[..., object] | None = self._emitters.get(
                     "error"
                 )
-                if error_callback:
+                if error_callback and event_type != "error":
                     _ = error_callback(self, e)
                 else:
-                    warnings.warn(
-                        f"WebSocket callback '{event_type}' failed",
+                    user_warning(
+                        f"WebSocket callback '{event_type}' failed: {e}",
                         CurlCffiWarning,
                         stacklevel=2,
                     )
+
+    def _handle_close_frame(self, message: bytes) -> None:
+        """Process a CLOSE frame."""
+        close_code: int = self._set_close_state(message)
+        if self.autoclose and not self.closed:
+            self.close(close_code)
 
     def connect(
         self,
@@ -369,7 +554,20 @@ class WebSocket(BaseWebSocket):
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             curl_options: extra curl options to use.
+
+        Note:
+            The ``WebSocket`` is NOT thread-safe, add your own locking
+            or use ``AsyncWebSocket`` for concurrent sending and receiving.
         """
+
+        # Reset socket and selector cache
+        self._sock_fd = -1
+        if self._read_selector is not None:
+            self._read_selector.close()
+            self._read_selector = None
+        if self._write_selector is not None:
+            self._write_selector.close()
+            self._write_selector = None
 
         curl: Curl = self.curl
         _ = set_curl_options(
@@ -404,95 +602,234 @@ class WebSocket(BaseWebSocket):
         )
 
         # Magic number defined in: https://curl.se/docs/websocket.html
+        _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
         _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
         curl.perform()
         return self
 
-    def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
-        """Receive a single curl websocket fragment as bytes."""
+    def recv(self, *, timeout: float | None = None) -> tuple[bytes, int]:
+        """Receive a WebSocket message.
 
-        if self.closed:
-            raise WebSocketClosed("WebSocket is already closed")
-
-        chunk, frame = self.curl.ws_recv()
-
-        if frame.flags & CurlWsFlag.CLOSE:
-            try:
-                self._close_code, self._close_reason = self._unpack_close_frame(chunk)
-            except WebSocketError as e:
-                # Follow the spec to close the connection
-                # Errors do not respect autoclose
-                self._close_code = e.code
-                self.close(e.code)
-                raise
-            if self.autoclose:
-                self.close()
-
-        return chunk, frame
-
-    def recv(self) -> tuple[bytes, int]:
-        """
-        Receive a frame as bytes. libcurl splits frames into fragments, so we have to
-        collect all the chunks for a frame.
-        """
-        chunks: list[bytes] = []
-        flags: int = 0
-
-        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
-        if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
-
-        while True:
-            try:
-                # Try to receive the first fragment first
-                chunk, frame = self.recv_fragment()
-
-                # Ignore control frames during data assembly
-                if frame.flags & (CurlWsFlag.PING | CurlWsFlag.PONG):
-                    continue
-
-                flags = frame.flags
-                chunks.append(chunk)
-                if frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0:
-                    break
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    # According to https://curl.se/libcurl/c/curl_ws_recv.html
-                    # > in real application: wait for socket here, e.g. using select()
-                    _, _, _ = select([sock_fd], [], [], 0.5)
-                else:
-                    raise
-
-        return b"".join(chunks), flags
-
-    def recv_str(self) -> str:
-        """Receive a text frame."""
-        data, flags = self.recv()
-        if not (flags & CurlWsFlag.TEXT):
-            raise WebSocketError("Not valid text frame", WsCloseCode.INVALID_DATA)
-        return data.decode("utf-8")
-
-    def recv_json(self, *, loads: Callable[[str], T] = json_loads) -> T:
-        """Receive a JSON frame.
+        This method waits for and returns the next complete WebSocket message.
+        Attempts to read immediately and only polls the socket if it returns EAGAIN.
 
         Args:
-            loads: JSON decoder, default is json.loads.
+            timeout: How many seconds to wait for a message before raising
+            a timeout error.
+
+        Returns:
+            tuple[bytes, int]: A tuple with the received payload and flags.
+
+        Raises:
+            WebSocketTimeout: If the timeout expires.
+            WebSocketClosed: If the connection is closed.
+            WebSocketError: If a network-level transport error occurs.
+
+        Notes:
+            This method is NOT thread-safe.
+
+            Message fragmentation and reassembly are handled automatically by the
+            implementation, so callers will always receive complete messages.
         """
-        data = self.recv_str()
-        return loads(data)
+        if self.closed:
+            raise WebSocketClosed("WebSocket is closed")
+
+        _ = self._get_sock_fd()
+        read_selector: BaseSelector | None = self._read_selector
+        if read_selector is None:
+            raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
+
+        # Cache local variables
+        retry_on_error: bool = self.ws_retry.retry
+        retry_codes: set[CurlECode] = self.ws_retry.codes
+        max_retries: int = self.ws_retry.count
+        recv_error_retries: int = 0
+        max_message_size: int = self._max_message_size
+        curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
+
+        # Fetch reassembly state from the instance
+        chunks: list[bytes] = self._recv_chunks
+        chunks_append: Callable[[bytes], None] = chunks.append
+        msg_size: int = self._recv_msg_size
+        message_completed: bool = False
+
+        flags: int = 0
+        deadline: float = 0.0
+        if timeout is not None:
+            deadline = time_monotonic() + timeout
+
+        # Merged bitmasks to minimize hot-loop branching
+        close_flag: int = int(CurlWsFlag.CLOSE)
+        cont_flag: int = int(CurlWsFlag.CONT)
+        data_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
+
+        try:
+            while True:
+                try:
+                    # Read WebSocket frame from libcurl
+                    chunk, frame = curl_ws_recv()
+                    if recv_error_retries > 0:
+                        recv_error_retries = 0
+
+                    flags = frame.flags
+
+                    # Data Frames (Text / Binary / Cont)
+                    if flags & data_mask:
+
+                        # Perform message size checks
+                        msg_size += len(chunk)
+                        if msg_size > max_message_size:
+                            chunks.clear()
+                            self.close(
+                                WsCloseCode.MESSAGE_TOO_BIG, b"Message too large"
+                            )
+                            raise WebSocketError(
+                                f"Message too large: {msg_size} bytes.",
+                                CurlECode.TOO_LARGE,
+                            )
+
+                        chunks_append(chunk)
+
+                        # If the message is complete, process and return
+                        if frame.bytesleft == 0 and not (flags & cont_flag):
+                            message_completed = True
+                            return (
+                                chunks[0] if len(chunks) == 1 else b"".join(chunks)
+                            ), flags
+
+                        continue
+
+                    # If a CLOSE frame is received, the reader is done.
+                    if flags & close_flag:
+                        self._handle_close_frame(chunk)
+                        return chunk, flags
+
+                    # Silently consume PING/PONG and loop again
+                    continue
+
+                except CurlError as e:
+                    code: int = e.code
+
+                    # Handle Server Disconnect (Empty Reply)
+                    if code == CurlECode.GOT_NOTHING:
+                        self.terminate()
+                        raise WebSocketClosed(
+                            "Server EOF", WsCloseCode.ABNORMAL_CLOSURE
+                        ) from e
+
+                    if self._is_transient_error(e):
+                        if timeout is not None:
+                            if not read_selector.select(
+                                max(0.0, deadline - time_monotonic())
+                            ):
+                                raise WebSocketTimeout(
+                                    "WebSocket recv() timed out",
+                                    CurlECode.OPERATION_TIMEDOUT,
+                                ) from None
+                        else:
+                            _ = read_selector.select(None)
+                        continue
+
+                    # Apply the user-configured retry logic
+                    if (
+                        retry_on_error
+                        and code in retry_codes
+                        and recv_error_retries < max_retries
+                    ):
+                        recv_error_retries += 1
+                        sleep_time: float = self._get_retry_delay(recv_error_retries)
+
+                        if timeout is not None:
+                            remain: float = deadline - time_monotonic()
+                            if sleep_time > remain:
+                                sync_sleep(max(0.0, remain))
+                                continue
+
+                        sync_sleep(sleep_time)
+                        continue
+
+                    # Fatal error - can't retry
+                    raise
+        finally:
+            if self.closed or message_completed:
+                # Clear stashed states on clean completions or connection shutdowns
+                chunks.clear()
+                self._recv_msg_size = 0
+            else:
+                # Save the immutable size back to the instance ONLY upon early exit
+                self._recv_msg_size = msg_size
+
+    def recv_str(self, *, timeout: float | None = None) -> str:
+        """Receive a text frame."""
+        data, flags = self.recv(timeout=timeout)
+        if flags & CurlWsFlag.CLOSE:
+            raise WebSocketClosed(
+                f"Received close frame: {self.close_code} {self.close_reason}",
+                self.close_code or WsCloseCode.OK,
+            )
+
+        if not (flags & CurlWsFlag.TEXT):
+            raise WebSocketError("Not a valid text frame", WsCloseCode.INVALID_DATA)
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise WebSocketError(
+                "Invalid UTF-8 in text frame", WsCloseCode.INVALID_DATA
+            ) from e
+
+    def recv_json(
+        self, *, loads: Callable[[str], T] = json_loads, timeout: float | None = None
+    ) -> T:
+        """Receive a JSON frame."""
+        data: str = self.recv_str(timeout=timeout)
+        if not data:
+            raise WebSocketError("Empty frame", WsCloseCode.INVALID_DATA)
+        try:
+            return loads(data)
+        except Exception as e:
+            raise WebSocketError(f"Invalid JSON: {e}", WsCloseCode.INVALID_DATA) from e
+
+    def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
+        """This function is deprecated and removed.
+        The new architecture automatically handles frame reassembly.
+        Call :meth:`recv()` instead to get complete, fully assembled frames.
+        """
+        raise NotImplementedError(
+            "recv_fragment() is no longer supported. "
+            + "Call recv() instead to get complete messages. "
+            + "See docs: https://curl-cffi.readthedocs.io/en/latest/websockets.html"
+        )
 
     def send(
         self,
-        payload: str | bytes,
-        flags: CurlWsFlag = CurlWsFlag.BINARY,
+        payload: str | bytes | bytearray | memoryview,
+        flags: CurlWsFlag | int = CurlWsFlag.BINARY,
+        timeout: float | None = None,
     ) -> int:
-        """Send a data frame.
+        """
+        Send a WebSocket message.
 
         Args:
-            payload: data to send.
-            flags: flags for the frame.
+            payload: Data to send (``str``/``bytes``/``bytearray``/``memoryview``).
+            flags: Frame type flags (e.g., ``CurlWsFlag.TEXT`` / ``CurlWsFlag.BINARY``).
+            timeout: Max seconds to wait if the socket is blocked.
+
+        Returns:
+            ``int``: The number of bytes successfully written to the socket.
+
+        Raises:
+            CurlError: Network related exception occured.
+            WebSocketClosed: The WebSocket has been closed.
+            WebSocketTimeout: The send operation timed out.
+            WebSocketError: The socket stalled while sending.
+
+        Note:
+            This method is NOT thread-safe.
+
+            There are no limits on the size of the message that can be sent.
+            Large outbound messages are seamlessly broken down into optimal
+            fragments using the ``CURLWS_CONT`` flag, arriving as a single
+            logical message to the server.
         """
         if flags & CurlWsFlag.CLOSE:
             self.keep_running = False
@@ -500,64 +837,115 @@ class WebSocket(BaseWebSocket):
         if self.closed:
             raise WebSocketClosed("WebSocket is already closed")
 
-        # curl expects bytes
         if isinstance(payload, str):
-            payload = payload.encode()
+            payload = payload.encode("utf-8")
 
-        sock_fd: bytes | int | float | list[str | int] = self.curl.getinfo(
-            CurlInfo.ACTIVESOCKET
-        )
-        if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
-            )
+        _ = self._get_sock_fd()
+        write_selector: BaseSelector | None = self._write_selector
+        if write_selector is None:
+            raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
 
-        # Loop checks for CurlECode.Again
-        # https://curl.se/libcurl/c/curl_ws_send.html
-        offset = 0
-        while offset < len(payload):
-            current_buffer = payload[offset:]
+        view: memoryview = memoryview(payload)
+        total_bytes: int = view.nbytes
+        offset: int = 0
+        frame_end: int = 0
+        write_retries: int = 0
+        max_zero_writes: int = 3
 
-            try:
-                n_sent = self.curl.ws_send(current_buffer, flags)
-            except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    _, writeable, _ = select([], [sock_fd], [], 0.5)
-                    if not writeable:
-                        raise WebSocketError("Socket write timeout") from e
-                    continue
-                raise
+        # Hoist locals
+        base_flags: int = flags & ~CurlWsFlag.CONT
+        current_flags: int = flags
+        max_frame_size: int = self._MAX_CURL_FRAME_SIZE
+        curl_ws_send: Callable[..., int] = self.curl.ws_send
 
-            offset += n_sent
+        deadline: float = 0.0
+        if timeout is not None:
+            deadline = time_monotonic() + timeout
+
+        try:
+            # Loop until the entire view is sent
+            while offset < total_bytes or (offset == 0 and total_bytes == 0):
+                # Boundary check: Calculate next fragment ONLY when needed
+                if offset == frame_end:
+                    if total_bytes - offset > max_frame_size:
+                        frame_end = offset + max_frame_size
+                        current_flags = base_flags | CurlWsFlag.CONT
+                    else:
+                        frame_end = total_bytes
+                        current_flags = flags
+
+                try:
+                    # libcurl returns the number of bytes actually sent
+                    n_sent: int = curl_ws_send(view[offset:frame_end], current_flags)
+
+                    if n_sent == 0:
+                        # Handle 0-byte payload (Valid Empty Frame)
+                        if frame_end - offset == 0:
+                            return offset
+
+                        # Raise AGAIN to jump to the existing wait logic below
+                        write_retries += 1
+                        if write_retries >= max_zero_writes:
+                            raise WebSocketError(
+                                f"Writer stalled ({write_retries} attempts).",
+                                CurlECode.WRITE_ERROR,
+                            )
+                        raise CurlError("0 bytes sent", CurlECode.AGAIN)
+
+                    if write_retries:
+                        write_retries = 0
+
+                    offset += n_sent
+
+                except CurlError as e:
+                    if self._is_transient_error(e):
+                        # Check the clock when the socket is blocked
+                        try:
+                            if timeout is not None:
+                                if not write_selector.select(
+                                    max(0.0, deadline - time_monotonic())
+                                ):
+                                    raise WebSocketTimeout(
+                                        "Socket write timeout",
+                                        CurlECode.OPERATION_TIMEDOUT,
+                                    ) from None
+                            else:
+                                _ = write_selector.select(None)
+                        except (ValueError, OSError) as exc:
+                            if self.closed:
+                                raise WebSocketClosed("WebSocket is closed") from exc
+                            raise
+
+                        continue
+                    raise
+
+        except BaseException:
+            # If we get interrupted after some data is already sent,
+            # the framing alignment is lost. Tear down the connection.
+            if offset > 0:
+                self.terminate()
+            raise
 
         return offset
 
-    def send_binary(self, payload: bytes) -> int:
-        """Send a binary frame.
+    def send_binary(self, payload: bytes, *, timeout: float | None = None) -> int:
+        """Send a binary frame."""
+        return self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-        Args:
-            payload: binary data to send.
-        """
-        return self.send(payload, CurlWsFlag.BINARY)
+    def send_bytes(self, payload: bytes, *, timeout: float | None = None) -> int:
+        """Send a binary frame, alias of :meth:`send_binary`."""
+        return self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    def send_bytes(self, payload: bytes):
-        """Send a binary frame, alias of :meth:`send_binary`.
-
-        Args:
-            payload: binary data to send.
-        """
-        return self.send(payload, CurlWsFlag.BINARY)
-
-    def send_str(self, payload: str) -> int:
-        """Send a text frame.
-
-        Args:
-            payload: text data to send.
-        """
-        return self.send(payload, CurlWsFlag.TEXT)
+    def send_str(self, payload: str, *, timeout: float | None = None) -> int:
+        """Send a text frame."""
+        return self.send(payload, CurlWsFlag.TEXT, timeout=timeout)
 
     def send_json(
-        self, payload: object, *, dumps: Callable[..., str] = json_dumps
+        self,
+        payload: object,
+        *,
+        dumps: Callable[..., str] = json_dumps,
+        timeout: float | None = None,
     ) -> int:
         """Send a JSON frame.
 
@@ -566,114 +954,241 @@ class WebSocket(BaseWebSocket):
             dumps: JSON encoder, default is json.dumps.
         """
         if dumps is json_dumps:
-            return self.send_str(json_dumps(payload, separators=(",", ":")))
-        return self.send_str(dumps(payload))
+            return self.send_str(
+                json_dumps(payload, separators=(",", ":")), timeout=timeout
+            )
+        return self.send_str(dumps(payload), timeout=timeout)
 
-    def ping(self, payload: str | bytes) -> int:
-        """Send a ping frame.
+    def ping(self, payload: str | bytes, *, timeout: float | None = None) -> int:
+        """Send a ping frame."""
+        return self.send(
+            self._prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
+        )
 
-        Args:
-            payload: data to send.
-        """
-        return self.send(payload, CurlWsFlag.PING)
-
-    def run_forever(self, url: str = "", **kwargs) -> None:
+    def run_forever(
+        self,
+        url: str = "",
+        **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+    ) -> None:
         """Run the WebSocket forever. See :meth:`connect` for details on parameters.
 
         libcurl automatically handles pings and pongs.
         ref: https://curl.se/libcurl/c/libcurl-ws.html
         """
-
         if url:
-            _ = self.connect(url, **kwargs)
-
-        sock_fd = self.curl.getinfo(CurlInfo.ACTIVESOCKET)
-        if sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket", CurlECode.NO_CONNECTION_AVAILABLE
+            _ = self.connect(
+                url, **kwargs  # pyright: ignore[reportUnknownArgumentType]
             )
+
+        _ = self._get_sock_fd()
+        read_selector: BaseSelector | None = self._read_selector
+        if read_selector is None:
+            raise WebSocketError("Selectors uninitialized", CurlECode.FAILED_INIT)
 
         self._emit("open")
 
-        # Keep reading the messages and invoke callbacks
-        # TODO: Reconnect logic
+        # Hoist locals
         chunks: list[bytes] = []
+        chunks_append: Callable[[bytes], None] = chunks.append
+        chunks_clear: Callable[[], None] = chunks.clear
+        msg_size: int = 0
         self.keep_running = True
+
+        retry_on_error: bool = self.ws_retry.retry
+        retry_codes: set[CurlECode] = self.ws_retry.codes
+        max_retries: int = self.ws_retry.count
+        recv_error_retries: int = 0
+
+        max_message_size: int = self._max_message_size
+        curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
+        emit: Callable[..., None] = self._emit
+        has_message_emitter: bool = "message" in self._emitters
+
+        close_flag: int = int(CurlWsFlag.CLOSE)
+        cont_flag: int = int(CurlWsFlag.CONT)
+        data_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
+
         while self.keep_running:
             try:
-                chunk, frame = self.recv_fragment()
-                flags = frame.flags
-                self._emit("data", chunk, frame)
+                # Read WebSocket frame
+                chunk, frame = curl_ws_recv()
+                if recv_error_retries > 0:
+                    recv_error_retries = 0
 
-                chunks.append(chunk)
-                if not (frame.bytesleft == 0 and flags & CurlWsFlag.CONT == 0):
+                flags: int = frame.flags
+                emit("data", chunk, frame)
+
+                # Data Frames (Text / Binary / Cont)
+                if flags & data_mask:
+                    # Perform message size checks
+                    msg_size += len(chunk)
+                    if msg_size > max_message_size:
+                        chunks_clear()
+                        self.close(WsCloseCode.MESSAGE_TOO_BIG)
+
+                        # Emit the close event before raising
+                        emit(
+                            "close",
+                            self._close_code or WsCloseCode.MESSAGE_TOO_BIG,
+                            self._close_reason or "",
+                        )
+
+                        raise WebSocketError(
+                            (
+                                f"Message too large: {msg_size} bytes "
+                                f"(limit {max_message_size} bytes)."
+                            ),
+                            CurlECode.TOO_LARGE,
+                        )
+
+                    # Collect the chunk
+                    chunks_append(chunk)
+
+                    # If the message is complete, process and dispatch it
+                    if not (frame.bytesleft == 0 and not (flags & cont_flag)):
+                        continue
+
+                    if has_message_emitter:
+                        msg: bytes = chunks[0] if len(chunks) == 1 else b"".join(chunks)
+
+                        if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
+                            try:
+                                emit_msg: str | bytes = msg.decode("utf-8")
+                            except UnicodeDecodeError as e:
+                                self._close_code = WsCloseCode.INVALID_DATA
+                                self.close(WsCloseCode.INVALID_DATA)
+                                emit(
+                                    "close", self._close_code, self._close_reason or ""
+                                )
+                                raise WebSocketError(
+                                    "Invalid UTF-8", WsCloseCode.INVALID_DATA
+                                ) from e
+                        else:
+                            emit_msg = msg
+
+                        if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
+                            emit("message", emit_msg)
+
+                    chunks_clear()
+                    msg_size = 0
                     continue
 
-                # Avoid unnecessary computation
-                if "message" in self._emitters:
-                    # Concatenate collected chunks with the final message
-                    msg = b"".join(chunks)
-
-                    if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
-                        try:
-                            emit_msg: str | bytes = msg.decode()
-                        except UnicodeDecodeError as e:
-                            self._close_code = WsCloseCode.INVALID_DATA
-                            self.close(WsCloseCode.INVALID_DATA)
-                            raise WebSocketError(
-                                "Invalid UTF-8", WsCloseCode.INVALID_DATA
-                            ) from e
-
-                    else:
-                        emit_msg = msg
-
-                    if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
-                        self._emit("message", emit_msg)
-
-                chunks = []  # Reset chunks for next message
-
-                if flags & CurlWsFlag.CLOSE:
+                # If a CLOSE frame is received, the reader is done.
+                if flags & close_flag:
+                    self._handle_close_frame(chunk)
                     self.keep_running = False
-                    self._emit("close", self._close_code or 0, self._close_reason or "")
+                    emit("close", self._close_code or 0, self._close_reason or "")
+                    break
+
+                # Silently consume PING/PONG and loop again
+                if flags & (CurlWsFlag.PING | CurlWsFlag.PONG):
+                    continue
 
             except CurlError as e:
-                if e.code == CurlECode.AGAIN:
-                    _, _, _ = select([sock_fd], [], [], 0.5)
-                else:
-                    self._emit("error", e)
-                    if not self.closed:
-                        code: int = WsCloseCode.UNKNOWN
-                        if isinstance(e, WebSocketError):
-                            code = e.code
-                        self.close(code)
-                    raise
+                code: int = e.code
 
-    def close(self, code: int = WsCloseCode.OK, message: bytes = b""):
+                # Handle Server Disconnect (Empty Reply)
+                if code == CurlECode.GOT_NOTHING:
+                    e_close: WebSocketClosed = WebSocketClosed(
+                        "Connection closed unexpectedly by server (EOF)",
+                        WsCloseCode.ABNORMAL_CLOSURE,
+                    )
+                    e_close.__suppress_context__ = True
+                    self.keep_running = False
+                    emit("error", e_close)
+                    self.close(WsCloseCode.ABNORMAL_CLOSURE)
+                    emit(
+                        "close",
+                        self._close_code or WsCloseCode.ABNORMAL_CLOSURE,
+                        self._close_reason or "",
+                    )
+                    raise e_close from e
+
+                if self._is_transient_error(e):
+                    _ = read_selector.select(0.5)
+                    continue
+
+                # Apply the user-configured retry logic
+                if (
+                    self.keep_running
+                    and retry_on_error
+                    and code in retry_codes
+                    and recv_error_retries < max_retries
+                ):
+                    recv_error_retries += 1
+                    sync_sleep(self._get_retry_delay(recv_error_retries))
+                    continue
+
+                # Fatal error
+                emit("error", e)
+                if not self.closed:
+                    close_code: int = WsCloseCode.UNKNOWN
+                    if isinstance(e, WebSocketError):
+                        close_code = e.code
+                    self.close(close_code)
+                    emit(
+                        "close",
+                        self._close_code or close_code,
+                        self._close_reason or "",
+                    )
+
+                raise
+
+    def close(
+        self,
+        code: int = WsCloseCode.OK,
+        message: str | bytes = b"",
+        timeout: float = 3.0,
+    ) -> None:
         """Close the connection.
 
         Args:
             code: close code.
             message: close reason.
+            timeout: Max seconds to wait for the close frame to send.
         """
+        if self.closed:
+            return
 
-        # TODO: As per spec, we should wait for the server to close the connection
-        # But this is not a requirement
-        msg = self._pack_close_frame(code, message)
-        _ = self.send(msg, CurlWsFlag.CLOSE)
-        # The only way to close the connection appears to be curl_easy_cleanup
+        if isinstance(message, str):
+            message = message.encode("utf-8")
+
+        max_msg_size: int = self._MAX_CONTROL_FRAME_SIZE - 2
+        if len(message) > max_msg_size:
+            message = message[:max_msg_size]
+
+        if self._close_code is None:
+            self._close_code = code
+            self._close_reason = message.decode("utf-8", errors="replace")
+
+        msg: bytes = self._pack_close_frame(code, message)
+        with suppress(CurlError):
+            _ = self.send(msg, CurlWsFlag.CLOSE, timeout=timeout)
+
         self.terminate()
+
+    def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
+        """Terminate the connection and clean up selectors."""
+        if self._read_selector is not None:
+            self._read_selector.close()
+            self._read_selector = None
+
+        if self._write_selector is not None:
+            self._write_selector.close()
+            self._write_selector = None
+
+        super().terminate()
 
 
 @final
 class AsyncWebSocket(BaseWebSocket):
     """
-    An asyncio WebSocket implementation using libcurl.
+    A high-performance asynchronous WebSocket implementation using libcurl.
     """
 
     __slots__ = (
         "session",
         "_loop",
-        "_sock_fd",
         "_close_lock",
         "_terminate_lock",
         "_read_task",
@@ -686,14 +1201,10 @@ class AsyncWebSocket(BaseWebSocket):
         "_send_time_slice",
         "_terminated",
         "_terminated_event",
-        "ws_retry",
         "_transport_exception",
-        "_max_message_size",
         "drain_on_error",
         "_block_on_recv_queue_full",
     )
-
-    _MAX_CURL_FRAME_SIZE: Final[int] = 65536
 
     def __init__(
         self,
@@ -702,13 +1213,13 @@ class AsyncWebSocket(BaseWebSocket):
         *,
         autoclose: bool = True,
         debug: bool = False,
-        recv_queue_size: int = 128,
-        send_queue_size: int = 128,
+        recv_queue_size: int = 64,
+        send_queue_size: int = 32,
         max_send_batch_size: int = 64,
         coalesce_frames: bool = False,
         ws_retry: WebSocketRetryStrategy | None = None,
         recv_time_slice: float = 0.01,
-        send_time_slice: float = 0.005,
+        send_time_slice: float = 0.01,
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
@@ -747,47 +1258,48 @@ class AsyncWebSocket(BaseWebSocket):
 
         Note:
             Architecture: This uses a background I/O model. Network operations run in
-            background tasks. Errors are raised in subsequent calls to send() or recv().
+            background tasks. Network errors are raised in calls to send() or recv().
 
-            Performance: The time_slice defaults (5ms read / 1ms write) favor reading
-            to compensate for libcurl's overhead. Increase these values to allocate more
-            CPU time to I/O operations at the cost of event loop latency.
+            Performance: Time slices default to 10ms. Increase these values to allocate
+            more CPU time to I/O operations at the cost of event loop latency.
+
+            Increasing queue sizes reduces backpressure and buffers more messages
+            in memory, increasing throughput - but increases latency and bufferbloat.
 
         See also:
             - https://curl.se/libcurl/c/curl_ws_recv.html
             - https://curl.se/libcurl/c/curl_ws_send.html
         """
-        super().__init__(curl=curl, autoclose=autoclose, debug=debug)
+        super().__init__(
+            curl=curl,
+            autoclose=autoclose,
+            debug=debug,
+            ws_retry=ws_retry,
+            max_message_size=max_message_size,
+        )
         self.session: AsyncSession[Response] = session
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._sock_fd: int = -1
+        self._loop: AbstractEventLoop | None = None
         self._terminated: bool = False
-        self._close_lock: asyncio.Lock = asyncio.Lock()
-        self._terminate_lock: threading.Lock = threading.Lock()
-        self._terminated_event: asyncio.Event = asyncio.Event()
-        self._read_task: asyncio.Task[None] | None = None
-        self._write_task: asyncio.Task[None] | None = None
-        self._receive_queue: asyncio.Queue[RECV_QUEUE_ITEM] = asyncio.Queue(
-            maxsize=recv_queue_size
-        )
-        self._send_queue: asyncio.Queue[SEND_QUEUE_ITEM] = asyncio.Queue(
-            maxsize=send_queue_size
-        )
+        self._close_lock: Lock = Lock()
+        self._terminate_lock: ThreadLock = ThreadLock()
+        self._terminated_event: Event = Event()
+        self._read_task: Task[None] | None = None
+        self._write_task: Task[None] | None = None
+        self._receive_queue: Queue[RecvQueueItem] = Queue(maxsize=recv_queue_size)
+        self._send_queue: Queue[SendQueueItem] = Queue(maxsize=send_queue_size)
         self._max_send_batch_size: int = max_send_batch_size
         self._coalesce_frames: bool = coalesce_frames
-        self.ws_retry: WebSocketRetryStrategy = ws_retry or WebSocketRetryStrategy()
         self._recv_time_slice: float = recv_time_slice
         self._send_time_slice: float = send_time_slice
         self._transport_exception: Exception | None = None
-        self._max_message_size: int = max_message_size
         self.drain_on_error: bool = drain_on_error
         self._block_on_recv_queue_full: bool = block_on_recv_queue_full
 
     @property
-    def loop(self) -> asyncio.AbstractEventLoop:
+    def loop(self) -> AbstractEventLoop:
         """Get a reference to the running event loop"""
         if self._loop is None:
-            self._loop = get_selector(asyncio.get_running_loop())
+            self._loop = get_selector(get_running_loop())
         return self._loop
 
     @property
@@ -897,11 +1409,7 @@ class AsyncWebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket already terminated")
 
         # Get the currently active socket FD
-        self._sock_fd = cast(int, self.curl.getinfo(CurlInfo.ACTIVESOCKET))
-        if self._sock_fd == CURL_SOCKET_BAD:
-            raise WebSocketError(
-                "Invalid active socket.", code=CurlECode.NO_CONNECTION_AVAILABLE
-            )
+        self._sock_fd = self._get_sock_fd()
 
         # Get an identifier for the websocket from its object id
         ws_id: str = f"WebSocket-{id(self):#x}"
@@ -913,6 +1421,14 @@ class AsyncWebSocket(BaseWebSocket):
         self._write_task = self.loop.create_task(
             self._write_loop(), name=f"{ws_id}-writer"
         )
+
+    async def _handle_close_frame(self, message: bytes) -> None:
+        """Unpack and handle the closing frame, then initiate shutdown."""
+        close_code = self._set_close_state(message)
+        if self.autoclose and not self.closed:
+            await self.close(close_code)
+        else:
+            self.terminate()
 
     async def recv(self, *, timeout: float | None = None) -> tuple[bytes, int]:
         """Receive a WebSocket message.
@@ -959,7 +1475,7 @@ class AsyncWebSocket(BaseWebSocket):
         # Hot path: immediate buffered item (zero allocation).
         try:
             return self._receive_queue.get_nowait()
-        except asyncio.QueueEmpty:
+        except QueueEmpty:
             pass
 
         # Terminal checks when queue is empty.
@@ -970,23 +1486,21 @@ class AsyncWebSocket(BaseWebSocket):
             raise WebSocketClosed("WebSocket is closed")
 
         # Cold path: wait for data or for the reader task to finish.
-        queue_waiter: asyncio.Task[RECV_QUEUE_ITEM] = asyncio.create_task(
-            self._receive_queue.get()
-        )
+        queue_waiter: Task[RecvQueueItem] = create_task(self._receive_queue.get())
 
         try:
             # Wait for the first of: queue_waiter or _read_task
-            done, _ = await asyncio.wait(
+            done, _ = await wait(
                 (queue_waiter, self._read_task),
-                return_when=asyncio.FIRST_COMPLETED,
+                return_when=FIRST_COMPLETED,
                 timeout=timeout,
             )
 
         # Caller cancelled — cancel the waiter and re-raise
-        except asyncio.CancelledError:
+        except CancelledError:
             if not queue_waiter.done():
                 _ = queue_waiter.cancel()
-                with suppress(asyncio.CancelledError):
+                with suppress(CancelledError):
                     await queue_waiter
             raise
 
@@ -995,7 +1509,7 @@ class AsyncWebSocket(BaseWebSocket):
             _ = queue_waiter.cancel()
             try:
                 return await queue_waiter
-            except asyncio.CancelledError:
+            except CancelledError:
                 pass
 
             # Prefer transport error over timeout if both happen
@@ -1012,12 +1526,12 @@ class AsyncWebSocket(BaseWebSocket):
 
         # Reader task finished first. Cancel the waiter.
         _ = queue_waiter.cancel()
-        with suppress(asyncio.CancelledError):
+        with suppress(CancelledError):
             await queue_waiter
 
         # Try to return one buffered item when drain is set
         if self.drain_on_error:
-            with suppress(asyncio.QueueEmpty):
+            with suppress(QueueEmpty):
                 return self._receive_queue.get_nowait()
 
         # Propagate any transport exception or raise closed.
@@ -1033,6 +1547,12 @@ class AsyncWebSocket(BaseWebSocket):
             timeout: how many seconds to wait before giving up.
         """
         data, flags = await self.recv(timeout=timeout)
+        if flags & CurlWsFlag.CLOSE:
+            raise WebSocketClosed(
+                f"Received close frame: {self.close_code} {self.close_reason}",
+                self.close_code or WsCloseCode.OK,
+            )
+
         if not (flags & CurlWsFlag.TEXT):
             raise WebSocketError("Not a valid text frame", WsCloseCode.INVALID_DATA)
         try:
@@ -1065,10 +1585,6 @@ class AsyncWebSocket(BaseWebSocket):
 
         try:
             return loads(data)
-        except UnicodeDecodeError as e:
-            raise WebSocketError(
-                "Invalid UTF-8 in JSON text frame", WsCloseCode.INVALID_DATA
-            ) from e
         except Exception as e:
             raise WebSocketError(
                 f"Invalid JSON payload: {e}", WsCloseCode.INVALID_DATA
@@ -1100,7 +1616,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         Warning:
             This method is non-blocking. It queues the message for immediate
-            transmission. Use ``await ws.flush()`` after sending if you need
+            transmission. Call ``await ws.flush()`` after sending if you need
             to guarantee that the data has actually reached the socket.
         """
 
@@ -1120,7 +1636,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         try:
             self._send_queue.put_nowait((payload, flags))
-        except asyncio.QueueFull as exc:
+        except QueueFull as exc:
             if self._terminated:
                 raise WebSocketClosed("WebSocket connection is terminated") from exc
 
@@ -1130,12 +1646,11 @@ class AsyncWebSocket(BaseWebSocket):
 
             if timeout is not None:
                 try:
-                    await asyncio.wait_for(
-                        self._send_queue.put((payload, flags)), timeout
-                    )
-                except asyncio.TimeoutError as e:
+                    await wait_for(self._send_queue.put((payload, flags)), timeout)
+                except AsyncTimeout as e:
                     raise WebSocketTimeout(
-                        "Send queue full (network slow) - hit timeout enqueuing message"
+                        "Send queue full (network slow) - timed out enqueuing message",
+                        code=CurlECode.OPERATION_TIMEDOUT,
                     ) from e
             else:
                 await self._send_queue.put((payload, flags))
@@ -1149,79 +1664,82 @@ class AsyncWebSocket(BaseWebSocket):
                     "Connection was terminated while waiting to send"
                 ) from exc
 
-    async def send_binary(self, payload: bytes) -> None:
+    async def send_binary(
+        self, payload: bytes, *, timeout: float | None = None
+    ) -> None:
         """Send a binary frame.
 
         Args:
-            payload: binary data to send.
+            payload: Binary data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(payload, CurlWsFlag.BINARY)
+        return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    async def send_bytes(self, payload: bytes) -> None:
+    async def send_bytes(self, payload: bytes, *, timeout: float | None = None) -> None:
         """Send a binary frame, alias of :meth:`send_binary`.
 
         Args:
-            payload: binary data to send.
+            payload: Binary data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(payload, CurlWsFlag.BINARY)
+        return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    async def send_str(self, payload: str) -> None:
+    async def send_str(self, payload: str, *, timeout: float | None = None) -> None:
         """Send a text frame.
 
         Args:
-            payload: text data to send.
+            payload: Text data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
-        return await self.send(payload, CurlWsFlag.TEXT)
+        return await self.send(payload, CurlWsFlag.TEXT, timeout=timeout)
 
     async def send_json(
-        self, payload: object, *, dumps: Callable[..., str] = json_dumps
+        self,
+        payload: object,
+        *,
+        dumps: Callable[..., str] = json_dumps,
+        timeout: float | None = None,
     ) -> None:
         """Send a JSON frame.
 
         Args:
-            payload: data to send.
+            payload: Data to send.
             dumps: JSON encoder, default is :meth:`json.dumps()`.
+            timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
         if dumps is json_dumps:
-            return await self.send_str(json_dumps(payload, separators=(",", ":")))
-        return await self.send_str(dumps(payload))
+            return await self.send_str(
+                json_dumps(payload, separators=(",", ":")), timeout=timeout
+            )
+        return await self.send_str(dumps(payload), timeout=timeout)
 
-    async def ping(self, payload: str | bytes) -> None:
+    async def ping(self, payload: str | bytes, *, timeout: float | None = None) -> None:
         """Send a ping frame.
 
         Args:
-            payload: data to send.
+            payload: Data to send.
+            timeout: Max seconds to wait if the send queue is full.
 
         Raises:
             WebSocketError: The payload length is outside specification.
 
         For more info, see the docstring for :meth:`send()`
         """
-
-        if isinstance(payload, str):
-            payload_bytes: bytes = payload.encode("utf-8")
-        else:
-            payload_bytes = bytes(payload)
-
-        if len(payload_bytes) > 125:
-            raise WebSocketError(
-                f"Ping frame has invalid length: {len(payload_bytes)}",
-                CurlECode.TOO_LARGE,
-            )
-
-        return await self.send(payload_bytes, CurlWsFlag.PING)
+        return await self.send(
+            self._prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
+        )
 
     async def close(
         self,
-        code: int = WsCloseCode.OK,
+        code: int | WsCloseCode = WsCloseCode.OK,
         message: str | bytes = b"",
         timeout: float = 3.0,
     ) -> None:
@@ -1244,22 +1762,28 @@ class AsyncWebSocket(BaseWebSocket):
             self.closed = True
             close_start: float = self.loop.time()
 
-            try:
+            if isinstance(message, str):
+                message = message.encode("utf-8")
+
+            # 125 bytes (Spec) - 2 bytes for close code
+            max_msg_size: int = self._MAX_CONTROL_FRAME_SIZE - 2
+            if len(message) > max_msg_size:
+                message = message[:max_msg_size]
+
+            # Store the code and reason
+            if self._close_code is None:
+                self._close_code = code
+                self._close_reason = message.decode("utf-8", errors="replace")
+
+            with suppress(AsyncTimeout, WebSocketError):
                 if (
                     self._write_task
                     and not self._write_task.done()
                     and self._transport_exception is None
                 ):
-                    if isinstance(message, str):
-                        message = message.encode("utf-8")
-
-                    # 125 bytes (Spec) - 2 bytes for close code
-                    if len(message) > 123:
-                        message = message[:123]
-
                     # Send Close Frame and wait for queue to empty
                     close_frame: bytes = self._pack_close_frame(code, message)
-                    await asyncio.wait_for(
+                    await wait_for(
                         self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
                         timeout=timeout,
                     )
@@ -1268,29 +1792,25 @@ class AsyncWebSocket(BaseWebSocket):
                         max(0.0, timeout - (self.loop.time() - close_start))
                     )
 
-            except (asyncio.TimeoutError, WebSocketError):
-                pass
-
-            finally:
-                # Ensure resources are cleaned up
-                self.terminate()
-                with suppress(asyncio.TimeoutError):
-                    _ = await asyncio.wait_for(
-                        self._terminated_event.wait(),
-                        max(0.0, timeout - (self.loop.time() - close_start)),
-                    )
+            # Ensure resources are cleaned up
+            self.terminate()
+            with suppress(AsyncTimeout):
+                _ = await wait_for(
+                    self._terminated_event.wait(),
+                    max(0.0, timeout - (self.loop.time() - close_start)),
+                )
 
     def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
         """
         Immediately terminates the connection without a graceful handshake.
 
-        This method is a forceful shutdown that cancels all background I/O tasks
+        This method is thread-safe, task-safe, and idempotent.
+
+        This is a forceful shutdown that cancels all background I/O tasks
         and cleans up resources. It should be used for final cleanup or after an
         unrecoverable error. Unlike ``close()``, it does not attempt to send a close
         frame or wait for pending messages. It schedules the cleanup to run on the
         event loop and returns immediately. It does not wait for cleanup completion.
-
-        This method is thread-safe, task-safe, and idempotent.
         """
 
         with self._terminate_lock:
@@ -1298,13 +1818,11 @@ class AsyncWebSocket(BaseWebSocket):
                 return
             self._terminated = True
 
-            loop: asyncio.AbstractEventLoop | None = self._loop
+            loop: AbstractEventLoop | None = self._loop
 
             # Get the currently running event loop
             try:
-                current_loop: asyncio.AbstractEventLoop | None = (
-                    asyncio.get_running_loop()
-                )
+                current_loop: AbstractEventLoop | None = get_running_loop()
             except RuntimeError:
                 current_loop = None
 
@@ -1316,7 +1834,7 @@ class AsyncWebSocket(BaseWebSocket):
                 if current_loop is not None and current_loop is loop:
                     _ = loop.create_task(self._terminate_helper())
                 else:
-                    _ = asyncio.run_coroutine_threadsafe(self._terminate_helper(), loop)
+                    _ = run_coroutine_threadsafe(self._terminate_helper(), loop)
 
             # pylint: disable-next=broad-exception-caught
             except Exception:
@@ -1349,15 +1867,13 @@ class AsyncWebSocket(BaseWebSocket):
 
         # Cache locals to avoid repeated attribute lookups
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
-        queue_put_nowait: Callable[[RECV_QUEUE_ITEM], None] = (
+        queue_put_nowait: Callable[[RecvQueueItem], None] = (
             self._receive_queue.put_nowait
         )
-        queue_put: Callable[[RECV_QUEUE_ITEM], Awaitable[None]] = (
-            self._receive_queue.put
-        )
-        loop: asyncio.AbstractEventLoop = self.loop
+        queue_put: Callable[[RecvQueueItem], Awaitable[None]] = self._receive_queue.put
+        loop: AbstractEventLoop = self.loop
         loop_time: Callable[[], float] = loop.time
-        create_future: Callable[[], asyncio.Future[None]] = loop.create_future
+        create_future: Callable[[], Future[None]] = loop.create_future
         add_reader: Callable[..., None] = loop.add_reader
         remove_reader: Callable[..., bool] = loop.remove_reader
         time_slice: float = self._recv_time_slice
@@ -1365,9 +1881,6 @@ class AsyncWebSocket(BaseWebSocket):
         retry_on_error: bool = self.ws_retry.retry
         retry_codes: set[CurlECode] = self.ws_retry.codes
         max_retries: int = self.ws_retry.count
-        retry_base: float = float(self.ws_retry.delay)
-        e_again: int = int(CurlECode.AGAIN)
-        e_recv_err: int = int(CurlECode.RECV_ERROR)
         e_nothing: int = int(CurlECode.GOT_NOTHING)
         close_flag: int = int(CurlWsFlag.CLOSE)
         cont_flag: int = int(CurlWsFlag.CONT)
@@ -1377,7 +1890,7 @@ class AsyncWebSocket(BaseWebSocket):
         queue_full_err: str = (
             "Receive queue full; failing connection to preserve message integrity"
         )
-        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
+        set_fut_result: Callable[[Future[None]], None] = _safe_set_result
 
         # Message specific values
         recv_error_retries: int = 0
@@ -1392,23 +1905,8 @@ class AsyncWebSocket(BaseWebSocket):
                     chunk, frame = curl_ws_recv()
 
                 except CurlError as e:
-                    should_retry: bool = False
-
-                    # Handle normal cURL EAGAINs
-                    if e.code == e_again:
-                        should_retry = True
-
-                    # EAGAIN ("errno 11") bubbling up as RECV_ERROR from BoringSSL
-                    elif e.code == e_recv_err:
-                        err_msg: str = str(e).lower()
-                        if (
-                            "errno 11" in err_msg
-                            or "resource temporarily unavailable" in err_msg
-                        ):
-                            should_retry = True
-
                     # Handle Server Disconnect (Empty Reply)
-                    elif e.code == e_nothing:
+                    if e.code == e_nothing:
                         final_exc: WebSocketClosed = WebSocketClosed(
                             "Connection closed unexpectedly by server (EOF)",
                             WsCloseCode.ABNORMAL_CLOSURE,
@@ -1418,8 +1916,8 @@ class AsyncWebSocket(BaseWebSocket):
                         self._finalize_connection(final_exc)
                         return
 
-                    if should_retry:
-                        read_future: asyncio.Future[None] = create_future()
+                    if self._is_transient_error(e):
+                        read_future: Future[None] = create_future()
                         try:
                             add_reader(self._sock_fd, set_fut_result, read_future)
                             await read_future
@@ -1452,14 +1950,7 @@ class AsyncWebSocket(BaseWebSocket):
                         and recv_error_retries < max_retries
                     ):
                         recv_error_retries += 1
-                        # Formula: base * (2 ^ (attempt - 1))
-                        retry_delay: float = (  # pyright: ignore[reportAny]
-                            retry_base * (2 ** (recv_error_retries - 1))
-                        )
-                        # Add Jitter: +/- 10%
-                        jitter: float = retry_delay * 0.1
-                        retry_delay += uniform(-jitter, jitter)
-                        await asyncio.sleep(max(0.0, retry_delay))
+                        await sleep(max(0.0, self._get_retry_delay(recv_error_retries)))
                         continue
 
                     # Fatal error - can't retry
@@ -1502,7 +1993,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                         try:
                             queue_put_nowait((message, flags))
-                        except asyncio.QueueFull:
+                        except QueueFull:
                             if not block_on_recv:
                                 self._finalize_connection(
                                     WebSocketError(
@@ -1513,7 +2004,7 @@ class AsyncWebSocket(BaseWebSocket):
                             await queue_put((message, flags))
 
                     if loop_time() >= next_yield:
-                        await asyncio.sleep(0)
+                        await sleep(0)
                         next_yield = loop_time() + time_slice
 
                     continue
@@ -1523,7 +2014,7 @@ class AsyncWebSocket(BaseWebSocket):
                     chunks_clear()
                     try:
                         queue_put_nowait((chunk, flags))
-                    except asyncio.QueueFull:
+                    except QueueFull:
                         if not block_on_recv:
                             self._finalize_connection(
                                 WebSocketError(queue_full_err, CurlECode.OUT_OF_MEMORY)
@@ -1534,12 +2025,17 @@ class AsyncWebSocket(BaseWebSocket):
                     await self._handle_close_frame(chunk)
                     return
 
-        except asyncio.CancelledError:
+        except CancelledError:
             pass
 
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
             self._finalize_connection(e)
+
+        finally:
+            # Ensure any sudden reader exit terminates the connection
+            if not self.closed:
+                self.terminate()
 
     async def _write_loop(self) -> None:
         """
@@ -1573,10 +2069,10 @@ class AsyncWebSocket(BaseWebSocket):
         control_frame_flags: int = CurlWsFlag.CLOSE | CurlWsFlag.PING | CurlWsFlag.PONG
         close_flag: int = int(CurlWsFlag.CLOSE)
         send_payload: Callable[..., Awaitable[bool]] = self._send_payload
-        queue_get: Callable[[], Awaitable[SEND_QUEUE_ITEM]] = self._send_queue.get
-        queue_get_nowait: Callable[[], SEND_QUEUE_ITEM] = self._send_queue.get_nowait
+        queue_get: Callable[[], Awaitable[SendQueueItem]] = self._send_queue.get
+        queue_get_nowait: Callable[[], SendQueueItem] = self._send_queue.get_nowait
         queue_done: Callable[[], None] = self._send_queue.task_done
-        loop: asyncio.AbstractEventLoop = self.loop
+        loop: AbstractEventLoop = self.loop
         loop_time: Callable[[], float] = loop.time
         time_slice: float = self._send_time_slice
         next_yield: float = loop_time() + time_slice
@@ -1597,7 +2093,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                         # Perform yield checks
                         if loop_time() >= next_yield:
-                            await asyncio.sleep(0)
+                            await sleep(0)
                             next_yield = loop_time() + time_slice
 
                     finally:
@@ -1609,7 +2105,7 @@ class AsyncWebSocket(BaseWebSocket):
                     payload, flags = await queue_get()
 
                     # Build the rest of the batch without waiting.
-                    batch: list[SEND_QUEUE_ITEM] = [(payload, flags)]
+                    batch: list[SendQueueItem] = [(payload, flags)]
                     if not (flags & close_flag):
                         while len(batch) < self._max_send_batch_size:
                             try:
@@ -1618,7 +2114,7 @@ class AsyncWebSocket(BaseWebSocket):
                                 if frame & close_flag:
                                     break
 
-                            except asyncio.QueueEmpty:
+                            except QueueEmpty:
                                 break
 
                     try:
@@ -1643,7 +2139,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                             # Perform yield checks
                             if loop_time() >= next_yield:
-                                await asyncio.sleep(0)
+                                await sleep(0)
                                 next_yield = loop_time() + time_slice
 
                     finally:
@@ -1655,7 +2151,7 @@ class AsyncWebSocket(BaseWebSocket):
                     if batch[-1][1] & close_flag:
                         break
 
-        except asyncio.CancelledError:
+        except CancelledError:
             pass
 
         # pylint: disable-next=broad-exception-caught
@@ -1675,12 +2171,12 @@ class AsyncWebSocket(BaseWebSocket):
         """
         # Cache locals to reduce lookup cost
         curl_ws_send: Callable[[memoryview, CurlWsFlag | int], int] = self.curl.ws_send
-        loop: asyncio.AbstractEventLoop = self.loop
+        loop: AbstractEventLoop = self.loop
         loop_time: Callable[[], float] = loop.time
-        create_future: Callable[[], asyncio.Future[None]] = loop.create_future
+        create_future: Callable[[], Future[None]] = loop.create_future
         add_writer: Callable[..., None] = loop.add_writer
         remove_writer: Callable[..., bool] = loop.remove_writer
-        set_fut_result: Callable[[asyncio.Future[None]], None] = _safe_set_result
+        set_fut_result: Callable[[Future[None]], None] = _safe_set_result
         sock_fd: int = self._sock_fd
         time_slice: float = self._send_time_slice
         next_yield: float = loop_time() + time_slice
@@ -1738,13 +2234,13 @@ class AsyncWebSocket(BaseWebSocket):
 
                 # Cooperative yield checks
                 if loop_time() >= next_yield:
-                    await asyncio.sleep(0)
+                    await sleep(0)
                     next_yield = loop_time() + time_slice
 
             except CurlError as e:
-                if e.code == e_again:
+                if self._is_transient_error(e):
                     # Wait for socket to be writable
-                    write_future: asyncio.Future[None] = create_future()
+                    write_future: Future[None] = create_future()
                     try:
                         add_writer(sock_fd, set_fut_result, write_future)
                         await write_future
@@ -1776,6 +2272,20 @@ class AsyncWebSocket(BaseWebSocket):
 
         return True
 
+    async def recv_fragment(
+        self, *, timeout: float | None = None
+    ) -> tuple[bytes, CurlWsFrame]:
+        """This function is deprecated and removed.
+        The new architecture automatically handles frame reassembly.
+        Call :meth:`recv()` instead as a direct replacement.
+        """
+        _ = timeout
+        raise NotImplementedError(
+            "recv_fragment() is no longer supported. "
+            + "Call recv() instead to get complete messages. "
+            + "See docs: https://curl-cffi.readthedocs.io/en/latest/websockets.html"
+        )
+
     async def flush(self, timeout: float | None = None) -> None:
         """Waits until all items in the send queue have been processed.
 
@@ -1797,17 +2307,20 @@ class AsyncWebSocket(BaseWebSocket):
             return
 
         # Create a task for the queue join operation
-        join_task: asyncio.Task[None] = asyncio.create_task(self._send_queue.join())
+        join_task: Task[None] = create_task(self._send_queue.join())
 
         try:
-            done, _ = await asyncio.wait(
+            done, _ = await wait(
                 {join_task, self._write_task},
-                return_when=asyncio.FIRST_COMPLETED,
+                return_when=FIRST_COMPLETED,
                 timeout=timeout,
             )
 
             if not done:
-                raise WebSocketTimeout("Timed out waiting for send queue to flush.")
+                raise WebSocketTimeout(
+                    "Timed out waiting for send queue to flush.",
+                    CurlECode.OPERATION_TIMEDOUT,
+                )
 
             # Fast path: queue drained
             if join_task in done:
@@ -1824,18 +2337,22 @@ class AsyncWebSocket(BaseWebSocket):
                 if self._send_queue.empty():
                     return
 
+                # Expose the actual network error that killed the writer
+                if self._transport_exception is not None:
+                    raise self._transport_exception
+
                 raise WebSocketError("Writer task stopped unexpectedly while flushing.")
 
         finally:
             # Cancel join task on early exit to avoid leak.
             if not join_task.done():
                 _ = join_task.cancel()
-                with suppress(asyncio.CancelledError):
+                with suppress(CancelledError):
                     await join_task
 
     async def _terminate_helper(self) -> None:
         """Utility method for connection termination"""
-        tasks_to_cancel: set[asyncio.Task[None]] = {
+        tasks_to_cancel: set[Task[None]] = {
             t
             for t in (self._read_task, self._write_task)
             if t is not None and not t.done()
@@ -1849,10 +2366,10 @@ class AsyncWebSocket(BaseWebSocket):
 
             # Wait for cancellation but don't get stuck
             if tasks_to_cancel:
-                _, pending = await asyncio.wait(
+                _, pending = await wait(
                     tasks_to_cancel,
                     timeout=max_timeout,
-                    return_when=asyncio.ALL_COMPLETED,
+                    return_when=ALL_COMPLETED,
                 )
                 # Force cancel tasks that didn't complete within timeout.
                 for p in pending:
@@ -1863,7 +2380,7 @@ class AsyncWebSocket(BaseWebSocket):
                 try:
                     _ = self._send_queue.get_nowait()
                     self._send_queue.task_done()
-                except (asyncio.QueueEmpty, ValueError):
+                except (QueueEmpty, ValueError):
                     break
 
             # Remove the reader/writer if still registered
@@ -1877,30 +2394,16 @@ class AsyncWebSocket(BaseWebSocket):
 
             # Close the Curl connection
             super().terminate()
-            if self.session and not self.session._closed:
+            if (
+                self.session
+                # pylint: disable-next=protected-access
+                and not self.session._closed  # pyright: ignore[reportPrivateUsage]
+            ):
                 # WebSocket curls CANNOT be reused
                 self.session.push_curl(None)
 
         finally:
             self._terminated_event.set()
-
-    async def _handle_close_frame(self, message: bytes) -> None:
-        """Unpack and handle the closing frame, then initiate shutdown."""
-        try:
-            self._close_code, self._close_reason = self._unpack_close_frame(message)
-        except WebSocketError as e:
-            self._close_code = e.code
-
-        if self.autoclose and not self.closed:
-            close_code: int | CurlECode | Literal[WsCloseCode.OK] = (
-                WsCloseCode.OK
-                if self._close_code == WsCloseCode.UNKNOWN
-                else (self._close_code or WsCloseCode.OK)
-            )
-            await self.close(close_code)
-        else:
-            # If not sending a reply, we must still terminate the connection.
-            self.terminate()
 
 
 @final

@@ -216,10 +216,10 @@ print(r.json())
 `curl_cffi` supports the same browser versions preset as supported by our [fork](https://github.com/lexiforest/curl-impersonate) of [curl-impersonate](https://github.com/lwthiker/curl-impersonate):
 
 The open source version of `curl_cffi` includes versions when we are adding new capabilities for impersonating.
-If you see a version, e.g. `chrome135`, was skipped, it's simply because there's nothing new or we were busy at that time. 
+If you see a version, e.g. `chrome135`, was skipped, it's simply because there's nothing new or we were busy at that time.
 You can simply impersonate it with your own headers and the previous browser target.
 
-For a full list of preset fingerprints, see the [curl-impersonate docs](https://curl-impersonate.readthedocs.io/en/latest/fingerprints.html). 
+For a full list of preset fingerprints, see the [curl-impersonate docs](https://curl-impersonate.readthedocs.io/en/latest/fingerprints.html).
 We will no longer put duplicated and outdated info here.
 
 If you don't want to look up the headers/etc by yourself, consider buying commercial support from [impersonate.pro](https://impersonate.pro).
@@ -231,7 +231,7 @@ We offer the Safari, Chrome, Firefox updates for free and others as part of the 
 The current number of fingerprints:
 
 ![Preset](https://img.shields.io/badge/Preset_Fingerprints-37-blue)
-![Free](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.free&label=Free%20Fingerprints) 
+![Free](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.free&label=Free%20Fingerprints)
 ![Pro](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.all&label=Pro%20Fingerprints)
 
 To see the current list of fingerprints on your device, use the command line:
@@ -248,7 +248,6 @@ curl-cffi update
 
 If you are trying to impersonate a target other than a browser, use `ja3=...`, `akamai=...`, `extra_fp=...`, and `perk=...`
 to specify your own customized fingerprints. See the [docs on impersonation](https://curl-cffi.readthedocs.io/en/latest/impersonate/_index.html) for details.
-
 
 ### Asyncio
 
@@ -284,28 +283,63 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 
 ### WebSockets
 
-```python
-from curl_cffi import WebSocket
+`curl_cffi` provides a fast and robust WebSocket client for both synchronous and asynchronous contexts. This is the most advanced Python integration of libcurl's WebSocket interface, powered by a customized, optimized build of libcurl. Handshake requests automatically inherit all session settings—such as browser impersonation (TLS/JA3 and HTTP/2), custom proxies, and headers—enabling seamless connections to servers protected by strict anti-bot systems.
 
-def on_message(ws: WebSocket, message: str | bytes):
-    print(message)
+#### Synchronous WebSockets
+
+WebSockets can be used synchronously, through standard blocking methods, direct iteration, or by using an event-driven callback model (similar to `websocket-client`):
+
+```python
+from curl_cffi import Session, WebSocket
+
+with Session() as session:
+    # Handshake automatically inherits browser fingerprints (Chrome, Safari, etc.)
+    with session.ws_connect("wss://echo.websocket.org", impersonate="chrome") as ws:
+        ws.send_str("Hello, World!", timeout=5.0)
+
+        # Standard block-and-read
+        msg = ws.recv_str(timeout=5.0)
+        print(f"Received: {msg}")
+
+        # Stream incoming messages sequentially
+        for message in ws:
+            print(f"Stream: {message}")
+
+def on_message(ws, message):
+    print(f"Received: {message}")
 
 ws = WebSocket(on_message=on_message)
-ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
+# Automatically negotiates upgrades and listens continuously
+ws.run_forever("wss://echo.websocket.org")
 ```
 
-### Asyncio WebSockets
+#### Asynchronous WebSockets
+
+For high-concurrency applications, the async client supports concurrent reading and writing with cooperative multitasking (similar to `aiohttp`):
 
 ```python
 import asyncio
 from curl_cffi import AsyncSession
 
-async with AsyncSession() as session:
-    async with session.ws_connect("wss://echo.websocket.org") as ws:
-        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-        async for message in ws:
-            print(message)
+async def main():
+    async with AsyncSession() as session:
+        async with session.ws_connect("wss://echo.websocket.org", impersonate="chrome") as ws:
+            # Execute concurrent sends
+            await asyncio.gather(*[ws.send_str(f"Message {i}") for i in range(10)])
+
+            # Stream incoming frames asynchronously
+            async for message in ws:
+                print(f"Asyncio Stream: {message}")
+
+asyncio.run(main())
 ```
+
+#### Why use `curl_cffi` for WebSockets?
+
+- **Impersonation & Session Inheritance:** Inherits browser fingerprints (TLS/JA3 and HTTP/2), custom proxies, and headers directly during the initial handshake request.
+- **Vectorized SIMD Performance:** Frame payload masking is executed at the hardware level using vectorized SIMD assembly (AVX-512, AVX2, and ARM Neon) inside a customized build of libcurl, offering optimized speeds for large data streams.
+- **Automatic Message Reassembly:** Automatically merges fragmented WebSocket frames in the background, so messages are always read as a single, fully reassembled payload.
+- **Robust Network Resiliency:** Built with precise timeout boundaries and socket transient error (`EAGAIN`) recovery to safely handle network-level socket blocking without corrupting the connection state.
 
 See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
 
