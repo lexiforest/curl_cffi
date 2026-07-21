@@ -914,8 +914,7 @@ class TestWebSocketFragmentationFix:
         """
         Verifies that if a send() operation times out after writing a partial
         amount of bytes (offset > 0), the connection is forcefully terminated
-        (closed = True) and a terminal WebSocketError is raised instead of
-        a standard transient timeout.
+        (closed = True) and the original exception is re-raised intact.
         """
         mock_curl: Mock = Mock(spec=Curl)
         ws: WebSocket = WebSocket(curl=mock_curl)
@@ -942,12 +941,11 @@ class TestWebSocketFragmentationFix:
         mock_selector.select.return_value = []
 
         # We attempt to send a 100,000-byte payload
-        with pytest.raises(WebSocketError) as exc_info:
+        with pytest.raises(WebSocketTimeout) as exc_info:
             _ = ws.send(b"X" * 100000, timeout=0.05)
 
-        # Ensure we raised the unrecoverable wrapped exception instead of a bare timeout
-        assert not isinstance(exc_info.value, WebSocketTimeout)
-        assert "unrecoverable" in str(exc_info.value).lower()
+        # Ensure the original timeout exception bubbles up without masking
+        assert "write timeout" in str(exc_info.value).lower()
         assert exc_info.value.code == CurlECode.OPERATION_TIMEDOUT
 
         # The connection must have been forcefully terminated to prevent frame desync
@@ -996,6 +994,9 @@ class TestWebSocketRobustness:
         ws: WebSocket = WebSocket(curl=mock_curl)
         ws.closed = False
         ws._sock_fd = 999
+
+        # Support the zero-payload auto-PONG flush triggered by intercepted PINGs
+        mock_curl.ws_send.return_value = 0
 
         # Mock the selectors to prevent registering the fake FD (999) with the OS
         mock_selector: Mock = Mock()

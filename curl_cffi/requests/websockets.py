@@ -822,7 +822,6 @@ class WebSocket(BaseWebSocket):
             WebSocketClosed: The WebSocket has been closed.
             WebSocketTimeout: The send operation timed out.
             WebSocketError: The socket stalled while sending.
-            WebSocketError: Timed out while sending (unrecoverable).
 
         Note:
             This method is NOT thread-safe.
@@ -863,73 +862,69 @@ class WebSocket(BaseWebSocket):
         if timeout is not None:
             deadline = time_monotonic() + timeout
 
-        # Loop until the entire view is sent
-        while offset < total_bytes or (offset == 0 and total_bytes == 0):
-            # Boundary check: Calculate next fragment ONLY when needed
-            if offset == frame_end:
-                if total_bytes - offset > max_frame_size:
-                    frame_end = offset + max_frame_size
-                    current_flags = base_flags | CurlWsFlag.CONT
-                else:
-                    frame_end = total_bytes
-                    current_flags = flags
+        try:
+            # Loop until the entire view is sent
+            while offset < total_bytes or (offset == 0 and total_bytes == 0):
+                # Boundary check: Calculate next fragment ONLY when needed
+                if offset == frame_end:
+                    if total_bytes - offset > max_frame_size:
+                        frame_end = offset + max_frame_size
+                        current_flags = base_flags | CurlWsFlag.CONT
+                    else:
+                        frame_end = total_bytes
+                        current_flags = flags
 
-            try:
-                # libcurl returns the number of bytes actually sent
-                n_sent: int = curl_ws_send(view[offset:frame_end], current_flags)
+                try:
+                    # libcurl returns the number of bytes actually sent
+                    n_sent: int = curl_ws_send(view[offset:frame_end], current_flags)
 
-                if n_sent == 0:
-                    # Handle 0-byte payload (Valid Empty Frame)
-                    if frame_end - offset == 0:
-                        return offset
+                    if n_sent == 0:
+                        # Handle 0-byte payload (Valid Empty Frame)
+                        if frame_end - offset == 0:
+                            return offset
 
-                    # Raise AGAIN to jump to the existing wait logic below
-                    write_retries += 1
-                    if write_retries >= max_zero_writes:
-                        raise WebSocketError(
-                            f"Writer stalled ({write_retries} attempts).",
-                            CurlECode.WRITE_ERROR,
-                        )
-                    raise CurlError("0 bytes sent", CurlECode.AGAIN)
+                        # Raise AGAIN to jump to the existing wait logic below
+                        write_retries += 1
+                        if write_retries >= max_zero_writes:
+                            raise WebSocketError(
+                                f"Writer stalled ({write_retries} attempts).",
+                                CurlECode.WRITE_ERROR,
+                            )
+                        raise CurlError("0 bytes sent", CurlECode.AGAIN)
 
-                if write_retries:
-                    write_retries = 0
+                    if write_retries:
+                        write_retries = 0
 
-                offset += n_sent
+                    offset += n_sent
 
-            except CurlError as e:
-                if self._is_transient_error(e):
-                    # Check the clock when the socket is blocked
-                    try:
-                        if timeout is not None:
-                            if not write_selector.select(
-                                max(0.0, deadline - time_monotonic())
-                            ):
-                                if offset > 0:
-                                    # If we timeout after already sending some data,
-                                    # framing alignment is lost. Close connection.
-                                    self.terminate()
-                                    raise WebSocketError(
-                                        (
-                                            "Timed out before complete "
-                                            "message sent (unrecoverable)"
-                                        ),
+                except CurlError as e:
+                    if self._is_transient_error(e):
+                        # Check the clock when the socket is blocked
+                        try:
+                            if timeout is not None:
+                                if not write_selector.select(
+                                    max(0.0, deadline - time_monotonic())
+                                ):
+                                    raise WebSocketTimeout(
+                                        "Socket write timeout",
                                         CurlECode.OPERATION_TIMEDOUT,
                                     ) from None
+                            else:
+                                _ = write_selector.select(None)
+                        except (ValueError, OSError) as exc:
+                            if self.closed:
+                                raise WebSocketClosed("WebSocket is closed") from exc
+                            raise
 
-                                raise WebSocketTimeout(
-                                    "Socket write timeout before message sent",
-                                    CurlECode.OPERATION_TIMEDOUT,
-                                ) from None
-                        else:
-                            _ = write_selector.select(None)
-                    except (ValueError, OSError) as exc:
-                        if self.closed:
-                            raise WebSocketClosed("WebSocket is closed") from exc
-                        raise
+                        continue
+                    raise
 
-                    continue
-                raise
+        except BaseException:
+            # If we get interrupted after some data is already sent,
+            # the framing alignment is lost. Tear down the connection.
+            if offset > 0:
+                self.terminate()
+            raise
 
         return offset
 
