@@ -750,9 +750,9 @@ class TestAsyncWebSocketConcurrency:
                 _ = task.cancel()
 
             # All tasks should complete (no deadlock)
-            assert (
-                len(pending) == 0
-            ), f"Deadlock detected: {len(pending)} tasks still pending"
+            assert len(pending) == 0, (
+                f"Deadlock detected: {len(pending)} tasks still pending"
+            )
             assert len(done) == num_consumers
 
             # Collect results - some may be messages or errors if connection closed
@@ -894,9 +894,9 @@ class TestAsyncWebSocketConcurrency:
             # Should have at least 1 message (the echo) and the rest should be
             # close frames or closed errors
             assert messages >= 1, "Expected at least the echo message"
-            assert (
-                timeout_errors == 0
-            ), "No recv() should timeout - connection should close cleanly"
+            assert timeout_errors == 0, (
+                "No recv() should timeout - connection should close cleanly"
+            )
 
 
 class TestAsyncWebSocketCancellation:
@@ -1409,13 +1409,14 @@ class TestAsyncWebSocketParameterBoundaries:
                 payload_size = 5 * 1024 * 1024
                 large_payload: bytes = b"A" * payload_size
 
+                ticks_before_transfer = heartbeat_ticks
                 await ws.send(large_payload)
                 data, _ = await ws.recv(timeout=10.0)
 
                 assert data == large_payload
                 # If time-slicing works, the heartbeat task must have been
                 # given time to run during the transfer.
-                assert heartbeat_ticks > 0
+                assert heartbeat_ticks > ticks_before_transfer
 
         finally:
             _ = hb_task.cancel()
@@ -2314,14 +2315,14 @@ class TestAsyncWebSocketRobustness:
         """
         Tests the integrity and event loop fairness of a huge 20MB payload.
         This exercises the SIMD XOR masking across thousands of internal
-        C buffers and hundreds of Byte-Bucket yield points.
+        C buffers and the time-based cooperative yield checks.
         """
         ws_config(behavior=ServerBehavior.ECHO)
 
         # Heartbeat task to prove the loop stays responsive during the massive CPU task
         heartbeat_ticks = 0
 
-        async def heartbeat():
+        async def heartbeat() -> None:
             nonlocal heartbeat_ticks
             while True:
                 await asyncio.sleep(0.001)
@@ -2342,6 +2343,7 @@ class TestAsyncWebSocketRobustness:
             ) as ws:
                 # Time the send/recv process
                 start_time: float = asyncio.get_running_loop().time()
+                ticks_before_transfer = heartbeat_ticks
 
                 await ws.send(payload)
                 data, _ = await ws.recv(timeout=20.0)
@@ -2352,10 +2354,9 @@ class TestAsyncWebSocketRobustness:
                 assert len(data) == huge_size
                 assert data == payload
 
-                # Assert fairness: With a 20MB payload and 5ms time slice,
-                # we yielded at least 160 times. Heartbeat MUST have ticked.
-                assert heartbeat_ticks > 0
-                assert heartbeat_ticks >= 5
+                # The heartbeat must make progress during the transfer. Its exact
+                # tick count depends on event-loop timer scheduling and system load.
+                assert heartbeat_ticks > ticks_before_transfer
 
                 # Log performance for visibility
                 print(

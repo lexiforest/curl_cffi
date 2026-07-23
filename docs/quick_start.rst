@@ -231,11 +231,12 @@ Use the ``data={...}`` option.
 Binary data
 ~~~~~~~~~~~
 
-Still, use the ``data=b"..."`` option.
+Use the ``content=b"..."`` option. Passing bytes through ``data=`` remains supported
+for compatibility.
 
 .. code-block:: python
 
-    >>> r = curl_cffi.post("https://httpbin.org/post", data=b"LukeSkywalker")
+    >>> r = curl_cffi.post("https://httpbin.org/post", content=b"LukeSkywalker")
     >>> print(r.text)
     {
       "args": {},
@@ -244,6 +245,37 @@ Still, use the ``data=b"..."`` option.
       "form": {},
       ...
     }
+
+Streaming request bodies
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pass a byte iterable or binary file through ``content=`` to upload it without
+buffering the entire body. If no ``Content-Length`` header is supplied, libcurl uses
+streaming transfer framing appropriate for the negotiated HTTP version.
+
+.. code-block:: python
+
+    def chunks():
+        yield b"first chunk"
+        yield b"second chunk"
+
+    r = curl_cffi.post("https://httpbin.org/post", content=chunks())
+
+With ``AsyncSession``, ``content=`` also accepts an async byte iterable:
+
+.. code-block:: python
+
+    async def chunks():
+        yield b"first chunk"
+        await get_more_data()
+        yield b"second chunk"
+
+    async with curl_cffi.AsyncSession() as session:
+        r = await session.post("https://httpbin.org/post", content=chunks())
+
+One-shot iterators cannot be replayed. If a retry or redirect needs to resend the
+body, curl_cffi raises ``UnrewindableBodyError``. Seekable binary files are rewound
+automatically.
 
 Posting JSON
 ~~~~~~~~~~~~
@@ -405,9 +437,14 @@ Redirection and history
     >>> r.status_code
     302
 
-.. warning::
+Redirect responses are available in request order. Their status, URL, and headers
+are populated, but their response bodies are not available.
 
-    History is not implemented.
+.. code-block:: python
+
+    >>> r = curl_cffi.get("https://httpbin.org/redirect-to?url=/")
+    >>> r.history[0].status_code
+    302
 
 
 Authenticate

@@ -278,7 +278,10 @@ class AsyncCurl:
                 if curl_msg.msg == CURLMSG_DONE:
                     curl = self._curl2curl[curl_msg.easy_handle]
                     retcode = curl_msg.data.result
-                    if retcode == 0:
+                    callback_exception = curl._get_callback_exception()
+                    if callback_exception is not None:
+                        self.set_exception(curl, callback_exception)
+                    elif retcode == 0:
                         self.set_result(curl)
                     else:
                         self.set_exception(curl, curl._get_error(retcode, "perform"))

@@ -1,10 +1,8 @@
-import warnings
 from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Optional, TypedDict
 
-from ..const import CurlOpt, CurlSslVersion
-from ..utils import CurlCffiWarning
+from ..const import CurlSslVersion
 
 
 BrowserTypeLiteral = Literal[
@@ -387,73 +385,3 @@ TLS_EC_CURVES_MAP = {
     4588: "X25519MLKEM768",
     25497: "X25519Kyber768Draft00",
 }
-
-
-def toggle_extension(curl, extension_id: int, enable: bool):
-    # ECH
-    if extension_id == 65037:
-        if enable:
-            curl.setopt(CurlOpt.ECH, "grease")
-        else:
-            curl.setopt(CurlOpt.ECH, "")
-    # compress certificate
-    elif extension_id == 27:
-        if enable:
-            warnings.warn(
-                "Cert compression setting to brotli, "
-                "you had better specify which to use: zlib/brotli",
-                CurlCffiWarning,
-                stacklevel=1,
-            )
-            curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "brotli")
-        else:
-            curl.setopt(CurlOpt.SSL_CERT_COMPRESSION, "")
-    # ALPS: application settings
-    elif extension_id == 17513:
-        if enable:
-            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
-        else:
-            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
-    elif extension_id == 17613:
-        if enable:
-            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 1)
-            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 1)
-        else:
-            curl.setopt(CurlOpt.SSL_ENABLE_ALPS, 0)
-            curl.setopt(CurlOpt.TLS_USE_NEW_ALPS_CODEPOINT, 0)
-    # server_name
-    elif extension_id == 0:
-        raise NotImplementedError(
-            "It's unlikely that the server_name(0) extension being changed."
-        )
-    # ALPN
-    elif extension_id == 16:
-        if enable:
-            curl.setopt(CurlOpt.SSL_ENABLE_ALPN, 1)
-        else:
-            curl.setopt(CurlOpt.SSL_ENABLE_ALPN, 0)
-    # status_request
-    elif extension_id == 5:
-        if enable:
-            curl.setopt(CurlOpt.TLS_STATUS_REQUEST, 1)
-    # signed_certificate_timestamps
-    elif extension_id == 18:
-        if enable:
-            curl.setopt(CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, 1)
-    # session_ticket
-    elif extension_id == 35:
-        if enable:
-            curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 1)
-        else:
-            curl.setopt(CurlOpt.SSL_ENABLE_TICKET, 0)
-    # padding, should be ignored
-    elif extension_id == 21:
-        pass  # type: ignore
-    # firefox extension, toggled by extra_fp
-    elif extension_id in (34, 28):
-        pass
-    else:
-        raise NotImplementedError(
-            f"This extension({extension_id}) can not be toggled for now, it may be "
-            "updated later."
-        )
