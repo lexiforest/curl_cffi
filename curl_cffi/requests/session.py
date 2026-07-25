@@ -285,7 +285,7 @@ class BaseSession(Generic[R]):
         self.interface = interface
         self.doh_url = doh_url
         self.cert = cert
-        self.cache = normalize_cache_backend(cache)
+        self._cache = normalize_cache_backend(cache)
 
         if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
@@ -455,8 +455,8 @@ class BaseSession(Generic[R]):
         content_callback: Optional[Callable[..., object]],
     ) -> bool:
         return bool(
-            self.cache
-            and self.cache.should_cache_request(
+            self._cache
+            and self._cache.should_cache_request(
                 request,
                 stream=bool(stream),
                 content_callback=content_callback,
@@ -865,7 +865,7 @@ class Session(BaseSession[R]):
         )
 
         if self._cache_enabled(req, stream=stream, content_callback=content_callback):
-            cached_response = self.cache.get(
+            cached_response = self._cache.get(
                 req,
                 response_class=self.response_class,
             )  # type: ignore[union-attr]
@@ -947,7 +947,7 @@ class Session(BaseSession[R]):
                 if self._cache_enabled(
                     req, stream=stream, content_callback=content_callback
                 ):
-                    self.cache.set(req, rsp)  # type: ignore[union-attr]
+                    self._cache.set(req, rsp)  # type: ignore[union-attr]
                 if self.raise_for_status:
                     rsp.raise_for_status()
                 return rsp
