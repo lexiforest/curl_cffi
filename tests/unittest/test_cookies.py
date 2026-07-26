@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from curl_cffi.requests.cookies import Cookies, CurlMorsel
@@ -25,6 +27,16 @@ def test_cookies_conflict_but_same():
     c.set("foo", "bar", domain="example.com")
     c.set("foo", "bar", domain="test.local")
     assert c.get("foo") == "bar"
+
+
+def test_cookies_pickle():
+    cookies = Cookies()
+    cookies.set("foo", "bar", domain="example.com")
+
+    restored = pickle.loads(pickle.dumps(cookies))
+
+    assert restored.get("foo", domain="example.com") == "bar"
+    assert restored.jar._cookies_lock is not cookies.jar._cookies_lock
 
 
 def test_curl_format_with_hostname():

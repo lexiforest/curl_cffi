@@ -12,6 +12,7 @@ from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
+from .streams import STREAM_END
 
 # Use orjson if present
 try:
@@ -42,15 +43,7 @@ JSON_NATIVE_ENCODINGS = {
     "utf-32be",
     "utf-32le",
 }
-STREAM_END = object()
 REDIRECT_STATI = (301, 302, 303, 307, 308)
-
-
-def clear_queue(q: queue.Queue):
-    with q.mutex:
-        q.queue.clear()
-        q.all_tasks_done.notify_all()
-        q.unfinished_tasks = 0
 
 
 class Request:
@@ -102,7 +95,8 @@ class Response:
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
-        history: history redirections, only headers are available.
+        history: redirect responses, in request order. Response bodies are not
+            available.
         download_size: total downloaded bytes (body).
         upload_size: total uploaded bytes (body).
         header_size: total header size.
@@ -129,7 +123,7 @@ class Response:
         self.primary_port: int = 0
         self.local_ip: str = ""
         self.local_port: int = 0
-        self.history: list[dict[str, Any]] = []
+        self.history: list[Response] = []
         self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task: Optional[Future] = None
@@ -141,6 +135,41 @@ class Response:
         self.header_size: int = 0
         self.request_size: int = 0
         self.response_size: int = 0
+
+    def __getstate__(self) -> dict[str, Any]:
+        if any(
+            value is not None
+            for value in (
+                self.queue,
+                self.stream_task,
+                self.astream_task,
+                self.quit_now,
+            )
+        ):
+            raise TypeError(
+                "Streaming responses cannot be pickled; make the request without "
+                "stream=True before pickling the response."
+            )
+
+        state = self.__dict__.copy()
+        for attribute in (
+            "curl",
+            "queue",
+            "stream_task",
+            "astream_task",
+            "quit_now",
+        ):
+            state.pop(attribute, None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self.curl = None
+        self.queue = None
+        self.stream_task = None
+        self.astream_task = None
+        self.quit_now = None
+        self._stream_closed = True
 
     @property
     def charset(self) -> str:

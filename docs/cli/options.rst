@@ -32,6 +32,8 @@ highlighted. When piped, only the body is printed as plain text.
      - Description
    * - ``--verbose``, ``-v``
      - Print request headers, request body, response headers, and response body
+   * - ``--quiet``, ``-q``
+     - Suppress all output except errors, including download progress
    * - ``--headers``
      - Print response headers only
    * - ``--body``, ``-b``
@@ -53,6 +55,9 @@ highlighted. When piped, only the body is printed as plain text.
     # Full verbose output
     curl-cffi post -v https://httpbin.org/post name=test
 
+    # No output on success
+    curl-cffi get -q https://httpbin.org/get
+
     # Custom: request headers + response headers
     curl-cffi get -p Hh https://httpbin.org/get
 
@@ -61,7 +66,8 @@ Download
 
 Downloads display a progress bar with transfer speed when ``rich`` is installed.
 Without ``rich``, the download is written with plain text output. Filenames are
-automatically sanitized to remove unsafe characters.
+automatically sanitized to remove unsafe characters. Use ``--quiet`` to suppress
+the response headers, progress, and completion message.
 
 .. list-table::
    :widths: 25 75
@@ -82,6 +88,9 @@ automatically sanitized to remove unsafe characters.
 
     # Download to a specific path
     curl-cffi get --download -o myfile.zip https://example.com/file.zip
+
+    # Download without headers or progress output
+    curl-cffi get --quiet --download -o myfile.zip https://example.com/file.zip
 
 Connection options
 ------------------

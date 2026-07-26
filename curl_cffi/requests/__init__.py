@@ -90,6 +90,8 @@ def request(
         data: form values(dict/list/tuple) or binary data to use in body,
             ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict
             is given.
+        content: raw request body as str, bytes, a byte iterable, or a binary file.
+            ``AsyncSession`` also accepts an async byte iterable.
         json: json values to use in body, `Content-Type: application/json` will be added
             automatically.
         headers: headers to send.

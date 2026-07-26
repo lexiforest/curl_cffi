@@ -5,8 +5,10 @@
 __all__ = ["Cookies"]
 
 import re
+import threading
 import time
 import warnings
+from contextlib import suppress
 from dataclasses import dataclass
 from http.cookiejar import Cookie, CookieJar
 from http.cookies import _unquote
@@ -148,6 +150,24 @@ class Cookies(MutableMapping[str, str]):
         else:
             self.jar = cookies
 
+    def __getstate__(self) -> dict:
+        state = self.__dict__.copy()
+        jar = state.pop("jar")
+        jar_state = jar.__dict__.copy()
+        jar_state.pop("_cookies_lock", None)
+        state["_jar_type"] = type(jar)
+        state["_jar_state"] = jar_state
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        jar_type = state.pop("_jar_type")
+        jar_state = state.pop("_jar_state")
+        jar = object.__new__(jar_type)
+        jar.__dict__.update(jar_state)
+        jar._cookies_lock = threading.RLock()
+        self.__dict__.update(state)
+        self.jar = jar
+
     def _eff_request_host(self, request) -> str:
         """
         Almost equivalent to the eff_request_host function in:
@@ -186,6 +206,31 @@ class Cookies(MutableMapping[str, str]):
         for morsel in morsels:
             cookie = morsel.to_cookiejar_cookie()
             self.jar.set_cookie(cookie)
+        self.jar.clear_expired_cookies()
+
+    def _delete_curl_morsel(self, morsel: CurlMorsel) -> None:
+        domains = [morsel.hostname]
+        if morsel.subdomains:
+            domain = morsel.hostname.lstrip(".")
+            domains = [domain, f".{domain}"]
+
+        for domain in domains:
+            with suppress(KeyError):
+                self.jar.clear(domain, morsel.path, morsel.name)
+
+    def update_cookies_from_curl_changes(self, changes: list[bytes]) -> None:
+        for change in changes:
+            action, separator, curl_format = change.partition(b"\t")
+            if not separator or action not in (b"SET", b"DELETE"):
+                raise ValueError(f"Invalid curl cookie change: {change!r}")
+
+            morsel = CurlMorsel.from_curl_format(curl_format)
+            if action == b"SET":
+                self._delete_curl_morsel(morsel)
+                self.jar.set_cookie(morsel.to_cookiejar_cookie())
+            else:
+                self._delete_curl_morsel(morsel)
+
         self.jar.clear_expired_cookies()
 
     def set(

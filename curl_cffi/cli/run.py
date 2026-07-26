@@ -143,7 +143,8 @@ def _run_http_file(
 
     failed = 0
     for i, req in enumerate(requests, 1):
-        print(f"--- [{i}] {req.method} {req.url}", file=sys.stderr)
+        if not args.quiet:
+            print(f"--- [{i}] {req.method} {req.url}", file=sys.stderr)
 
         url = process_url(req.url)
 
@@ -202,7 +203,8 @@ def _run_har_file(
             print(f"--- [{i}] skipping entry with no URL", file=sys.stderr)
             continue
 
-        print(f"--- [{i}] {method} {url}", file=sys.stderr)
+        if not args.quiet:
+            print(f"--- [{i}] {method} {url}", file=sys.stderr)
 
         headers = {}
         for h in req.get("headers", []):

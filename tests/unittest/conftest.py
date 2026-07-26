@@ -110,12 +110,18 @@ async def app(scope, receive, send):
         await set_headers(scope, receive, send)
     elif scope["path"].startswith("/set_cookies"):
         await set_cookies(scope, receive, send)
+    elif scope["path"].startswith("/delete_cookies_then_redirect"):
+        await delete_cookies_then_redirect(scope, receive, send)
     elif scope["path"].startswith("/delete_cookies"):
         await delete_cookies(scope, receive, send)
     elif scope["path"].startswith("/set_special_cookies"):
         await set_special_cookies(scope, receive, send)
     elif scope["path"].startswith("/retry_once"):
         await retry_once(scope, receive, send)
+    elif scope["path"].startswith("/retry_body"):
+        await retry_body(scope, receive, send)
+    elif scope["path"].startswith("/redirect_307"):
+        await redirect_307(scope, receive, send)
     elif scope["path"].startswith("/redirect_301"):
         await redirect_301(scope, receive, send)
     elif scope["path"].startswith("/redirect_to"):
@@ -430,6 +436,20 @@ async def delete_cookies(scope, receive, send):
     await send({"type": "http.response.body", "body": b"Hello, world!"})
 
 
+async def delete_cookies_then_redirect(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 302,
+            "headers": [
+                [b"location", b"/echo_cookies"],
+                [b"set-cookie", b"foo=; Max-Age=0"],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Redirecting..."})
+
+
 async def set_cookies_unique(scope, receive, send):
     t = f"foo={str(uuid4())}"
     print("Sending unique cookie:", t)
@@ -482,6 +502,47 @@ async def retry_once(scope, receive, send):
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+_retry_body_counts: dict[str, int] = defaultdict(int)
+
+
+async def retry_body(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode(), keep_blank_values=True)
+    key = params.get("key", ["default"])[0]
+    body = b""
+    more_body = True
+    while more_body:
+        message = await receive()
+        body += message.get("body", b"")
+        more_body = message.get("more_body", False)
+
+    count = _retry_body_counts[key]
+    _retry_body_counts[key] = count + 1
+    status = 500 if count == 0 else 200
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [[b"content-type", b"application/octet-stream"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+async def redirect_307(scope, receive, send):
+    more_body = True
+    while more_body:
+        message = await receive()
+        more_body = message.get("more_body", False)
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 307,
+            "headers": [[b"location", b"/echo_body"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"Redirecting..."})
 
 
 async def redirect_301(scope, receive, send):

@@ -155,8 +155,8 @@ def test_async_session_rejects_cache_shorthand():
 def test_session_accepts_int_cache_shorthand():
     session = Session(cache=60)
     try:
-        assert isinstance(session.cache, FileCacheBackend)
-        assert session.cache.expires == timedelta(seconds=60)
+        assert isinstance(session._cache, FileCacheBackend)
+        assert session._cache.expires == timedelta(seconds=60)
     finally:
         session.close()
 
@@ -164,7 +164,12 @@ def test_session_accepts_int_cache_shorthand():
 def test_session_accepts_timedelta_cache_shorthand():
     session = Session(cache=timedelta(minutes=2))
     try:
-        assert isinstance(session.cache, FileCacheBackend)
-        assert session.cache.expires == timedelta(minutes=2)
+        assert isinstance(session._cache, FileCacheBackend)
+        assert session._cache.expires == timedelta(minutes=2)
     finally:
         session.close()
+
+
+def test_session_does_not_expose_cache_attribute():
+    with Session() as session:
+        assert not hasattr(session, "cache")

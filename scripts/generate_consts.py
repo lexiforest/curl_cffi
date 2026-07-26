@@ -1,4 +1,3 @@
-import platform
 import re
 import subprocess
 import sys
@@ -6,7 +5,14 @@ import sys
 CONST_FILE = "curl_cffi/const.py"
 CURL_VERSION = sys.argv[1]
 
-uname = platform.uname()
+
+def clean_output(output: bytes) -> str:
+    """Convert curl's parenthesized enum expressions to readable Python."""
+    return re.sub(
+        r"\(\((\d+)\) \+ \((\d+)\)\)",
+        r"\1 + \2",
+        output.decode(),
+    )
 
 
 print("extract consts from curl.h")
@@ -17,13 +23,10 @@ with open(CONST_FILE, "w") as f:
     f.write('    """``CULROPT_`` constancs extracted from libcurl,\n')
     f.write('    see: https://curl.se/libcurl/c/curl_easy_setopt.html"""\n\n')
     cmd = rf"""
-        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLOPT_.\+ =" | sed "s/  CURLOPT_/    /g" | sed "s/,//g"
+        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -DCURL_DISABLE_DEPRECATION -E - | grep -i "CURLOPT_.\+ =" | sed "s/  CURLOPT_/    /g" | sed "s/,//g"
     """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
-    clean_output = re.sub(
-        r"__attribute__\(.*\) ", "", output.decode(), flags=re.MULTILINE
-    )
-    f.write(clean_output)
+    f.write(clean_output(output))
     f.write(
         """
     if locals().get("WRITEDATA"):
@@ -39,10 +42,10 @@ with open(CONST_FILE, "w") as f:
     f.write('    """``CURLINFO_`` constancs extracted from libcurl,\n')
     f.write('    see: https://curl.se/libcurl/c/curl_easy_getinfo.html"""\n\n')
     cmd = rf"""
-        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLINFO_.\+ =" | sed "s/  CURLINFO_/    /g" | sed "s/,//g"
+        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -DCURL_DISABLE_DEPRECATION -E - | grep -i "CURLINFO_.\+ =" | sed "s/  CURLINFO_/    /g" | sed "s/,//g"
     """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
-    f.write(output.decode())
+    f.write(clean_output(output))
     f.write(
         """
     if locals().get("RESPONSE_CODE"):
@@ -54,10 +57,10 @@ with open(CONST_FILE, "w") as f:
     f.write('    """``CURLMOPT_`` constancs extracted from libcurl,\n')
     f.write('    see: https://curl.se/libcurl/c/curl_multi_setopt.html"""\n\n')
     cmd = rf"""
-        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -E - | grep -i "CURLMOPT_.\+ =" | sed "s/  CURLMOPT_/    /g" | sed "s/,//g"
+        echo '#include "{CURL_VERSION}/include/curl/curl.h"' | gcc -DCURL_DISABLE_DEPRECATION -E - | grep -i "CURLMOPT_.\+ =" | sed "s/  CURLMOPT_/    /g" | sed "s/,//g"
     """  # noqa E501
     output = subprocess.check_output(cmd, shell=True)
-    f.write(output.decode())
+    f.write(clean_output(output))
     f.write("\n\n")
 
     f.write("class CurlECode(IntEnum):\n")
@@ -122,6 +125,7 @@ class CurlIpResolve(IntEnum):
 
 class CurlFollow(IntEnum):
     """``CURLFOLLOW_*`` consts for redirect behavior"""
+
     # generic follow redirects
     ALL = 1
 

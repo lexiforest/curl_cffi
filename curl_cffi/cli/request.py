@@ -61,8 +61,9 @@ def _execute_request(
     print_spec = determine_print_spec(args)
 
     if args.download:
-        print_output(response, method, url, headers, None, "h")
-        handle_download(response, url, args.output)
+        if not args.quiet:
+            print_output(response, method, url, headers, None, "h")
+        handle_download(response, url, args.output, quiet=args.quiet)
     else:
         request_body = None
         if json_body is not None:

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-CURL_VERSION=curl-8_15_0
+CURL_VERSION=curl-8_21_0
 
 curl -L https://github.com/curl/curl/archive/${CURL_VERSION}.zip -o curl.zip
 unzip -q -o curl.zip

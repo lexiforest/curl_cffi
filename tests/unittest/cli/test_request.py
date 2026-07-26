@@ -1,8 +1,12 @@
 import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+import curl_cffi
 
 
 def _run_cli(*args: str, **kwargs) -> subprocess.CompletedProcess:
@@ -63,6 +67,32 @@ def test_cli_get_body_only(server):
     assert r.returncode == 0
     assert "HTTP/" not in r.stdout
     assert "Hello, world!" in r.stdout
+
+
+def test_cli_get_quiet(server):
+    r = _run_cli("get", "--quiet", str(server.url))
+    assert r.returncode == 0
+    assert r.stdout == ""
+    assert r.stderr == ""
+
+
+def test_cli_download_quiet(server, tmp_path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(curl_cffi.__file__).parent.parent)
+    r = _run_cli(
+        "get",
+        "-q",
+        "-d",
+        "-o",
+        "response.txt",
+        str(server.url),
+        cwd=tmp_path,
+        env=env,
+    )
+    assert r.returncode == 0
+    assert r.stdout == ""
+    assert r.stderr == ""
+    assert (tmp_path / "response.txt").read_text() == "Hello, world!"
 
 
 def test_cli_no_args_shows_help():
