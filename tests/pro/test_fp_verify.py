@@ -683,9 +683,11 @@ def test_live_http3_fingerprint_data_matches_runtime_output(monkeypatch, tmp_pat
 
     preset_targets = {item["target_name"] for item in NATIVE_IMPERSONATE_TARGETS}
     custom_targets = sorted(
-        target for target in fingerprints if target not in preset_targets
+        target
+        for target, fingerprint in fingerprints.items()
+        if target not in preset_targets and fingerprint.http3_settings
     )
-    assert custom_targets, "No non-preset fingerprints found in updated cache"
+    assert custom_targets, "No non-preset HTTP/3 fingerprints found in updated cache"
 
     mismatches: dict[str, list[str]] = {}
     should_print_target_progress = _should_print_target_progress()
