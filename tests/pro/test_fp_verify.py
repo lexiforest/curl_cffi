@@ -665,3 +665,67 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
             formatted.append(target)
             formatted.extend(mismatches[target])
         raise AssertionError("\n\n".join(formatted))
+
+
+def test_live_http3_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
+    api_key = _require_live_api_key()
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+
+    FingerprintManager.load_fingerprints.cache_clear()
+    FingerprintManager.set_api_key(api_key=api_key)
+
+    api_root = FingerprintManager.get_api_root()
+    updated = FingerprintManager.update_fingerprints(api_root)
+    assert updated is not None and updated > 0
+
+    fingerprints = FingerprintManager.load_fingerprints()
+    assert fingerprints
+
+    preset_targets = {item["target_name"] for item in NATIVE_IMPERSONATE_TARGETS}
+    custom_targets = sorted(
+        target
+        for target, fingerprint in fingerprints.items()
+        if target not in preset_targets and fingerprint.http3_settings
+    )
+    assert custom_targets, "No non-preset HTTP/3 fingerprints found in updated cache"
+
+    mismatches: dict[str, list[str]] = {}
+    should_print_target_progress = _should_print_target_progress()
+
+    for target in custom_targets:
+        if should_print_target_progress:
+            print(f"verifying HTTP/3 fingerprint: {target}")
+        raw_payload = _load_raw_fingerprint(target, api_root, "http3")
+        if raw_payload.get("source") == "ping":
+            ping_payload = requests.get(
+                PING_FP_URL,
+                impersonate=target,
+                http_version="v3",
+                timeout=30,
+            ).json()
+            _verify_ping_fingerprint(
+                target=target,
+                raw_payload=raw_payload,
+                ping_payload=ping_payload,
+                mismatches=mismatches,
+            )
+        else:
+            peet_payload = requests.get(
+                TLS_PEET_URL,
+                impersonate=target,
+                http_version="v3",
+                timeout=30,
+            ).json()
+            _verify_api_fingerprint(
+                target=target,
+                raw_payload=raw_payload,
+                peet_payload=peet_payload,
+                mismatches=mismatches,
+            )
+
+    if mismatches:
+        formatted = []
+        for target in sorted(mismatches):
+            formatted.append(target)
+            formatted.extend(mismatches[target])
+        raise AssertionError("\n\n".join(formatted))
