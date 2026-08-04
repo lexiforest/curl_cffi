@@ -423,7 +423,7 @@ ClientLiteral = Literal[
     "baidu", "wechat", "bing", "duckduckgo", "google", "yandex",
 ]
 # fmt: on
-PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
+PlatformLiteral = Literal["macos", "windows", "linux", "ios", "android"]
 
 
 @dataclass
