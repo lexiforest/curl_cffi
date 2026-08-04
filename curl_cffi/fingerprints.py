@@ -416,7 +416,7 @@ class Fingerprint:
 ClientLiteral = Literal[
     # browsers
     "chrome", "firefox", "edge", "brave", "opera", "operamini",
-    "qihoo", "qq", "quark", "samsung", "sogou", "sogou_ie",
+    "qihoo", "qq", "quark", "safari", "samsung", "sogou", "sogou_ie", "tor"
     # http client
     "volley", "okhttp", "webview",
     # app with general web view
