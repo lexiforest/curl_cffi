@@ -404,7 +404,7 @@ This is an *optional* optimization technique which merges multiple pending messa
 Cooperative Multitasking
 ------------------------
 
-To adjust event loop fairness during extremely high-volume streams, you can tune the time-based cooperative scheduler:
+To adjust event loop fairness during high-volume streams, you can tune the time-based cooperative scheduler:
 
 *   **recv_time_slice** (default: 0.01s): Max time spent processing incoming messages before yielding (10ms).
 *   **send_time_slice** (default: 0.01s): Max time spent sending messages before yielding (10ms).

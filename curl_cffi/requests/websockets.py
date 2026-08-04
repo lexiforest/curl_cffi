@@ -510,6 +510,7 @@ class WebSocket(BaseWebSocket):
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | None = None,
         interface: str | None = None,
+        doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
         curl_options: dict[CurlOpt, str] | None = None,
@@ -550,8 +551,9 @@ class WebSocket(BaseWebSocket):
                 string is ``!#$%&'()*+,/:;=?@[]~``. If set to a string, the characters
                 will be removed from the safe string. If set to ``False``, the URL
                 is used as-is (you must encode it yourself).
-            http_version: Limiting http version, defaults to http2.
+            http_version: WebSockets are bootstrapped over HTTP/1.1, this has no effect.
             interface: interface name or local IP to bind to (bare IP = source address).
+            doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
             curl_options: extra curl options to use.
@@ -599,6 +601,7 @@ class WebSocket(BaseWebSocket):
                 quote=quote,
                 http_version=http_version,
                 interface=interface,
+                doh_url=doh_url,
                 max_recv_speed=max_recv_speed,
                 cert=cert,
                 curl_options=curl_options,
