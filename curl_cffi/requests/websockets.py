@@ -174,8 +174,9 @@ class BaseWebSocket:
         "_sock_fd",
     )
 
-    _MAX_CURL_FRAME_SIZE: Final[int] = 65536
-    _MAX_CONTROL_FRAME_SIZE: Final[int] = 125
+    _MAX_CURL_FRAME_SIZE: Final[Literal[65536]] = 65536
+    _MAX_CONTROL_FRAME_SIZE: Final[Literal[125]] = 125
+    _MAX_CLOSE_REASON_SIZE: Final[Literal[123]] = _MAX_CONTROL_FRAME_SIZE - 2
 
     def __init__(
         self,
@@ -1136,16 +1137,24 @@ class WebSocket(BaseWebSocket):
 
     def close(
         self,
-        code: int = WsCloseCode.OK,
+        code: int | WsCloseCode = WsCloseCode.OK,
         message: str | bytes = b"",
         timeout: float = 3.0,
     ) -> None:
-        """Close the connection.
+        """Close the WebSocket connection.
+
+        Sends a close frame to the peer and shuts down the connection.
 
         Args:
-            code: close code.
-            message: close reason.
-            timeout: Max seconds to wait for the close frame to send.
+            code (``int | WsCloseCode``, optional): Close code..
+            message (``str | bytes``, optional): Close reason. Defaults to ``b""``.
+            timeout (``float``, optional): How long (in seconds) to wait for the
+            connection to close gracefully before force-terminating. Defaults to 3.0.
+
+        Note:
+            WebSocket control frames are limited to 125 bytes. The close code requires
+            2 bytes, therefore 123 bytes are available for the close reason. If the
+            close reason is longer than this, it is implicitly truncated to 123 bytes.
         """
         if self.closed:
             return
@@ -1153,9 +1162,12 @@ class WebSocket(BaseWebSocket):
         if isinstance(message, str):
             message = message.encode("utf-8")
 
-        max_msg_size: int = self._MAX_CONTROL_FRAME_SIZE - 2
-        if len(message) > max_msg_size:
-            message = message[:max_msg_size]
+        if len(message) > self._MAX_CLOSE_REASON_SIZE:
+            message = (
+                message[: self._MAX_CLOSE_REASON_SIZE]
+                .decode("utf-8", errors="ignore")
+                .encode("utf-8")
+            )
 
         if self._close_code is None:
             self._close_code = code
@@ -1743,17 +1755,21 @@ class AsyncWebSocket(BaseWebSocket):
         message: str | bytes = b"",
         timeout: float = 3.0,
     ) -> None:
-        """
-        Performs a graceful WebSocket closing handshake and terminates the connection.
+        """Close the WebSocket connection.
 
-        This method sends a WebSocket close frame to the peer, waits for queued
-        outgoing messages to be sent, and then shuts down the connection.
+        Sends a close frame to the peer, waits for queued outgoing messages to be sent,
+        and then shuts down the connection.
 
         Args:
-            code (int): Close code. Defaults to ``WsCloseCode.OK``.
-            message (bytes): Close reason. Defaults to ``b""``.
-            timeout (float): How long (in seconds) to wait for the connection to close
-                gracefully before force-terminating.
+            code (``int | WsCloseCode``, optional): Close code.
+            message (``str | bytes``, optional): Close reason. Defaults to ``b""``.
+            timeout (``float``, optional): How long (in seconds) to wait for the
+            connection to close gracefully before force-terminating. Defaults to 3.0.
+
+        Note:
+            WebSocket control frames are limited to 125 bytes. The close code requires
+            2 bytes, therefore 123 bytes are available for the close reason. If the
+            close reason is longer than this, it is implicitly truncated to 123 bytes.
         """
         async with self._close_lock:
             if self.closed:
@@ -1766,9 +1782,12 @@ class AsyncWebSocket(BaseWebSocket):
                 message = message.encode("utf-8")
 
             # 125 bytes (Spec) - 2 bytes for close code
-            max_msg_size: int = self._MAX_CONTROL_FRAME_SIZE - 2
-            if len(message) > max_msg_size:
-                message = message[:max_msg_size]
+            if len(message) > self._MAX_CLOSE_REASON_SIZE:
+                message = (
+                    message[: self._MAX_CLOSE_REASON_SIZE]
+                    .decode("utf-8", errors="ignore")
+                    .encode("utf-8")
+                )
 
             # Store the code and reason
             if self._close_code is None:
