@@ -423,12 +423,12 @@ ClientLiteral = Literal[
     "baidu", "wechat", "bing", "duckduckgo", "google", "yandex",
 ]
 # fmt: on
-PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
+PlatformLiteral = Literal["macos", "windows", "linux", "ios", "android"]
 
 
 @dataclass
 class FingerprintSpec:
-    platform: str | None = None
+    platform: PlatformLiteral | None = None
     client: ClientLiteral | None = None
     strategy: Literal["uniform"] | None = "uniform"
 
