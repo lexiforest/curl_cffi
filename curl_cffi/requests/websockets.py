@@ -571,41 +571,49 @@ class WebSocket(BaseWebSocket):
             self._write_selector = None
 
         curl: Curl = self.curl
-        _ = set_curl_options(
-            curl=curl,
-            method="GET",
-            url=url,
-            params_list=[None, params],
-            headers_list=[None, headers],
-            cookies_list=[None, cookies],
-            auth=auth,
-            timeout=timeout,
-            allow_redirects=allow_redirects,
-            max_redirects=max_redirects,
-            proxies_list=[None, proxies],
-            proxy=proxy,
-            proxy_auth=proxy_auth,
-            verify_list=[None, verify],
-            referer=referer,
-            accept_encoding=accept_encoding,
-            impersonate=impersonate,
-            ja3=ja3,
-            akamai=akamai,
-            perk=perk,
-            extra_fp=extra_fp,
-            default_headers=default_headers,
-            quote=quote,
-            http_version=http_version,
-            interface=interface,
-            max_recv_speed=max_recv_speed,
-            cert=cert,
-            curl_options=curl_options,
-        )
 
-        # Magic number defined in: https://curl.se/docs/websocket.html
-        _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
-        _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
-        curl.perform()
+        try:
+            _ = set_curl_options(
+                curl=curl,
+                method="GET",
+                url=url,
+                params_list=[None, params],
+                headers_list=[None, headers],
+                cookies_list=[None, cookies],
+                auth=auth,
+                timeout=timeout,
+                allow_redirects=allow_redirects,
+                max_redirects=max_redirects,
+                proxies_list=[None, proxies],
+                proxy=proxy,
+                proxy_auth=proxy_auth,
+                verify_list=[None, verify],
+                referer=referer,
+                accept_encoding=accept_encoding,
+                impersonate=impersonate,
+                ja3=ja3,
+                akamai=akamai,
+                perk=perk,
+                extra_fp=extra_fp,
+                default_headers=default_headers,
+                quote=quote,
+                http_version=http_version,
+                interface=interface,
+                max_recv_speed=max_recv_speed,
+                cert=cert,
+                curl_options=curl_options,
+            )
+
+            # Magic number defined in: https://curl.se/docs/websocket.html
+            _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
+            _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
+            curl.perform()
+
+        except Exception:
+            # If the connection fails, don't leak the curl handle.
+            self.terminate()
+            raise
+
         return self
 
     def recv(self, *, timeout: float | None = None) -> tuple[bytes, int]:
