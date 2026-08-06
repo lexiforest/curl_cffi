@@ -30,7 +30,6 @@ dev = [
     "coverage>=6.4.1,<7.0",
     "cryptography>=46.0.4,<47.0",
     "httpx==0.23.1",                  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
-    "mypy>=1.9.0,<2.0",
     "pytest>=8.1.1,<9.0",
     "pytest-asyncio>=0.23.6,<1.0",
     "pytest-trio>=0.8.0,<1.0",
@@ -157,10 +156,3 @@ ignore = [
 [tool.isort]
 profile = "black"
 line_length = 88
-
-[tool.mypy]
-python_version = "3.10"
-ignore_missing_imports = true
-#warn_unused_ignores = true
-#strict = true
-exclude = ["benchmark/", "docs/", "examples/", "scripts/", "tests/", "build/"]
