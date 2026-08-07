@@ -415,20 +415,20 @@ class Fingerprint:
 # fmt: off
 ClientLiteral = Literal[
     # browsers
-    "chrome", "firefox", "edge", "brave", "opera", "brave", "operamini",
-    "qihoo", "qq", "quark", "samsung", "sogou", "sogou_ie",
+    "chrome", "firefox", "edge", "brave", "opera", "operamini",
+    "qihoo", "qq", "quark", "safari", "samsung", "sogou", "sogou_ie", "tor"
     # http client
     "volley", "okhttp", "webview",
     # app with general web view
     "baidu", "wechat", "bing", "duckduckgo", "google", "yandex",
 ]
 # fmt: on
-PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
+PlatformLiteral = Literal["macos", "windows", "linux", "ios", "android"]
 
 
 @dataclass
 class FingerprintSpec:
-    platform: str | None = None
+    platform: PlatformLiteral | None = None
     client: ClientLiteral | None = None
     strategy: Literal["uniform"] | None = "uniform"
 
