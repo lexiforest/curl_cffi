@@ -376,7 +376,7 @@ class Fingerprint:
     tls_version: str = "1.2"
     tls_ciphers: list[str] = field(default_factory=list)
     # the value is [h2, http/1.1], which will be filled by libcurl
-    tls_alpn: bool = False
+    tls_alpn: bool = True
     tls_alps: bool = False
     tls_cert_compression: list[str] = field(default_factory=list)
     tls_signature_hashes: list[str] = field(default_factory=list)  # .sig_hash_args
