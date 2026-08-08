@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import http.cookies
+import math
 import os
 import queue
 import random
@@ -17,7 +18,7 @@ from collections.abc import (
 )
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from io import BytesIO
 from typing import (
@@ -193,10 +194,24 @@ RetryBackoff = Literal["linear", "exponential"]
 
 @dataclass
 class RetryStrategy:
+    """Configuration for retrying failed requests.
+
+    Attributes:
+        count: maximum number of retries (the first attempt is not counted).
+        delay: base delay in seconds between attempts.
+        jitter: maximum extra random delay in seconds added to each retry.
+        backoff: how ``delay`` grows across attempts, ``"linear"`` or
+            ``"exponential"``.
+        status_forcelist: HTTP status codes that should trigger a retry even when
+            the request itself succeeded (e.g. ``(429, 500, 502, 503, 504)``).
+            Empty by default, meaning only transport errors are retried.
+    """
+
     count: int
     delay: float = 0.0
     jitter: float = 0.0
     backoff: RetryBackoff = "linear"
+    status_forcelist: tuple[int, ...] = ()
 
 
 def _normalize_retry(retry: Optional[Union[int, RetryStrategy]]) -> RetryStrategy:
@@ -216,6 +231,19 @@ def _normalize_retry(retry: Optional[Union[int, RetryStrategy]]) -> RetryStrateg
         raise ValueError("retry.jitter must be >= 0")
     if strategy.backoff not in ("linear", "exponential"):
         raise ValueError("retry.backoff must be 'linear' or 'exponential'")
+    forcelist = strategy.status_forcelist
+    if isinstance(forcelist, list):
+        forcelist = tuple(forcelist)
+    elif not isinstance(forcelist, tuple):
+        raise ValueError("retry.status_forcelist must be a list or tuple of ints")
+    for status in forcelist:
+        if not isinstance(status, int) or not (100 <= status <= 599):
+            raise ValueError(
+                "retry.status_forcelist entries must be ints in the range 100..599"
+            )
+    # never mutate the caller's RetryStrategy; only copy if coercion happened
+    if forcelist is not strategy.status_forcelist:
+        strategy = replace(strategy, status_forcelist=forcelist)
     return strategy
 
 
@@ -471,6 +499,26 @@ class BaseSession(Generic[R]):
             delay += random.uniform(0.0, strategy.jitter)
         return delay
 
+    def _status_retry_delay(self, resp: R, attempt: int) -> float:
+        """Delay before retrying a response with a retryable status code.
+
+        Honours the ``Retry-After`` response header when present and parseable
+        (delta-seconds form, e.g. ``Retry-After: 5``), otherwise falls back to
+        the configured backoff via :meth:`_retry_delay`.
+        """
+        retry_after = resp.headers.get("Retry-After")
+        if retry_after:
+            try:
+                # Only finite delta-seconds; HTTP-date falls back to backoff.
+                # Clamp >= 0 so a negative value can't make sleep raise.
+                delay = float(retry_after.strip())
+            except (TypeError, ValueError):
+                pass
+            else:
+                if math.isfinite(delay):
+                    return max(0.0, delay)
+        return self._retry_delay(attempt)
+
     @property
     def cookies(self) -> Cookies:
         return self._cookies
@@ -522,6 +570,8 @@ class Session(BaseSession[R]):
                 internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
+                Pass a ``RetryStrategy`` with ``status_forcelist`` to also retry on
+                specific HTTP status codes (e.g. 429, 503).
             impersonate: which browser version or fingerprint to impersonate
                 in the session.
             ja3: ja3 string to impersonate in the session.
@@ -900,7 +950,7 @@ class Session(BaseSession[R]):
             if attempt > 0:
                 _rewind_body(body, body_position)
             try:
-                return self._request_once(
+                resp = self._request_once(
                     method=method,
                     url=url,
                     params=params,
@@ -944,6 +994,20 @@ class Session(BaseSession[R]):
                 delay = self._retry_delay(attempt + 1)
                 if delay:
                     time.sleep(delay)
+                continue
+
+            if (
+                strategy.status_forcelist
+                and resp.status_code in strategy.status_forcelist
+                and attempt < strategy.count
+            ):
+                delay = self._status_retry_delay(resp, attempt + 1)
+                resp.close()  # release the handle/stream before retrying
+                if delay:
+                    time.sleep(delay)
+                continue
+
+            return resp
 
     def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="HEAD", url=url, **kwargs)
@@ -1013,6 +1077,8 @@ class AsyncSession(BaseSession[R]):
                 internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
+                Pass a ``RetryStrategy`` with ``status_forcelist`` to also retry on
+                specific HTTP status codes (e.g. 429, 503).
             impersonate: which browser version or fingerprint to impersonate
                 in the session.
             ja3: ja3 string to impersonate in the session.
@@ -1585,7 +1651,7 @@ class AsyncSession(BaseSession[R]):
             if attempt:
                 _rewind_body(body, body_position)
             try:
-                return await self._request_once(
+                resp = await self._request_once(
                     method=method,
                     url=url,
                     params=params,
@@ -1629,6 +1695,23 @@ class AsyncSession(BaseSession[R]):
                 delay = self._retry_delay(attempt + 1)
                 if delay:
                     await asyncio.sleep(delay)
+                continue
+
+            if (
+                strategy.status_forcelist
+                and resp.status_code in strategy.status_forcelist
+                and attempt < strategy.count
+            ):
+                delay = self._status_retry_delay(resp, attempt + 1)
+                # release the handle/stream before retrying
+                if resp.quit_now is not None:
+                    resp.quit_now.set()
+                await resp.aclose()
+                if delay:
+                    await asyncio.sleep(delay)
+                continue
+
+            return resp
 
     async def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return await self.request(method="HEAD", url=url, **kwargs)
