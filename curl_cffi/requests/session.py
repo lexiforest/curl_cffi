@@ -43,7 +43,7 @@ from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
 from ..utils import CurlCffiWarning
-from .cache import CacheSpec, normalize_cache_backend
+from .cache import CacheBackend, CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes
 from .exceptions import (
     RequestException,
@@ -470,6 +470,11 @@ class BaseSession(Generic[R]):
         if strategy.jitter:
             delay += random.uniform(0.0, strategy.jitter)
         return delay
+
+    @property
+    def cache_backend(self) -> Optional[CacheBackend]:
+        """The configured cache backend, or None when caching is disabled."""
+        return self._cache
 
     @property
     def cookies(self) -> Cookies:
