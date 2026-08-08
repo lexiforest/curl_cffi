@@ -119,6 +119,7 @@ if TYPE_CHECKING:
         debug: bool
         interface: Optional[str]
         doh_url: Optional[str]
+        dns: Optional[Union[str, list[str]]]
         cert: Optional[Union[str, tuple[str, str]]]
         response_class: Optional[type[R]]
         discard_cookies: bool
@@ -251,6 +252,7 @@ class BaseSession(Generic[R]):
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
         interface: Optional[str] = None,
+        dns: Optional[Union[str, list[str]]] = None,
         doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         response_class: Optional[type[R]] = None,
@@ -314,6 +316,12 @@ class BaseSession(Generic[R]):
                 or os.environ.get("CURL_CA_BUNDLE")
                 or self.verify
             )
+        if dns:
+            if not isinstance(dns, (str, list, tuple)):
+                raise TypeError("dns must be a string or a list/tuple of strings")
+            if isinstance(dns, (list, tuple)):
+                dns = ",".join(dns)
+            self.curl_options.setdefault(CurlOpt.DNS_SERVERS, dns)
 
     def _parse_response(
         self,
