@@ -196,6 +196,13 @@ You can simply add the ``curl_options`` dict to apply the option.
 
 .. code-block:: python
 
+    from curl_cffi import CurlHttpVersion, CurlOpt, requests
+
+    response = requests.get(
+        "https://example.com",
+        curl_options={CurlOpt.HTTP_VERSION: CurlHttpVersion.V1_1},
+    )
+
 
 .. note::
 

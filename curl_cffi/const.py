@@ -353,6 +353,7 @@ class CurlOpt(IntEnum):
     WS_HTTPHEADER_ORDER = 10000 + 1035
     WS_SSL_DISABLE_TICKET = 0 + 1036
     WS_SSL_CERT_COMPRESSION = 10000 + 1037
+    QUIC_CID_LENGTH = 10000 + 1038
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
