@@ -1997,6 +1997,7 @@ class AsyncWebSocket(BaseWebSocket):
                     msg_size += len(chunk)
                     if msg_size > max_msg_size:
                         chunks_clear()
+                        self._close_code = WsCloseCode.MESSAGE_TOO_BIG
                         self._finalize_connection(
                             WebSocketError(
                                 (

@@ -1120,7 +1120,7 @@ class AsyncSession(BaseSession[R]):
         Parameters:
             loop: loop to use, if not provided, the running loop will be used.
             async_curl: [AsyncCurl](/api/curl_cffi#curl_cffi.AsyncCurl) object to use.
-            max_clients: maxmium curl handle to use in the session,
+            max_clients: maximum curl handles to use in the session,
                 this will affect the concurrency ratio.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
