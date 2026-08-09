@@ -498,7 +498,7 @@ class WebSocket(BaseWebSocket):
         proxies: ProxySpec | None = None,
         proxy: str | None = None,
         proxy_auth: tuple[str, str] | None = None,
-        verify: bool | None = None,
+        verify: bool | str | None = None,
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
         impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
@@ -1223,7 +1223,7 @@ class AsyncWebSocket(BaseWebSocket):
         "_recv_time_slice",
         "_send_time_slice",
         "_terminated",
-        "_terminated_event",
+        "close_event",
         "_transport_exception",
         "drain_on_error",
         "_block_on_recv_queue_full",
@@ -1305,7 +1305,7 @@ class AsyncWebSocket(BaseWebSocket):
         self._terminated: bool = False
         self._close_lock: Lock = Lock()
         self._terminate_lock: ThreadLock = ThreadLock()
-        self._terminated_event: Event = Event()
+        self.close_event: Event = Event()
         self._read_task: Task[None] | None = None
         self._write_task: Task[None] | None = None
         self._receive_queue: Queue[RecvQueueItem] = Queue(maxsize=recv_queue_size)
@@ -1826,7 +1826,7 @@ class AsyncWebSocket(BaseWebSocket):
             self.terminate()
             with suppress(AsyncTimeout):
                 _ = await wait_for(
-                    self._terminated_event.wait(),
+                    self.close_event.wait(),
                     max(0.0, timeout - (self.loop.time() - close_start)),
                 )
 
@@ -1871,7 +1871,7 @@ class AsyncWebSocket(BaseWebSocket):
                 try:
                     super().terminate()
                 finally:
-                    self._terminated_event.set()
+                    self.close_event.set()
 
     async def _read_loop(self) -> None:
         """
@@ -2433,7 +2433,7 @@ class AsyncWebSocket(BaseWebSocket):
                 self.session.push_curl(None)
 
         finally:
-            self._terminated_event.set()
+            self.close_event.set()
 
 
 @final

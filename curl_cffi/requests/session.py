@@ -635,12 +635,12 @@ class Session(BaseSession[R]):
         cookies: CookieTypes | None = None,
         auth: tuple[str, str] | None = None,
         timeout: float | tuple[float, float] | object | None = NOT_SET,
-        allow_redirects: bool | CurlFollow | str = True,
-        max_redirects: int = 30,
+        allow_redirects: bool | CurlFollow | str | None = None,
+        max_redirects: int | None = None,
         proxies: ProxySpec | None = None,
         proxy: str | None = None,
         proxy_auth: tuple[str, str] | None = None,
-        verify: bool | None = None,
+        verify: bool | str | None = None,
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
         impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
@@ -648,7 +648,7 @@ class Session(BaseSession[R]):
         akamai: str | None = None,
         perk: str | None = None,
         extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
-        default_headers: bool = True,
+        default_headers: bool | None = None,
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | None = None,
         interface: str | None = None,
@@ -679,7 +679,9 @@ class Session(BaseSession[R]):
             auth: HTTP basic auth, a tuple of (username, password).
             timeout: Handshake connection phase timeout in seconds.
             allow_redirects: Allow redirects. Can be a bool, ``CurlFollow``, or "safe".
-            max_redirects: Max redirect counts (default 30). Use -1 for unlimited.
+                Defaults to session's value (True).
+            max_redirects: Max redirect counts. Defaults to the session's configured
+                value (30 by default).
             proxies: Dictionary of proxies, e.g. ``{"http": proxy_url}``.
             proxy: Proxy URL. Cannot be used concurrently with `proxies`.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
@@ -692,6 +694,7 @@ class Session(BaseSession[R]):
             perk: Perk fingerprint option to impersonate.
             extra_fp: Extra fingerprint options complementing ja3 and akamai.
             default_headers: Whether to set default browser headers.
+                Defaults to session's value (True).
             quote: Quote (percent-encode) characters. Default safe string is
                 ``!#$%&'()*+,/:;=?@[]~``. Set to a string to quote more, or ``False``
                 to bypass automatic encoding.
@@ -729,42 +732,61 @@ class Session(BaseSession[R]):
             debug=self.debug,
         )
 
-        # Merge session cookies with call-specific cookies safely
+        # Merge session headers
+        if headers is not None:
+            merged_headers: Headers = Headers(self.headers)
+            merged_headers.update(headers)
+            final_headers: Headers | None = merged_headers
+        else:
+            final_headers = self.headers if self.headers else None
+
+        # Merge session cookies
         if cookies is not None:
             merged_cookies: Cookies = Cookies(self.cookies)
             merged_cookies.update(cookies)
-            final_cookies: Cookies = merged_cookies
+            final_cookies: Cookies | None = merged_cookies
         else:
-            final_cookies = self.cookies
+            final_cookies = self.cookies if self.cookies else None
 
-        # Invoke the explicit connection protocol on the WebSocket instance
+        # Invoke connection with properly merged session attributes
         _ = ws.connect(
             url,
-            params=params,
-            headers=headers,
+            params=params if params is not None else self.params,
+            headers=final_headers,
             cookies=final_cookies,
-            auth=auth,
-            timeout=timeout,
-            allow_redirects=allow_redirects,
-            max_redirects=max_redirects,
-            proxies=proxies,
+            auth=auth or self.auth,
+            timeout=self.timeout if timeout is NOT_SET else timeout,
+            allow_redirects=(
+                self.allow_redirects if allow_redirects is None else allow_redirects
+            ),
+            max_redirects=(
+                self.max_redirects if max_redirects is None else max_redirects
+            ),
+            proxies=(
+                (proxies if proxies is not None else self.proxies)
+                if not proxy
+                else None
+            ),
             proxy=proxy,
-            proxy_auth=proxy_auth,
-            verify=verify,
+            proxy_auth=proxy_auth or self.proxy_auth,
+            verify=self.verify if verify is None else verify,
             referer=referer,
             accept_encoding=accept_encoding,
-            impersonate=impersonate,
-            ja3=ja3,
-            akamai=akamai,
-            perk=perk,
-            extra_fp=extra_fp,
-            default_headers=default_headers,
+            impersonate=impersonate or self.impersonate,
+            ja3=ja3 or self.ja3,
+            akamai=akamai or self.akamai,
+            perk=perk or self.perk,
+            extra_fp=extra_fp or self.extra_fp,
+            default_headers=(
+                self.default_headers if default_headers is None else default_headers
+            ),
             quote=quote,
-            http_version=http_version,
-            interface=interface,
-            cert=cert,
+            http_version=http_version or self.http_version,
+            interface=interface or self.interface,
+            doh_url=doh_url or self.doh_url,
+            cert=cert or self.cert,
             max_recv_speed=max_recv_speed,
-            curl_options=curl_options,
+            curl_options={**self.curl_options, **(curl_options or {})},
         )
         return ws
 
@@ -1423,8 +1445,8 @@ class AsyncSession(BaseSession[R]):
                 cert=cert or self.cert,
                 queue_class=asyncio.Queue,
                 event_class=asyncio.Event,
-                curl_options=curl_options,
-                perk=perk,
+                curl_options={**self.curl_options, **(curl_options or {})},
+                perk=perk or self.perk,
             )
             _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
             _ = curl.setopt(

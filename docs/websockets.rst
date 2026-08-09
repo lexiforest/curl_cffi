@@ -114,6 +114,8 @@ All sending and receiving methods are blocking. Sending methods return the numbe
     # Receive parsed JSON
     data = ws.recv_json()
 
+Use ``recv_str()`` or ``recv_json()`` if you need UTF-8 validation.
+
 Event Callbacks & run_forever()
 -------------------------------
 
@@ -145,9 +147,9 @@ For applications that prefer an event-driven approach over manual iteration, the
 Thread Safety
 -------------
 
-The synchronous ``WebSocket`` relies on ``libcurl`` easy handles, which is **not thread-safe** at the C level. If Thread A is blocked in ``recv()``, and Thread B concurrently calls ``send()``, libcurl's internal state machine will corrupt, leading to undefined behavior or segmentation faults.
+The synchronous ``WebSocket`` relies on ``libcurl`` easy handles, which is **not thread-safe** at the C level. If Thread A is blocked in ``recv()``, and Thread B concurrently calls ``send()``, libcurl's internal state machine can corrupt, leading to undefined behavior or segmentation faults.
 
-For highly concurrent, full-duplex streaming, using the **AsyncWebSocket** is the safest and most recommended approach.
+For highly concurrent, full-duplex streaming, using the **AsyncWebSocket** is the best option.
 
 Asynchronous Client
 ===================
@@ -219,6 +221,7 @@ Concurrent calls to receive methods are fully supported. Messages are distribute
     if flags & CurlWsFlag.BINARY:
         print(f"Received binary data: {payload}")
 
+Use ``recv_str()`` or ``recv_json()`` if you need UTF-8 validation.
 
 Shared Features
 ===============
@@ -273,7 +276,12 @@ Context managers handle closing **automatically**. If you need to manage the lif
     # Forceful shutdown: cancels all I/O and severs the socket immediately.
     ws.terminate()
 
-These methods are fully idempotent and can be called multiple times. For the ``AsyncWebSocket``, ``ws.terminate()`` is thread-safe and task-safe.
+These methods are fully idempotent and can be called multiple times.
+
+For asynchronous connections:
+
+-   ``ws.terminate()`` is thread-safe and task-safe.
+-   ``ws.close_event`` is an async event that can be awaited for a session closure notification.
 
 Reliability & Retries
 ---------------------
