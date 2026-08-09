@@ -670,7 +670,9 @@ class Session(BaseSession[R]):
             on_close: Close callback: ``def on_close(ws, code, reason)``.
             on_data: Raw data frame callback: ``def on_data(ws, bytes, frame)``.
             autoclose: Whether to automatically close on CLOSE frame.
-            skip_utf8_validation: Skip UTF-8 check during ``run_forever()``.
+            skip_utf8_validation: Skips UTF-8 validation of text frames in
+                ``run_forever()``, ``recv_str()``, and ``recv_json()``.
+                When set, raise but don't close connection per RFC 6455 §8.1.
             ws_retry: Custom retry strategy for failed network receives.
             max_message_size: Maximum allowed message size in bytes (default ``4 MiB``).
             params: Query string parameters to attach to the handshake URL.
@@ -1291,7 +1293,9 @@ class AsyncSession(BaseSession[R]):
     def ws_connect(
         self,
         url: str,
+        *,
         autoclose: bool = True,
+        skip_utf8_validation: bool = False,
         params: dict[str, object] | list[object] | tuple[object, ...] | None = None,
         headers: HeaderTypes | None = None,
         cookies: CookieTypes | None = None,
@@ -1302,7 +1306,7 @@ class AsyncSession(BaseSession[R]):
         proxies: ProxySpec | None = None,
         proxy: str | None = None,
         proxy_auth: tuple[str, str] | None = None,
-        verify: bool | None = None,
+        verify: bool | str | None = None,
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
         impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
@@ -1334,6 +1338,9 @@ class AsyncSession(BaseSession[R]):
         Args:
             url: The WebSocket URL to connect to (e.g. ``wss://echo.websocket.org``).
             autoclose: Whether to automatically close on CLOSE frame.
+            skip_utf8_validation: Skips UTF-8 validation of text frames in
+                ``recv_str()``, and ``recv_json()``. When set, raise an error
+                but don't close the connection as per RFC 6455 §8.1.
             params: Query string parameters to attach to the handshake URL.
             headers: Handshake request headers (merges with session defaults).
             cookies: Handshake request cookies (merges with session defaults).
@@ -1391,13 +1398,13 @@ class AsyncSession(BaseSession[R]):
                 messages before yielding to the event loop.
                 Defaults to ``0.01`` (10ms).
             max_message_size: Maximum allowed message size in bytes (default ``4 MiB``).
-            drain_on_error: If ``True``, when a connection error occurs,
-            attempt to consume all the buffered received messages first,
-            before raising the error. Otherwise, raise it immediately (default).
-            block_on_recv_queue_full (bool, optional): If ``False``, the connection
-                is failed immediately when the receive queue is full. The message that
-                caused the overflow is not delivered; any messages already buffered may
-                still be drained if ``drain_on_error=True``.
+            drain_on_error: When a connection error occurs, attempt to consume all the
+                buffered received messages first, before raising the error. Otherwise,
+                raise it immediately, discarding the buffered messages (the default).
+            block_on_recv_queue_full: When enabled, the connection is failed immediately
+                when the receive queue is full. The message that caused the overflow
+                is not delivered; any messages already buffered can still be drained
+                if ``drain_on_error`` is also set.
             curl_options: Dictionary of extra low-level curl options to apply.
 
         Documentation:
@@ -1465,6 +1472,7 @@ class AsyncSession(BaseSession[R]):
                 cast(AsyncSession[Response], self),
                 curl,
                 autoclose=autoclose,
+                skip_utf8_validation=skip_utf8_validation,
                 recv_queue_size=recv_queue_size,
                 send_queue_size=send_queue_size,
                 max_send_batch_size=max_send_batch_size,
@@ -1479,7 +1487,7 @@ class AsyncSession(BaseSession[R]):
             )
 
             try:
-                ws._start_io_tasks()
+                ws._start_io_tasks()  # pyright: ignore[reportPrivateUsage]
             except WebSocketError:
                 ws.terminate()
                 raise

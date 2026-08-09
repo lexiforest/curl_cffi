@@ -737,7 +737,9 @@ class Curl:
         )
 
     def ws_send(
-        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+        self,
+        payload: bytes | bytearray | memoryview,
+        flags: CurlWsFlag | int = CurlWsFlag.BINARY,
     ) -> int:
         """Send data to a websocket connection.
 
@@ -750,10 +752,15 @@ class Curl:
 
         Raises:
             CurlError: if failed.
+
+        Notes:
+            Memoryview payloads must be byte-format for ``len()`` to work correctly.
         """
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
+        # Don't assign ffi.from_buffer() to a variable!
+        # See: https://github.com/lexiforest/curl_cffi/pull/700
         if ret := lib.curl_ws_send(
             self._curl,
             ffi.from_buffer(payload),
