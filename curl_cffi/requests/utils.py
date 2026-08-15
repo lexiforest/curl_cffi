@@ -750,6 +750,16 @@ def set_curl_options(
     # Never send `Expect` header.
     update_header_line(header_lines, "Expect", "", replace=True)
 
+    # Browsers only send the RFC 9218 `priority` header on HTTP/2 and HTTP/3, it has no
+    # HTTP/1.x form. Drop the impersonated default when HTTP/1.x is pinned, see #785.
+    if (
+        default_headers
+        and http_version
+        and normalize_http_version(http_version)
+        in (CurlHttpVersion.V1_0, CurlHttpVersion.V1_1)
+    ):
+        update_header_line(header_lines, "Priority", "")
+
     c.setopt(CurlOpt.HTTPHEADER, [h.encode() for h in header_lines])
 
     # Collect user defined headers if default_headers are to be used.
