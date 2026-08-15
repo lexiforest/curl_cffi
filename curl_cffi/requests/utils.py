@@ -448,7 +448,7 @@ def _apply_fingerprint(
     # enable browser capabilities here and let the selected order suppress them.
     curl.setopt(CurlOpt.TLS_STATUS_REQUEST, 1)
     curl.setopt(
-        CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, value=int(fingerprint.tls_signed_cert_timestamps)
+        CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(fingerprint.tls_signed_cert_timestamps)
         )
     curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, fingerprint.tls_key_shares_limit)
 
