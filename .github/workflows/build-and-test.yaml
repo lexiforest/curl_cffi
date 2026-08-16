@@ -108,11 +108,17 @@ jobs:
       uses: pypa/cibuildwheel@v3.3.1
       env:
         CIBW_PLATFORM: android
-        # One wheel per CPython minor: Android extensions link libpython3.X.so by
-        # SONAME, so an abi3 wheel does not carry over to the next version.
+        # One wheel per CPython minor, see the Android note in setup.py.
         CIBW_BUILD: cp313-android_arm64_v8a cp314-android_arm64_v8a
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         ANDROID_API_LEVEL: 24
+
+    # cibuildwheel silently reuses an abi3 wheel for a later interpreter, so a
+    # missing wheel would otherwise leave this job green.
+    - name: Check one wheel was built per CPython minor
+      run: |
+        ls -l ./wheelhouse/
+        for tag in cp313 cp314; do ls ./wheelhouse/*-$tag-*-android_*.whl; done
 
     - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
