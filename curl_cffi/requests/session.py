@@ -33,12 +33,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-# Unpack introduced in 3.11
-try:
-    from typing import Unpack
-except ImportError:
-    from typing_extensions import Unpack
-
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
