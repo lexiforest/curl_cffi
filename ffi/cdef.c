@@ -1,6 +1,7 @@
 // easy interfaces
 void *curl_easy_init();
 int _curl_easy_setopt(void *curl, int option, void *param);
+int _curl_easy_getinfo_socket(void *curl, int option, uintptr_t *result);
 int curl_easy_getinfo(void *curl, int option, void *ret);
 int curl_easy_perform(void *curl);
 void curl_easy_cleanup(void *curl);
