@@ -888,7 +888,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
-    ):
+    ) -> R:
         """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
