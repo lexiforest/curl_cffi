@@ -33,12 +33,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-# Unpack introduced in 3.11
-try:
-    from typing import Unpack
-except ImportError:
-    from typing_extensions import Unpack
-
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
 from ..curl import Curl, CurlError, CurlMime
@@ -80,7 +74,10 @@ else:
     R = TypeVar("R", bound=Response)
 
 if TYPE_CHECKING:
-    from typing_extensions import Unpack
+    if sys.version_info >= (3, 11):
+        from typing import Unpack
+    else:
+        from typing_extensions import Unpack
 
     from ..fingerprints import Fingerprint
 
