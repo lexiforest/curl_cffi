@@ -544,6 +544,19 @@ def _apply_fingerprint(
             ",".join(fingerprint.ws_tls_cert_compression),
         )
 
+    # Fingerprints from the open source target list carry no headers at all, so
+    # impersonation would silently degrade to a header-less request, see #826.
+    if default_headers and not (
+        fingerprint.headers or fingerprint.http3_headers or fingerprint.ws_headers
+    ):
+        name = f"{fingerprint.client}{fingerprint.client_version}" or "The fingerprint"
+        warnings.warn(
+            f"{name} has no headers, the request is sent without impersonated "
+            "default headers. Pass headers explicitly to silence this warning.",
+            CurlCffiWarning,
+            stacklevel=2,
+        )
+
     # default headers will not override user-defined headers
     if default_headers and fingerprint.headers:
         header_lines = []
