@@ -57,6 +57,12 @@ No browser automation. Just simple API calls that return the exact cookies and h
 
 ------
 
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/cloro.png" height="55" width="149"></a>
+
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi">cloro</a>: SERP and AI search API for Google, ChatGPT, Perplexity, Gemini, Copilot and Grok
+
+------
+
 ## Impersonate Suite
 
 `curl-cffi` is part of the impersonate suite.
