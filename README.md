@@ -130,10 +130,6 @@ On macOS, you can also install via Homebrew:
 
     brew install lexiforest/tap/curl-cffi
 
-<small>Android support, including Termux, is currently in beta, you can install the beta release for testing.
-For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
-If you are using these OSes, please lend an hand.</small>
-
 To install beta releases:
 
     pip install curl_cffi --upgrade --pre
