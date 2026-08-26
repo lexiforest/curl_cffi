@@ -1,6 +1,7 @@
+import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict, get_args
 
 from ..const import CurlSslVersion
 
@@ -123,6 +124,33 @@ def resolve_latest_browser_type(item):
         return DEFAULT_TOR
     else:
         return item
+
+
+_FAMILY_PATTERNS = {
+    "chrome": r"^chrome\d+[a-z]?$",
+    "edge": r"^edge\d+$",
+    "safari": r"^safari\d+$",
+    "safari_ios": r"^safari\d+_ios$",
+    "safari_beta": r"^safari\d+$",
+    "safari_ios_beta": r"^safari\d+_ios$",
+    "chrome_android": r"^chrome\d+_android$",
+    "firefox": r"^firefox\d+$",
+    "tor": r"^tor\d+$",
+}
+
+
+def has_family_fallback(alias):
+    return alias in _FAMILY_PATTERNS
+
+
+def family_fallback_targets(alias):
+    # Derived from BrowserTypeLiteral (already chronological) instead of a
+    # second list, so it can't drift out of sync.
+    pattern = _FAMILY_PATTERNS.get(alias)
+    if not pattern:
+        return []
+    regex = re.compile(pattern)
+    return [t for t in reversed(get_args(BrowserTypeLiteral)) if regex.match(t)]
 
 
 class BrowserType(str, Enum):  # TODO: remove in version 1.x
