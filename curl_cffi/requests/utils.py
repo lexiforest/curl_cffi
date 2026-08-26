@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, fi
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
-from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
+from ..curl import CURL_WRITEFUNC_ERROR, Curl, CurlMime
 from ..utils import CurlCffiWarning, HttpVersionLiteral
 from ..fingerprints import Fingerprint, FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 from .cookies import Cookies
@@ -27,6 +27,8 @@ from .impersonate import (
     TLS_EC_CURVES_MAP,
     TLS_VERSION_MAP,
     ExtraFingerprints,
+    family_fallback_targets,
+    has_family_fallback,
     resolve_latest_browser_type,
 )
 from .models import Request
@@ -404,6 +406,43 @@ def _load_named_fingerprint(target: str) -> Optional[Fingerprint]:
 def _is_native_impersonate_target(target: str) -> bool:
     normalized = resolve_latest_browser_type(target)
     return normalized in NATIVE_TARGET_NAMES
+
+
+# Per-process, not per-Session: the linked libcurl-impersonate can't change
+# mid-process.
+_alias_fallback_cache: dict[str, Optional[str]] = {}
+
+
+def _resolve_impersonate_with_fallback(
+    alias: str, failed_target: str, default_headers: bool
+) -> Optional[str]:
+    # A system-provided libcurl-impersonate (CURL_IMPERSONATE_SYSTEM) may not
+    # support this release's hardcoded default. Probe on a throwaway handle,
+    # not the caller's, so a failed attempt can't leave it in a partial state.
+    if alias in _alias_fallback_cache:
+        return _alias_fallback_cache[alias]
+
+    probe = Curl()
+    try:
+        for candidate in family_fallback_targets(alias):
+            if candidate == failed_target:
+                continue
+            if probe.impersonate(candidate, default_headers=False) == 0:
+                _alias_fallback_cache[alias] = candidate
+                warnings.warn(
+                    f"curl_cffi: impersonate={alias!r} resolves to "
+                    f"{failed_target!r} by default, which the linked "
+                    f"libcurl-impersonate doesn't support; falling back to "
+                    f"{candidate!r} instead.",
+                    CurlCffiWarning,
+                    stacklevel=3,
+                )
+                return candidate
+    finally:
+        probe.close()
+
+    _alias_fallback_cache[alias] = None
+    return None
 
 
 def _strip_padding_extension(extension_order: str) -> str:
@@ -925,6 +964,13 @@ def set_curl_options(
             if _is_native_impersonate_target(impersonate):
                 normalized = resolve_latest_browser_type(impersonate)
                 ret = c.impersonate(normalized, default_headers=default_headers)  # type: ignore
+                if ret != 0 and has_family_fallback(impersonate):
+                    fallback = _resolve_impersonate_with_fallback(
+                        impersonate, normalized, default_headers
+                    )
+                    if fallback is not None:
+                        ret = c.impersonate(fallback, default_headers=default_headers)  # type: ignore
+                        normalized = fallback
                 if ret != 0:
                     raise ImpersonateError(
                         f"Impersonating {normalized} is not supported"
