@@ -691,11 +691,11 @@ class Curl:
         m = STATUS_LINE_RE.match(status_line)
         if not m:
             return CurlHttpVersion.V1_0, 0, b""
-        if m.group(1) == "2.0":
+        if m.group(1) == b"2.0":
             http_version = CurlHttpVersion.V2_0
-        elif m.group(1) == "1.1":
+        elif m.group(1) == b"1.1":
             http_version = CurlHttpVersion.V1_1
-        elif m.group(1) == "1.0":
+        elif m.group(1) == b"1.0":
             http_version = CurlHttpVersion.V1_0
         else:
             http_version = CurlHttpVersion.NONE
