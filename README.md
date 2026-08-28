@@ -57,6 +57,12 @@ No browser automation. Just simple API calls that return the exact cookies and h
 
 ------
 
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/cloro.png" height="55" width="149"></a>
+
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi">cloro</a>: SERP and AI search API for Google, ChatGPT, Perplexity, Gemini, Copilot and Grok
+
+------
+
 ## Impersonate Suite
 
 `curl-cffi` is part of the impersonate suite.
@@ -123,10 +129,6 @@ This should work on Linux, macOS and Windows out of the box.
 On macOS, you can also install via Homebrew:
 
     brew install lexiforest/tap/curl-cffi
-
-<small>Android support, including Termux, is currently in beta, you can install the beta release for testing.
-For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
-If you are using these OSes, please lend an hand.</small>
 
 To install beta releases:
 
