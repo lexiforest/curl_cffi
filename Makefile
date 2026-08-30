@@ -5,7 +5,7 @@ PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip
 
 # this is the upstream libcurl-impersonate version
-VERSION := 2.1.1
+VERSION := 2.2.0
 CURL_VERSION := curl-8_21_0
 
 ifeq ($(OS),Windows_NT)

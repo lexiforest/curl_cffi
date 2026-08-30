@@ -21,6 +21,16 @@ Install editable dependencies with `pip install -e .[test]` and `pip install -e 
 - `ruff format --exclude issues` formats Python files.
 - `make build` preprocesses and builds a wheel into `dist/`.
 
+### sibling projects
+
+This project has some dependencies and sibling projects.
+
+- ../curl-impersonate, the build script of libcurl-impersonate
+- ../curl-chrome, the patched curl source used in libcurl-impersonate
+- ../boringssl, the patched boringssl source used in libcurl-impersonate
+- ../ngtcp2, the patched ngtcp2 source used in libcurl-impersonate
+- ../nghttp3, the patched nghttp3 source used in libcurl-impersonate
+
 ## Coding Style & Naming Conventions
 
 Target Python 3.10+ and follow existing Python conventions: 4-space indentation, `snake_case` for functions/modules, `CapWords` for classes, and concise docstrings/comments only where they clarify non-obvious logic. Keep line length at 88 characters to match Ruff. Prefer small, focused changes in `curl_cffi/` and keep public API names consistent with the existing `requests`-style surface.

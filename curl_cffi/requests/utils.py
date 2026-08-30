@@ -485,6 +485,11 @@ def _apply_fingerprint(
     if fingerprint.tls_ech is not None:
         curl.setopt(CurlOpt.ECH, fingerprint.tls_ech)
 
+    if fingerprint.tls_trust_anchors is not None:
+        curl.setopt(
+            CurlOpt.TLS_TRUST_ANCHORS, ",".join(fingerprint.tls_trust_anchors)
+        )
+
     # http2 settings
     if fingerprint.http2_settings:
         curl.setopt(CurlOpt.HTTP2_SETTINGS, fingerprint.http2_settings)
