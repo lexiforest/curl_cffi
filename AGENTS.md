@@ -9,6 +9,8 @@ on cffi for interfacing between python and libcurl.
 
 `curl_cffi/cli` contains the CLI implementation.
 
+Never compromise on the fingerprints matching, it's the core value of this project.
+
 ## Build, Test, and Development Commands
 
 Use `uv` to manage venv and dependencies.
@@ -30,6 +32,8 @@ This project has some dependencies and sibling projects.
 - ../boringssl, the patched boringssl source used in libcurl-impersonate
 - ../ngtcp2, the patched ngtcp2 source used in libcurl-impersonate
 - ../nghttp3, the patched nghttp3 source used in libcurl-impersonate
+
+When dependencies are updated, run `make build && sudo make install` in ../curl-impersonate to update local binaries.
 
 ## Coding Style & Naming Conventions
 
