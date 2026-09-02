@@ -92,14 +92,40 @@ def get_obj_name(arch, link_type):
     return "libcurl-impersonate.dll"
 
 
-arch = detect_arch()
-link_type = get_link_type(arch)
-obj_name = get_obj_name(arch, link_type)
-libdir = Path(arch["libdir"])
-is_static = link_type == "static"
-is_dynamic = link_type == "dynamic"
-is_android = arch.get("libc") == "android"
-print(f"Using {libdir} to store libcurl-impersonate")
+is_system = os.environ.get("CURL_IMPERSONATE_SYSTEM") == "1"
+if is_system:
+    import subprocess
+    try:
+        inc_dirs = [
+            p[2:] for p in subprocess.check_output(
+                ["pkg-config", "--cflags-only-I", "libcurl-impersonate"], text=True
+            ).split() if p.startswith("-I")
+        ]
+        libs = [
+            p[2:] for p in subprocess.check_output(
+                ["pkg-config", "--libs-only-l", "libcurl-impersonate"], text=True
+            ).split() if p.startswith("-l")
+        ]
+    except Exception:
+        inc_dirs = ["/usr/include/curl-impersonate"]
+        libs = ["curl-impersonate"]
+
+    arch = {"system": "Linux"}
+    is_static = False
+    is_dynamic = True
+    is_android = False
+    libdir = Path("")
+else:
+    inc_dirs = []
+    libs = []
+    arch = detect_arch()
+    link_type = get_link_type(arch)
+    obj_name = get_obj_name(arch, link_type)
+    libdir = Path(arch["libdir"])
+    is_static = link_type == "static"
+    is_dynamic = link_type == "dynamic"
+    is_android = arch.get("libc") == "android"
+    print(f"Using {libdir} to store libcurl-impersonate")
 
 
 def download_libcurl():
@@ -182,7 +208,8 @@ def get_curl_libraries():
 ffibuilder = FFI()
 system = platform.system()
 root_dir = Path(__file__).parent.parent
-download_libcurl()
+if not is_system:
+    download_libcurl()
 
 # With mega archive, we only have one to link
 static_libs = get_curl_archives()
@@ -214,25 +241,24 @@ ffibuilder.set_source(
     """
         #include "shim.h"
     """,
-    library_dirs=[str(libdir)],
-    runtime_library_dirs=(
+    library_dirs=[] if is_system else [str(libdir)],
+    runtime_library_dirs=[] if is_system else (
         [str(libdir)] if is_dynamic and arch["system"] != "Windows" else []
     ),
-    libraries=get_curl_libraries(),
+    libraries=libs if is_system else get_curl_libraries(),
     extra_objects=[],  # linked via extra_link_args
     source_extension=".c",
     include_dirs=[
         str(root_dir / "include"),
         str(root_dir / "ffi"),
-        str(libdir / "include"),
-    ],
+    ] + (inc_dirs if is_system else [str(libdir / "include")]),
     sources=[
         str(root_dir / "ffi/shim.c"),
     ],
     extra_compile_args=(
         ["-Wno-implicit-function-declaration"] if system == "Darwin" else []
     ),
-    extra_link_args=extra_link_args,
+    extra_link_args=[] if is_system else extra_link_args,
 )
 
 with open(root_dir / "ffi/cdef.c") as f:
