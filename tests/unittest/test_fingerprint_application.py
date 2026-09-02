@@ -27,6 +27,32 @@ def test_apply_fingerprint_does_not_select_http_version():
     assert CurlOpt.HTTP_VERSION not in curl.options
 
 
+def test_apply_fingerprint_enables_alpn_by_default():
+    curl = FakeCurl()
+
+    _apply_fingerprint(
+        curl,
+        Fingerprint(),
+        existing_header_names=set(),
+        default_headers=False,
+    )
+
+    assert curl.options[CurlOpt.SSL_ENABLE_ALPN] == 1
+
+
+def test_apply_fingerprint_can_disable_alpn():
+    curl = FakeCurl()
+
+    _apply_fingerprint(
+        curl,
+        Fingerprint(tls_alpn=False),
+        existing_header_names=set(),
+        default_headers=False,
+    )
+
+    assert curl.options[CurlOpt.SSL_ENABLE_ALPN] == 0
+
+
 def test_apply_fingerprint_strips_padding_extension_from_tls_extension_order():
     curl = FakeCurl()
     fingerprint = Fingerprint(tls_extension_order="0-21-11")
