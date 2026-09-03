@@ -141,10 +141,12 @@ def run_benchmark() -> None:
 def main() -> None:
     """Entrypoint"""
     stop_event: Event = Event()
-    health_check_thread: Thread = Thread(
-        target=health_check, args=(stop_event,), daemon=True
-    )
-    health_check_thread.start()
+    health_check_thread: Thread | None = None
+    if config.health_check:
+        health_check_thread = Thread(
+            target=health_check, args=(stop_event,), daemon=True
+        )
+        health_check_thread.start()
 
     try:
         run_benchmark()
@@ -152,7 +154,8 @@ def main() -> None:
         logger.debug("Cancelling benchmark")
     finally:
         stop_event.set()
-        health_check_thread.join()
+        if health_check_thread is not None:
+            health_check_thread.join()
 
 
 if __name__ == "__main__":

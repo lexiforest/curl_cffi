@@ -3,11 +3,11 @@
 Cross-platform utility code for the WebSocket benchmarks.
 """
 
-import asyncio
 import hashlib
 import mmap
 import os
 import time
+from asyncio import AbstractEventLoop, new_event_loop, set_event_loop
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -102,6 +102,7 @@ class TestConfig:
     proto: str = "wss://" if ssl_ctx else "ws://"
     srv_path: str = f"{proto}{srv_host}:{srv_port}/ws"
     benchmark_direction: BenchmarkDirection = BenchmarkDirection.READ_ONLY
+    health_check: bool = False
 
 
 # Initialize config object
@@ -165,22 +166,22 @@ def binary_data_generator_sync(
         bytes_sent += current_chunk_size
 
 
-def get_loop() -> asyncio.AbstractEventLoop:
+def get_loop() -> AbstractEventLoop:
     """Returns the correct event loop for the platform and what's installed.
 
     Returns:
-        asyncio.AbstractEventLoop: The created and installed event loop.
+        AbstractEventLoop: The created and installed event loop.
     """
 
     try:
         # pylint: disable-next=import-outside-toplevel
         import uvloop
 
-        loop: asyncio.AbstractEventLoop = uvloop.new_event_loop()
+        loop: AbstractEventLoop = uvloop.new_event_loop()
     except ImportError:
-        loop = asyncio.new_event_loop()
+        loop = new_event_loop()
 
-    asyncio.set_event_loop(loop)
+    set_event_loop(loop)
     return loop
 
 
@@ -316,7 +317,7 @@ async def stream_test_data() -> AsyncGenerator[bytes]:
 
     elapsed_time: float = end_time - start_time
     if elapsed_time > 0:
-        disk_speed = (file_size / (1024 * 1024)) / elapsed_time
+        disk_speed: float = (file_size / (1024 * 1024)) / elapsed_time
         logger.info(
             "Streaming '%s' completed in %.2fs. Speed: %.2f MiB/s",
             config.data_filename,

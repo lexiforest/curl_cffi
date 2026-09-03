@@ -150,7 +150,9 @@ async def run_benchmark() -> None:
 async def main() -> None:
     """Entrypoint"""
     loop: AbstractEventLoop = get_running_loop()
-    health_check_task: Task[Never] = loop.create_task(health_check())
+    health_check_task: Task[Never] | None = (
+        loop.create_task(health_check()) if config.health_check else None
+    )
     try:
         await run_benchmark()
 
@@ -158,11 +160,12 @@ async def main() -> None:
         logger.debug("Cancelling benchmark")
 
     finally:
-        try:
-            _ = health_check_task.cancel()
-            await health_check_task
-        except CancelledError:
-            ...
+        if health_check_task is not None:
+            try:
+                _ = health_check_task.cancel()
+                await health_check_task
+            except CancelledError:
+                ...
 
 
 if __name__ == "__main__":

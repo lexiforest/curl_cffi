@@ -66,12 +66,12 @@ Setup
 
 2. Configuration
 
-    The benchmark parameters (total data size, chunk size) can be modified by editing the [`TestConfig`](ws_bench_utils.py#L76) class. By default, both benchmarks are configured for `10 GiB` of data transfer.
+    The benchmark parameters (total data size, chunk size) can be modified by editing the [`TestConfig`](ws_bench_utils.py#L80) class. By default, both benchmarks are configured for `10 GiB` of data transfer.
 
 WebSocket Benchmarks
 ------
 
-It is recommended to run the server and client in different terminal windows.
+It is recommended to run the server and client in separate terminal windows.
 
 Benchmark 1: Simple Throughput Test
 ------
@@ -91,6 +91,8 @@ Benchmark 1: Simple Throughput Test
     # Sync
     python ws_bench_1_client_sync.py
     ```
+
+> The client can print a constant stream of dots to stderr to debug starvation. Printing to the console isn't a constant cost and invalidates the performance results. To enable it, set the boolean in [`TestConfig`](ws_bench_utils.py#L105) to `True` and re-run.
 
 Benchmark 2: Verified Streaming Test
 ------
@@ -167,6 +169,6 @@ Benchmark results can vary significantly based on system-level factors. The foll
     start /affinity 2 python ws_bench_1_client.py
     ```
 
-- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) / [`ws_bench_1_client_sync.py`](ws_bench_1_client_sync.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L100) enum. A concurrent test completes when both directions finish.
+- **Concurrent Tests**: The [`ws_bench_1_client.py`](ws_bench_1_client.py) / [`ws_bench_1_client_sync.py`](ws_bench_1_client_sync.py) benchmark mode can be changed to download/upload/concurrent by changing the [`BenchmarkDirection`](ws_bench_utils.py#L104) enum. A concurrent test completes when both directions finish.
 
-- **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L90) and [`recv_queue`](ws_bench_utils.py#L89) sizes within the [`TestConfig`](ws_bench_utils.py#L76) class to observe the impact on performance and backpressure for the async implementation.
+- **Queue Sizes**: Adjust the [`send_queue`](ws_bench_utils.py#L94) and [`recv_queue`](ws_bench_utils.py#L93) sizes within the [`TestConfig`](ws_bench_utils.py#L80) dataclass to observe the impact on performance and backpressure for the async implementation.
