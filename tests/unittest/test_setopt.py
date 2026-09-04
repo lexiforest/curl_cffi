@@ -259,3 +259,40 @@ def test_interface_name_and_prefixed_values_pass_through(interface):
     curl = _set_interface(interface)
 
     assert curl.options[CurlOpt.INTERFACE] == interface.encode()
+
+
+def _header_lines(headers=None, **kwargs):
+    curl = FakeCurl()
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, headers],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        **kwargs,
+    )
+    return [line.decode() for line in curl.options[CurlOpt.HTTPHEADER]]
+
+
+@pytest.mark.parametrize(
+    "http_version", ["v1", CurlHttpVersion.V1_0, CurlHttpVersion.V1_1]
+)
+def test_priority_header_is_dropped_on_http1(http_version):
+    assert "Priority: " in _header_lines(http_version=http_version)
+
+
+@pytest.mark.parametrize(
+    "http_version", [None, "v2", "v3", CurlHttpVersion.V2_0, CurlHttpVersion.V3]
+)
+def test_priority_header_is_kept_on_http2_and_http3(http_version):
+    assert "Priority: " not in _header_lines(http_version=http_version)
+
+
+def test_explicit_priority_header_is_kept_on_http1():
+    lines = _header_lines(headers={"priority": "u=4"}, http_version="v1")
+
+    assert "priority: u=4" in lines
+    assert "Priority: " not in lines
