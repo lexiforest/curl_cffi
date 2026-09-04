@@ -14,12 +14,14 @@ from collections.abc import (
     AsyncIterable,
     Callable,
     Generator,
+    Iterable,
 )
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
+from inspect import isawaitable
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -121,6 +123,7 @@ if TYPE_CHECKING:
         discard_cookies: bool
         raise_for_status: bool
         cache: Optional[CacheSpec]
+        hooks: Optional[HookType]
 
     class StreamRequestParams(TypedDict, total=False):
         params: Optional[Union[dict, list, tuple]]
@@ -156,6 +159,7 @@ if TYPE_CHECKING:
         max_recv_speed: int
         multipart: Optional[CurlMime]
         discard_cookies: bool
+        hooks: Optional[HookType]
 
     class RequestParams(StreamRequestParams, total=False):
         stream: Optional[bool]
@@ -177,6 +181,55 @@ ThreadType = Literal["eventlet", "gevent"]
 HttpMethod = Literal[
     "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"
 ]
+HookType = dict[str, Union[Callable[..., Any], Iterable[Callable[..., Any]]]]
+
+
+def _get_response_hooks(hooks: Optional[HookType]) -> list[Callable[..., Any]]:
+    if hooks is None:
+        return []
+
+    response_hooks: list[Callable[..., Any]] = []
+    for event, callbacks in hooks.items():
+        if event != "response":
+            raise ValueError(f"Only the 'response' hook is supported, got {event!r}")
+        if callable(callbacks):
+            response_hooks.append(callbacks)
+        elif callbacks is not None:
+            response_hooks.extend(
+                callback for callback in callbacks if callable(callback)
+            )
+    return response_hooks
+
+
+def _invoke_response_hooks(
+    hooks: Iterable[Callable[..., Any]],
+    response: Response,
+    **kwargs: Any,
+) -> Response:
+    for callback in hooks:
+        updated_response = callback(response, **kwargs)
+        if isawaitable(updated_response):
+            close = getattr(updated_response, "close", None)
+            if close is not None:
+                close()
+            raise TypeError("Async response hooks require AsyncSession")
+        if updated_response is not None:
+            response = cast(Response, updated_response)
+    return response
+
+
+async def _invoke_response_hooks_async(
+    hooks: Iterable[Callable[..., Any]],
+    response: Response,
+    **kwargs: Any,
+) -> Response:
+    for callback in hooks:
+        updated_response = callback(response, **kwargs)
+        if isawaitable(updated_response):
+            updated_response = await updated_response
+        if updated_response is not None:
+            response = cast(Response, updated_response)
+    return response
 
 
 def _is_absolute_url(url: str) -> bool:
@@ -254,6 +307,7 @@ class BaseSession(Generic[R]):
         discard_cookies: bool = False,
         raise_for_status: bool = False,
         cache: Optional[CacheSpec] = None,
+        hooks: Optional[HookType] = None,
     ):
         self.headers = Headers(headers)
         self._cookies = Cookies(cookies)  # guarded by @property
@@ -281,6 +335,7 @@ class BaseSession(Generic[R]):
         self.doh_url = doh_url
         self.cert = cert
         self._cache = normalize_cache_backend(cache)
+        self.hooks = {"response": _get_response_hooks(hooks)}
 
         if response_class is not None and issubclass(response_class, Response) is False:
             raise TypeError(
@@ -534,6 +589,7 @@ class Session(BaseSession[R]):
             response_class: A customized subtype of ``Response`` to use.
             raise_for_status: automatically raise an HTTPError for 4xx and 5xx
                 status codes.
+            hooks: event hooks. Only the ``response`` event is supported.
 
         Notes:
             This class can be used as a context manager.
@@ -765,8 +821,6 @@ class Session(BaseSession[R]):
             if cached_response is not None:
                 if not (discard_cookies or self.discard_cookies):
                     self._cookies.update(cached_response.cookies)
-                if self.raise_for_status:
-                    cached_response.raise_for_status()
                 c.reset()
                 return cast(R, cached_response)
 
@@ -808,8 +862,6 @@ class Session(BaseSession[R]):
             rsp.stream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
-            if self.raise_for_status:
-                rsp.raise_for_status()
             return rsp
         else:
             try:
@@ -841,8 +893,6 @@ class Session(BaseSession[R]):
                     req, stream=stream, content_callback=content_callback
                 ):
                     self._cache.set(req, rsp)  # type: ignore[union-attr]
-                if self.raise_for_status:
-                    rsp.raise_for_status()
                 return rsp
             finally:
                 c.reset()
@@ -885,6 +935,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        hooks: Optional[HookType] = None,
     ) -> R:
         """Send the request, see ``requests.request`` for details on parameters."""
 
@@ -892,12 +943,22 @@ class Session(BaseSession[R]):
 
         body = content if content is not None else data
         body_position = _capture_body_position(data, content)
+        request_hooks = _get_response_hooks(hooks)
+        if not request_hooks:
+            request_hooks = _get_response_hooks(self.hooks)
+        hook_kwargs = {
+            "stream": bool(stream),
+            "timeout": self.timeout if timeout is NOT_SET else timeout,
+            "verify": self.verify if verify is None else verify,
+            "cert": cert or self.cert,
+            "proxies": proxies or self.proxies,
+        }
         strategy = self.retry
         for attempt in range(strategy.count + 1):
             if attempt > 0:
                 _rewind_body(body, body_position)
             try:
-                return self._request_once(
+                rsp = self._request_once(
                     method=method,
                     url=url,
                     params=params,
@@ -941,6 +1002,19 @@ class Session(BaseSession[R]):
                 delay = self._retry_delay(attempt + 1)
                 if delay:
                     time.sleep(delay)
+            else:
+                rsp = cast(R, _invoke_response_hooks(request_hooks, rsp, **hook_kwargs))
+                if self.raise_for_status:
+                    try:
+                        rsp.raise_for_status()
+                    except RequestException:
+                        if attempt == strategy.count:
+                            raise
+                        delay = self._retry_delay(attempt + 1)
+                        if delay:
+                            time.sleep(delay)
+                        continue
+                return rsp
 
     def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="HEAD", url=url, **kwargs)
@@ -1023,6 +1097,8 @@ class AsyncSession(BaseSession[R]):
             response_class: A customized subtype of ``Response`` to use.
             raise_for_status: automatically raise an HTTPError for 4xx and 5xx
                 status codes.
+            hooks: event hooks. Only the ``response`` event is supported. Async
+                response hooks are awaited.
 
         Notes:
             This class can be used as a context manager, and it's recommended to use via
@@ -1503,8 +1579,6 @@ class AsyncSession(BaseSession[R]):
             rsp.astream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
-            if self.raise_for_status:
-                rsp.raise_for_status()
             return rsp
         else:
             try:
@@ -1522,8 +1596,6 @@ class AsyncSession(BaseSession[R]):
                     curl, buffer, header_buffer, default_encoding, discard_cookies
                 )
                 rsp.request = req
-                if self.raise_for_status:
-                    rsp.raise_for_status()
                 return rsp
             finally:
                 if async_reader is not None:
@@ -1570,6 +1642,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        hooks: Optional[HookType] = None,
     ) -> R:
         """Send the request, see ``curl_cffi.requests.request`` for details on args."""
 
@@ -1577,12 +1650,22 @@ class AsyncSession(BaseSession[R]):
 
         body = content if content is not None else data
         body_position = _capture_body_position(data, content)
+        request_hooks = _get_response_hooks(hooks)
+        if not request_hooks:
+            request_hooks = _get_response_hooks(self.hooks)
+        hook_kwargs = {
+            "stream": bool(stream),
+            "timeout": self.timeout if timeout is NOT_SET else timeout,
+            "verify": self.verify if verify is None else verify,
+            "cert": cert or self.cert,
+            "proxies": proxies or self.proxies,
+        }
         strategy = self.retry
         for attempt in range(strategy.count + 1):
             if attempt:
                 _rewind_body(body, body_position)
             try:
-                return await self._request_once(
+                rsp = await self._request_once(
                     method=method,
                     url=url,
                     params=params,
@@ -1626,6 +1709,24 @@ class AsyncSession(BaseSession[R]):
                 delay = self._retry_delay(attempt + 1)
                 if delay:
                     await asyncio.sleep(delay)
+            else:
+                rsp = cast(
+                    R,
+                    await _invoke_response_hooks_async(
+                        request_hooks, rsp, **hook_kwargs
+                    ),
+                )
+                if self.raise_for_status:
+                    try:
+                        rsp.raise_for_status()
+                    except RequestException:
+                        if attempt == strategy.count:
+                            raise
+                        delay = self._retry_delay(attempt + 1)
+                        if delay:
+                            await asyncio.sleep(delay)
+                        continue
+                return rsp
 
     async def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return await self.request(method="HEAD", url=url, **kwargs)
