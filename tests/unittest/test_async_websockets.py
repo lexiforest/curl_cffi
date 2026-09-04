@@ -33,7 +33,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from struct import unpack
-from typing import Protocol
+from typing import Final, Protocol
 from unittest.mock import Mock
 
 import pytest
@@ -85,7 +85,6 @@ class ServerConfig:
     response_size: int = 1024
     close_code: int = WsCloseCode.OK
     close_reason: str = ""
-    max_size: int = 32 * 1024 * 1024
 
 
 class WebSocketHandler(Protocol):
@@ -218,6 +217,30 @@ HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.SEND_PINGS: send_pings_handler,
 }
 
+_MAX_FRAME: Final[int] = 65536
+DEFAULT_SERVER_MAX_SIZE: Final[int] = 32 * 1024 * 1024
+
+
+def _pattern(size: int) -> bytes:
+    """Deterministic non-uniform payload for fragmentation tests.
+
+    ``assert data == payload`` over a uniform payload such as ``b"X" * n``
+    cannot detect reordering, duplication, or a dropped-then-refilled span,
+    because every permutation of identical bytes compares equal. 251 is prime
+    and therefore coprime with both the 65536 byte frame size and the 4 byte
+    XOR mask, so any misalignment shows up as an inequality.
+    """
+    return (bytes(range(251)) * (size // 251 + 1))[:size]
+
+
+def _text_pattern(size: int) -> str:
+    """UTF-8 safe counterpart to ``_pattern`` for text frame tests.
+
+    Period 95 (printable ASCII) is coprime with 65536 and with 4.
+    """
+    block: str = "".join(chr(32 + i) for i in range(95))
+    return (block * (size // 95 + 1))[:size]
+
 
 @dataclass
 class ConfigurableWSServer:
@@ -234,13 +257,24 @@ class ConfigurableWSServer:
         self.set_config(ServerConfig(**kwargs))
 
 
-def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
-    """
-    Start a configurable WebSocket server on 127.0.0.1:port.
-    Returns a ConfigurableWSServer instance.
+def start_configurable_ws_server(
+    port: int = 0, max_size: int = DEFAULT_SERVER_MAX_SIZE
+) -> ConfigurableWSServer:
+    """Start a configurable WebSocket server on 127.0.0.1.
+
+    Args:
+        port: TCP port, or 0 to let the OS pick a free one. Fixtures should
+            always pass 0: a hard-coded port collides under pytest-xdist and
+            fails the whole module when a crashed run leaves the socket bound.
+        max_size: Maximum inbound message size. Fixed for the life of the
+            server, because ``websockets.serve`` binds it at construction.
+
+    Returns:
+        ConfigurableWSServer: Handle carrying the actually-bound port.
     """
     ready: threading.Event = threading.Event()
     stop_q: queue.Queue[Callable[[], None]] = queue.Queue()
+    port_q: queue.Queue[int] = queue.Queue()
     config_holder: list[ServerConfig] = [ServerConfig()]
 
     def set_config(cfg: ServerConfig) -> None:
@@ -262,10 +296,10 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
             await handler_fn(ws, cfg)
 
         async def _run() -> None:
-            initial_max_size: int = config_holder[0].max_size
             async with websockets.serve(
-                handler, "127.0.0.1", port, max_size=initial_max_size
-            ):
+                handler, "127.0.0.1", port, max_size=max_size
+            ) as server:
+                port_q.put(int(server.sockets[0].getsockname()[1]))
                 stop_q.put(_stop)
                 ready.set()
                 _ = await stop_event.wait()
@@ -279,12 +313,13 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
     t: threading.Thread = threading.Thread(target=_thread_target, daemon=True)
     t.start()
 
+    bound_port: int = port_q.get()
     stop: Callable[[], None] = stop_q.get()
     _ = ready.wait()
 
     return ConfigurableWSServer(
-        url=f"ws://127.0.0.1:{port}",
-        port=port,
+        url=f"ws://127.0.0.1:{bound_port}",
+        port=bound_port,
         stop=stop,
         set_config=set_config,
         _thread=t,
@@ -298,8 +333,25 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
 
 @pytest.fixture(scope="module")
 def configurable_ws_server() -> Generator[ConfigurableWSServer, object, None]:
-    """Module-scoped configurable WebSocket server."""
-    server: ConfigurableWSServer = start_configurable_ws_server(port=8965)
+    """Module-scoped configurable WebSocket server on an OS-assigned port."""
+    server: ConfigurableWSServer = start_configurable_ws_server()
+    try:
+        yield server
+    finally:
+        server.stop()
+        server._thread.join(timeout=5)
+
+
+@pytest.fixture
+def small_max_size_ws_server() -> Generator[ConfigurableWSServer, object, None]:
+    """Function-scoped server with a small inbound message limit.
+
+    Separate from the module-scoped server because ``websockets.serve`` binds
+    ``max_size`` at construction and it cannot be reconfigured per test.
+    """
+    server: ConfigurableWSServer = start_configurable_ws_server(
+        max_size=1024 * 1024,
+    )
     try:
         yield server
     finally:
@@ -601,35 +653,35 @@ class TestAsyncWebSocketLargeMessages:
         self, ws_connection: AsyncWebSocket, size: int
     ) -> None:
         """Test sending and receiving large messages."""
-        payload: bytes = b"X" * size
+        payload: bytes = _pattern(size)
         await ws_connection.send(payload)
-        data, _ = await ws_connection.recv()
+        data, _ = await ws_connection.recv(timeout=10.0)
         assert len(data) == size
         assert data == payload
 
     async def test_large_text_message(self, ws_connection: AsyncWebSocket) -> None:
         """Test large text message."""
-        payload: str = "A" * 100_000
+        payload: str = _text_pattern(100_000)
         await ws_connection.send_str(payload)
-        response: str = await ws_connection.recv_str()
+        response: str = await ws_connection.recv_str(timeout=10.0)
         assert response == payload
 
     async def test_message_at_curl_frame_boundary(
         self, ws_connection: AsyncWebSocket
     ) -> None:
         """Test message exactly at libcurl's 65536 byte frame boundary."""
-        payload: bytes = b"B" * 65536
+        payload: bytes = _pattern(_MAX_FRAME)
         await ws_connection.send(payload)
-        data, _ = await ws_connection.recv()
+        data, _ = await ws_connection.recv(timeout=10.0)
         assert data == payload
 
     async def test_message_just_over_frame_boundary(
         self, ws_connection: AsyncWebSocket
     ) -> None:
         """Test message just over the frame boundary (requires fragmentation)."""
-        payload: bytes = b"C" * (65536 + 1)
+        payload: bytes = _pattern(_MAX_FRAME + 1)
         await ws_connection.send(payload)
-        data, _ = await ws_connection.recv()
+        data, _ = await ws_connection.recv(timeout=10.0)
         assert data == payload
 
 
@@ -707,24 +759,16 @@ class TestAsyncWebSocketConcurrency:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
+        """Concurrent recv() calls when there are MORE callers than queue size.
+
+        Regression test for the deadlock where only one sentinel could wake the
+        first waiter. Every waiter must get a message, and asyncio.Queue is FIFO
+        for both items and getters, so they must arrive in send order.
         """
-        Test concurrent recv() calls when there are MORE callers than queue size.
+        queue_size: int = 3
+        num_consumers: int = 10
 
-        This tests the fix for the deadlock bug where having more consumers
-        (e.g., 10 concurrent calls to recv) than queue size (e.g., 5) could
-        cause a deadlock because only one sentinel could wake up the first waiter.
-
-        The expected behavior is:
-        - All waiters eventually get a message or error
-        - No deadlock occurs
-        - Messages are delivered in FIFO order
-        """
-        # Use small queue size with more consumers
-        queue_size = 3
-        num_consumers = 10
-        num_messages = 10
-
-        messages: list[str] = [f"msg_{i}" for i in range(num_messages)]
+        messages: list[str] = [f"msg_{i}" for i in range(num_consumers)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
         async with session.ws_connect(
@@ -735,38 +779,36 @@ class TestAsyncWebSocketConcurrency:
             # Give server time to start sending
             await asyncio.sleep(0.05)
 
-            # Create MORE concurrent recv tasks than the queue size
             tasks: list[Task[tuple[bytes, int]]] = [
                 asyncio.create_task(ws.recv(timeout=5.0)) for _ in range(num_consumers)
             ]
 
-            # Wait for all with a reasonable timeout
-            done, pending = await asyncio.wait(
+            _done, pending = await asyncio.wait(
                 tasks, timeout=10.0, return_when=asyncio.ALL_COMPLETED
             )
-
-            # Cancel any pending tasks
             for task in pending:
                 _ = task.cancel()
 
-            # All tasks should complete (no deadlock)
+            assert not pending, f"Deadlock detected: {len(pending)} tasks still pending"
+
+            # Read results in TASK creation order. asyncio.wait returns sets,
+            # so iterating `done` would destroy the ordering being asserted.
+            received: list[str] = []
+            failures: list[str] = []
+            for index, task in enumerate(tasks):
+                exc: BaseException | None = task.exception()
+                if exc is not None:
+                    failures.append(f"consumer {index}: {exc!r}")
+                    continue
+                data, _flags = task.result()
+                received.append(data.decode())
+
+            assert not failures, "every waiter must receive a message, got: " + repr(
+                failures
+            )
             assert (
-                len(pending) == 0
-            ), f"Deadlock detected: {len(pending)} tasks still pending"
-            assert len(done) == num_consumers
-
-            # Collect results - some may be messages or errors if connection closed
-            results: list[tuple[bytes, int]] = []
-            errors: list[WebSocketTimeout | WebSocketClosed | WebSocketError] = []
-            for task in done:
-                try:
-                    result: tuple[bytes, int] = task.result()
-                    results.append(result)
-                except (WebSocketClosed, WebSocketTimeout, WebSocketError) as e:
-                    errors.append(e)
-
-            # We should have received some messages
-            assert len(results) > 0, "Expected at least some successful receives"
+                received == messages
+            ), "messages must be delivered FIFO, got: " + repr(received)
 
     async def test_recv_callers_exceed_queue_with_slow_producer(
         self,
@@ -774,14 +816,13 @@ class TestAsyncWebSocketConcurrency:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
-        """
-        Test many recv() callers waiting when messages arrive slowly.
+        """Many recv() callers waiting when messages arrive slowly.
 
-        This verifies that multiple waiters properly wake up one-by-one
-        as messages become available, without deadlock.
+        Verifies that waiters wake one-by-one in the order they began waiting,
+        which is what the queue's getter FIFO guarantees.
         """
-        queue_size = 2
-        num_consumers = 5
+        queue_size: int = 2
+        num_consumers: int = 5
 
         # Use echo - we control the message rate
         ws_config(behavior=ServerBehavior.ECHO)
@@ -792,16 +833,19 @@ class TestAsyncWebSocketConcurrency:
         ) as ws:
             received: list[str] = []
             receive_order: list[int] = []
-            lock: asyncio.Lock = asyncio.Lock()
+            errors: list[str] = []
 
             async def consumer(consumer_id: int) -> None:
                 try:
-                    data, _ = await ws.recv(timeout=5.0)
-                    async with lock:
-                        received.append(data.decode())
-                        receive_order.append(consumer_id)
-                except (WebSocketTimeout, WebSocketClosed):
-                    pass
+                    data, _flags = await ws.recv(timeout=5.0)
+                except (WebSocketTimeout, WebSocketClosed) as exc:
+                    errors.append(f"consumer {consumer_id}: {exc!r}")
+                    return
+                # No lock here on purpose: appending immediately after recv()
+                # keeps the recorded order identical to the wake order. An
+                # intervening `async with lock` would add a scheduling point.
+                received.append(data.decode())
+                receive_order.append(consumer_id)
 
             # Start consumers BEFORE any messages are sent
             consumer_tasks: list[Task[None]] = [
@@ -816,14 +860,17 @@ class TestAsyncWebSocketConcurrency:
                 await ws.send_str(f"slow_msg_{i}")
                 await asyncio.sleep(0.05)  # Let one consumer wake up
 
-            # Wait for all consumers
             _ = await asyncio.wait(consumer_tasks, timeout=10.0)
 
-            # All consumers should have received exactly one message
-            assert len(received) == num_consumers
-            # Messages should be the ones we sent
-            expected: set[str] = {f"slow_msg_{i}" for i in range(num_consumers)}
-            assert set[str](received) == expected
+            assert not errors, "every consumer must receive a message, got: " + repr(
+                errors
+            )
+            assert receive_order == list[int](
+                range(num_consumers)
+            ), "waiters must wake in the order they started waiting, got: " + repr(
+                receive_order
+            )
+            assert received == [f"slow_msg_{i}" for i in range(num_consumers)]
 
     async def test_concurrent_recv_with_connection_close(
         self,
@@ -831,16 +878,14 @@ class TestAsyncWebSocketConcurrency:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
-        """
-        Test that all waiting recv() calls properly terminate when connection closes.
+        """All waiting recv() calls must terminate when the connection closes.
 
-        When the connection closes, ALL waiting recv() calls should:
-        - Either receive the close frame
-        - Or raise WebSocketClosed
-        - NOT hang indefinitely
+        Every waiter must end as a message, a close frame, or WebSocketClosed.
+        Nothing may hang, time out, or fail in any other way -- the previous
+        `except Exception: pass` let arbitrary breakage pass as green.
         """
-        queue_size = 2
-        num_consumers = 8
+        queue_size: int = 2
+        num_consumers: int = 8
 
         # Server closes after 1 message
         ws_config(
@@ -853,7 +898,6 @@ class TestAsyncWebSocketConcurrency:
             configurable_ws_server.url,
             recv_queue_size=queue_size,
         ) as ws:
-            # Start many recv waiters
             tasks: list[Task[tuple[bytes, int]]] = [
                 asyncio.create_task(ws.recv(timeout=5.0)) for _ in range(num_consumers)
             ]
@@ -861,42 +905,37 @@ class TestAsyncWebSocketConcurrency:
             # Trigger the server to send one message then close
             await ws.send(b"trigger")
 
-            # All tasks should complete - not hang
-            done, pending = await asyncio.wait(tasks, timeout=10.0)
-
-            # Cancel stragglers
+            _done, pending = await asyncio.wait(tasks, timeout=10.0)
             for t in pending:
                 _ = t.cancel()
 
-            # No deadlock - all should complete
-            assert len(pending) == 0, "Some recv() calls hung after connection close"
+            assert not pending, "Some recv() calls hung after connection close"
 
-            # Count outcomes
-            messages = 0
-            close_frames = 0
-            closed_errors = 0
-            timeout_errors = 0
+            messages: int = 0
+            close_frames: int = 0
+            closed_errors: int = 0
+            unexpected: list[str] = []
 
-            for task in done:
-                try:
+            for index, task in enumerate[Task[tuple[bytes, int]]](tasks):
+                exc: BaseException | None = task.exception()
+                if exc is None:
                     _data, flags = task.result()
                     if flags & CurlWsFlag.CLOSE:
                         close_frames += 1
                     else:
                         messages += 1
-                except WebSocketClosed:
+                elif isinstance(exc, WebSocketClosed):
                     closed_errors += 1
-                except WebSocketTimeout:
-                    timeout_errors += 1
-                except Exception:
-                    pass  # Other errors acceptable
+                else:
+                    unexpected.append(f"consumer {index}: {exc!r}")
 
-            # Should have at least 1 message (the echo) and the rest should be
-            # close frames or closed errors
+            assert not unexpected, (
+                "every waiter must end as a message, a close frame or "
+                + "WebSocketClosed, got: "
+                + repr(unexpected)
+            )
             assert messages >= 1, "Expected at least the echo message"
-            assert (
-                timeout_errors == 0
-            ), "No recv() should timeout - connection should close cleanly"
+            assert messages + close_frames + closed_errors == num_consumers
 
 
 class TestAsyncWebSocketCancellation:
@@ -941,10 +980,21 @@ class TestAsyncWebSocketClose:
         session: AsyncSession[Response],
         configurable_ws_server: ConfigurableWSServer,
     ) -> None:
-        """Test terminate() immediately kills connection."""
+        """Test terminate() immediately kills the connection.
+
+        Asserts the public contract rather than the private ``_terminated``
+        flag. `assert ws.closed or ws._terminated` passed for any terminate()
+        that set the flag, even one that leaked the socket and left the
+        background tasks running.
+        """
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         ws.terminate()
-        assert ws.closed or ws._terminated
+
+        with pytest.raises((WebSocketClosed, WebSocketError)):
+            _ = await ws.recv(timeout=2.0)
+
+        assert ws.closed
+        assert not ws.is_alive()
 
     async def test_recv_after_close_raises(
         self,
@@ -1011,14 +1061,12 @@ class TestAsyncWebSocketIterator:
 
         async with session.ws_connect(configurable_ws_server.url) as ws:
             received: list[bytes] = []
-            count = 0
             async for msg in ws:
                 received.append(msg)
-                count += 1
-                if count >= 3:
+                if len(received) >= len(messages):
                     break
 
-            assert len(received) == 3
+            assert received == messages
 
     async def test_aiter_on_closed_raises(
         self,
@@ -1064,8 +1112,14 @@ class TestAsyncWebSocketQueueBehavior:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
-        """Test recv queue respects size limit."""
-        messages: list[str] = [f"msg_{i}" for i in range(10)]
+        """Test recv queue respects size limit without losing messages.
+
+        A queue smaller than the number of in-flight messages must apply
+        backpressure, not drop: with block_on_recv_queue_full=True every
+        broadcast message must still arrive, in order.
+        """
+        num_messages: int = 10
+        messages: list[str] = [f"msg_{i}" for i in range(num_messages)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
         async with session.ws_connect(
@@ -1073,16 +1127,14 @@ class TestAsyncWebSocketQueueBehavior:
             recv_queue_size=5,
             block_on_recv_queue_full=True,
         ) as ws:
-            # Give time for messages to arrive
+            # Give time for the reader to fill the queue and block on it.
             await asyncio.sleep(0.2)
-            # Should be able to receive all eventually
+
             received: list[str] = []
-            for _ in range(10):
-                try:
-                    msg: str = await ws.recv_str(timeout=1.0)
-                    received.append(msg)
-                except WebSocketTimeout:
-                    break
+            for _ in range(num_messages):
+                received.append(await ws.recv_str(timeout=5.0))
+
+            assert received == messages
 
     async def test_drain_on_error_false(
         self,
@@ -1090,7 +1142,12 @@ class TestAsyncWebSocketQueueBehavior:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
-        """Test drain_on_error=False raises immediately on transport error."""
+        """Test drain_on_error=False surfaces the close/error promptly.
+
+        The server closes immediately, so the first recv() must either hand
+        back the close frame or raise. What it must NOT do is time out, which
+        is the one outcome the previous version also accepted.
+        """
         ws_config(behavior=ServerBehavior.CLOSE_IMMEDIATELY)
 
         async with session.ws_connect(
@@ -1098,14 +1155,18 @@ class TestAsyncWebSocketQueueBehavior:
             drain_on_error=False,
         ) as ws:
             await asyncio.sleep(0.1)  # Let close happen
-            # Should get either close frame or error
-            # The server sends a proper close, so we may receive it
+
             try:
-                _, flags = await ws.recv(timeout=1.0)
-                # If we received data, it should be a close frame
-                assert flags & CurlWsFlag.CLOSE
-            except (WebSocketClosed, WebSocketError):
-                pass  # Also acceptable
+                _data, flags = await ws.recv(timeout=5.0)
+            except (WebSocketClosed, WebSocketError) as exc:
+                assert not isinstance(
+                    exc, WebSocketTimeout
+                ), "recv() must not time out after the server closed"
+            else:
+                assert flags & CurlWsFlag.CLOSE, (
+                    "the only data frame after an immediate close must be the "
+                    + "close frame"
+                )
 
 
 class TestAsyncWebSocketPing:
@@ -1187,12 +1248,17 @@ class TestAsyncWebSocketStateChecks:
 
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
         try:
-            # Wait for close frame
-            await asyncio.sleep(0.5)
-            with suppress(WebSocketClosed, WebSocketError, WebSocketTimeout):
-                _ = await ws.recv(timeout=0.5)
+            # Drain until the close frame lands (or the connection reports it).
+            for _ in range(10):
+                if ws.close_code is not None:
+                    break
+                with suppress(WebSocketClosed, WebSocketError, WebSocketTimeout):
+                    _ = await ws.recv(timeout=0.5)
         finally:
             await ws.close()
+
+        assert ws.close_code == WsCloseCode.GOING_AWAY
+        assert ws.close_reason == "test reason"
 
 
 class TestAsyncWebSocketEdgeCases:
@@ -1386,15 +1452,18 @@ class TestAsyncWebSocketParameterBoundaries:
         ws_config: Callable[..., None],
         time_slice: float,
     ) -> None:
-        """Test recv_time_slice and send_time_slice parameters."""
-        ws_config(behavior=ServerBehavior.ECHO, max_size=20 * 1024 * 1024)
-        heartbeat_ticks = 0
+        """Test recv_time_slice and send_time_slice parameters.
+
+        The server's inbound limit is fixed at construction (32 MiB by default),
+        so it is not set here.
+        """
+        ws_config(behavior=ServerBehavior.ECHO)
+        heartbeat_ticks: list[int] = [0]
 
         async def heartbeat() -> None:
-            nonlocal heartbeat_ticks
             while True:
                 await asyncio.sleep(0.001)
-                heartbeat_ticks += 1
+                heartbeat_ticks[0] += 1
 
         hb_task: Task[None] = asyncio.create_task(heartbeat())
 
@@ -1406,17 +1475,17 @@ class TestAsyncWebSocketParameterBoundaries:
                 max_message_size=20 * 1024 * 1024,
             ) as ws:
                 # 5MB payload ensures we trigger the time-based yield on all hardware
-                payload_size = 5 * 1024 * 1024
-                large_payload: bytes = b"A" * payload_size
+                payload_size: int = 5 * 1024 * 1024
+                large_payload: bytes = _pattern(payload_size)
 
-                ticks_before_transfer = heartbeat_ticks
+                ticks_before_transfer: int = heartbeat_ticks[0]
                 await ws.send(large_payload)
                 data, _ = await ws.recv(timeout=10.0)
 
                 assert data == large_payload
                 # If time-slicing works, the heartbeat task must have been
                 # given time to run during the transfer.
-                assert heartbeat_ticks > ticks_before_transfer
+                assert heartbeat_ticks[0] > ticks_before_transfer
 
         finally:
             _ = hb_task.cancel()
@@ -1480,21 +1549,22 @@ class TestAsyncWebSocketParameterBoundaries:
     async def test_server_enforces_max_message_size(
         self,
         session: AsyncSession[Response],
-        configurable_ws_server: ConfigurableWSServer,
-        ws_config: Callable[..., None],
+        small_max_size_ws_server: ConfigurableWSServer,
     ) -> None:
         """Test the client's reaction when the server drops the connection
-        for an oversized message."""
-        ws_config(behavior=ServerBehavior.ECHO)
+        for an oversized message.
 
-        # 33MB is just over the 32MB default limit set in ServerConfig
-        too_big = 33 * 1024 * 1024
-        payload: bytes = b"A" * too_big
+        Uses a dedicated 1 MiB server rather than the module-scoped 32 MiB one:
+        max_size is fixed at server construction so it cannot be set per test,
+        and a 2 MiB payload runs far faster than the old 33 MiB one.
+        """
+        too_big: int = 2 * 1024 * 1024
+        payload: bytes = _pattern(too_big)
 
         async with session.ws_connect(
-            configurable_ws_server.url,
+            small_max_size_ws_server.url,
             # Ensure client is willing to send it
-            max_message_size=40 * 1024 * 1024,
+            max_message_size=4 * 1024 * 1024,
         ) as ws:
             await ws.send(payload)
 
@@ -1503,7 +1573,7 @@ class TestAsyncWebSocketParameterBoundaries:
             assert flags & CurlWsFlag.CLOSE
 
             # Payload starts with 2-byte integer code
-            close_code = unpack("!H", data[:2])[0]
+            close_code: int = int(unpack("!H", data[:2])[0])
             assert close_code == WsCloseCode.MESSAGE_TOO_BIG  # 1009
 
 
@@ -1651,78 +1721,96 @@ class TestAsyncWebSocketFragmentationFix:
     async def test_partial_write_exact_boundary_resumption(
         self, ws_connection: AsyncWebSocket
     ) -> None:
-        """
-        Forces a partial write to ensure _send_payload resumes the exact
-        remaining bytes of the frame, avoiding the '(43) unaligned frame size' error.
+        """A partial write must resume with exactly the remainder of the frame.
+
+        Asserts the invariant rather than a call count. POSIX does not
+        guarantee that send() accepts the whole buffer, so the number of
+        ws_send() calls is kernel dependent: OpenBSD short-writes where Linux
+        loopback does not. See issue #849.
         """
         original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
-        attempt_logs: list[tuple[int, int]] = []
+        offered: list[int] = []
+        accepted: list[int] = []
 
         def mock_ws_send(chunk: memoryview, flags: int) -> int:
-            chunk_len: int = len(chunk)
+            # Truncate the very first call so the resumption path is exercised
+            # even on kernels that always accept the whole buffer.
+            truncate: bool = not offered
+            offered.append(len(chunk))
+            try:
+                if truncate:
+                    n_sent: int = original_ws_send(chunk[:10000], flags)
+                else:
+                    n_sent = original_ws_send(chunk, flags)
+            except BaseException:
+                # Keep the two logs index-aligned when libcurl raises EAGAIN.
+                accepted.append(0)
+                raise
+            accepted.append(n_sent)
+            return n_sent
 
-            # On the very first large frame, simulate a full socket buffer
-            # by refusing to accept more than 10,000 bytes.
-            if chunk_len == 65536 and len(attempt_logs) == 0:
-                n_sent: int = 10000
-            else:
-                n_sent = chunk_len
-
-            attempt_logs.append((chunk_len, n_sent))
-            return original_ws_send(chunk[:n_sent], flags)
-
+        payload: bytes = _pattern(100000)
         with unittest.mock.patch.object(
             ws_connection.curl, "ws_send", side_effect=mock_ws_send
         ):
-            # Send 100,000 bytes (Requires 2 frames: 65536 + 34464)
-            payload: bytes = b"X" * 100000
             await ws_connection.send(payload)
+            data, _ = await ws_connection.recv(timeout=10.0)
 
-            data, _ = await ws_connection.recv()
-            assert data == payload
+        assert data == payload
 
-            # Verify the exact chunking sequence generated by the hot loop:
-            # 1. Loop tries 65536, mock only accepts 10000
-            # 2. Loop MUST try exactly 55536 next (the remainder of the 65536 frame)
-            # 3. Loop tries 34464 (the final fragment)
-            assert len(attempt_logs) == 3
-            assert attempt_logs[0] == (65536, 10000)
-            assert attempt_logs[1] == (
-                55536,
-                55536,
-            )  # <-- The old code failed here by trying 65536
-            assert attempt_logs[2] == (34464, 34464)
+        # Every call must offer exactly the remainder of the open frame. More
+        # trips libcurl's "unaligned frame size"; less silently drops bytes.
+        # The kernel is free to accept fewer bytes than were offered, so the
+        # stream is reconstructed from `accepted`, not from `offered`.
+        offset: int = 0
+        for offered_len, accepted_len in zip(offered, accepted, strict=True):
+            expected: int = min(
+                _MAX_FRAME - (offset % _MAX_FRAME), len(payload) - offset
+            )
+            assert (
+                offered_len == expected
+            ), f"at offset {offset}: offered {offered_len}, expected {expected}"
+            offset += accepted_len
+
+        assert offset == len(payload)
+        assert any(
+            a < o for o, a in zip(offered, accepted, strict=True)
+        ), "no partial write occurred, the resumption path was not exercised"
 
     async def test_send_eagain_retry_preserves_state(
         self, ws_connection: AsyncWebSocket
     ) -> None:
-        """
-        Test that an EAGAIN error doesn't corrupt the frame boundary state.
-        Verifies the zero-math hot-path retry optimization.
+        """EAGAIN must not corrupt frame boundary state.
+
+        The retry has to present the identical buffer and flags. The total call
+        count is kernel dependent (issue #849), so it is not asserted -- only
+        that a retry happened and that it repeated the same offer.
         """
         original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
-        call_count = 0
+        offers: list[tuple[int, int]] = []
 
         def mock_ws_send(chunk: memoryview, flags: int) -> int:
-            nonlocal call_count
-            call_count += 1
-
-            # Throw EAGAIN on the very first attempt to simulate a blocked socket
-            if call_count == 1:
+            offers.append((len(chunk), flags))
+            # Throw EAGAIN on the very first attempt to simulate a blocked
+            # socket. Derived from len(offers) rather than a nonlocal counter,
+            # for the type narrowing reason described above.
+            if len(offers) == 1:
                 raise CurlError("Simulated EAGAIN", CurlECode.AGAIN)
-
             return original_ws_send(chunk, flags)
 
+        payload: bytes = _pattern(100000)
         with unittest.mock.patch.object(
             ws_connection.curl, "ws_send", side_effect=mock_ws_send
         ):
-            payload: bytes = b"Y" * 100000
             await ws_connection.send(payload)
-            data, _ = await ws_connection.recv()
+            data, _ = await ws_connection.recv(timeout=10.0)
 
-            assert data == payload
-            # 1 EAGAIN attempt + 1st fragment (65536) + 2nd fragment (34464)
-            assert call_count == 3
+        assert data == payload
+        # 1 EAGAIN attempt + at least 2 fragments (65536 + 34464).
+        assert len(offers) >= 3
+        assert (
+            offers[1] == offers[0]
+        ), "the retry after EAGAIN changed the frame boundary or the flags"
 
     async def test_manual_fragmentation_with_cont_flag(
         self, ws_connection: AsyncWebSocket
@@ -1819,8 +1907,9 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
-        """Test blocking when recv queue is full."""
-        messages: list[str] = [f"full_{i}" for i in range(20)]
+        """Blocking when the recv queue is full must not lose messages."""
+        num_messages: int = 20
+        messages: list[str] = [f"full_{i}" for i in range(num_messages)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
         async with session.ws_connect(
@@ -1828,20 +1917,15 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
             recv_queue_size=5,
             block_on_recv_queue_full=True,
         ) as ws:
-            # Give server time to send
+            # Give server time to send and the reader time to fill and block
             await asyncio.sleep(0.2)
 
-            # Should be able to receive all messages eventually
             received: list[str] = []
-            for _ in range(20):
-                try:
-                    data, _ = await ws.recv(timeout=2.0)
-                    received.append(data.decode())
-                except WebSocketTimeout:
-                    break
+            for _ in range(num_messages):
+                data, _flags = await ws.recv(timeout=5.0)
+                received.append(data.decode())
 
-            # With blocking, we should receive most/all messages
-            assert len(received) >= 5  # At least queue size
+            assert received == messages
 
     async def test_block_on_recv_queue_full_false(
         self,
@@ -1849,30 +1933,47 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
         configurable_ws_server: ConfigurableWSServer,
         ws_config: Callable[..., None],
     ) -> None:
-        """Test non-blocking when recv queue is full fails the connection."""
-        messages: list[str] = [f"drop_{i}" for i in range(20)]
+        """Non-blocking mode must fail the connection rather than drop silently.
+
+        The contract is that overflow is surfaced as an error, and that no
+        message is delivered out of order before it. Asserted on behaviour, not
+        on the exception's message text.
+        """
+        num_messages: int = 20
+        messages: list[str] = [f"drop_{i}" for i in range(num_messages)]
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=messages)
 
-        # With block_on_recv_queue_full=False, the connection fails when queue fills
-        # This is the expected behavior to preserve message integrity
-        try:
-            async with session.ws_connect(
-                configurable_ws_server.url,
-                recv_queue_size=5,
-                block_on_recv_queue_full=False,
-            ) as ws:
-                # Try to receive - may get error due to queue overflow
-                received: list[str] = []
-                for _ in range(20):
-                    try:
-                        data, _ = await ws.recv(timeout=0.5)
-                        received.append(data.decode())
-                    except (WebSocketTimeout, WebSocketError, WebSocketClosed):
-                        break
+        received: list[str] = []
+        overflowed: bool = False
 
-        except WebSocketError as e:
-            # Expected: connection failed due to queue overflow
-            assert "queue full" in str(e).lower() or "integrity" in str(e).lower()
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            recv_queue_size=5,
+            block_on_recv_queue_full=False,
+        ) as ws:
+            # Let the server outrun the (undrained) queue.
+            await asyncio.sleep(0.3)
+
+            for _ in range(num_messages):
+                try:
+                    data, _flags = await ws.recv(timeout=2.0)
+                except WebSocketTimeout:
+                    break
+                except (WebSocketError, WebSocketClosed):
+                    overflowed = True
+                    break
+                received.append(data.decode())
+
+        assert overflowed, (
+            "with block_on_recv_queue_full=False an overflow must surface as an "
+            + "error, not be silently absorbed"
+        )
+        # Whatever was delivered before the failure must be an unbroken prefix:
+        # dropping from the middle is the data-integrity bug this mode exists
+        # to prevent.
+        assert (
+            received == messages[: len(received)]
+        ), "messages delivered before the overflow must be a contiguous prefix"
 
 
 class TestAsyncWebSocketCloseCodeValidation:
@@ -2292,8 +2393,8 @@ class TestAsyncWebSocketRobustness:
         # - 64x 8KB SIMD xbufs
         # - 4x 128KB libcurl chunk buffers
         # - Ends with an unaligned remainder for scalar fallback checks.
-        payload_size = (512 * 1024) + 13
-        payload: bytes = b"X" * payload_size
+        payload_size: int = (512 * 1024) + 13
+        payload: bytes = _pattern(payload_size)
 
         async with session.ws_connect(configurable_ws_server.url) as ws:
             await ws.send(payload)
@@ -2320,19 +2421,18 @@ class TestAsyncWebSocketRobustness:
         ws_config(behavior=ServerBehavior.ECHO)
 
         # Heartbeat task to prove the loop stays responsive during the massive CPU task
-        heartbeat_ticks = 0
+        heartbeat_ticks: list[int] = [0]
 
         async def heartbeat() -> None:
-            nonlocal heartbeat_ticks
             while True:
                 await asyncio.sleep(0.001)
-                heartbeat_ticks += 1
+                heartbeat_ticks[0] += 1
 
         hb_task: Task[None] = asyncio.create_task(heartbeat())
 
         # 20 MiB payload
-        huge_size = 20 * 1024 * 1024
-        payload: bytes = b"Z" * huge_size
+        huge_size: int = 20 * 1024 * 1024
+        payload: bytes = _pattern(huge_size)
 
         try:
             async with session.ws_connect(
@@ -2341,24 +2441,21 @@ class TestAsyncWebSocketRobustness:
                 send_time_slice=0.005,
                 recv_time_slice=0.005,
             ) as ws:
-                # Time the send/recv process
                 start_time: float = asyncio.get_running_loop().time()
-                ticks_before_transfer = heartbeat_ticks
+                ticks_before_transfer: int = heartbeat_ticks[0]
 
                 await ws.send(payload)
-                data, _ = await ws.recv(timeout=20.0)
+                # The bound exists to catch a hang, not to assert throughput.
+                data, _ = await ws.recv(timeout=120.0)
 
                 duration: float = asyncio.get_running_loop().time() - start_time
 
-                # Assert integrity
                 assert len(data) == huge_size
                 assert data == payload
 
-                # The heartbeat must make progress during the transfer. Its exact
-                # tick count depends on event-loop timer scheduling and system load.
-                assert heartbeat_ticks > ticks_before_transfer
+                # The heartbeat must make progress during the transfer.
+                assert heartbeat_ticks[0] > ticks_before_transfer
 
-                # Log performance for visibility
                 print(
                     f"\n[Huge Payload Test] Transferred {huge_size / 1024**2:.1f} MB "
                     + f"in {duration:.2f}s (~{huge_size * 8 / duration / 1e6:.1f} Mbps)"
@@ -2378,9 +2475,9 @@ class TestAsyncWebSocketRobustness:
         rapid small-frame exchanges.
         """
         for i in range(500):
-            msg = f"ping_{i}".encode()
+            msg: bytes = f"ping_{i}".encode()
             await ws_connection.send(msg)
-            data, _ = await ws_connection.recv(timeout=1.0)
+            data, _ = await ws_connection.recv(timeout=5.0)
             assert data == msg
 
     def test_multithreaded_event_loops(
@@ -2389,26 +2486,46 @@ class TestAsyncWebSocketRobustness:
         """
         Runs two completely independent asyncio loops in two separate threads.
         Ensures C-layer state (like CPU feature detection) is thread-safe.
-        """
 
-        def run_loop() -> None:
+        Failures MUST be captured and re-raised on the main thread, otherwise
+        this test cannot fail at all. Payloads are distinct per thread so cross-thread
+        state issues shows as a mismatch.
+        """
+        num_threads: int = 2
+        failures: list[BaseException | None] = [None] * num_threads
+
+        def run_loop(slot: int) -> None:
             async def task() -> None:
                 async with (
                     AsyncSession[Response]() as s,
                     s.ws_connect(configurable_ws_server.url) as ws,
                 ):
-                    for _ in range(50):
-                        await ws.send(b"data")
-                        _ = await ws.recv()
+                    for i in range(50):
+                        msg: bytes = f"thread_{slot}_msg_{i}".encode()
+                        await ws.send(msg)
+                        data, _ = await ws.recv(timeout=10.0)
+                        assert data == msg
 
-            asyncio.run(task())
+            try:
+                asyncio.run(task())
+            # pylint: disable-next=broad-exception-caught
+            except BaseException as exc:
+                failures[slot] = exc
 
-        t1: threading.Thread = threading.Thread(target=run_loop)
-        t2: threading.Thread = threading.Thread(target=run_loop)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+        threads: list[threading.Thread] = [
+            threading.Thread(target=run_loop, args=(i,)) for i in range(num_threads)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=60.0)
+
+        for index, t in enumerate(threads):
+            assert not t.is_alive(), f"thread {index} did not finish within 60s"
+
+        for exc in failures:
+            if exc is not None:
+                raise exc
 
     @pytest.mark.asyncio
     async def test_boundary_fragmentation_plus_one(
@@ -2419,10 +2536,10 @@ class TestAsyncWebSocketRobustness:
         Forces the C-layer to fill exactly one full chunk and then carry
         the mask state over for a single trailing byte.
         """
-        size = (128 * 1024) + 1
-        payload: bytes = b"B" * size
+        size: int = (128 * 1024) + 1
+        payload: bytes = _pattern(size)
         await ws_connection.send(payload)
-        data, _ = await ws_connection.recv(timeout=5.0)
+        data, _ = await ws_connection.recv(timeout=10.0)
         assert data == payload
 
     @pytest.mark.asyncio
@@ -2481,18 +2598,17 @@ class TestAsyncWebSocketRobustness:
         ws_config(behavior=ServerBehavior.SILENT)
         ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
 
+        close_timeout: float = 0.5
         start_time: float = asyncio.get_running_loop().time()
-
-        # Close with a very aggressive 0.5s timeout
-        await ws.close(timeout=0.5)
-
+        await ws.close(timeout=close_timeout)
         duration: float = asyncio.get_running_loop().time() - start_time
-
-        # It should take approximately ~0.5 seconds, not hang forever
-        assert duration <= 0.5
-
-        # The connection MUST be marked as forcefully terminated
-        assert ws._terminated is True
+        assert (
+            duration < close_timeout + 5.0
+        ), f"close() took {duration:.2f}s against a {close_timeout}s timeout"
+        assert ws.closed
+        assert not ws.is_alive()
+        with pytest.raises((WebSocketClosed, WebSocketError)):
+            _ = await ws.recv(timeout=2.0)
 
 
 class TestAsyncWebSocketSIMDEdgeCases:
@@ -2506,11 +2622,16 @@ class TestAsyncWebSocketSIMDEdgeCases:
         """
         Probes the C-layer cleanup loops (32-bit and 8-bit fallbacks).
         Payloads are sized to leave specific 'tails' after SIMD vector blocks.
+
+        The payload must NOT be periodic in 4 bytes. The XOR mask is 4 bytes
+        wide, so a payload of period 4 and every mask-index error that is a
+        multiple of 4 becomes invisible. SIMD blocks are 32, 64 and 128 bytes,
+        all multiples of 4, so that was precisely the failure class this
+        test catches.
         """
         # Base of 128 (AVX-512 unroll) + the tail we want to test
         size: int = 128 + extra_bytes
-        payload: bytes = b"\xde\xad\xbe\xef" * (size // 4) + b"\xff" * (size % 4)
-        payload = payload[:size]  # Ensure exact size
+        payload: bytes = bytes((i * 7 + 13) % 251 for i in range(size))
 
         await ws_connection.send_binary(payload)
         data, _ = await ws_connection.recv(timeout=5.0)
