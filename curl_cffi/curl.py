@@ -652,12 +652,15 @@ class Curl:
 
     def reset(self) -> None:
         """Reset all curl options, wrapper for ``curl_easy_reset``."""
+        # curl_easy_reset does not own the slists and Python callback handles
+        # retained by this wrapper. Release them before resetting the native
+        # handle so repeated pre-perform resets cannot leak wrapper resources.
+        self.clean_handles_and_buffers()
         self._is_cert_set = False
         self._skip_cacert = False
         if self._curl is not None:
             lib.curl_easy_reset(self._curl)
             self._set_error_buffer()
-        self._resolve = ffi.NULL
 
     def parse_cookie_headers(self, headers: list[bytes]) -> SimpleCookie:
         """Extract ``cookies.SimpleCookie`` from header lines.
