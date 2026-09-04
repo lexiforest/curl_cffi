@@ -1,8 +1,13 @@
+import warnings
+
+import pytest
+
 from curl_cffi.const import CurlOpt
 from curl_cffi.fingerprints import Fingerprint
 from curl_cffi.requests.impersonate import ExtraFingerprints
 from curl_cffi.requests.utils import _apply_fingerprint
 from curl_cffi.requests.utils import set_extra_fp
+from curl_cffi.utils import CurlCffiWarning
 
 
 class FakeCurl:
@@ -200,3 +205,48 @@ def test_set_extra_fp_sets_header_order():
     set_extra_fp(curl, extra_fp)
 
     assert curl.options[CurlOpt.HTTPHEADER_ORDER] == "User-Agent,Host,Connection"
+
+
+def test_apply_fingerprint_warns_when_fingerprint_has_no_headers():
+    curl = FakeCurl()
+    fingerprint = Fingerprint(client="chrome", client_version="146")
+
+    with pytest.warns(CurlCffiWarning, match="chrome146 has no headers"):
+        _apply_fingerprint(
+            curl,
+            fingerprint,
+            existing_header_names=set(),
+            default_headers=True,
+        )
+
+    assert CurlOpt.HTTPHEADER not in curl.options
+
+
+def test_apply_fingerprint_does_not_warn_when_headers_are_present():
+    curl = FakeCurl()
+    fingerprint = Fingerprint(headers={"user-agent": "curl"})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", CurlCffiWarning)
+        _apply_fingerprint(
+            curl,
+            fingerprint,
+            existing_header_names=set(),
+            default_headers=True,
+        )
+
+    assert curl.options[CurlOpt.HTTPHEADER] == [b"user-agent: curl"]
+
+
+def test_apply_fingerprint_does_not_warn_without_default_headers():
+    curl = FakeCurl()
+    fingerprint = Fingerprint()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", CurlCffiWarning)
+        _apply_fingerprint(
+            curl,
+            fingerprint,
+            existing_header_names=set(),
+            default_headers=False,
+        )
