@@ -766,7 +766,7 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
-        # Don't assign ffi.from_buffer() to a variable!
+        # Do NOT assign ffi.from_buffer() to a variable!
         # See: https://github.com/lexiforest/curl_cffi/pull/700
         if ret := lib.curl_ws_send(
             self._curl,

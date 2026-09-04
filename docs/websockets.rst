@@ -1,9 +1,9 @@
 WebSockets
 **********
 
-``curl_cffi`` provides high-performance WebSocket clients for both synchronous and asynchronous contexts.
+``curl_cffi`` provides high-performance WebSocket clients for synchronous and asynchronous contexts.
 
-Both clients are powered by a heavily optimized, SIMD-accelerated C extension capable of multi-gigabit throughput. The asynchronous client utilizes a background I/O architecture for non-blocking performance, while the synchronous client provides a simple, direct blocking interface alongside an optional event-driven callback loop.
+Both clients are powered by a heavily optimized, SIMD-accelerated libcurl build capable of multi-gigabit throughput. The synchronous client provides a simple, direct blocking interface alongside an optional event-driven callback loop, while the asynchronous client utilizes an efficient non-blocking I/O architecture.
 
 .. contents:: Table of Contents
    :local:
@@ -114,7 +114,7 @@ All sending and receiving methods are blocking. Sending methods return the numbe
     # Receive parsed JSON
     data = ws.recv_json()
 
-Use ``recv_str()`` or ``recv_json()`` if you need UTF-8 validation.
+``recv()`` gives you the payload exactly as it arrived, with no UTF-8 validation. Use ``recv_str()`` or ``recv_json()`` if you need that check.
 
 Event Callbacks & run_forever()
 -------------------------------
@@ -149,14 +149,14 @@ Thread Safety
 
 The synchronous ``WebSocket`` relies on ``libcurl`` easy handles, which is **not thread-safe** at the C level. If Thread A is blocked in ``recv()``, and Thread B concurrently calls ``send()``, libcurl's internal state machine can corrupt, leading to undefined behavior or segmentation faults.
 
-For highly concurrent, full-duplex streaming, using the **AsyncWebSocket** is the best option.
+For concurrent, full-duplex streaming, using the **AsyncWebSocket** is the best option.
 
 Asynchronous Client
 ===================
 
-The ``AsyncWebSocket`` client uses a highly optimized **Background I/O Architecture**:
+The ``AsyncWebSocket`` client uses a highly optimized **non-blocking I/O Architecture**:
 
-1.  **Outgoing**: Messages are queued for delivery instantly (non-blocking). A background task handles the actual network transmission.
+1.  **Outgoing**: Messages are queued for delivery instantly. A background task handles the actual network transmission.
 2.  **Incoming**: A background task continuously reads from the network and populates a receive queue, separating your application logic from network speeds.
 
 Connecting
@@ -188,14 +188,16 @@ Sending Data
 
 Because sending is queued, these methods return immediately unless the internal send queue is full (backpressure).
 
+Async send methods return ``None`` rather than the sent byte-count.
+
 .. code-block:: python
 
-    # Queues data for background delivery
+    # Queues data for immediate delivery
     await ws.send_str("Hello")
     await ws.send_json({"action": "subscribe"})
 
 **Flushing:**
-If your application logic requires confirmation that messages have been successfully handed off to the underlying network socket before proceeding, use ``flush()``.
+If the application logic requires confirmation that messages have been successfully handed off to the underlying network socket, use ``flush()``.
 
 .. code-block:: python
 
@@ -221,7 +223,7 @@ Concurrent calls to receive methods are fully supported. Messages are distribute
     if flags & CurlWsFlag.BINARY:
         print(f"Received binary data: {payload}")
 
-Use ``recv_str()`` or ``recv_json()`` if you need UTF-8 validation.
+``recv()`` gives you the payload exactly as it arrived, with no UTF-8 validation. Use ``recv_str()`` or ``recv_json()`` if you need that check.
 
 Shared Features
 ===============
@@ -251,6 +253,8 @@ Heartbeats and Pings
 --------------------
 
 When a PING frame is received from the server, libcurl automatically sends a PONG frame in response. Received PONG frames are consumed internally and not delivered to your application.
+
+The automatic PONG is queued alongside your own outgoing messages, so a busy sender can delay it. Worth knowing if your server enforces a tight ping deadline.
 
 To send a manual PING frame:
 
@@ -362,16 +366,16 @@ The ``AsyncWebSocket`` client exposes several advanced configuration options to 
 Queue Sizes (Backpressure)
 --------------------------
 
-You can control the internal buffer sizes to manage TCP backpressure.
+You can control the internal buffer sizes to manage TCP backpressure. These values also influence the maximum possible memory footprint.
 
-*   **recv_queue_size** (default: 64): Max incoming messages to buffer internally.
-*   **send_queue_size** (default: 32): Max outgoing messages to buffer before ``send()`` blocks.
-*   **block_on_recv_queue_full** (default: ``True``): The background reader pauses when the receive queue is full. When set to ``False``, the connection will fail immediately to avoid silent data loss.
-*   **drain_on_error** (default: ``False``): When a fatal error occurs, calls to ``recv()`` will yield all buffered messages first before raising the exception.
+*   **recv_queue_size** (default: 64): Max incoming messages to buffer internally. ``max_message_size`` caps how large each one can be, so the worst case is fixed at ``recv_queue_size`` × ``max_message_size`` — 256MB with the defaults.
+*   **send_queue_size** (default: 32): Max outgoing messages to buffer before ``send()`` blocks. Outgoing messages have no size limit, so size this against your own largest message.
+*   **block_on_recv_queue_full** (default: ``True``): Behavior when the receive queue is full. If ``True`` (default), the reader blocks until there is space in the queue (may cause timeouts). If ``False``, the connection fails immediately to prevent data loss.
+*   **drain_on_error** (default: ``False``): When a fatal error occurs, calls to ``recv()`` will drain all buffered messages first before raising the exception.
 
 .. code-block:: python
 
-    # Increase queues for high-throughput fast-moving streams (e.g., video/market data)
+    # Larger queues suit high rates of small messages (e.g., market data)
     ws = await session.ws_connect(
         url,
         recv_queue_size=1024,
@@ -386,6 +390,8 @@ This is an *optional* optimization technique which merges multiple pending messa
 .. warning::
 
     Multiple messages will arrive as a single concatenated payload. Ensure your server protocol expects concatenated strings/bytes.
+
+    Large batches share the outgoing queue with automatic PONG replies and can delay them. Lower ``max_send_batch_size`` if your server has a strict ping timeout.
 
 *   **coalesce_frames** (default: ``False``): Enable batching.
 *   **max_send_batch_size** (default: 64): Max messages to merge per frame.
@@ -428,7 +434,16 @@ Upgrading from Earlier Versions
 **Auto-Reassembly & recv_fragment**:
 The WebSocket clients now handle message fragmentation and reassembly automatically. You are guaranteed to receive complete logical messages when calling ``recv()``, ``recv_str()``, or ``recv_json()``.
 
-As a result, the ``recv_fragment()`` method has been deprecated and removed. If your existing code relied on ``recv_fragment()`` to manually stitch together ``CONT`` frames, you can now safely remove that logic and simply use ``recv()``.
+As a result, the ``recv_fragment()`` method has been deprecated and removed. If your existing code relied on ``recv_fragment()`` to manually stitch together ``CONT`` frames, you can safely remove that logic and simply call ``recv()``.
+
+**Closing a session closes its WebSockets**:
+Closing an ``AsyncSession``, or leaving its ``async with`` block, now closes any WebSocket still open on it with a ``1001`` (going away) frame. Keep the session open for as long as the connection is needed.
+
+**WebSockets count against max_clients**:
+Each WebSocket holds one of the session's curl handles for as long as it stays connected. If every handle is held by a WebSocket, further requests raise ``RequestException`` rather than waiting indefinitely. Increase ``max_clients`` if you need more connections at once.
+
+**send() timeout is keyword-only**:
+``ws.send(payload, flags, timeout)`` no longer works — pass ``timeout=`` by name. This matches every other send and receive method.
 
 Performance Tuning
 ==================

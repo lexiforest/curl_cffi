@@ -31,6 +31,8 @@ from typing import (
     Union,
     cast,
 )
+from urllib.parse import urlparse
+from weakref import WeakSet
 
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
@@ -64,6 +66,7 @@ from .websockets import (
     WebSocket,
     WebSocketError,
     WebSocketRetryStrategy,
+    WsCloseCode,
 )
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
@@ -629,7 +632,7 @@ class Session(BaseSession[R]):
         headers: HeaderTypes | None = None,
         cookies: CookieTypes | None = None,
         auth: tuple[str, str] | None = None,
-        timeout: float | tuple[float, float] | object | None = NOT_SET,
+        timeout: float | tuple[float, float] | NotSetType | None = NOT_SET,
         allow_redirects: bool | CurlFollow | str | None = None,
         max_redirects: int | None = None,
         proxies: ProxySpec | None = None,
@@ -645,7 +648,7 @@ class Session(BaseSession[R]):
         extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
         default_headers: bool | None = None,
         quote: str | Literal[False] = "",
-        http_version: CurlHttpVersion | None = None,
+        http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
         doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
@@ -1118,7 +1121,8 @@ class AsyncSession(BaseSession[R]):
             loop: loop to use, if not provided, the running loop will be used.
             async_curl: [AsyncCurl](/api/curl_cffi#curl_cffi.AsyncCurl) object to use.
             max_clients: maximum curl handles to use in the session,
-                this will affect the concurrency ratio.
+                this will affect the concurrency ratio. WebSockets count
+                against this limit for their connection lifetime.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
@@ -1179,6 +1183,7 @@ class AsyncSession(BaseSession[R]):
         self._acurl: AsyncCurl | None = async_curl
         self._owns_acurl: bool = async_curl is None
         self.max_clients: int = max_clients
+        self._websockets: WeakSet[AsyncWebSocket] = WeakSet[AsyncWebSocket]()
         self.init_pool()
 
     @property
@@ -1203,6 +1208,21 @@ class AsyncSession(BaseSession[R]):
                 break
 
     async def pop_curl(self) -> Curl:
+        """Get a Curl handle from the pool or create one if None.
+
+        Returns:
+            Curl: Fresh Curl handle.
+
+        Raises:
+            ``RequestException``: All curl handles are held by live WebSockets.
+        """
+        # If all Curl pool handles are consumed by WebSockets, raise an error.
+        if len(self._websockets) >= self.max_clients and self.pool.empty():
+            raise RequestException(
+                f"All {self.max_clients} curl handles are held by live WebSockets. "
+                + "Close one, or raise max_clients."
+            )
+
         curl: Curl | None = await self.pool.get()
         if curl is None:
             curl = Curl(cacert=self.acurl._cacert, debug=self.debug)
@@ -1221,9 +1241,28 @@ class AsyncSession(BaseSession[R]):
 
     async def close(self) -> None:
         """Close the session."""
+        # If the session is already closed, don't close again.
+        if self._closed:
+            return
+
+        self._closed = True
+
+        # On a session close, also close any live WebSockets.
+        if self._websockets:
+            _ = await asyncio.gather(
+                *(
+                    ws.close(
+                        WsCloseCode.GOING_AWAY,
+                        timeout=AsyncWebSocket.CLOSE_NOTIFY_SECS,
+                    )
+                    for ws in self._websockets
+                ),
+                return_exceptions=True,
+            )
+
         if self._owns_acurl:
             await self.acurl.close()
-        self._closed = True
+
         while True:
             try:
                 curl = self.pool.get_nowait()
@@ -1396,9 +1435,10 @@ class AsyncSession(BaseSession[R]):
             drain_on_error: When a connection error occurs, attempt to consume all the
                 buffered received messages first, before raising the error. Otherwise,
                 raise it immediately, discarding the buffered messages (the default).
-            block_on_recv_queue_full: When enabled, the connection is failed immediately
-                when the receive queue is full. The message that caused the overflow
-                is not delivered; any messages already buffered can still be drained
+            block_on_recv_queue_full: When the receive queue is full, receiving is
+                paused for backpressure. When this option is disabled, the connection
+                is immediately failed instead. The message that caused the overflow is
+                not delivered; any messages already buffered can still be drained
                 if ``drain_on_error`` is also set.
             curl_options: Dictionary of extra low-level curl options to apply.
 
@@ -1410,54 +1450,56 @@ class AsyncSession(BaseSession[R]):
             self._check_session_closed()
 
             curl: Curl = await self.pop_curl()
-            _ = set_curl_options(
-                curl=curl,
-                method="GET",
-                url=url,
-                base_url=self.base_url,
-                params_list=[self.params, params],
-                headers_list=[self.headers, headers],
-                cookies_list=[self.cookies, cookies],
-                auth=auth or self.auth,
-                timeout=self.timeout if timeout is NOT_SET else timeout,
-                allow_redirects=(
-                    self.allow_redirects if allow_redirects is None else allow_redirects
-                ),
-                max_redirects=(
-                    self.max_redirects if max_redirects is None else max_redirects
-                ),
-                proxies_list=[self.proxies, proxies],
-                proxy=proxy,
-                proxy_auth=proxy_auth or self.proxy_auth,
-                verify_list=[self.verify, verify],
-                referer=referer,
-                accept_encoding=accept_encoding,
-                impersonate=impersonate or self.impersonate,
-                ja3=ja3 or self.ja3,
-                akamai=akamai or self.akamai,
-                extra_fp=extra_fp or self.extra_fp,
-                default_headers=(
-                    self.default_headers if default_headers is None else default_headers
-                ),
-                quote=quote,
-                http_version=http_version or self.http_version,
-                interface=interface or self.interface,
-                doh_url=doh_url or self.doh_url,
-                max_recv_speed=max_recv_speed,
-                cert=cert or self.cert,
-                queue_class=asyncio.Queue,
-                event_class=asyncio.Event,
-                curl_options={**self.curl_options, **(curl_options or {})},
-                perk=perk or self.perk,
-            )
-            _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
-            _ = curl.setopt(
-                CurlOpt.CONNECT_ONLY,
-                2,  # https://curl.se/docs/websocket.html
-            )
-
             try:
-                _ = await self.loop.run_in_executor(None, curl.perform)
+                _ = set_curl_options(
+                    curl=curl,
+                    method="GET",
+                    url=url,
+                    base_url=self.base_url,
+                    params_list=[self.params, params],
+                    headers_list=[self.headers, headers],
+                    cookies_list=[self.cookies, cookies],
+                    auth=auth or self.auth,
+                    timeout=self.timeout if timeout is NOT_SET else timeout,
+                    allow_redirects=(
+                        self.allow_redirects
+                        if allow_redirects is None
+                        else allow_redirects
+                    ),
+                    max_redirects=(
+                        self.max_redirects if max_redirects is None else max_redirects
+                    ),
+                    proxies_list=[self.proxies, proxies],
+                    proxy=proxy,
+                    proxy_auth=proxy_auth or self.proxy_auth,
+                    verify_list=[self.verify, verify],
+                    referer=referer,
+                    accept_encoding=accept_encoding,
+                    impersonate=impersonate or self.impersonate,
+                    ja3=ja3 or self.ja3,
+                    akamai=akamai or self.akamai,
+                    extra_fp=extra_fp or self.extra_fp,
+                    default_headers=(
+                        self.default_headers
+                        if default_headers is None
+                        else default_headers
+                    ),
+                    quote=quote,
+                    http_version=http_version or self.http_version,
+                    interface=interface or self.interface,
+                    doh_url=doh_url or self.doh_url,
+                    max_recv_speed=max_recv_speed,
+                    cert=cert or self.cert,
+                    queue_class=asyncio.Queue,
+                    event_class=asyncio.Event,
+                    curl_options={**self.curl_options, **(curl_options or {})},
+                    perk=perk or self.perk,
+                )
+                _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
+                _ = curl.setopt(
+                    CurlOpt.CONNECT_ONLY,
+                    2,  # https://curl.se/docs/websocket.html
+                )
             except Exception:
                 curl.close()
                 self.push_curl(None)
@@ -1480,11 +1522,28 @@ class AsyncSession(BaseSession[R]):
                 block_on_recv_queue_full=block_on_recv_queue_full,
                 debug=self.debug,
             )
+            # Add the WebSocket to the Weakset
+            self._websockets.add(ws)
 
+            # Connect to the WebSocket
+            perform: asyncio.Future[None] = self.loop.run_in_executor(
+                None, curl.perform
+            )
+            try:
+                _ = await perform
+            except BaseException:
+                if not perform.cancelled():
+                    curl.close()
+                self.push_curl(None)
+                self._websockets.discard(ws)
+                raise
+
+            # Start the background I/O tasks
             try:
                 ws._start_io_tasks()  # pyright: ignore[reportPrivateUsage]
             except WebSocketError:
                 ws.terminate()
+                self._websockets.discard(ws)
                 raise
 
             return ws

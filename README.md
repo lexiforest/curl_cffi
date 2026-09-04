@@ -72,7 +72,7 @@ No browser automation. Just simple API calls that return the exact cookies and h
 
 - [curl-impersonate](https://github.com/lexiforest/curl-impersonate). A curl distribution that impersonates browsers.
 - [curl_cffi](https://github.com/lexiforest/curl_cffi). Python binding to curl-impersonate.
-- [brimp](https://docs.brimp.ai). Browser-impersonate, a lightweight browser 
+- [brimp](https://docs.brimp.ai). Browser-impersonate, a lightweight browser
 - [impers](https://github.com/lexiforest/impers). Node.js binding to curl-impersonate.
 - [impersonate.pro](https://impersonate.pro). Commercial support, more fingerprints and cloud offering.
 
@@ -274,9 +274,7 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 
 ### WebSockets
 
-`curl_cffi` provides a fast and robust WebSocket client for both synchronous and asynchronous contexts. This is the most advanced Python integration of libcurl's WebSocket interface, powered by a customized, optimized build of libcurl. Handshake requests automatically inherit all session settings—such as browser impersonation (TLS/JA3 and HTTP/2), custom proxies, and headers—enabling seamless connections to servers protected by strict anti-bot systems.
-
-#### Synchronous WebSockets
+`curl_cffi` provides an advanced Python interface to libcurl's WebSocket client. Handshake requests automatically inherit all session settings — such as browser impersonation (TLS/JA3 and HTTP/2), custom proxies, and headers, enabling seamless connections to servers protected by strict anti-bot systems.
 
 WebSockets can be used synchronously, through standard blocking methods, direct iteration, or by using an event-driven callback model (similar to `websocket-client`):
 
@@ -292,21 +290,22 @@ with Session() as session:
         msg = ws.recv_str(timeout=5.0)
         print(f"Received: {msg}")
 
+        for i in range(10):
+            ws.send_str(f"Stream #{i}")
+
         # Stream incoming messages sequentially
-        for message in ws:
-            print(f"Stream: {message}")
+        for message, _ in zip(ws, range(11)):
+            print(message)
 
 def on_message(ws, message):
     print(f"Received: {message}")
 
-ws = WebSocket(on_message=on_message)
 # Automatically negotiates upgrades and listens continuously
-ws.run_forever("wss://echo.websocket.org")
+ws = WebSocket(on_message=on_message)
+ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 ```
 
-#### Asynchronous WebSockets
-
-For high-concurrency applications, the async client supports concurrent reading and writing with cooperative multitasking (similar to `aiohttp`):
+For high-performance applications, the async client supports concurrent receiving and sending (similar to `aiohttp`):
 
 ```python
 import asyncio
@@ -318,19 +317,27 @@ async def main():
             # Execute concurrent sends
             await asyncio.gather(*[ws.send_str(f"Message {i}") for i in range(10)])
 
+            # Receive messages
+            received = await asyncio.gather(*[ws.recv_str() for i in range(11)])
+            for frame in received:
+                print(frame)
+
+async def stream():
+    async with AsyncSession() as session:
+        async with session.ws_connect("wss://api.gemini.com/v1/marketdata/BTCUSD") as ws:
             # Stream incoming frames asynchronously
             async for message in ws:
                 print(f"Asyncio Stream: {message}")
 
-asyncio.run(main())
+asyncio.run(main())  # or stream()
 ```
 
-#### Why use `curl_cffi` for WebSockets?
+#### Features
 
 - **Impersonation & Session Inheritance:** Inherits browser fingerprints (TLS/JA3 and HTTP/2), custom proxies, and headers directly during the initial handshake request.
-- **Vectorized SIMD Performance:** Frame payload masking is executed at the hardware level using vectorized SIMD assembly (AVX-512, AVX2, and ARM Neon) inside a customized build of libcurl, offering optimized speeds for large data streams.
-- **Automatic Message Reassembly:** Automatically merges fragmented WebSocket frames in the background, so messages are always read as a single, fully reassembled payload.
-- **Robust Network Resiliency:** Built with precise timeout boundaries and socket transient error (`EAGAIN`) recovery to safely handle network-level socket blocking without corrupting the connection state.
+- **SIMD Performance:** Frame payload masking is executed using SIMD hardware acceleration (AVX-512, AVX2, and ARM NEON) inside a customized libcurl build.
+- **Automatic Message Reassembly:** Automatically assembles fragmented WebSocket frames in the background, so messages are always delivered complete.
+- **Robust Network Resiliency:** Built with precise timeout boundaries and transient error recovery to safely handle network conditions without corrupting connection state.
 
 See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
 

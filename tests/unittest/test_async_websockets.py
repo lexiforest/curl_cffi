@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import queue
+import socket
 import threading
 import unittest.mock
 from asyncio import Task
@@ -33,7 +34,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from struct import unpack
-from typing import Final, Protocol
+from typing import Final, NamedTuple, Protocol
 from unittest.mock import Mock
 
 import pytest
@@ -391,6 +392,55 @@ async def ws_connection(
         yield ws
     finally:
         await ws.close()
+
+
+class StalledServer(NamedTuple):
+    """Stall test helper"""
+
+    url: str
+    disconnect: Callable[[], None]
+
+
+@pytest.fixture
+def stalled_ws_server() -> Generator[StalledServer, object, None]:
+    """A TCP listener that accepts and never replies, so the WebSocket
+    handshake blocks inside curl_easy_perform and the cancellation window is
+    deterministic rather than a race against loopback."""
+    sock: socket.socket = socket.socket()
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(8)
+    port: int = int(sock.getsockname()[1])
+    accepted: list[socket.socket] = []
+    stop: threading.Event = threading.Event()
+
+    def _accept_loop() -> None:
+        sock.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                conn, _addr = sock.accept()
+            except OSError:
+                continue
+            accepted.append(conn)
+
+    def _disconnect() -> None:
+        """Drop the peer so an abandoned curl_easy_perform returns.
+
+        Without this the executor worker stays blocked and
+        ThreadPoolExecutor's atexit hook joins it forever at shutdown.
+        """
+        while accepted:
+            accepted.pop().close()
+
+    t: threading.Thread = threading.Thread(target=_accept_loop, daemon=True)
+    t.start()
+    try:
+        yield StalledServer(url=f"ws://127.0.0.1:{port}", disconnect=_disconnect)
+    finally:
+        stop.set()
+        t.join(timeout=2)
+        _disconnect()
+        sock.close()
 
 
 @asynccontextmanager
@@ -2609,6 +2659,53 @@ class TestAsyncWebSocketRobustness:
         assert not ws.is_alive()
         with pytest.raises((WebSocketClosed, WebSocketError)):
             _ = await ws.recv(timeout=2.0)
+
+    async def test_cancelled_connect_does_not_leak_pool_permit(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        stalled_ws_server: StalledServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Cancelling ws_connect() mid-handshake must return its slot to the pool.
+
+        With max_clients=1 a leaked slot is unrecoverable: the WebSocket is
+        discarded from _websockets, so the futility guard in pop_curl() sees a
+        count of 0 and waits on an empty pool forever.
+        """
+        async with AsyncSession[Response](max_clients=1) as session:
+
+            async def _stalled_connect() -> AsyncWebSocket:
+                # 2s connect timeout so the worker thread is not stuck for the
+                # rest of the session once we abandon it.
+                return await session.ws_connect(stalled_ws_server.url, timeout=2.0)
+
+            task: Task[AsyncWebSocket] = asyncio.create_task(_stalled_connect())
+            await asyncio.sleep(0.1)  # let it reach curl_easy_perform
+            assert not task.done(), "handshake completed; window not exercised"
+
+            _ = task.cancel()
+            with suppress(asyncio.CancelledError):
+                _ = await task
+
+            # let the worker observe EOF and return
+            stalled_ws_server.disconnect()
+            await asyncio.sleep(0.1)
+
+            # Pin the shared server's behaviour: it is module-scoped, so without
+            # this it keeps whatever the previous test set.
+            ws_config(behavior=ServerBehavior.ECHO)
+
+            async def _good_connect() -> AsyncWebSocket:
+                return await session.ws_connect(configurable_ws_server.url)
+
+            # Hangs forever if the slot leaked, so bound it.
+            ws: AsyncWebSocket = await asyncio.wait_for(_good_connect(), timeout=10.0)
+            try:
+                await ws.send(b"still works")
+                data, _ = await ws.recv(timeout=5.0)
+                assert data == b"still works"
+            finally:
+                await ws.close()
 
 
 class TestAsyncWebSocketSIMDEdgeCases:

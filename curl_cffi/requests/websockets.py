@@ -38,7 +38,7 @@ from threading import Lock as ThreadLock
 from time import monotonic as time_monotonic
 from time import sleep as sync_sleep
 from types import TracebackType
-from typing import TYPE_CHECKING, Final, Literal, TypeVar, final
+from typing import TYPE_CHECKING, Literal, final
 from warnings import warn as user_warning
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -47,9 +47,11 @@ from ..curl import Curl, CurlError
 from ..utils import CurlCffiWarning
 from .exceptions import SessionClosed, Timeout
 from .models import Response
-from .utils import NOT_SET, NotSetType, set_curl_options
+from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
 
 if TYPE_CHECKING:
+    from typing import ClassVar, Final, TypeVar
+
     from typing_extensions import Self
 
     from ..const import CurlHttpVersion
@@ -161,7 +163,7 @@ def _safe_set_result(fut: Future[None]) -> None:
 class BaseWebSocket:
     """Shared methods and static constants."""
 
-    __slots__: tuple[str, ...] = (
+    __slots__: ClassVar[tuple[str, ...]] = (
         "_close_code",
         "_close_reason",
         "_curl",
@@ -179,6 +181,8 @@ class BaseWebSocket:
     _MAX_CLOSE_REASON_SIZE: Final = _MAX_CONTROL_FRAME_SIZE - 2
     _INVALID_UTF8_MSG: Final[str] = "Invalid UTF-8 in text frame"
     _RESERVED_CLOSE_CODES: Final[frozenset[int]] = frozenset({1004, 1005, 1006, 1015})
+    # Unreachable with current libcurl, but a zero-length write would
+    # spin the writer's retry loop at full speed on a writable socket.
     _MAX_ZERO_WRITES: Final = 3
 
     def __init__(
@@ -321,6 +325,8 @@ class BaseWebSocket:
             return True
 
         if code in (CurlECode.RECV_ERROR, CurlECode.SEND_ERROR):
+            # Required: Under CONNECT_ONLY libcurl reports EAGAIN as CURLE_RECV_ERROR
+            # or CURLE_SEND_ERROR with the errno in the message, not as CURLE_AGAIN.
             err_msg: str = str(exc).lower()
             return (
                 "errno 11" in err_msg or "resource temporarily unavailable" in err_msg
@@ -349,7 +355,7 @@ class BaseWebSocket:
 class WebSocket(BaseWebSocket):
     """A high-performance synchronous WebSocket implementation using libcurl."""
 
-    __slots__ = (
+    __slots__: ClassVar[tuple[str, ...]] = (
         "_emitters",
         "_read_selector",
         "_recv_chunks",
@@ -507,7 +513,7 @@ class WebSocket(BaseWebSocket):
         headers: HeaderTypes | None = None,
         cookies: CookieTypes | None = None,
         auth: tuple[str, str] | None = None,
-        timeout: float | tuple[float, float] | object | None = NOT_SET,
+        timeout: float | tuple[float, float] | NotSetType | None = NOT_SET,
         allow_redirects: bool | CurlFollow | str = True,
         max_redirects: int = 30,
         proxies: ProxySpec | None = None,
@@ -523,7 +529,7 @@ class WebSocket(BaseWebSocket):
         extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
         default_headers: bool = True,
         quote: str | Literal[False] = "",
-        http_version: CurlHttpVersion | None = None,
+        http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
         doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
@@ -837,6 +843,7 @@ class WebSocket(BaseWebSocket):
         self,
         payload: str | bytes | bytearray | memoryview,
         flags: CurlWsFlag | int = CurlWsFlag.BINARY,
+        *,
         timeout: float | None = None,
     ) -> int:
         """
@@ -897,7 +904,8 @@ class WebSocket(BaseWebSocket):
                 if not self._is_transient_error(e):
                     raise
 
-            # Set the frame boundary for the general path.
+            # Required: without it the retry slices view[offset:0]
+            # and libcurl rejects the empty buffer.
             frame_end = total_bytes
 
         # Hoist remaining locals for general path
@@ -921,7 +929,10 @@ class WebSocket(BaseWebSocket):
         try:
             # Loop until the entire view is sent
             while offset < total_bytes or (offset == 0 and total_bytes == 0):
-                # Boundary check: Calculate next fragment ONLY when needed
+                # Only recompute the boundary on a completed frame: libcurl
+                # requires a resumed write to be the exact remainder of the
+                # open frame, and rejects anything else with "unaligned frame size".
+                # See: https://curl.se/libcurl/c/curl_ws_send.html
                 if offset == frame_end:
                     if total_bytes - offset > max_frame_size:
                         frame_end = offset + max_frame_size
@@ -1262,9 +1273,10 @@ class AsyncWebSocket(BaseWebSocket):
     A high-performance asynchronous WebSocket implementation using libcurl.
     """
 
-    _CLOSE_NOTIFY_GRACE: Final[float] = 0.5
+    CLOSE_NOTIFY_SECS: Final[float] = 0.5
 
-    __slots__ = (
+    __slots__: ClassVar[tuple[str, ...]] = (
+        "__weakref__",  # pyright: ignore[reportUninitializedInstanceVariable]
         "_block_on_recv_queue_full",
         "_close_lock",
         "_coalesce_frames",
@@ -1679,6 +1691,7 @@ class AsyncWebSocket(BaseWebSocket):
         self,
         payload: str | bytes | bytearray | memoryview,
         flags: CurlWsFlag | int = CurlWsFlag.BINARY,
+        *,
         timeout: float | None = None,
     ) -> None:
         """Send a WebSocket message.
@@ -2017,6 +2030,8 @@ class AsyncWebSocket(BaseWebSocket):
                     if self._is_transient_error(e):
                         read_future: Future[None] = create_future()
                         try:
+                            # Per-EAGAIN, not persistent. Persistent registration
+                            # adds callback churn and was benchmarked slower twice.
                             add_reader(self._sock_fd, set_fut_result, read_future)
                             await read_future
 
@@ -2032,12 +2047,11 @@ class AsyncWebSocket(BaseWebSocket):
                             return
 
                         finally:
-                            if (sock_fd := self._sock_fd) != -1:
-                                try:  # noqa: SIM105
-                                    _ = remove_reader(sock_fd)
-                                # pylint: disable-next=broad-exception-caught
-                                except Exception:
-                                    pass
+                            try:  # noqa: SIM105
+                                _ = remove_reader(self._sock_fd)
+                            # pylint: disable-next=broad-exception-caught
+                            except Exception:
+                                pass
 
                         # Loop back to the top to try reading again
                         continue
@@ -2096,7 +2110,7 @@ class AsyncWebSocket(BaseWebSocket):
                                 )
                                 _ = await wait(
                                     {write_task},
-                                    timeout=self._CLOSE_NOTIFY_GRACE,
+                                    timeout=self.CLOSE_NOTIFY_SECS,
                                 )
 
                         self._finalize_connection(
@@ -2290,10 +2304,9 @@ class AsyncWebSocket(BaseWebSocket):
         except Exception as e:
             self._finalize_connection(e)
 
-        finally:
-            # If the loop exits unexpectedly, ensure we terminate the connection.
-            if not self.closed:
-                self.terminate()
+        # Every failing exit above already calls _finalize_connection,
+        # and after a clean CLOSE the initiator finishes teardown
+        # Calling terminate() here would cancel a reader awaiting this task.
 
     async def _send_payload(
         self, payload: bytes | memoryview | bytearray, flags: CurlWsFlag | int
@@ -2320,6 +2333,8 @@ class AsyncWebSocket(BaseWebSocket):
                     self._finalize_connection(e)
                     return False
 
+            # Required: Without it the retry slices view[offset:0]
+            # and libcurl rejects the empty buffer.
             frame_end = total_bytes
 
         # Cache remaining locals for the general path
@@ -2342,7 +2357,10 @@ class AsyncWebSocket(BaseWebSocket):
         try:
             # General path: loop until the entire view is sent
             while offset < total_bytes or (offset == 0 and total_bytes == 0):
-                # Boundary check: Calculate next fragment ONLY when needed
+                # Only recompute the boundary on a completed frame: libcurl
+                # requires a resumed write to be the exact remainder of the
+                # open frame, and rejects anything else with "unaligned frame size".
+                # See: https://curl.se/libcurl/c/curl_ws_send.html
                 if offset == frame_end:
                     if total_bytes - offset > max_frame_size:
                         frame_end = offset + max_frame_size
@@ -2404,12 +2422,11 @@ class AsyncWebSocket(BaseWebSocket):
 
                         finally:
                             # FD can go stale in between awaits
-                            if (sock_fd := self._sock_fd) != -1:
-                                try:  # noqa: SIM105
-                                    _ = remove_writer(sock_fd)
-                                # pylint: disable-next=broad-exception-caught
-                                except Exception:
-                                    pass
+                            try:  # noqa: SIM105
+                                _ = remove_writer(self._sock_fd)
+                            # pylint: disable-next=broad-exception-caught
+                            except Exception:
+                                pass
 
                         # Retry the exact same chunk
                         continue
@@ -2543,11 +2560,10 @@ class AsyncWebSocket(BaseWebSocket):
                     break
 
             # Remove the reader/writer if still registered
-            if self._sock_fd != -1:
-                with suppress(Exception):
-                    _ = self.loop.remove_reader(self._sock_fd)
-                with suppress(Exception):
-                    _ = self.loop.remove_writer(self._sock_fd)
+            with suppress(Exception):
+                _ = self.loop.remove_reader(self._sock_fd)
+            with suppress(Exception):
+                _ = self.loop.remove_writer(self._sock_fd)
 
             self._sock_fd = -1
 
