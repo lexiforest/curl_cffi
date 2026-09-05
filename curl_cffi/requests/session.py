@@ -64,7 +64,6 @@ from .websockets import (
     AsyncWebSocket,
     AsyncWebSocketContext,
     WebSocket,
-    WebSocketError,
     WebSocketRetryStrategy,
     WsCloseCode,
 )
@@ -305,7 +304,7 @@ class BaseSession(Generic[R]):
         if self.base_url and not _is_absolute_url(self.base_url):
             raise ValueError("You need to provide an absolute url for 'base_url'")
 
-        self._closed = False
+        self._closed: bool = False
         # Look for requests environment configuration
         # and be compatible with cURL.
         if self.verify is True or self.verify is None:
@@ -441,7 +440,7 @@ class BaseSession(Generic[R]):
 
         return rsp
 
-    def _check_session_closed(self):
+    def _check_session_closed(self) -> None:
         if self._closed:
             raise SessionClosed("Session is closed, cannot send request.")
 
@@ -552,6 +551,7 @@ class Session(BaseSession[R]):
         self._thread = thread
         self._use_thread_local_curl = use_thread_local_curl
         self._queue = None
+        self._websockets: WeakSet[WebSocket] = WeakSet[WebSocket]()
         self._executor = None
         if use_thread_local_curl:
             self._local = threading.local()
@@ -594,7 +594,13 @@ class Session(BaseSession[R]):
     def close(self) -> None:
         """Close the session."""
         self._closed = True
-        self.curl.close()
+
+        # On a Session close, also close any live WebSockets
+        for ws in tuple[WebSocket, ...](self._websockets):
+            with suppress(Exception):
+                ws.close(WsCloseCode.GOING_AWAY, timeout=WebSocket.CLOSE_NOTIFY_SECS)
+
+        _ = self.curl.close()
 
     @contextmanager
     def stream(
@@ -788,6 +794,7 @@ class Session(BaseSession[R]):
             max_recv_speed=max_recv_speed,
             curl_options={**self.curl_options, **(curl_options or {})},
         )
+        self._websockets.add(ws)
         return ws
 
     def upkeep(self) -> int:
@@ -1541,7 +1548,7 @@ class AsyncSession(BaseSession[R]):
             # Start the background I/O tasks
             try:
                 ws._start_io_tasks()  # pyright: ignore[reportPrivateUsage]
-            except WebSocketError:
+            except BaseException:
                 ws.terminate()
                 self._websockets.discard(ws)
                 raise

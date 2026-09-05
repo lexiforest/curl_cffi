@@ -51,6 +51,7 @@ from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final, TypeVar
+    from weakref import ReferenceType
 
     from typing_extensions import Self
 
@@ -164,6 +165,7 @@ class BaseWebSocket:
     """Shared methods and static constants."""
 
     __slots__: ClassVar[tuple[str, ...]] = (
+        "__weakref__",
         "_close_code",
         "_close_reason",
         "_curl",
@@ -180,10 +182,18 @@ class BaseWebSocket:
     _MAX_CONTROL_FRAME_SIZE: Final = 125
     _MAX_CLOSE_REASON_SIZE: Final = _MAX_CONTROL_FRAME_SIZE - 2
     _INVALID_UTF8_MSG: Final[str] = "Invalid UTF-8 in text frame"
-    _RESERVED_CLOSE_CODES: Final[frozenset[int]] = frozenset({1004, 1005, 1006, 1015})
+    _RESERVED_CLOSE_CODES: Final[frozenset[int]] = frozenset[int](
+        {1004, 1005, 1006, 1015}
+    )
     # Unreachable with current libcurl, but a zero-length write would
     # spin the writer's retry loop at full speed on a writable socket.
     _MAX_ZERO_WRITES: Final = 3
+    CLOSE_NOTIFY_SECS: Final[float] = 0.5
+
+    # Annotation only - never assign.
+    __weakref__: (  # pyright: ignore[reportUninitializedInstanceVariable]
+        ReferenceType[BaseWebSocket] | None
+    )
 
     def __init__(
         self,
@@ -1273,10 +1283,7 @@ class AsyncWebSocket(BaseWebSocket):
     A high-performance asynchronous WebSocket implementation using libcurl.
     """
 
-    CLOSE_NOTIFY_SECS: Final[float] = 0.5
-
     __slots__: ClassVar[tuple[str, ...]] = (
-        "__weakref__",  # pyright: ignore[reportUninitializedInstanceVariable]
         "_block_on_recv_queue_full",
         "_close_lock",
         "_coalesce_frames",
@@ -1951,6 +1958,11 @@ class AsyncWebSocket(BaseWebSocket):
                 try:
                     super().terminate()
                     self.session.push_curl(None)
+
+                    # pylint: disable-next=protected-access
+                    self.session._websockets.discard(  # pyright: ignore[reportPrivateUsage]
+                        self
+                    )
                 finally:
                     self.close_event.set()
 
@@ -2576,6 +2588,11 @@ class AsyncWebSocket(BaseWebSocket):
             ):
                 # WebSocket curls CANNOT be reused
                 self.session.push_curl(None)
+
+                # pylint: disable-next=protected-access
+                self.session._websockets.discard(  # pyright: ignore[reportPrivateUsage]
+                    self
+                )
 
         finally:
             self.close_event.set()

@@ -814,6 +814,52 @@ class TestWebSocketCloseAndState:
         assert code == WsCloseCode.OK
         assert reason == ""
 
+    def test_session_close_closes_live_websockets(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Closing a Session must close any WebSocket still open on it."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        with Session[Response](verify=False) as session:
+            ws: WebSocket = session.ws_connect(configurable_ws_server.url)
+            assert not ws.closed
+
+            session.close()
+            assert ws.closed, "session.close() left a live WebSocket running"
+            with pytest.raises((WebSocketClosed, WebSocketError)):
+                _ = ws.send(b"should fail")
+
+    def test_websocket_accounting_across_lifecycle(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """The tracking set must track live connections through every exit path."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        with Session[Response](verify=False) as session:
+
+            def live() -> int:
+                return len(session._websockets)  # pyright: ignore[reportPrivateUsage]
+
+            assert live() == 0
+
+            ws: WebSocket = session.ws_connect(configurable_ws_server.url)
+            assert live() == 1
+            ws.close()
+            assert ws.closed
+
+            # sync WebSocket has no session back-reference, so nothing
+            # discards on close/terminate.
+            ws2: WebSocket = session.ws_connect(configurable_ws_server.url)
+            assert live() == 2
+            ws2.terminate()
+            assert ws2.closed
+
+            with pytest.raises((CurlError, WebSocketError)):
+                _ = session.ws_connect("ws://127.0.0.1:1/nonexistent", timeout=5.0)
+            assert live() == 2, "failed connect registered a WebSocket"
+
 
 class TestWebSocketIterator:
     def test_for_in_loop(

@@ -370,17 +370,21 @@ You can control the internal buffer sizes to manage TCP backpressure. These valu
 
 *   **recv_queue_size** (default: 64): Max incoming messages to buffer internally. ``max_message_size`` caps how large each one can be, so the worst case is fixed at ``recv_queue_size`` × ``max_message_size`` — 256MB with the defaults.
 *   **send_queue_size** (default: 32): Max outgoing messages to buffer before ``send()`` blocks. Outgoing messages have no size limit, so size this against your own largest message.
-*   **block_on_recv_queue_full** (default: ``True``): Behavior when the receive queue is full. If ``True`` (default), the reader blocks until there is space in the queue (may cause timeouts). If ``False``, the connection fails immediately to prevent data loss.
+*   **block_on_recv_queue_full** (default: ``True``): Behavior when the receive queue is full. If ``True``, the reader blocks until there is space in the queue (may cause timeouts). If ``False``, the connection fails immediately to prevent data loss.
 *   **drain_on_error** (default: ``False``): When a fatal error occurs, calls to ``recv()`` will drain all buffered messages first before raising the exception.
+
+Queue size interacts with cache residency: the working set is
+``queue_size`` × typical message size, and once it exceeds the CPU's
+L2/L3 cache, throughput drops.
 
 .. code-block:: python
 
-    # Larger queues suit high rates of small messages (e.g., market data)
-    ws = await session.ws_connect(
-        url,
-        recv_queue_size=1024,
-        send_queue_size=1024
-    )
+    # Many small messages (< 4KB): larger queues cut scheduling overhead
+    ws = await session.ws_connect(url, recv_queue_size=1024, send_queue_size=1024)
+
+    # Streaming large messages (>= 64KB): smaller queues keep the working
+    # set in cache and measurably improve throughput
+    ws = await session.ws_connect(url, recv_queue_size=16, send_queue_size=16)
 
 Frame Coalescing
 ----------------
@@ -437,10 +441,10 @@ The WebSocket clients now handle message fragmentation and reassembly automatica
 As a result, the ``recv_fragment()`` method has been deprecated and removed. If your existing code relied on ``recv_fragment()`` to manually stitch together ``CONT`` frames, you can safely remove that logic and simply call ``recv()``.
 
 **Closing a session closes its WebSockets**:
-Closing an ``AsyncSession``, or leaving its ``async with`` block, now closes any WebSocket still open on it with a ``1001`` (going away) frame. Keep the session open for as long as the connection is needed.
+Closing a session, or leaving its context manager block, now closes any WebSocket still open on it with a ``1001`` (going away) frame. Keep the session open for as long as the connection is needed.
 
 **WebSockets count against max_clients**:
-Each WebSocket holds one of the session's curl handles for as long as it stays connected. If every handle is held by a WebSocket, further requests raise ``RequestException`` rather than waiting indefinitely. Increase ``max_clients`` if you need more connections at once.
+Each async WebSocket holds one of the ``AsyncSession`` curl handles for its lifetime. If every handle is held by a WebSocket, further requests raise ``RequestException`` rather than waiting indefinitely. Increase ``max_clients`` if you need more connections at once.
 
 **send() timeout is keyword-only**:
 ``ws.send(payload, flags, timeout)`` no longer works — pass ``timeout=`` by name. This matches every other send and receive method.
@@ -450,6 +454,6 @@ Performance Tuning
 
 The WebSocket protocol requires every client-to-server message to be masked (XOR) according to RFC 6455.
 
-Curl-CFFI uses a highly customized version of libcurl enhanced with AVX-512/AVX2/NEON SIMD vectorized masking. It is capable of multi-gigabit throughput in both directions.
+Curl-CFFI uses a customized build of libcurl enhanced with AVX-512/AVX2/NEON SIMD vectorized masking. It is capable of multi-gigabit throughput in both directions.
 
-If your application needs to send large volumes of data, you should **focus on sending fewer, larger messages** (e.g., 64KB to 1MB per message). This minimizes the framing and FFI overhead, allowing the C-layer SIMD instructions to process the payload at hardware limits.
+If your application needs to send large volumes of data, you should **focus on sending fewer, larger messages** (e.g., 64KB to 1MB per message). This minimizes the framing and FFI overhead, allowing the C-layer to process the payload at hardware limits.
