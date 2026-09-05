@@ -11,7 +11,6 @@ import warnings
 from contextlib import suppress
 from dataclasses import dataclass
 from http.cookiejar import Cookie, CookieJar
-from http.cookies import _unquote
 from typing import Optional, Union
 from collections.abc import Iterator, MutableMapping
 from urllib.parse import urlparse
@@ -66,7 +65,9 @@ class CurlMorsel:
             secure=cls.parse_bool(secure),
             expires=int(expires),
             name=name,
-            value=_unquote(value),
+            # Keep the value verbatim, including surrounding quotes, so a
+            # server-quoted value round-trips quoted, matching requests.
+            value=value,
             http_only=http_only,
         )
 
