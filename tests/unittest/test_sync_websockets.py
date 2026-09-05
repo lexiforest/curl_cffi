@@ -27,7 +27,7 @@ from collections.abc import Awaitable, Callable, Generator, Iterator
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Literal
+from typing import Final, Literal
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -69,7 +69,6 @@ class ServerConfig:
     response_size: int = 1024
     close_code: int = WsCloseCode.OK
     close_reason: str = ""
-    max_size: int = 32 * 1024 * 1024
 
 
 async def echo_handler(ws: websockets.ServerConnection, config: ServerConfig) -> None:
@@ -151,6 +150,25 @@ async def large_response_handler(
         pass
 
 
+_MAX_FRAME: Final[int] = (
+    WebSocket._MAX_CURL_FRAME_SIZE
+)  # pyright: ignore[reportPrivateUsage]
+DEFAULT_SERVER_MAX_SIZE: Final[int] = 32 * 1024 * 1024
+
+
+def _pattern(size: int) -> bytes:
+    """Non-uniform payload: 251 is coprime with the frame size and the mask
+    width, so reordering or duplication shows up in an equality check."""
+    return (bytes(range(251)) * (size // 251 + 1))[:size]
+
+
+def _text_pattern(size: int) -> str:
+    """UTF-8 safe counterpart to _pattern. Period 95 is coprime with the frame
+    size and the mask width."""
+    block: str = "".join(chr(32 + i) for i in range(95))
+    return (block * (size // 95 + 1))[:size]
+
+
 HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.ECHO: echo_handler,
     ServerBehavior.BROADCAST: broadcast_handler,
@@ -174,9 +192,12 @@ class ConfigurableWSServer:
         self.set_config(ServerConfig(**kwargs))
 
 
-def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
+def start_configurable_ws_server(
+    port: int = 0, max_size: int = DEFAULT_SERVER_MAX_SIZE
+) -> ConfigurableWSServer:
     ready: threading.Event = threading.Event()
     stop_q: queue.Queue[Callable[[], None]] = queue.Queue()
+    port_q: queue.Queue[int] = queue.Queue()
     config_holder: list[ServerConfig] = [ServerConfig()]
 
     def set_config(cfg: ServerConfig) -> None:
@@ -198,10 +219,10 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
             await handler_fn(ws, cfg)
 
         async def _run() -> None:
-            initial_max_size: int = config_holder[0].max_size
             async with websockets.serve(
-                handler, "127.0.0.1", port, max_size=initial_max_size
-            ):
+                handler, "127.0.0.1", port, max_size=max_size
+            ) as server:
+                port_q.put(int(server.sockets[0].getsockname()[1]))
                 stop_q.put(_stop)
                 ready.set()
                 _ = await stop_event.wait()
@@ -215,12 +236,13 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
     t: threading.Thread = threading.Thread(target=_thread_target, daemon=True)
     t.start()
 
+    bound_port: int = port_q.get()
     stop: Callable[[], None] = stop_q.get()
     _ = ready.wait()
 
     return ConfigurableWSServer(
-        url=f"ws://127.0.0.1:{port}",
-        port=port,
+        url=f"ws://127.0.0.1:{bound_port}",
+        port=bound_port,
         stop=stop,
         set_config=set_config,
         _thread=t,
@@ -234,7 +256,7 @@ def start_configurable_ws_server(port: int) -> ConfigurableWSServer:
 
 @pytest.fixture(scope="module")
 def configurable_ws_server() -> Generator[ConfigurableWSServer, None, None]:
-    server: ConfigurableWSServer = start_configurable_ws_server(port=8966)
+    server: ConfigurableWSServer = start_configurable_ws_server()
     try:
         yield server
     finally:
@@ -500,14 +522,14 @@ class TestWebSocketPing:
 class TestWebSocketLargeMessages:
     @pytest.mark.parametrize("size", [1024, 65536, 100_000, 500_000])
     def test_large_message_echo(self, ws_connection: WebSocket, size: int) -> None:
-        payload: bytes = b"X" * size
+        payload: bytes = _pattern(size)
         _ = ws_connection.send(payload, timeout=10.0)
         data, _ = ws_connection.recv(timeout=10.0)
         assert len(data) == size
         assert data == payload
 
     def test_message_at_curl_frame_boundary(self, ws_connection: WebSocket) -> None:
-        payload: bytes = b"B" * 65536
+        payload: bytes = _pattern(_MAX_FRAME)
         _ = ws_connection.send(payload, timeout=10.0)
         data, _ = ws_connection.recv(timeout=10.0)
         assert data == payload
@@ -589,7 +611,7 @@ class TestWebSocketRunForever:
             nonlocal error_triggered
             error_triggered = True
             assert isinstance(exc, WebSocketError)
-            assert "too large" in str(exc).lower()
+            assert exc.code == CurlECode.TOO_LARGE
 
         def on_close(ws: WebSocket, code: int, reason: str) -> None:
             nonlocal close_code
@@ -852,63 +874,11 @@ class TestWebSocketParameterBoundaries:
             with pytest.raises(WebSocketError) as exc_info:
                 _ = ws.recv(timeout=5.0)
 
-            assert "Message too large" in str(exc_info.value)
             assert exc_info.value.code == CurlECode.TOO_LARGE
 
 
 class TestWebSocketFragmentationFix:
     """Tests validating the manual memoryview slicing & boundary math."""
-
-    def test_partial_write_exact_boundary_resumption(
-        self, ws_connection: WebSocket
-    ) -> None:
-        original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
-        attempt_logs: list[tuple[int, int]] = []
-
-        def mock_ws_send(chunk: memoryview, flags: int) -> int:
-            chunk_len: int = len(chunk)
-            if chunk_len == 65536 and len(attempt_logs) == 0:
-                n_sent: int = 10000
-            else:
-                n_sent = chunk_len
-
-            attempt_logs.append((chunk_len, n_sent))
-            return original_ws_send(chunk[:n_sent], flags)
-
-        with unittest.mock.patch.object(
-            ws_connection.curl, "ws_send", side_effect=mock_ws_send
-        ):
-            payload: bytes = b"X" * 100000
-            _ = ws_connection.send(payload, timeout=5.0)
-
-            data, _ = ws_connection.recv(timeout=5.0)
-            assert data == payload
-
-            assert len(attempt_logs) == 3
-            assert attempt_logs[0] == (65536, 10000)
-            assert attempt_logs[1] == (55536, 55536)
-            assert attempt_logs[2] == (34464, 34464)
-
-    def test_send_eagain_retry_preserves_state(self, ws_connection: WebSocket) -> None:
-        original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
-        call_count = 0
-
-        def mock_ws_send(chunk: memoryview, flags: int) -> int:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise CurlError("Simulated EAGAIN", CurlECode.AGAIN)
-            return original_ws_send(chunk, flags)
-
-        with unittest.mock.patch.object(
-            ws_connection.curl, "ws_send", side_effect=mock_ws_send
-        ):
-            payload: bytes = b"Y" * 100000
-            _ = ws_connection.send(payload, timeout=5.0)
-            data, _ = ws_connection.recv(timeout=5.0)
-
-            assert data == payload
-            assert call_count == 3
 
     def test_send_timeout_partial_write_terminates_connection(self) -> None:
         """
@@ -945,7 +915,6 @@ class TestWebSocketFragmentationFix:
             _ = ws.send(b"X" * 100000, timeout=0.05)
 
         # Ensure the original timeout exception bubbles up without masking
-        assert "write timeout" in str(exc_info.value).lower()
         assert exc_info.value.code == CurlECode.OPERATION_TIMEDOUT
 
         # The connection must have been forcefully terminated to prevent frame desync
@@ -982,6 +951,90 @@ class TestWebSocketFragmentationFix:
 
         # Connection must remain open because offset was 0
         assert ws.closed is False
+
+    def test_partial_write_exact_boundary_resumption(
+        self, ws_connection: WebSocket
+    ) -> None:
+        """A partial write must resume with exactly the remainder of the frame.
+
+        Asserts the invariant, not a call count: POSIX does not guarantee that
+        send() accepts the whole buffer, so the number of ws_send() calls is
+        kernel dependent. See issue #849. The async twin of this test is in
+        test_async_websockets.py -- keep them in step.
+        """
+        original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
+        offered: list[int] = []
+        accepted: list[int] = []
+
+        def mock_ws_send(chunk: memoryview, flags: int) -> int:
+            # Truncate the first call so the resumption path is exercised even
+            # on kernels that always accept the whole buffer.
+            truncate: bool = not offered
+            offered.append(len(chunk))
+            try:
+                if truncate:
+                    n_sent: int = original_ws_send(chunk[:10000], flags)
+                else:
+                    n_sent = original_ws_send(chunk, flags)
+            except BaseException:
+                accepted.append(0)  # keep the logs index-aligned on EAGAIN
+                raise
+            accepted.append(n_sent)
+            return n_sent
+
+        payload: bytes = _pattern(100000)
+        with unittest.mock.patch.object(
+            ws_connection.curl, "ws_send", side_effect=mock_ws_send
+        ):
+            _ = ws_connection.send(payload, timeout=5.0)
+            data, _ = ws_connection.recv(timeout=10.0)
+
+        assert data == payload
+
+        # Every call must offer exactly the remainder of the open frame. More
+        # trips libcurl's "unaligned frame size"; less silently drops bytes.
+        offset: int = 0
+        for offered_len, accepted_len in zip(offered, accepted, strict=True):
+            expected: int = min(
+                _MAX_FRAME - (offset % _MAX_FRAME), len(payload) - offset
+            )
+            assert (
+                offered_len == expected
+            ), f"at offset {offset}: offered {offered_len}, expected {expected}"
+            offset += accepted_len
+
+        assert offset == len(payload)
+        assert any(
+            a < o for o, a in zip(offered, accepted, strict=True)
+        ), "no partial write occurred, the resumption path was not exercised"
+
+    def test_send_eagain_retry_preserves_state(self, ws_connection: WebSocket) -> None:
+        """EAGAIN must not corrupt frame boundary state.
+
+        The retry has to present the identical buffer and flags. Total call
+        count is kernel dependent (issue #849), so it is not asserted.
+        """
+        original_ws_send: Callable[..., int] = ws_connection.curl.ws_send
+        offers: list[tuple[int, int]] = []
+
+        def mock_ws_send(chunk: memoryview, flags: int) -> int:
+            offers.append((len(chunk), flags))
+            if len(offers) == 1:
+                raise CurlError("Simulated EAGAIN", CurlECode.AGAIN)
+            return original_ws_send(chunk, flags)
+
+        payload: bytes = _pattern(100000)
+        with unittest.mock.patch.object(
+            ws_connection.curl, "ws_send", side_effect=mock_ws_send
+        ):
+            _ = ws_connection.send(payload, timeout=5.0)
+            data, _ = ws_connection.recv(timeout=10.0)
+
+        assert data == payload
+        assert len(offers) >= 3
+        assert (
+            offers[1] == offers[0]
+        ), "the retry after EAGAIN changed the frame boundary or the flags"
 
 
 class TestWebSocketRobustness:
@@ -1102,10 +1155,8 @@ class TestWebSocketRobustness:
 
         # 1. First attempt: Call recv() with a timeout. It should read Fragment 1,
         # hit EAGAIN, block on select(), time out, and raise WebSocketTimeout.
-        with pytest.raises(WebSocketTimeout) as exc_info:
+        with pytest.raises(WebSocketTimeout):
             _ = ws.recv(timeout=0.1)
-
-        assert "recv() timed out" in str(exc_info.value)
 
         # VERIFY STATE PRESERVATION: Option B must have safely saved the partial state
         assert len(ws._recv_chunks) == 1
@@ -1157,13 +1208,19 @@ class TestWebSocketRobustness:
         with pytest.raises(WebSocketClosed) as exc_info:
             _ = ws.recv()
 
-        assert "Server EOF" in str(exc_info.value)
+        assert exc_info.value.code == WsCloseCode.ABNORMAL_CLOSURE
 
         # VERIFY LEAK PREVENTION: The connection must be closed
         # and the partial buffer cleared
         assert ws.closed is True
         assert len(ws._recv_chunks) == 0
         assert ws._recv_msg_size == 0
+
+    def test_large_text_message(self, ws_connection: WebSocket) -> None:
+        payload: str = _text_pattern(100_000)
+        _ = ws_connection.send_str(payload, timeout=10.0)
+        response: str = ws_connection.recv_str(timeout=10.0)
+        assert response == payload
 
 
 class TestWebSocketSIMDEdgeCases:
@@ -1174,8 +1231,7 @@ class TestWebSocketSIMDEdgeCases:
         self, ws_connection: WebSocket, extra_bytes: int
     ) -> None:
         size: int = 128 + extra_bytes
-        payload: bytes = b"\xde\xad\xbe\xef" * (size // 4) + b"\xff" * (size % 4)
-        payload = payload[:size]
+        payload: bytes = bytes((i * 7 + 13) % 251 for i in range(size))
 
         _ = ws_connection.send_binary(payload, timeout=5.0)
         data, _ = ws_connection.recv(timeout=5.0)
@@ -1218,14 +1274,14 @@ class TestWebSocketSIMDEdgeCases:
     def test_simd_to_scalar_transition_boundaries(
         self, ws_connection: WebSocket, length: int
     ) -> None:
-        payload: bytes = b"A" * length
+        payload: bytes = _pattern(length)
         _ = ws_connection.send(payload, timeout=5.0)
         data, _ = ws_connection.recv(timeout=5.0)
         assert data == payload
         assert len(data) == length
 
 
-class TestWebSocketThreadSafety:
+class TestWebSocketMultithreadedDispatch:
     """Verifies that multiple independent synchronous clients run cleanly on threads."""
 
     def test_multithreaded_event_loops(

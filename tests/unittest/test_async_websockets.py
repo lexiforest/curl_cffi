@@ -218,7 +218,9 @@ HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.SEND_PINGS: send_pings_handler,
 }
 
-_MAX_FRAME: Final[int] = 65536
+_MAX_FRAME: Final[int] = (
+    AsyncWebSocket._MAX_CURL_FRAME_SIZE
+)  # pyright: ignore[reportPrivateUsage]
 DEFAULT_SERVER_MAX_SIZE: Final[int] = 32 * 1024 * 1024
 
 
