@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import queue
+import socket
 import threading
 import unittest.mock
 from asyncio import Task
@@ -33,7 +34,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from struct import unpack
-from typing import Protocol, Final
+from typing import Final, NamedTuple, Protocol
 from unittest.mock import Mock
 
 import pytest
@@ -46,6 +47,7 @@ from curl_cffi import (
     Curl,
     CurlECode,
     CurlError,
+    CurlInfo,
     CurlWsFlag,
     Response,
     WebSocketClosed,
@@ -53,6 +55,7 @@ from curl_cffi import (
     WebSocketTimeout,
     WsCloseCode,
 )
+from curl_cffi.requests.exceptions import RequestException
 
 # =============================================================================
 # Test Server Infrastructure
@@ -217,7 +220,9 @@ HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.SEND_PINGS: send_pings_handler,
 }
 
-_MAX_FRAME: Final[int] = 65536
+_MAX_FRAME: Final[int] = (
+    AsyncWebSocket._MAX_CURL_FRAME_SIZE
+)  # pyright: ignore[reportPrivateUsage]
 DEFAULT_SERVER_MAX_SIZE: Final[int] = 32 * 1024 * 1024
 
 
@@ -391,6 +396,55 @@ async def ws_connection(
         yield ws
     finally:
         await ws.close()
+
+
+class StalledServer(NamedTuple):
+    """Stall test helper"""
+
+    url: str
+    disconnect: Callable[[], None]
+
+
+@pytest.fixture
+def stalled_ws_server() -> Generator[StalledServer, object, None]:
+    """A TCP listener that accepts and never replies, so the WebSocket
+    handshake blocks inside curl_easy_perform and the cancellation window is
+    deterministic rather than a race against loopback."""
+    sock: socket.socket = socket.socket()
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(8)
+    port: int = int(sock.getsockname()[1])
+    accepted: list[socket.socket] = []
+    stop: threading.Event = threading.Event()
+
+    def _accept_loop() -> None:
+        sock.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                conn, _addr = sock.accept()
+            except OSError:
+                continue
+            accepted.append(conn)
+
+    def _disconnect() -> None:
+        """Drop the peer so an abandoned curl_easy_perform returns.
+
+        Without this the executor worker stays blocked and
+        ThreadPoolExecutor's atexit hook joins it forever at shutdown.
+        """
+        while accepted:
+            accepted.pop().close()
+
+    t: threading.Thread = threading.Thread(target=_accept_loop, daemon=True)
+    t.start()
+    try:
+        yield StalledServer(url=f"ws://127.0.0.1:{port}", disconnect=_disconnect)
+    finally:
+        stop.set()
+        t.join(timeout=2)
+        _disconnect()
+        sock.close()
 
 
 @asynccontextmanager
@@ -2209,12 +2263,16 @@ class TestAsyncWebSocketBugFixes:
                     return (b"saved_by_the_bell", CurlWsFlag.TEXT)
                 return await original_get()
 
-            ws._receive_queue.get = mock_get  # pyright: ignore[reportPrivateUsage]
-
-            # The recv() call should NOT drop the message, should gracefully return it
-            data, flags = await ws.recv(timeout=0.1)
-            assert data == b"saved_by_the_bell"
-            assert flags == CurlWsFlag.TEXT
+            with unittest.mock.patch.object(
+                ws._receive_queue,  # pyright: ignore[reportPrivateUsage]
+                "get",
+                mock_get,
+            ):
+                # The recv() call should NOT drop the message, should gracefully
+                # return it
+                data, flags = await ws.recv(timeout=0.1)
+                assert data == b"saved_by_the_bell"
+                assert flags == CurlWsFlag.TEXT
 
     async def test_recv_json_enforces_text_frame(
         self,
@@ -2609,6 +2667,200 @@ class TestAsyncWebSocketRobustness:
         assert not ws.is_alive()
         with pytest.raises((WebSocketClosed, WebSocketError)):
             _ = await ws.recv(timeout=2.0)
+
+    async def test_cancelled_connect_does_not_leak_pool_permit(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        stalled_ws_server: StalledServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Cancelling ws_connect() mid-handshake must return its slot to the pool.
+
+        With max_clients=1 a leaked slot is unrecoverable: the WebSocket is
+        discarded from _websockets, so the futility guard in pop_curl() sees a
+        count of 0 and waits on an empty pool forever.
+        """
+        async with AsyncSession[Response](max_clients=1) as session:
+
+            async def _stalled_connect() -> AsyncWebSocket:
+                # 2s connect timeout so the worker thread is not stuck for the
+                # rest of the session once we abandon it.
+                return await session.ws_connect(stalled_ws_server.url, timeout=2.0)
+
+            task: Task[AsyncWebSocket] = asyncio.create_task(_stalled_connect())
+            await asyncio.sleep(0.1)  # let it reach curl_easy_perform
+            assert not task.done(), "handshake completed; window not exercised"
+
+            _ = task.cancel()
+            with suppress(asyncio.CancelledError):
+                _ = await task
+
+            # The permit must be back regardless of where the cancel landed.
+            assert not session.pool.empty(), "cancelled connect leaked its pool slot"
+
+            # let the worker observe EOF and return
+            stalled_ws_server.disconnect()
+            await asyncio.sleep(0.1)
+
+            # Pin the shared server's behaviour: it is module-scoped, so without
+            # this it keeps whatever the previous test set.
+            ws_config(behavior=ServerBehavior.ECHO)
+
+            async def _good_connect() -> AsyncWebSocket:
+                return await session.ws_connect(configurable_ws_server.url)
+
+            # Hangs forever if the slot leaked, so bound it.
+            ws: AsyncWebSocket = await asyncio.wait_for(_good_connect(), timeout=10.0)
+            try:
+                await ws.send(b"still works")
+                data, _ = await ws.recv(timeout=5.0)
+                assert data == b"still works"
+            finally:
+                await ws.close()
+
+    @pytest.mark.asyncio
+    async def test_closed_websocket_does_not_inflate_pool_guard(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """A closed WebSocket must leave the _websockets set, not linger until GC.
+
+        A closed-but-referenced WebSocket keeps the count at max_clients, so once
+        an ordinary request takes the returned handle both conditions hold again
+        and the request raises instead of queueing on the pool.
+        """
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with AsyncSession[Response](max_clients=2, verify=False) as session:
+            ws1: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
+            ws2: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
+            assert len(session._websockets) == 2  # pyright: ignore[reportPrivateUsage]
+
+            # Keep ws1 referenced for the rest of the test -- `del ws1` would let
+            # the WeakSet drop it and hide the bug this test catches.
+            await ws1.close()
+            assert (
+                len(session._websockets) == 1  # pyright: ignore[reportPrivateUsage]
+            ), "closed WebSocket still counted; _terminate_helper did not discard"
+
+            # This is the consumer that empties the pool without
+            # incrementing the WebSocket count, which is what exposes the bug.
+            http_url: str = f"http://127.0.0.1:{configurable_ws_server.port}/"
+            results: tuple[Response | BaseException, ...] = await asyncio.gather(
+                session.get(http_url),
+                session.get(http_url),
+                return_exceptions=True,
+            )
+            for r in results:
+                assert not isinstance(
+                    r, RequestException
+                ), f"request rejected by the pool guard: {r!r}"
+
+            assert ws1.closed and not ws2.closed
+            await ws2.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_accounting_across_lifecycle(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        stalled_ws_server: StalledServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """len(_websockets) must track live connections, not dependant on GC timing.
+
+        Every acquire/release path is exercised in one place so a future edit
+        that adds an exit path without a discard fails here.
+        """
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with AsyncSession[Response](max_clients=4, verify=False) as session:
+
+            def live() -> int:
+                return len(session._websockets)  # pyright: ignore[reportPrivateUsage]
+
+            assert live() == 0
+
+            # Connect
+            ws: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
+            assert live() == 1
+
+            # Graceful close
+            await ws.close()
+            assert live() == 0, "close() left an entry behind"
+
+            # Terminate() without close()
+            ws2: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
+            assert live() == 1
+            ws2.terminate()
+            _ = await asyncio.wait_for(ws2.close_event.wait(), timeout=5.0)
+            assert live() == 0, "terminate() left an entry behind"
+
+            # Failed handshake
+            with pytest.raises((CurlError, WebSocketError)):
+                _ = await session.ws_connect(
+                    "ws://127.0.0.1:1/nonexistent", timeout=5.0
+                )
+            assert live() == 0, "failed connect left an entry behind"
+
+            # Cancelled handshake
+            async def _stalled_connect() -> AsyncWebSocket:
+                return await session.ws_connect(stalled_ws_server.url, timeout=2.0)
+
+            task: Task[AsyncWebSocket] = asyncio.create_task(_stalled_connect())
+            await asyncio.sleep(0.1)
+            assert not task.done(), "handshake completed; window not exercised"
+            _ = task.cancel()
+            with suppress(asyncio.CancelledError):
+                _ = await task
+
+            # The permit must be back regardless of where the cancel landed.
+            assert not session.pool.empty(), "cancelled connect leaked its pool slot"
+
+            stalled_ws_server.disconnect()
+            await asyncio.sleep(0.1)
+            assert live() == 0, "cancelled connect left an entry behind"
+
+            # Session close with a live connection
+            ws3: AsyncWebSocket = await session.ws_connect(configurable_ws_server.url)
+            assert live() == 1
+
+        assert ws3.closed, "session close did not close its WebSocket"
+
+    @pytest.mark.asyncio
+    async def test_start_io_tasks_failure_releases_pool_permit(
+        self,
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """A non-WebSocketError from _start_io_tasks must not leak the permit."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with AsyncSession[Response](max_clients=1, verify=False) as session:
+            real_getinfo: Callable[..., bytes | int | float | list[str | int]] = (
+                Curl.getinfo
+            )
+
+            def _boom(self: Curl, option: CurlInfo) -> object:
+                if option == CurlInfo.ACTIVESOCKET:
+                    raise CurlError("simulated getinfo failure", CurlECode.FAILED_INIT)
+                return real_getinfo(self, option)
+
+            with (
+                unittest.mock.patch.object(Curl, "getinfo", _boom),
+                pytest.raises((CurlError, WebSocketError)),
+            ):
+                _ = await session.ws_connect(configurable_ws_server.url, timeout=5.0)
+
+            # Nothing holds a strong reference to the failed WebSocket,
+            # so the WeakSet drops it on GC whether or not the code discarded it.
+            ws: AsyncWebSocket = await asyncio.wait_for(
+                session.ws_connect(configurable_ws_server.url), timeout=10.0
+            )
+            await ws.close()
+
+            # Hangs rather than fails if the count leaked, so bound it.
+            ws = await asyncio.wait_for(
+                session.ws_connect(configurable_ws_server.url), timeout=10.0
+            )
+            await ws.close()
 
 
 class TestAsyncWebSocketSIMDEdgeCases:

@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import locale
+import os
 import re
-import struct
 import ssl
+import struct
 import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
-
-import os
 
 import certifi
 
@@ -261,7 +260,7 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
-    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
+    _WS_RECV_BUFFER_SIZE: int = 128 * 1024  # 128 kB
 
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
@@ -745,7 +744,9 @@ class Curl:
         )
 
     def ws_send(
-        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+        self,
+        payload: bytes | bytearray | memoryview,
+        flags: CurlWsFlag | int = CurlWsFlag.BINARY,
     ) -> int:
         """Send data to a websocket connection.
 
@@ -758,10 +759,15 @@ class Curl:
 
         Raises:
             CurlError: if failed.
+
+        Notes:
+            Memoryview payloads must be byte-format for ``len()`` to work correctly.
         """
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
+        # Do NOT assign ffi.from_buffer() to a variable!
+        # See: https://github.com/lexiforest/curl_cffi/pull/700
         if ret := lib.curl_ws_send(
             self._curl,
             ffi.from_buffer(payload),
