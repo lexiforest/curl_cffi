@@ -1942,25 +1942,28 @@ class AsyncWebSocket(BaseWebSocket):
                 self._close_code = code
                 self._close_reason = message.decode("utf-8", errors="replace")
 
-            with suppress(AsyncTimeout, WebSocketError):
-                if (
-                    self._write_task
-                    and not self._write_task.done()
-                    and self._transport_exception is None
-                ):
-                    # Send Close Frame and wait for queue to empty
-                    close_frame: bytes = self._pack_close_frame(code, message)
-                    await wait_for(
-                        self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
-                        timeout=timeout,
-                    )
-                    # Subtract time already elapsed when flushing queue
-                    await self.flush(
-                        max(0.0, timeout - (self.loop.time() - close_start))
-                    )
+            try:
+                with suppress(AsyncTimeout, WebSocketError):
+                    if (
+                        self._write_task
+                        and not self._write_task.done()
+                        and self._transport_exception is None
+                    ):
+                        # Send Close Frame and wait for queue to empty
+                        close_frame: bytes = self._pack_close_frame(code, message)
+                        await wait_for(
+                            self._send_queue.put((close_frame, CurlWsFlag.CLOSE)),
+                            timeout=timeout,
+                        )
+                        # Subtract time already elapsed when flushing queue
+                        await self.flush(
+                            max(0.0, timeout - (self.loop.time() - close_start))
+                        )
 
-            # Ensure resources are cleaned up
-            self.terminate()
+            finally:
+                # Ensure resources are cleaned up even if close gets cancelled.
+                self.terminate()
+
             with suppress(AsyncTimeout):
                 _ = await wait_for(
                     self.close_event.wait(),

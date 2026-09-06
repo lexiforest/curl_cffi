@@ -249,23 +249,18 @@ All receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()
     except WebSocketTimeout:
         print("No message received in 5 seconds")
 
-Setting ``timeout=None`` is not honoured for the connection handshake. The connection phase runs inside libcurl and cannot be interrupted once started, so ``None`` is clamped to 30 seconds. Pass an explicit ``timeout`` if you need a different ceiling.
+Setting ``timeout=None`` is not honoured for the initial connection handshake. The connection phase runs inside libcurl and cannot be interrupted once started, so ``None`` is clamped to 30 seconds. Pass an explicit ``timeout`` if you need a different ceiling.
 
 Heartbeats and Pings
 --------------------
 
-When a PING frame is received from the server, libcurl automatically sends a PONG frame in response. Received PONG frames are consumed internally and not delivered to your application.
-
-The automatic PONG is queued alongside your own outgoing messages, so a busy sender can delay it. Worth knowing if your server enforces a tight ping deadline.
+When a PING frame is received from the server, libcurl automatically sends a PONG frame in response. Received PONG frames are consumed internally and not delivered to your application. The automatic PONG is queued alongside your own outgoing messages, so a busy sender can delay it.
 
 To send a manual PING frame:
 
 .. code-block:: python
 
-    # Async
-    await ws.ping(b"keepalive")
-
-    # Sync
+    # Add 'await' for async
     ws.ping(b"keepalive")
 
 Lifecycle Management
@@ -277,7 +272,7 @@ Context managers handle closing **automatically**. If you need to manage the lif
 
     # Graceful shutdown: sends a close frame, waits for queued messages to be sent
     # and tears down afterwards (doesn't wait for server's reply).
-    await ws.close(code=1000, message=b"bye") # Omit 'await' in Sync
+    await ws.close(code=1000, message=b"bye") # Omit 'await' in sync
 
     # Forceful shutdown: cancels all I/O and severs the socket immediately.
     ws.terminate()
@@ -317,53 +312,54 @@ Message Limits
     # Allow large received payloads (e.g. 16MB)
     ws = session.ws_connect(url, max_message_size=16 * 1024 * 1024)
 
-There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag.
+There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, arriving as a single message to the receiver.
 
 Manual Fragmentation
 --------------------
 
-You do not need to worry about frame fragmentation for large payloads. However, if you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
+The underlying implementation automatically handles frame fragmentation for large outbound messages.
+
+However, if you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
 
 .. warning::
 
     According to the ``libcurl`` specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in every chunk, alongside the ``CONT`` flag. The final chunk simply drops the ``CONT`` flag to conclude the message.
 
+    A manually fragmented message occupies the connection until its final chunk. If another task calls ``send()`` in between, the frames interleave and libcurl rejects the message with "fragmented message interrupted". Hold your own lock for the duration of a manually fragmented message, or send it from a single task.
+
 .. code-block:: python
 
     from curl_cffi import CurlWsFlag
 
-    # Async
+    # Manually fragment across frames (omit 'await' in sync)
     await ws.send("Part 1...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
     await ws.send("Part 2...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
     await ws.send("Final part", flags=CurlWsFlag.TEXT)
 
-    # Sync
-    ws.send("Part 1...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
-    ws.send("Part 2...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
-    ws.send("Final part", flags=CurlWsFlag.TEXT)
-
 Error Handling
 --------------
 
-Network errors are raised as ``WebSocketError`` or its subclasses.
+Network errors are raised as ``CurlError``. WebSocket-specific failures — a closed connection, a timeout, an oversized message — use the ``WebSocketError`` subclasses.
 
 .. code-block:: python
 
-    from curl_cffi import WebSocketClosed, WebSocketTimeout, WebSocketError
+    from curl_cffi import CurlError, WebSocketClosed, WebSocketError, WebSocketTimeout
 
     try:
-        msg = ws.recv_str() # Add 'await' in Async
+        msg = ws.recv_str()  # Add 'await' in Async
     except WebSocketClosed as e:
         print(f"Closed: {e.code} - {e}")
     except WebSocketTimeout:
         print("Did not receive a message in time.")
     except WebSocketError as e:
-        print(f"Transport/Network error: {e}")
+        print(f"WebSocket specific error: {e}")
+    except CurlError as e:
+        print(f"Network transport error: {e}")
 
 Async-Only Advanced Configuration
 =================================
 
-The ``AsyncWebSocket`` client exposes several advanced configuration options to tune its Background I/O architecture.
+The ``AsyncWebSocket`` client exposes several advanced configuration options to tune its I/O architecture.
 
 Queue Sizes (Backpressure)
 --------------------------
@@ -375,9 +371,7 @@ You can control the internal buffer sizes to manage TCP backpressure. These valu
 *   **block_on_recv_queue_full** (default: ``True``): Behavior when the receive queue is full. If ``True``, the reader blocks until there is space in the queue (may cause timeouts). If ``False``, the connection fails immediately to prevent data loss.
 *   **drain_on_error** (default: ``False``): When a fatal error occurs, calls to ``recv()`` will drain all buffered messages first before raising the exception.
 
-Queue size interacts with cache residency: the working set is
-``queue_size`` × typical message size, and once it exceeds the CPU's
-L2/L3 cache, throughput drops.
+Queue size interacts with cache residency: the working set is ``queue_size`` × typical message size, and once it exceeds the CPU's L2/L3 cache, throughput drops.
 
 .. code-block:: python
 
