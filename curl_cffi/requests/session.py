@@ -596,7 +596,7 @@ class Session(BaseSession[R]):
         self._closed = True
 
         # On a Session close, also close any live WebSockets
-        for ws in tuple[WebSocket, ...](self._websockets):
+        for ws in self._websockets:
             with suppress(Exception):
                 ws.close(WsCloseCode.GOING_AWAY, timeout=WebSocket.CLOSE_NOTIFY_SECS)
 
