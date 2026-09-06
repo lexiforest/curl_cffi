@@ -805,6 +805,15 @@ class Session(BaseSession[R]):
             max_recv_speed=max_recv_speed,
             curl_options={**self.curl_options, **(curl_options or {})},
         )
+
+        # Sync cookies set during the upgrade handshake.
+        if not self.discard_cookies:
+            with suppress(CurlError):
+                self._cookies.update_cookies_from_curl_changes(
+                    cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
+                )
+
+        # Add the connection to the tracking WeakSet
         self._websockets.add(ws)
         return ws
 
@@ -1552,7 +1561,9 @@ class AsyncSession(BaseSession[R]):
                 block_on_recv_queue_full=block_on_recv_queue_full,
                 debug=self.debug,
             )
-            # Add the WebSocket to the Weakset
+
+            # Register the connection with the tracking WeakSet.
+            # Needs to be before the perform since pop_curl reads it.
             self._websockets.add(ws)
 
             # Connect to the WebSocket
@@ -1567,6 +1578,13 @@ class AsyncSession(BaseSession[R]):
                 self.push_curl(None)
                 self._websockets.discard(ws)
                 raise
+
+            # Sync cookies set during the upgrade handshake.
+            if not self.discard_cookies:
+                with suppress(CurlError):
+                    self._cookies.update_cookies_from_curl_changes(
+                        cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
+                    )
 
             # Start the background I/O tasks
             try:

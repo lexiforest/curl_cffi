@@ -1049,7 +1049,7 @@ class WebSocket(BaseWebSocket):
         self,
         payload: object,
         *,
-        dumps: Callable[..., str] = json_dumps,
+        dumps: Callable[..., str | bytes] = json_dumps,
         timeout: float | None = None,
     ) -> int:
         """Send a JSON frame.
@@ -1057,12 +1057,17 @@ class WebSocket(BaseWebSocket):
         Args:
             payload: data to send.
             dumps: JSON encoder, default is json.dumps.
+                The encoder may return ``str`` or ``bytes``; bytes
+                must be UTF-8, since the payload is sent as a TEXT frame.
+            timeout: Max seconds to wait if the socket is blocked.
         """
         if dumps is json_dumps:
-            return self.send_str(
-                json_dumps(payload, separators=(",", ":")), timeout=timeout
+            return self.send(
+                json_dumps(payload, separators=(",", ":")),
+                CurlWsFlag.TEXT,
+                timeout=timeout,
             )
-        return self.send_str(dumps(payload), timeout=timeout)
+        return self.send(dumps(payload), CurlWsFlag.TEXT, timeout=timeout)
 
     def ping(self, payload: str | bytes, *, timeout: float | None = None) -> int:
         """Send a ping frame."""
@@ -1841,7 +1846,7 @@ class AsyncWebSocket(BaseWebSocket):
         self,
         payload: object,
         *,
-        dumps: Callable[..., str] = json_dumps,
+        dumps: Callable[..., str | bytes] = json_dumps,
         timeout: float | None = None,
     ) -> None:
         """Send a JSON frame.
@@ -1849,15 +1854,19 @@ class AsyncWebSocket(BaseWebSocket):
         Args:
             payload: Data to send.
             dumps: JSON encoder, default is :meth:`json.dumps()`.
+                The encoder may return ``str`` or ``bytes``; bytes
+                must be UTF-8, since the payload is sent as a TEXT frame.
             timeout: Max seconds to wait if the send queue is full.
 
         For more info, see the docstring for :meth:`send()`
         """
         if dumps is json_dumps:
-            return await self.send_str(
-                json_dumps(payload, separators=(",", ":")), timeout=timeout
+            return await self.send(
+                json_dumps(payload, separators=(",", ":")),
+                CurlWsFlag.TEXT,
+                timeout=timeout,
             )
-        return await self.send_str(dumps(payload), timeout=timeout)
+        return await self.send(dumps(payload), CurlWsFlag.TEXT, timeout=timeout)
 
     async def ping(self, payload: str | bytes, *, timeout: float | None = None) -> None:
         """Send a ping frame.
@@ -2020,7 +2029,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         To ensure cooperative multitasking during high-volume message streams,
         the loop yields control to the asyncio event loop periodically which
-        is tracked using an operation counter.
+        is tracked using a monotonic time slice.
 
         If the receive queue becomes full, ``await self._receive_queue.put()`` will
         block the reader loop and stall the socket read task. Thus, appropriate queue
@@ -2618,6 +2627,8 @@ class AsyncWebSocket(BaseWebSocket):
             with suppress(Exception):
                 _ = self.loop.remove_writer(self._sock_fd)
 
+        finally:
+            # Clear the socket FD
             self._sock_fd = -1
 
             # Close the Curl connection
@@ -2634,8 +2645,6 @@ class AsyncWebSocket(BaseWebSocket):
                 self.session._websockets.discard(  # pyright: ignore[reportPrivateUsage]
                     self
                 )
-
-        finally:
             self.close_event.set()
 
 

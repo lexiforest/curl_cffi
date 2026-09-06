@@ -275,8 +275,8 @@ Context managers handle closing **automatically**. If you need to manage the lif
 
 .. code-block:: python
 
-    # Graceful shutdown: sends a close frame, waits for queued messages,
-    # and awaits server acknowledgment.
+    # Graceful shutdown: sends a close frame, waits for queued messages to be sent
+    # and tears down afterwards (doesn't wait for server's reply).
     await ws.close(code=1000, message=b"bye") # Omit 'await' in Sync
 
     # Forceful shutdown: cancels all I/O and severs the socket immediately.
