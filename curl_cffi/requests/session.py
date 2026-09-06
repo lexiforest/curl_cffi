@@ -684,6 +684,8 @@ class Session(BaseSession[R]):
             cookies: Handshake request cookies (merges with session defaults).
             auth: HTTP basic auth, a tuple of (username, password).
             timeout: Handshake connection phase timeout in seconds.
+                ``None`` is clamped to ``MAX_HANDSHAKE_SECS`` (30s)
+                because the handshake cannot be interrupted once started.
             allow_redirects: Allow redirects. Can be a bool, ``CurlFollow``, or "safe".
                 Defaults to session's value (True).
             max_redirects: Max redirect counts. Defaults to the session's configured
@@ -754,6 +756,15 @@ class Session(BaseSession[R]):
         else:
             final_cookies = self.cookies if self.cookies else None
 
+        # perform() blocks this thread inside libcurl, so nothing runs
+        # until it returns. An unbounded handshake is uninterruptible.
+        # Therefore, None is clamped instead of being honoured.
+        handshake_timeout: float | tuple[float, float] | NotSetType | None = (
+            self.timeout if timeout is NOT_SET else timeout
+        )
+        if handshake_timeout is None:
+            handshake_timeout = WebSocket.MAX_HANDSHAKE_SECS
+
         # Invoke connection with properly merged session attributes
         _ = ws.connect(
             url,
@@ -761,7 +772,7 @@ class Session(BaseSession[R]):
             headers=final_headers,
             cookies=final_cookies,
             auth=auth or self.auth,
-            timeout=self.timeout if timeout is NOT_SET else timeout,
+            timeout=handshake_timeout,
             allow_redirects=(
                 self.allow_redirects if allow_redirects is None else allow_redirects
             ),
@@ -1388,6 +1399,8 @@ class AsyncSession(BaseSession[R]):
             auth: HTTP basic auth, a tuple of (username, password).
                 Only basic auth is supported.
             timeout: Handshake connection phase timeout in seconds.
+                ``None`` is clamped to ``MAX_HANDSHAKE_SECS`` (30s)
+                because the handshake cannot be interrupted once started.
             allow_redirects: Whether to allow redirection. Can be a bool, a
                 ``CurlFollow`` value, or the string ``"safe"``. Use
                 ``CurlFollow.SAFE`` or ``"safe"`` to reject redirects to
@@ -1457,6 +1470,16 @@ class AsyncSession(BaseSession[R]):
             self._check_session_closed()
 
             curl: Curl = await self.pop_curl()
+
+            # The handshake runs perform() on a worker thread, which cannot be
+            # interrupted -- cancelling stops the await but shutdown still joins
+            # the thread. So None is clamped instead of being honoured.
+            handshake_timeout: float | tuple[float, float] | NotSetType | None = (
+                self.timeout if timeout is NOT_SET else timeout
+            )
+            if handshake_timeout is None:
+                handshake_timeout = AsyncWebSocket.MAX_HANDSHAKE_SECS
+
             try:
                 _ = set_curl_options(
                     curl=curl,
@@ -1467,7 +1490,7 @@ class AsyncSession(BaseSession[R]):
                     headers_list=[self.headers, headers],
                     cookies_list=[self.cookies, cookies],
                     auth=auth or self.auth,
-                    timeout=self.timeout if timeout is NOT_SET else timeout,
+                    timeout=handshake_timeout,
                     allow_redirects=(
                         self.allow_redirects
                         if allow_redirects is None

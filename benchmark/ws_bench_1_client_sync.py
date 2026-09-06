@@ -119,7 +119,9 @@ def run_benchmark() -> None:
                 config.srv_path,
                 config.benchmark_direction.name,
             )
-            with session.ws_connect(config.srv_path) as ws:
+            with session.ws_connect(
+                config.srv_path, timeout=config.connect_timeout
+            ) as ws:
                 match config.benchmark_direction:
                     case BenchmarkDirection.READ_ONLY:
                         ws_counter(ws)

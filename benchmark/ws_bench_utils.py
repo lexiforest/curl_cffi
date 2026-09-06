@@ -103,6 +103,7 @@ class TestConfig:
     srv_path: str = f"{proto}{srv_host}:{srv_port}/ws"
     benchmark_direction: BenchmarkDirection = BenchmarkDirection.READ_ONLY
     health_check: bool = False
+    connect_timeout: int = 10
 
 
 # Initialize config object

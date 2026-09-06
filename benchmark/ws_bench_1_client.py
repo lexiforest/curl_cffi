@@ -4,9 +4,15 @@ Websocket client simple benchmark - TLS (WSS)
 """
 
 import time
-from asyncio import AbstractEventLoop, CancelledError, Task, TaskGroup, get_running_loop
+from asyncio import (
+    AbstractEventLoop,
+    CancelledError,
+    Task,
+    TaskGroup,
+    get_running_loop,
+    sleep,
+)
 from asyncio import run as run_async
-from asyncio import sleep
 
 from typing_extensions import Never
 from ws_bench_utils import BenchmarkDirection, binary_data_generator, config, logger
@@ -128,6 +134,7 @@ async def run_benchmark() -> None:
                     config.srv_path,
                     recv_queue_size=config.recv_queue,
                     send_queue_size=config.send_queue,
+                    timeout=config.connect_timeout,
                 ) as ws,
                 TaskGroup() as tg,
             ):

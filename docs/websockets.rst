@@ -249,6 +249,8 @@ All receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()
     except WebSocketTimeout:
         print("No message received in 5 seconds")
 
+Setting ``timeout=None`` is not honoured for the connection handshake. The connection phase runs inside libcurl and cannot be interrupted once started, so ``None`` is clamped to 30 seconds. Pass an explicit ``timeout`` if you need a different ceiling.
+
 Heartbeats and Pings
 --------------------
 

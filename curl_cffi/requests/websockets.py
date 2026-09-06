@@ -4,6 +4,7 @@ The Curl CFFI WebSocket client implementation.
 
 from __future__ import annotations
 
+import errno
 from asyncio import (
     ALL_COMPLETED,
     FIRST_COMPLETED,
@@ -185,10 +186,18 @@ class BaseWebSocket:
     _RESERVED_CLOSE_CODES: Final[frozenset[int]] = frozenset[int](
         {1004, 1005, 1006, 1015}
     )
+    _TRANSIENT_ERRNOS: Final[frozenset[int]] = frozenset[int](
+        {errno.EAGAIN, errno.EWOULDBLOCK, getattr(errno, "WSAEWOULDBLOCK", 10035)}
+    )
+    _TRANSIENT_PATTERNS: Final[tuple[str, ...]] = tuple[str, ...](
+        f"errno {n}" for n in _TRANSIENT_ERRNOS
+    ) + ("resource temporarily unavailable", "call would block")
+
     # Unreachable with current libcurl, but a zero-length write would
     # spin the writer's retry loop at full speed on a writable socket.
     _MAX_ZERO_WRITES: Final = 3
     CLOSE_NOTIFY_SECS: Final[float] = 0.5
+    MAX_HANDSHAKE_SECS: Final[float] = 30.0
 
     # Annotation only - never assign.
     __weakref__: (  # pyright: ignore[reportUninitializedInstanceVariable]
@@ -289,8 +298,14 @@ class BaseWebSocket:
             tuple[int, str]: The close code and reason.
         """
 
-        if len(frame) < 2:
+        if len(frame) == 0:
             return WsCloseCode.UNKNOWN, ""
+
+        if len(frame) == 1:
+            raise WebSocketError(
+                "Close frame body cannot be 1 byte (RFC 6455 section 5.5.1)",
+                WsCloseCode.PROTOCOL_ERROR,
+            )
 
         try:
             code: int = _STRUCT_UNPACK_CLOSE(frame)[0]
@@ -335,12 +350,10 @@ class BaseWebSocket:
             return True
 
         if code in (CurlECode.RECV_ERROR, CurlECode.SEND_ERROR):
-            # Required: Under CONNECT_ONLY libcurl reports EAGAIN as CURLE_RECV_ERROR
-            # or CURLE_SEND_ERROR with the errno in the message, not as CURLE_AGAIN.
+            # Under CONNECT_ONLY, BoringSSL can surface a blocked socket as
+            # CURLE_RECV_ERROR with a platform-specific errno in the message.
             err_msg: str = str(exc).lower()
-            return (
-                "errno 11" in err_msg or "resource temporarily unavailable" in err_msg
-            )
+            return any(p in err_msg for p in self._TRANSIENT_PATTERNS)
 
         return False
 
@@ -401,6 +414,10 @@ class WebSocket(BaseWebSocket):
             on_open (OnOpenType | None, optional): Open callback.
             on_close (OnCloseType | None, optional): Close callback.
             on_data (OnDataType | None, optional): Data received callback.
+                The frame attribute is a view into libcurl's internal state
+                and is only valid for the duration of the callback. Read what
+                you need from it; do not retain it — the next received frame
+                overwrites the same memory.
             on_message (OnMessageType | None, optional): Message received callback.
             on_error (OnErrorType | None, optional): Error callback.
             ws_retry (WebSocketRetryStrategy | None, optional): Retry policy.
@@ -558,7 +575,8 @@ class WebSocket(BaseWebSocket):
             cookies: cookies to use.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
                 supported.
-            timeout: how many seconds to wait before giving up.
+            timeout: how many seconds to wait before giving up. ``None`` waits
+                indefinitely; prefer ``Session.ws_connect()``, which clamps it.
             allow_redirects: whether to allow redirection. Can be a bool, a
                 ``CurlFollow`` value, or the string ``"safe"``.
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
@@ -1237,14 +1255,25 @@ class WebSocket(BaseWebSocket):
 
         Note:
             WebSocket control frames are limited to 125 bytes. The close code requires
-            2 bytes, therefore 123 bytes are available for the close reason. If the
-            close reason is longer than this, it is implicitly truncated to 123 bytes.
+            2 bytes, therefore 123-bytes of UTF-8 are available for the close reason.
+            If the close reason is longer than this, it is implicitly truncated.
+
+        Raises:
+            WebSocketError: The close reason is invalid UTF-8.
         """
         if self.closed:
             return
 
         if isinstance(message, str):
             message = message.encode("utf-8")
+        else:
+            try:
+                _ = message.decode("utf-8")
+            except UnicodeDecodeError as e:
+                raise WebSocketError(
+                    "Close reason must be valid UTF-8 (RFC 6455 section 5.5.1)",
+                    WsCloseCode.INVALID_DATA,
+                ) from e
 
         if len(message) > self._MAX_CLOSE_REASON_SIZE:
             message = (
@@ -1865,18 +1894,30 @@ class AsyncWebSocket(BaseWebSocket):
 
         Note:
             WebSocket control frames are limited to 125 bytes. The close code requires
-            2 bytes, therefore 123 bytes are available for the close reason. If the
-            close reason is longer than this, it is implicitly truncated to 123 bytes.
+            2 bytes, therefore 123-bytes of UTF-8 are available for the close reason.
+            If the close reason is longer than this, it is implicitly truncated.
+
+        Raises:
+            WebSocketError: The close reason is invalid UTF-8.
         """
         async with self._close_lock:
             if self.closed:
                 return
 
-            self.closed = True
-            close_start: float = self.loop.time()
-
+            # Validate the close reason
             if isinstance(message, str):
                 message = message.encode("utf-8")
+            else:
+                try:
+                    _ = message.decode("utf-8")
+                except UnicodeDecodeError as e:
+                    raise WebSocketError(
+                        "Close reason must be valid UTF-8 (RFC 6455 section 5.5.1)",
+                        WsCloseCode.INVALID_DATA,
+                    ) from e
+
+            self.closed = True
+            close_start: float = self.loop.time()
 
             # 125 bytes (Spec) - 2 bytes for close code
             if len(message) > self._MAX_CLOSE_REASON_SIZE:

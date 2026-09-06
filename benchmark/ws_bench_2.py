@@ -160,6 +160,7 @@ async def client_handler(opt: str) -> None:
             f"{config.srv_path}?test={opt}",
             recv_queue_size=config.recv_queue,
             send_queue_size=config.send_queue,
+            timeout=config.connect_timeout,
         ) as ws,
     ):
         match opt:

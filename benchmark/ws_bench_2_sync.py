@@ -233,7 +233,9 @@ def sync_client_handler(opt: str) -> None:
     """Entry logic for the synchronous client."""
     with (
         Session[Response](impersonate="chrome", verify=False) as session,
-        session.ws_connect(f"{config.srv_path}?test={opt}") as ws,
+        session.ws_connect(
+            f"{config.srv_path}?test={opt}", timeout=config.connect_timeout
+        ) as ws,
     ):
         match opt:
             case "download":
