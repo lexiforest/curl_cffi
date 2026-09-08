@@ -1247,6 +1247,39 @@ class TestAsyncWebSocketPing:
         with pytest.raises(WebSocketError):
             await ws_connection.ping(b"X" * 126)
 
+    async def test_ping_default_payload(self, ws_connection: AsyncWebSocket) -> None:
+        """Test sending ping with the default empty payload."""
+        await ws_connection.ping()
+        assert ws_connection.is_alive()
+
+    async def test_pong_valid_payload(self, ws_connection: AsyncWebSocket) -> None:
+        """Test sending an unsolicited pong with a valid payload."""
+        await ws_connection.pong(b"heartbeat")
+        assert ws_connection.is_alive()
+
+    async def test_pong_default_payload(self, ws_connection: AsyncWebSocket) -> None:
+        """Test sending an unsolicited pong with the default empty payload."""
+        await ws_connection.pong()
+        assert ws_connection.is_alive()
+
+    async def test_pong_max_size(self, ws_connection: AsyncWebSocket) -> None:
+        """Test sending pong at maximum allowed size (125 bytes)."""
+        await ws_connection.pong(b"X" * 125)
+        assert ws_connection.is_alive()
+
+    async def test_pong_too_large_raises(self, ws_connection: AsyncWebSocket) -> None:
+        """Test pong with payload > 125 bytes raises error."""
+        with pytest.raises(WebSocketError):
+            await ws_connection.pong(b"X" * 126)
+
+    async def test_control_payload_limit_counts_bytes(
+        self, ws_connection: AsyncWebSocket
+    ) -> None:
+        """Test the 125 byte limit applies to encoded length, not characters."""
+        # 63 characters, 189 bytes once encoded.
+        with pytest.raises(WebSocketError):
+            await ws_connection.ping("\u20ac" * 63)
+
 
 class TestAsyncWebSocketFlush:
     """Tests for the flush() method."""
@@ -1767,6 +1800,29 @@ class TestAsyncWebSocketCoalesceFrames:
             msg2, flags2 = await ws.recv(timeout=2.0)
             assert msg2 == b"CD"
             assert flags2 & CurlWsFlag.TEXT
+
+    async def test_coalesce_never_merges_control_frames(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Consecutive control frames must not be coalesced into one frame."""
+        ws_config(behavior=ServerBehavior.ECHO)
+        async with session.ws_connect(
+            configurable_ws_server.url,
+            coalesce_frames=True,
+        ) as ws:
+            # Neither pong() suspends, so both land in the writer's batch.
+            # Merging them would put a 250-byte control frame on the wire and
+            # the peer would fail the connection.
+            await ws.pong(b"X" * 125)
+            await ws.pong(b"Y" * 125)
+
+            await ws.send(b"still_alive")
+            data, _ = await ws.recv(timeout=2.0)
+            assert data == b"still_alive"
+            assert ws.is_alive()
 
 
 class TestAsyncWebSocketFragmentationFix:

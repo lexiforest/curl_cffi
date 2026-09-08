@@ -156,7 +156,7 @@ Asynchronous Client
 
 The ``AsyncWebSocket`` client uses a highly optimized **non-blocking I/O Architecture**:
 
-1.  **Outgoing**: Messages are queued for delivery instantly. A background task handles the actual network transmission.
+1.  **Outgoing**: Messages are queued for immediate delivery. A background task handles the actual network transmission.
 2.  **Incoming**: A background task continuously reads from the network and populates a receive queue, separating your application logic from network speeds.
 
 Connecting
@@ -233,18 +233,15 @@ The following capabilities are shared equally across both the Synchronous and As
 Timeouts
 --------
 
-All receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()``) accept an optional keyword-only ``timeout`` argument in seconds.
+All receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()``) accept an optional keyword-only ``timeout`` parameter, in seconds.
 
 .. code-block:: python
 
     from curl_cffi import WebSocketTimeout
 
     try:
-        # Async
+        # Omit 'await' for sync
         data = await ws.recv_json(timeout=5.0)
-
-        # Sync
-        data = ws.recv_json(timeout=5.0)
 
     except WebSocketTimeout:
         print("No message received in 5 seconds")
@@ -254,14 +251,27 @@ Setting ``timeout=None`` is not honoured for the initial connection handshake. T
 Heartbeats and Pings
 --------------------
 
-When a PING frame is received from the server, libcurl automatically sends a PONG frame in response. Received PONG frames are consumed internally and not delivered to your application. The automatic PONG is queued alongside your own outgoing messages, so a busy sender can delay it.
+When a PING frame is received from the server, libcurl automatically sends a PONG frame in response. Received PONG frames are consumed internally and not delivered to your application.
+
+Libcurl queues automatic PONGs alongside outgoing messages, so a busy sender can delay it.
 
 To send a manual PING frame:
 
 .. code-block:: python
 
-    # Add 'await' for async
-    ws.ping(b"keepalive")
+    # Omit 'await' for sync
+    await ws.ping(b"keepalive")
+
+    # Zero-length payload is valid
+    await ws.ping()
+
+RFC 6455 also permits an unsolicited PONG as a unidirectional heartbeat. Since replies to server pings are already automatic, ``pong()`` exists for that case:
+
+.. code-block:: python
+
+    # Omit 'await' for sync
+    await ws.pong(b"keepalive")
+    await ws.pong()
 
 Lifecycle Management
 --------------------
@@ -287,7 +297,7 @@ For asynchronous connections:
 Reliability & Retries
 ---------------------
 
-Both clients support automatic exponential backoff retries with jitter for transient network read errors.
+Both clients support exponential backoff retries with jitter for transient network read errors. The ``WebSocketRetryStrategy`` dataclass is used to configure the retry policy.
 
 .. code-block:: python
 
@@ -369,7 +379,7 @@ You can control the internal buffer sizes to manage TCP backpressure. These valu
 *   **recv_queue_size** (default: 64): Max incoming messages to buffer internally. ``max_message_size`` caps how large each one can be, so the worst case is fixed at ``recv_queue_size`` × ``max_message_size`` — 256MB with the defaults.
 *   **send_queue_size** (default: 32): Max outgoing messages to buffer before ``send()`` blocks. Outgoing messages have no size limit, so size this against your own largest message.
 *   **block_on_recv_queue_full** (default: ``True``): Behavior when the receive queue is full. If ``True``, the reader blocks until there is space in the queue (may cause timeouts). If ``False``, the connection fails immediately to prevent data loss.
-*   **drain_on_error** (default: ``False``): When a fatal error occurs, calls to ``recv()`` will drain all buffered messages first before raising the exception.
+*   **drain_on_error** (default: ``False``): When a fatal error occurs, normally it is raised immediately. When this option is enabled, calls to ``recv()`` will yield all buffered messages first before raising the exception.
 
 Queue size interacts with cache residency: the working set is ``queue_size`` × typical message size, and once it exceeds the CPU's L2/L3 cache, throughput drops.
 
@@ -385,15 +395,15 @@ Queue size interacts with cache residency: the working set is ``queue_size`` × 
 Frame Coalescing
 ----------------
 
-This is an *optional* optimization technique which merges multiple pending messages from the send queue into a single WebSocket frame. This significantly reduces system call overhead and boosts throughput for chatty streams.
+This is an *optional* power-user optimization technique which breaks frame boundaries and concatenates multiple pending messages from the send queue into a single WebSocket frame. This significantly reduces system call overhead and boosts throughput for chatty streams with small payloads.
 
 .. warning::
 
-    Multiple messages will arrive as a single concatenated payload. Ensure your server protocol expects concatenated strings/bytes.
+    Multiple messages will arrive as a single merged payload. Ensure your server application can handle concatenated strings/bytes.
 
     Large batches share the outgoing queue with automatic PONG replies and can delay them. Lower ``max_send_batch_size`` if your server has a strict ping timeout.
 
-*   **coalesce_frames** (default: ``False``): Enable batching.
+*   **coalesce_frames** (default: ``False``): Enable frame coalescing.
 *   **max_send_batch_size** (default: 64): Max messages to merge per frame.
 
 .. code-block:: pycon

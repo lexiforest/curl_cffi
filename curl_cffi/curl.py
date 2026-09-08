@@ -290,10 +290,10 @@ class Curl:
         self._set_error_buffer()
 
         # Pre-allocated CFFI objects for WebSocket performance
-        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
-        self._ws_recv_n_recv = ffi.new("size_t *")
-        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
-        self._ws_send_n_sent = ffi.new("size_t *")
+        self._ws_recv_buffer: object | None = None
+        self._ws_recv_n_recv: object = ffi.new("size_t *")
+        self._ws_recv_p_frame: object = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent: object = ffi.new("size_t *")
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
@@ -727,6 +727,9 @@ class Curl:
         """
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
+
+        if self._ws_recv_buffer is None:
+            self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
 
         if ret := lib.curl_ws_recv(
             self._curl,

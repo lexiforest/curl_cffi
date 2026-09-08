@@ -259,14 +259,14 @@ class BaseWebSocket:
         self._sock_fd = sock_info
         return sock_info
 
-    def _prepare_ping_payload(self, payload: str | bytes) -> bytes:
-        """Validate and encode ping payloads with robust isinstance checks."""
+    def _prepare_control_payload(self, payload: str | bytes) -> bytes:
+        """Validate and encode control frame payloads with robust checks."""
         payload_bytes: bytes = (
             payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
         )
         if len(payload_bytes) > self._MAX_CONTROL_FRAME_SIZE:
             raise WebSocketError(
-                f"Ping frame has invalid length: {len(payload_bytes)}",
+                f"Control frame has invalid length: {len(payload_bytes)}",
                 CurlECode.TOO_LARGE,
             )
         return payload_bytes
@@ -690,7 +690,7 @@ class WebSocket(BaseWebSocket):
             This method is NOT thread-safe.
 
             Message fragmentation and reassembly are handled automatically by the
-            implementation, so callers will always receive complete messages.
+            implementation, so callers always receive complete messages.
         """
         if self.closed:
             raise WebSocketClosed("WebSocket is closed")
@@ -797,8 +797,14 @@ class WebSocket(BaseWebSocket):
 
                         if has_deadline:
                             remain: float = deadline - time_monotonic()
+                            if remain <= 0:
+                                raise WebSocketTimeout(
+                                    "WebSocket receive operation timed out",
+                                    CurlECode.OPERATION_TIMEDOUT,
+                                ) from None
+
                             if sleep_time > remain:
-                                sync_sleep(max(0.0, remain))
+                                sync_sleep(remain)
                                 continue
 
                         sync_sleep(sleep_time)
@@ -1034,15 +1040,22 @@ class WebSocket(BaseWebSocket):
         return offset
 
     def send_binary(self, payload: bytes, *, timeout: float | None = None) -> int:
-        """Send a binary frame."""
+        """Send a binary frame.
+
+        For more info, see the docstring for :meth:`send()`."""
         return self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
     def send_bytes(self, payload: bytes, *, timeout: float | None = None) -> int:
-        """Send a binary frame, alias of :meth:`send_binary`."""
+        """
+        Send a binary frame, alias of :meth:`send_binary`.
+
+        For more info, see the docstring for :meth:`send()`."""
         return self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
     def send_str(self, payload: str, *, timeout: float | None = None) -> int:
-        """Send a text frame."""
+        """Send a text frame.
+
+        For more info, see the docstring for :meth:`send()`."""
         return self.send(payload, CurlWsFlag.TEXT, timeout=timeout)
 
     def send_json(
@@ -1058,8 +1071,10 @@ class WebSocket(BaseWebSocket):
             payload: data to send.
             dumps: JSON encoder, default is json.dumps.
                 The encoder may return ``str`` or ``bytes``; bytes
-                must be UTF-8, since the payload is sent as a TEXT frame.
+                must be UTF-8, since the payload is sent as a text frame.
             timeout: Max seconds to wait if the socket is blocked.
+
+        For more info, see the docstring for :meth:`send()`.
         """
         if dumps is json_dumps:
             return self.send(
@@ -1069,10 +1084,44 @@ class WebSocket(BaseWebSocket):
             )
         return self.send(dumps(payload), CurlWsFlag.TEXT, timeout=timeout)
 
-    def ping(self, payload: str | bytes, *, timeout: float | None = None) -> int:
-        """Send a ping frame."""
+    def ping(self, payload: str | bytes = b"", *, timeout: float | None = None) -> int:
+        """Send a ping frame.
+
+        Args:
+            payload (str | bytes, optional): Ping frame payload. Defaults to ``b""``.
+            timeout (float | None, optional): Max seconds to wait if socket is blocked.
+
+        Returns:
+            ``int``: The number of bytes successfully written to the socket.
+
+        Note:
+            Ping frames are control frames, their payload length is restricted
+            to ``125`` bytes.
+        """
         return self.send(
-            self._prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
+            self._prepare_control_payload(payload), CurlWsFlag.PING, timeout=timeout
+        )
+
+    def pong(self, payload: str | bytes = b"", *, timeout: float | None = None) -> int:
+        """Send an unsolicited pong frame. Replies to server pings are automatic.
+
+        Args:
+            payload (str | bytes, optional): Pong frame payload. Defaults to ``b""``.
+            timeout (float | None, optional): Max seconds to wait if socket is blocked.
+
+        Returns:
+            ``int``: The number of bytes successfully written to the socket.
+
+        Note:
+            This method is specifically for sending unsolicited PONGs,
+            (e.g. unidirectional keep-alive in RFC 6455 §5.5.3). Libcurl
+            replies to received PING frames with PONG frames automatically.
+
+            Pong frames are control frames, their payload length is restricted
+            to ``125`` bytes.
+        """
+        return self.send(
+            self._prepare_control_payload(payload), CurlWsFlag.PONG, timeout=timeout
         )
 
     def run_forever(
@@ -1585,7 +1634,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         Notes:
             Message fragmentation and reassembly are handled automatically by the
-            implementation, so callers will always receive complete messages.
+            implementation, so callers always receive complete messages.
 
             ``WebSocketError`` exceptions may have originated from prior
             ``send()`` or ``recv()`` operations, since all operations
@@ -1762,8 +1811,8 @@ class AsyncWebSocket(BaseWebSocket):
         if self._transport_exception is not None:
             raise self._transport_exception
 
-        if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
+        if self.closed or self._terminated:
+            raise WebSocketClosed("WebSocket connection is closed")
 
         # Fail fast when writer is done
         if self._write_task is not None and self._write_task.done():
@@ -1816,7 +1865,7 @@ class AsyncWebSocket(BaseWebSocket):
             payload: Binary data to send.
             timeout: Max seconds to wait if the send queue is full.
 
-        For more info, see the docstring for :meth:`send()`
+        For more info, see the docstring for :meth:`send()`.
         """
         return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
@@ -1827,7 +1876,7 @@ class AsyncWebSocket(BaseWebSocket):
             payload: Binary data to send.
             timeout: Max seconds to wait if the send queue is full.
 
-        For more info, see the docstring for :meth:`send()`
+        For more info, see the docstring for :meth:`send()`.
         """
         return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
@@ -1838,7 +1887,7 @@ class AsyncWebSocket(BaseWebSocket):
             payload: Text data to send.
             timeout: Max seconds to wait if the send queue is full.
 
-        For more info, see the docstring for :meth:`send()`
+        For more info, see the docstring for :meth:`send()`.
         """
         return await self.send(payload, CurlWsFlag.TEXT, timeout=timeout)
 
@@ -1855,10 +1904,10 @@ class AsyncWebSocket(BaseWebSocket):
             payload: Data to send.
             dumps: JSON encoder, default is :meth:`json.dumps()`.
                 The encoder may return ``str`` or ``bytes``; bytes
-                must be UTF-8, since the payload is sent as a TEXT frame.
+                must be UTF-8, since the payload is sent as a text frame.
             timeout: Max seconds to wait if the send queue is full.
 
-        For more info, see the docstring for :meth:`send()`
+        For more info, see the docstring for :meth:`send()`.
         """
         if dumps is json_dumps:
             return await self.send(
@@ -1868,20 +1917,45 @@ class AsyncWebSocket(BaseWebSocket):
             )
         return await self.send(dumps(payload), CurlWsFlag.TEXT, timeout=timeout)
 
-    async def ping(self, payload: str | bytes, *, timeout: float | None = None) -> None:
+    async def ping(
+        self, payload: str | bytes = b"", *, timeout: float | None = None
+    ) -> None:
         """Send a ping frame.
 
         Args:
-            payload: Data to send.
+            payload: Ping payload to send. Defaults to ``b""``.
             timeout: Max seconds to wait if the send queue is full.
 
         Raises:
-            WebSocketError: The payload length is outside specification.
+            WebSocketError: The payload length is outside specification (>125 bytes).
 
-        For more info, see the docstring for :meth:`send()`
+        For more info, see the docstring for :meth:`send()`.
         """
         return await self.send(
-            self._prepare_ping_payload(payload), CurlWsFlag.PING, timeout=timeout
+            self._prepare_control_payload(payload), CurlWsFlag.PING, timeout=timeout
+        )
+
+    async def pong(
+        self, payload: str | bytes = b"", *, timeout: float | None = None
+    ) -> None:
+        """Send an unsolicited pong frame. Replies to server pings are automatic.
+
+        Args:
+            payload: Pong payload to send. Defaults to ``b""``.
+            timeout: Max seconds to wait if the send queue is full.
+
+        Raises:
+            WebSocketError: The payload length is outside specification (>125 bytes).
+
+        Note:
+            This method is specifically for sending unsolicited PONGs,
+            (e.g. unidirectional keep-alive in RFC 6455 §5.5.3). Libcurl
+            replies to received PING frames with PONG frames automatically.
+
+        For more info, see the docstring for :meth:`send()`.
+        """
+        return await self.send(
+            self._prepare_control_payload(payload), CurlWsFlag.PONG, timeout=timeout
         )
 
     async def close(

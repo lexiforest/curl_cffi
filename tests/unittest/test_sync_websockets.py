@@ -518,6 +518,31 @@ class TestWebSocketPing:
         with pytest.raises(WebSocketError):
             _ = ws_connection.ping(b"X" * 126, timeout=2.0)
 
+    def test_ping_default_payload(self, ws_connection: WebSocket) -> None:
+        _ = ws_connection.ping(timeout=2.0)
+        assert not ws_connection.closed
+
+    def test_pong_valid_payload(self, ws_connection: WebSocket) -> None:
+        _ = ws_connection.pong(b"heartbeat", timeout=2.0)
+        assert not ws_connection.closed
+
+    def test_pong_default_payload(self, ws_connection: WebSocket) -> None:
+        _ = ws_connection.pong(timeout=2.0)
+        assert not ws_connection.closed
+
+    def test_pong_max_size(self, ws_connection: WebSocket) -> None:
+        _ = ws_connection.pong(b"X" * 125, timeout=2.0)
+        assert not ws_connection.closed
+
+    def test_pong_too_large_raises(self, ws_connection: WebSocket) -> None:
+        with pytest.raises(WebSocketError):
+            _ = ws_connection.pong(b"X" * 126, timeout=2.0)
+
+    def test_control_payload_limit_counts_bytes(self, ws_connection: WebSocket) -> None:
+        # 63 characters, 189 bytes once encoded.
+        with pytest.raises(WebSocketError):
+            _ = ws_connection.ping("\u20ac" * 63, timeout=2.0)
+
 
 class TestWebSocketLargeMessages:
     @pytest.mark.parametrize("size", [1024, 65536, 100_000, 500_000])
@@ -1401,6 +1426,50 @@ class TestWebSocketRetryStrategy:
         assert data == b"recovered_message"
         assert flags == CurlWsFlag.TEXT
         assert call_count == 3
+
+    def test_recv_retry_expired_deadline_raises_timeout(self) -> None:
+        """An expired deadline mid-retry must surface as WebSocketTimeout."""
+        mock_curl: Mock = Mock(spec=Curl)
+        strategy: WebSocketRetryStrategy = WebSocketRetryStrategy(
+            retry=True, count=5, delay=5.0
+        )
+        ws: WebSocket = WebSocket(curl=mock_curl, ws_retry=strategy)
+        ws.closed = False
+        ws._sock_fd = 999
+        ws._read_selector = Mock()
+        ws._write_selector = Mock()
+
+        mock_curl.ws_recv.side_effect = CurlError(
+            "Transient connection error", CurlECode.RECV_ERROR
+        )
+
+        with pytest.raises(WebSocketTimeout):
+            _ = ws.recv(timeout=0.1)
+
+    def test_recv_retry_honours_backoff_delay(self) -> None:
+        """Retries without a deadline must still wait out the backoff."""
+        mock_curl: Mock = Mock(spec=Curl)
+        strategy: WebSocketRetryStrategy = WebSocketRetryStrategy(
+            retry=True, count=2, delay=0.02
+        )
+        ws: WebSocket = WebSocket(curl=mock_curl, ws_retry=strategy)
+        ws.closed = False
+        ws._sock_fd = 999
+        ws._read_selector = Mock()
+        ws._write_selector = Mock()
+
+        mock_curl.ws_recv.side_effect = CurlError(
+            "Transient connection error", CurlECode.RECV_ERROR
+        )
+
+        with (
+            unittest.mock.patch(f"{WebSocket.__module__}.sync_sleep") as mock_sleep,
+            pytest.raises(CurlError),
+        ):
+            _ = ws.recv()
+
+        assert mock_sleep.call_count == 2
+        assert all(c.args[0] > 0 for c in mock_sleep.call_args_list)
 
 
 class TestWebSocketPerformance:
