@@ -260,7 +260,17 @@ class BaseWebSocket:
         return sock_info
 
     def _prepare_control_payload(self, payload: str | bytes) -> bytes:
-        """Validate and encode control frame payloads with robust checks."""
+        """Validate and encode control frame payloads.
+
+        Args:
+            payload (str | bytes): The control frame payload
+
+        Raises:
+            WebSocketError: Control frame payload was outside specification.
+
+        Returns:
+            bytes: The valid, encoded payload bytes.
+        """
         payload_bytes: bytes = (
             payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
         )
@@ -466,7 +476,9 @@ class WebSocket(BaseWebSocket):
 
     def __iter__(self) -> WebSocket:
         if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
+            raise WebSocketClosed(
+                "WebSocket is closed", self._close_code or WsCloseCode.OK
+            )
         return self
 
     def __next__(self) -> bytes:
@@ -502,6 +514,15 @@ class WebSocket(BaseWebSocket):
         event_type: EventTypeLiteral,
         *args: str | bytes | int | CurlWsFrame | CurlError,
     ) -> None:
+        """Helper method for callback event emission.
+
+        Failed callbacks are routed to ``on_error``. If ``on_error`` itself fails,
+        a warning is emitted instead of propagating it further.
+
+        Args:
+            event_type (EventTypeLiteral): The callback type.
+            args: args list to pass into the callback.
+        """
         callback: Callable[..., object] | None = self._emitters.get(event_type)
         if callback:
             try:
@@ -513,7 +534,16 @@ class WebSocket(BaseWebSocket):
                     "error"
                 )
                 if error_callback and event_type != "error":
-                    _ = error_callback(self, e)
+                    try:
+                        _ = error_callback(self, e)
+
+                    # pylint: disable-next=broad-exception-caught
+                    except Exception as exc:
+                        user_warning(
+                            f"WebSocket 'on_error' callback failed: {exc}",
+                            CurlCffiWarning,
+                            stacklevel=2,
+                        )
                 else:
                     user_warning(
                         f"WebSocket callback '{event_type}' failed: {e}",
@@ -531,6 +561,13 @@ class WebSocket(BaseWebSocket):
         self,
         url: str,
         *,
+        base_url: str | None = None,
+        base_params: (
+            dict[str, object]
+            | list[object]
+            | tuple[str, int | list[str] | dict[str, str | int]]
+            | None
+        ) = None,
         params: (
             dict[str, object]
             | list[object]
@@ -569,7 +606,9 @@ class WebSocket(BaseWebSocket):
         ref: https://curl.se/libcurl/c/libcurl-ws.html
 
         Args:
-            url: url for the requests.
+            url: WebSocket connection URL.
+            base_url: Base URL to use for relative paths.
+            base_params: Session-level params applied before the request-level params.
             params: query string for the requests.
             headers: headers to send.
             cookies: cookies to use.
@@ -594,8 +633,6 @@ class WebSocket(BaseWebSocket):
             perk: perk string to impersonate.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             default_headers: whether to set default browser headers.
-            default_encoding: Encoding for decoding content if charset is not found.
-                Defaults to "utf-8".
             quote: Set characters to be quoted (percent-encoded). Default safe
                 string is ``!#$%&'()*+,/:;=?@[]~``. If set to a string, the characters
                 will be removed from the safe string. If set to ``False``, the URL
@@ -628,7 +665,8 @@ class WebSocket(BaseWebSocket):
                 curl=curl,
                 method="GET",
                 url=url,
-                params_list=[None, params],
+                base_url=base_url,
+                params_list=[base_params, params],
                 headers_list=[None, headers],
                 cookies_list=[None, cookies],
                 auth=auth,
@@ -661,7 +699,7 @@ class WebSocket(BaseWebSocket):
             _ = curl.setopt(CurlOpt.CONNECT_ONLY, 2)
             curl.perform()
 
-        except Exception:
+        except BaseException:
             # If the connection fails, don't leak the curl handle.
             self.terminate()
             raise
@@ -675,8 +713,7 @@ class WebSocket(BaseWebSocket):
         Attempts to read immediately and only polls the socket if it returns EAGAIN.
 
         Args:
-            timeout: How many seconds to wait for a message before raising
-            a timeout error.
+            timeout: How many seconds to wait for a message if socket is blocked.
 
         Returns:
             tuple[bytes, int]: A tuple with the received payload and flags.
@@ -684,16 +721,19 @@ class WebSocket(BaseWebSocket):
         Raises:
             WebSocketTimeout: If the timeout expires.
             WebSocketClosed: If the connection is closed.
-            WebSocketError: If a network-level transport error occurs.
+            WebSocketError: WebSocket connection specific error.
+            CurlError: If a network-level transport error occurs.
 
-        Notes:
+        Note:
             This method is NOT thread-safe.
 
             Message fragmentation and reassembly are handled automatically by the
             implementation, so callers always receive complete messages.
         """
         if self.closed:
-            raise WebSocketClosed("WebSocket is closed")
+            raise WebSocketClosed(
+                "WebSocket is closed", self._close_code or WsCloseCode.OK
+            )
 
         _ = self._get_sock_fd()
         read_selector: BaseSelector | None = self._read_selector
@@ -831,7 +871,23 @@ class WebSocket(BaseWebSocket):
                 self._recv_msg_size = msg_size
 
     def recv_str(self, *, timeout: float | None = None) -> str:
-        """Receive a text frame."""
+        """Receive a text frame.
+
+        Args:
+            timeout: How many seconds to wait before raising a timeout.
+
+        Raises:
+            WebSocketClosed: A close frame was received.
+            WebSocketError: The payload contains invalid UTF-8.
+            WebSocketError: The received frame is not a text frame.
+
+        Returns:
+            str: The text frame payload string.
+
+        Note:
+            This method checks if the message payload is valid UTF-8,
+            unless ``skip_utf8_validation`` is set at connection time.
+        """
         data, flags = self.recv(timeout=timeout)
         if flags & CurlWsFlag.CLOSE:
             raise WebSocketClosed(
@@ -853,7 +909,25 @@ class WebSocket(BaseWebSocket):
     def recv_json(
         self, *, loads: Callable[[str], T] = json_loads, timeout: float | None = None
     ) -> T:
-        """Receive a JSON frame."""
+        """Receive a JSON frame.
+
+        Args:
+            loads: JSON decoder. Defaults to :meth:`json.loads`.
+            timeout: How many seconds to wait before raising a timeout.
+
+        Raises:
+            WebSocketError: The JSON data was empty.
+            WebSocketError: The JSON was invalid.
+
+        Returns:
+            T: Deserialized JSON object.
+
+        Note:
+            This method checks if the message payload is valid UTF-8,
+            unless ``skip_utf8_validation`` is set at connection time.
+
+            This method inherits the same exceptions from :meth:`recv_str`.
+        """
         data: str = self.recv_str(timeout=timeout)
         if not data:
             raise WebSocketError("Empty frame", WsCloseCode.INVALID_DATA)
@@ -863,7 +937,7 @@ class WebSocket(BaseWebSocket):
             raise WebSocketError(f"Invalid JSON: {e}", WsCloseCode.INVALID_DATA) from e
 
     def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
-        """This function is deprecated and removed.
+        """This function has been removed.
         The new architecture automatically handles frame reassembly.
         Call :meth:`recv()` instead to get complete, fully assembled frames.
         """
@@ -885,7 +959,7 @@ class WebSocket(BaseWebSocket):
 
         Args:
             payload: Data to send (``str``/``bytes``/``bytearray``/``memoryview``).
-            flags: Frame type flags (e.g., ``CurlWsFlag.TEXT`` / ``CurlWsFlag.BINARY``).
+            flags: Frame type flags (e.g. ``CurlWsFlag.TEXT`` / ``CurlWsFlag.BINARY``).
             timeout: Max seconds to wait if the socket is blocked.
 
         Returns:
@@ -904,19 +978,29 @@ class WebSocket(BaseWebSocket):
             Large outbound messages are seamlessly broken down into optimal
             fragments using the ``CURLWS_CONT`` flag, arriving as a single
             logical message to the server.
+
+            Non-contiguous (i.e. strided) memoryviews are copied as they cannot
+            be cast into a contiguous format required by ``ffi.from_buffer()``.
         """
         if flags & CurlWsFlag.CLOSE:
             self.keep_running = False
 
         if self.closed:
-            raise WebSocketClosed("WebSocket is already closed")
+            raise WebSocketClosed(
+                "WebSocket is already closed", self._close_code or WsCloseCode.OK
+            )
 
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
 
         # pylint: disable-next=unidiomatic-typecheck
-        elif type(payload) is memoryview and payload.itemsize != 1:
-            payload = payload.cast("B")
+        elif type(payload) is memoryview:
+            # Strided memoryviews can't be cast OR accepted by CFFI.
+            if not payload.c_contiguous:
+                payload = payload.tobytes()
+
+            elif payload.itemsize != 1:
+                payload = payload.cast("B")
 
         # Cache locals for fast path
         total_bytes: int = len(payload)
@@ -1014,7 +1098,10 @@ class WebSocket(BaseWebSocket):
                                 _ = write_selector.select(None)
                         except (ValueError, OSError) as exc:
                             if self.closed:
-                                raise WebSocketClosed("WebSocket is closed") from exc
+                                raise WebSocketClosed(
+                                    "WebSocket is closed",
+                                    self._close_code or WsCloseCode.INTERNAL_ERROR,
+                                ) from exc
                             raise
 
                         continue
@@ -1091,12 +1178,11 @@ class WebSocket(BaseWebSocket):
             payload (str | bytes, optional): Ping frame payload. Defaults to ``b""``.
             timeout (float | None, optional): Max seconds to wait if socket is blocked.
 
+        Raises:
+            WebSocketError: The payload length is outside specification (>125 bytes).
+
         Returns:
             ``int``: The number of bytes successfully written to the socket.
-
-        Note:
-            Ping frames are control frames, their payload length is restricted
-            to ``125`` bytes.
         """
         return self.send(
             self._prepare_control_payload(payload), CurlWsFlag.PING, timeout=timeout
@@ -1109,6 +1195,9 @@ class WebSocket(BaseWebSocket):
             payload (str | bytes, optional): Pong frame payload. Defaults to ``b""``.
             timeout (float | None, optional): Max seconds to wait if socket is blocked.
 
+        Raises:
+            WebSocketError: The payload length is outside specification (>125 bytes).
+
         Returns:
             ``int``: The number of bytes successfully written to the socket.
 
@@ -1116,9 +1205,6 @@ class WebSocket(BaseWebSocket):
             This method is specifically for sending unsolicited PONGs,
             (e.g. unidirectional keep-alive in RFC 6455 §5.5.3). Libcurl
             replies to received PING frames with PONG frames automatically.
-
-            Pong frames are control frames, their payload length is restricted
-            to ``125`` bytes.
         """
         return self.send(
             self._prepare_control_payload(payload), CurlWsFlag.PONG, timeout=timeout
@@ -1131,8 +1217,18 @@ class WebSocket(BaseWebSocket):
     ) -> None:
         """Run the WebSocket forever. See :meth:`connect` for details on parameters.
 
+        The connection is always terminated when this method returns,
+        including when it exits by exception.
+
         libcurl automatically handles pings and pongs.
         ref: https://curl.se/libcurl/c/libcurl-ws.html
+
+        Raises:
+            WebSocketError: The selectors were not initialized by :meth:`connect`.
+            WebSocketClosed: The server dropped the connection without a close
+                frame (EOF).
+            CurlError: An unrecoverable transport error, after any configured
+                retries are exhausted.
         """
         if url:
             _ = self.connect(
@@ -1147,149 +1243,160 @@ class WebSocket(BaseWebSocket):
 
         self._emit("open")
 
-        # Hoist locals
+        # Hoist locals to reduce lookup cost.
         chunks: list[bytes] = []
         chunks_append: Callable[[bytes], None] = chunks.append
         chunks_clear: Callable[[], None] = chunks.clear
         msg_size: int = 0
         self.keep_running = True
-
         retry_on_error: bool = self.ws_retry.retry
         retry_codes: set[CurlECode] = self.ws_retry.codes
         max_retries: int = self.ws_retry.count
         recv_error_retries: int = 0
-
         max_message_size: int = self._max_message_size
         curl_ws_recv: Callable[[], tuple[bytes, CurlWsFrame]] = self.curl.ws_recv
         emit: Callable[..., None] = self._emit
         has_message_emitter: bool = "message" in self._emitters
-
         close_flag: int = int(CurlWsFlag.CLOSE)
         cont_flag: int = int(CurlWsFlag.CONT)
         data_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
 
-        while self.keep_running:
-            try:
-                # Read WebSocket frame
-                chunk, frame = curl_ws_recv()
-                if recv_error_retries > 0:
-                    recv_error_retries = 0
+        try:
+            while self.keep_running:
+                try:
+                    # Read WebSocket frame
+                    chunk, frame = curl_ws_recv()
+                    if recv_error_retries > 0:
+                        recv_error_retries = 0
 
-                flags: int = frame.flags
-                emit("data", chunk, frame)
+                    flags: int = frame.flags
+                    emit("data", chunk, frame)
 
-                # Data Frames (Text / Binary / Cont)
-                if flags & data_mask:
-                    # Perform message size checks
-                    msg_size += len(chunk)
-                    if msg_size > max_message_size:
+                    # Data Frames (Text / Binary / Cont)
+                    if flags & data_mask:
+                        # Perform message size checks
+                        msg_size += len(chunk)
+                        if msg_size > max_message_size:
+                            chunks_clear()
+                            self.close(WsCloseCode.MESSAGE_TOO_BIG)
+
+                            # Emit the close event before raising
+                            emit(
+                                "close",
+                                self._close_code or WsCloseCode.MESSAGE_TOO_BIG,
+                                self._close_reason or "",
+                            )
+
+                            raise WebSocketError(
+                                (
+                                    f"Message too large: {msg_size} bytes "
+                                    f"(limit {max_message_size} bytes)."
+                                ),
+                                CurlECode.TOO_LARGE,
+                            )
+
+                        # Collect the chunk
+                        chunks_append(chunk)
+
+                        # If the message is complete, process and dispatch it
+                        if not (frame.bytesleft == 0 and not (flags & cont_flag)):
+                            continue
+
+                        if has_message_emitter:
+                            msg: bytes = (
+                                chunks[0] if len(chunks) == 1 else b"".join(chunks)
+                            )
+
+                            if (
+                                flags & CurlWsFlag.TEXT
+                            ) and not self.skip_utf8_validation:
+                                try:
+                                    emit_msg: str | bytes = msg.decode("utf-8")
+                                except UnicodeDecodeError as e:
+                                    raise WebSocketError(
+                                        self._INVALID_UTF8_MSG, WsCloseCode.INVALID_DATA
+                                    ) from e
+                            else:
+                                emit_msg = msg
+
+                            if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
+                                emit("message", emit_msg)
+
                         chunks_clear()
-                        self.close(WsCloseCode.MESSAGE_TOO_BIG)
+                        msg_size = 0
+                        continue
 
-                        # Emit the close event before raising
+                    # If a CLOSE frame is received, the reader is done.
+                    if flags & close_flag:
+                        self._handle_close_frame(chunk)
+                        self.keep_running = False
+                        emit("close", self._close_code or 0, self._close_reason or "")
+                        break
+
+                    # Silently consume PING/PONG and loop again
+                    if flags & (CurlWsFlag.PING | CurlWsFlag.PONG):
+                        continue
+
+                except CurlError as e:
+                    code: int = e.code
+
+                    # Handle Server Disconnect (Empty Reply)
+                    if code == CurlECode.GOT_NOTHING:
+                        self.keep_running = False
+                        self._close_code = WsCloseCode.ABNORMAL_CLOSURE
+                        self._close_reason = (
+                            "Connection closed unexpectedly by server (EOF)"
+                        )
+                        e_close: WebSocketClosed = WebSocketClosed(
+                            message=self._close_reason,
+                            code=self._close_code,
+                        )
+                        e_close.__suppress_context__ = True
+                        emit("error", e_close)
+                        self.terminate()
                         emit(
                             "close",
-                            self._close_code or WsCloseCode.MESSAGE_TOO_BIG,
+                            self._close_code,
+                            self._close_reason,
+                        )
+                        raise e_close from e
+
+                    if self._is_transient_error(e):
+                        _ = read_selector.select(0.5)
+                        continue
+
+                    # Apply the user-configured retry logic
+                    if (
+                        self.keep_running
+                        and retry_on_error
+                        and code in retry_codes
+                        and recv_error_retries < max_retries
+                    ):
+                        recv_error_retries += 1
+                        sync_sleep(self._get_retry_delay(recv_error_retries))
+                        continue
+
+                    # Fatal error
+                    emit("error", e)
+                    if not self.closed:
+                        close_code: int = WsCloseCode.INTERNAL_ERROR
+                        close_reason: str = ""
+                        if isinstance(e, WebSocketError):
+                            close_code = e.code
+                            close_reason = str(e)
+                        self.close(close_code, close_reason)
+                        emit(
+                            "close",
+                            self._close_code or close_code,
                             self._close_reason or "",
                         )
 
-                        raise WebSocketError(
-                            (
-                                f"Message too large: {msg_size} bytes "
-                                f"(limit {max_message_size} bytes)."
-                            ),
-                            CurlECode.TOO_LARGE,
-                        )
+                    raise
 
-                    # Collect the chunk
-                    chunks_append(chunk)
-
-                    # If the message is complete, process and dispatch it
-                    if not (frame.bytesleft == 0 and not (flags & cont_flag)):
-                        continue
-
-                    if has_message_emitter:
-                        msg: bytes = chunks[0] if len(chunks) == 1 else b"".join(chunks)
-
-                        if (flags & CurlWsFlag.TEXT) and not self.skip_utf8_validation:
-                            try:
-                                emit_msg: str | bytes = msg.decode("utf-8")
-                            except UnicodeDecodeError as e:
-                                raise WebSocketError(
-                                    self._INVALID_UTF8_MSG, WsCloseCode.INVALID_DATA
-                                ) from e
-                        else:
-                            emit_msg = msg
-
-                        if (flags & CurlWsFlag.BINARY) or (flags & CurlWsFlag.TEXT):
-                            emit("message", emit_msg)
-
-                    chunks_clear()
-                    msg_size = 0
-                    continue
-
-                # If a CLOSE frame is received, the reader is done.
-                if flags & close_flag:
-                    self._handle_close_frame(chunk)
-                    self.keep_running = False
-                    emit("close", self._close_code or 0, self._close_reason or "")
-                    break
-
-                # Silently consume PING/PONG and loop again
-                if flags & (CurlWsFlag.PING | CurlWsFlag.PONG):
-                    continue
-
-            except CurlError as e:
-                code: int = e.code
-
-                # Handle Server Disconnect (Empty Reply)
-                if code == CurlECode.GOT_NOTHING:
-                    e_close: WebSocketClosed = WebSocketClosed(
-                        "Connection closed unexpectedly by server (EOF)",
-                        WsCloseCode.ABNORMAL_CLOSURE,
-                    )
-                    e_close.__suppress_context__ = True
-                    self.keep_running = False
-                    emit("error", e_close)
-                    self.close(WsCloseCode.ABNORMAL_CLOSURE)
-                    emit(
-                        "close",
-                        self._close_code or WsCloseCode.ABNORMAL_CLOSURE,
-                        self._close_reason or "",
-                    )
-                    raise e_close from e
-
-                if self._is_transient_error(e):
-                    _ = read_selector.select(0.5)
-                    continue
-
-                # Apply the user-configured retry logic
-                if (
-                    self.keep_running
-                    and retry_on_error
-                    and code in retry_codes
-                    and recv_error_retries < max_retries
-                ):
-                    recv_error_retries += 1
-                    sync_sleep(self._get_retry_delay(recv_error_retries))
-                    continue
-
-                # Fatal error
-                emit("error", e)
-                if not self.closed:
-                    close_code: int = WsCloseCode.INTERNAL_ERROR
-                    close_reason: str = ""
-                    if isinstance(e, WebSocketError):
-                        close_code = e.code
-                        close_reason = str(e)
-                    self.close(close_code, close_reason)
-                    emit(
-                        "close",
-                        self._close_code or close_code,
-                        self._close_reason or "",
-                    )
-
-                raise
+        finally:
+            self.keep_running = False
+            if not self.closed:
+                self.terminate()
 
     def close(
         self,
@@ -1302,18 +1409,18 @@ class WebSocket(BaseWebSocket):
         Sends a close frame to the peer and shuts down the connection.
 
         Args:
-            code (``int | WsCloseCode``, optional): Close code..
+            code (``int | WsCloseCode``, optional): Close code.
             message (``str | bytes``, optional): Close reason. Defaults to ``b""``.
             timeout (``float``, optional): How long (in seconds) to wait for the
-            connection to close gracefully before force-terminating. Defaults to 3.0.
-
-        Note:
-            WebSocket control frames are limited to 125 bytes. The close code requires
-            2 bytes, therefore 123-bytes of UTF-8 are available for the close reason.
-            If the close reason is longer than this, it is implicitly truncated.
+                connection to close gracefully before force-terminating.
 
         Raises:
             WebSocketError: The close reason is invalid UTF-8.
+
+        Note:
+            WebSocket control frames are limited to 125-bytes. The close code requires
+            2 bytes, therefore 123-bytes of UTF-8 are available for the close reason.
+            If the close reason is longer than this, it is implicitly truncated.
         """
         if self.closed:
             return
@@ -1539,7 +1646,9 @@ class AsyncWebSocket(BaseWebSocket):
 
     def __aiter__(self) -> Self:
         if self.closed:
-            raise WebSocketClosed("WebSocket has been closed")
+            raise WebSocketClosed(
+                "WebSocket has been closed", self._close_code or WsCloseCode.OK
+            )
         return self
 
     async def __anext__(self) -> bytes:
@@ -1566,7 +1675,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             exc (Exception): The exception object that gets raised. This does not
-            have to be an error, enqueuing ``WebSocketClosed`` indicates closure.
+                have to be an error, enqueuing ``WebSocketClosed`` indicates closure.
         """
 
         if self.closed or self._transport_exception is not None:
@@ -1591,7 +1700,10 @@ class AsyncWebSocket(BaseWebSocket):
 
         # Return early if terminated before start
         if self._terminated:
-            raise WebSocketClosed("WebSocket already terminated")
+            raise WebSocketClosed(
+                "WebSocket terminated before I/O tasks started",
+                self._close_code or WsCloseCode.INTERNAL_ERROR,
+            )
 
         # Get the currently active socket FD
         self._sock_fd = self._get_sock_fd()
@@ -1621,8 +1733,7 @@ class AsyncWebSocket(BaseWebSocket):
         This method waits for and returns the next complete WebSocket message.
 
         Args:
-            timeout: How many seconds to wait for a message before raising
-            a timeout error.
+            timeout: How many seconds to wait for a message before raising a timeout.
 
         Returns:
             tuple[bytes, int]: A tuple with the received payload and flags.
@@ -1630,9 +1741,10 @@ class AsyncWebSocket(BaseWebSocket):
         Raises:
             WebSocketTimeout: If the timeout expires.
             WebSocketClosed: If the connection is closed.
-            WebSocketError: If a network-level transport error occurs.
+            WebSocketError: WebSocket connection specific error.
+            CurlError: If a network-level transport error occurs.
 
-        Notes:
+        Note:
             Message fragmentation and reassembly are handled automatically by the
             implementation, so callers always receive complete messages.
 
@@ -1668,7 +1780,9 @@ class AsyncWebSocket(BaseWebSocket):
             raise self._transport_exception
 
         if self._read_task is None or self._read_task.done():
-            raise WebSocketClosed("WebSocket is closed")
+            raise WebSocketClosed(
+                "WebSocket connection is closed", self._close_code or WsCloseCode.OK
+            )
 
         # Cold path: wait for data or for the reader task to finish.
         queue_waiter: Task[RecvQueueItem] = create_task(self._receive_queue.get())
@@ -1723,13 +1837,28 @@ class AsyncWebSocket(BaseWebSocket):
         if self._transport_exception is not None:
             raise self._transport_exception
 
-        raise WebSocketClosed("Connection closed")
+        raise WebSocketClosed(
+            "WebSocket connection is closed",
+            self._close_code or WsCloseCode.INTERNAL_ERROR,
+        )
 
     async def recv_str(self, *, timeout: float | None = None) -> str:
         """Receive a text frame.
 
         Args:
-            timeout: how many seconds to wait before giving up.
+            timeout: How many seconds to wait before raising a timeout.
+
+        Raises:
+            WebSocketClosed: A close frame was received.
+            WebSocketError: The payload contains invalid UTF-8.
+            WebSocketError: The received frame is not a text frame.
+
+        Returns:
+            str: The text frame payload string.
+
+        Note:
+            This method checks if the message payload is valid UTF-8,
+            unless ``skip_utf8_validation`` is set at connection time.
         """
         data, flags = await self.recv(timeout=timeout)
         if flags & CurlWsFlag.CLOSE:
@@ -1758,11 +1887,21 @@ class AsyncWebSocket(BaseWebSocket):
         """Receive a JSON frame.
 
         Args:
-            loads: JSON decoder, default is :meth:`json.loads`.
-            timeout: how many seconds to wait before giving up.
+            loads: JSON decoder. Defaults to :meth:`json.loads`.
+            timeout: How many seconds to wait before raising a timeout.
 
         Raises:
-            WebSocketError: Received frame is invalid or failed to decode JSON.
+            WebSocketError: The JSON data was empty.
+            WebSocketError: The JSON was invalid.
+
+        Returns:
+            T: Deserialized JSON object.
+
+        Note:
+            This method checks if the message payload is valid UTF-8,
+            unless ``skip_utf8_validation`` is set at connection time.
+
+            This method inherits the same exceptions from :meth:`recv_str`.
         """
         data: str = await self.recv_str(timeout=timeout)
         if not data:
@@ -1795,12 +1934,16 @@ class AsyncWebSocket(BaseWebSocket):
             CurlError: Network related exception occured.
             WebSocketClosed: The WebSocket has been closed.
             WebSocketTimeout: The send operation timed out.
+            WebSocketError: Writer stalled or socket closed while sending.
 
         Note:
             There are no limits on the size of the message that can be sent.
             Large outbound messages are seamlessly broken down into optimal
             fragments using the ``CURLWS_CONT`` flag, arriving as a single
             logical message to the server.
+
+            Non-contiguous (i.e. strided) memoryviews are copied as they cannot
+            be cast into a contiguous format required by ``ffi.from_buffer()``.
 
         Warning:
             This method is non-blocking. It queues the message for immediate
@@ -1812,25 +1955,38 @@ class AsyncWebSocket(BaseWebSocket):
             raise self._transport_exception
 
         if self.closed or self._terminated:
-            raise WebSocketClosed("WebSocket connection is closed")
+            raise WebSocketClosed(
+                "WebSocket connection is closed", self._close_code or WsCloseCode.OK
+            )
 
         # Fail fast when writer is done
         if self._write_task is not None and self._write_task.done():
-            raise WebSocketClosed("WebSocket writer terminated; cannot send")
+            raise WebSocketClosed(
+                "WebSocket writer terminated; cannot send",
+                self._close_code or WsCloseCode.INTERNAL_ERROR,
+            )
 
         # cURL expects bytes
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
 
         # pylint: disable-next=unidiomatic-typecheck
-        elif type(payload) is memoryview and payload.itemsize != 1:
-            payload = payload.cast("B")
+        elif type(payload) is memoryview:
+            # Strided memoryviews can't be cast OR accepted by CFFI.
+            if not payload.c_contiguous:
+                payload = payload.tobytes()
+
+            elif payload.itemsize != 1:
+                payload = payload.cast("B")
 
         try:
             self._send_queue.put_nowait((payload, flags))
         except QueueFull as exc:
             if self._terminated:
-                raise WebSocketClosed("WebSocket connection is terminated") from exc
+                raise WebSocketClosed(
+                    "WebSocket connection is terminated",
+                    self._close_code or WsCloseCode.INTERNAL_ERROR,
+                ) from exc
 
             # Check exception after encoding
             if self._transport_exception is not None:
@@ -1853,7 +2009,8 @@ class AsyncWebSocket(BaseWebSocket):
 
             if self.closed or self._terminated:
                 raise WebSocketClosed(
-                    "Connection was terminated while waiting to send"
+                    "Connection was terminated while waiting to send",
+                    self._close_code or WsCloseCode.INTERNAL_ERROR,
                 ) from exc
 
     async def send_binary(
@@ -1973,15 +2130,19 @@ class AsyncWebSocket(BaseWebSocket):
             code (``int | WsCloseCode``, optional): Close code.
             message (``str | bytes``, optional): Close reason. Defaults to ``b""``.
             timeout (``float``, optional): How long (in seconds) to wait for the
-            connection to close gracefully before force-terminating. Defaults to 3.0.
-
-        Note:
-            WebSocket control frames are limited to 125 bytes. The close code requires
-            2 bytes, therefore 123-bytes of UTF-8 are available for the close reason.
-            If the close reason is longer than this, it is implicitly truncated.
+                connection to close gracefully before force-terminating.
 
         Raises:
             WebSocketError: The close reason is invalid UTF-8.
+
+        Note:
+            WebSocket control frames are limited to 125-bytes. The close code requires
+            2 bytes, therefore 123-bytes of UTF-8 are available for the close reason.
+            If the close reason is longer than this, it is implicitly truncated.
+
+            Transport errors during the closing handshake are suppressed.
+            The connection tears down regardless. The teardown also runs
+            if the calling task is cancelled.
         """
         async with self._close_lock:
             if self.closed:
@@ -2017,7 +2178,7 @@ class AsyncWebSocket(BaseWebSocket):
                 self._close_reason = message.decode("utf-8", errors="replace")
 
             try:
-                with suppress(AsyncTimeout, WebSocketError):
+                with suppress(AsyncTimeout, CurlError):
                     if (
                         self._write_task
                         and not self._write_task.done()
@@ -2590,9 +2751,9 @@ class AsyncWebSocket(BaseWebSocket):
     async def recv_fragment(
         self, *, timeout: float | None = None
     ) -> tuple[bytes, CurlWsFrame]:
-        """This function is deprecated and removed.
+        """This function has been removed.
         The new architecture automatically handles frame reassembly.
-        Call :meth:`recv()` instead as a direct replacement.
+        Call :meth:`recv()` instead to get complete, fully assembled frames.
         """
         _ = timeout
         raise NotImplementedError(
@@ -2610,13 +2771,16 @@ class AsyncWebSocket(BaseWebSocket):
 
         Args:
             timeout (float | None, optional): The maximum number of seconds to wait
-            for the queue to drain.
+                for the queue to drain.
 
         Raises:
-            WebSocketTimeout:  If the send queue is not fully processed within the
-            specified ``timeout`` period.
-            WebSocketError: If the writer task has already terminated while unsent
-            messages remain in the queue.
+            WebSocketTimeout: The send queue was not fully processed within the
+                specified ``timeout`` period.
+            CurlError: The transport error that stopped the writer. A drained
+                queue is not proof of delivery — the writer marks a frame done
+                even when the send failed.
+            WebSocketError: The writer task crashed, or stopped while unsent
+                messages remained in the queue.
         """
         if self._write_task is None:
             return
@@ -2637,24 +2801,26 @@ class AsyncWebSocket(BaseWebSocket):
                     CurlECode.OPERATION_TIMEDOUT,
                 )
 
-            # Fast path: queue drained
-            if join_task in done:
+            # Fast path: queue drained and writer is still alive.
+            if join_task in done and self._write_task not in done:
                 return
 
             # Writer finished first
             if self._write_task in done:
                 try:
                     self._write_task.result()
+                except CancelledError:
+                    pass
                 except Exception as exc:
                     raise WebSocketError("Writer task crashed while flushing.") from exc
 
-                # If the writer finished gracefully
-                if self._send_queue.empty():
-                    return
-
-                # Expose the actual network error that killed the writer
+                # Surface error if it stopped the writer.
                 if self._transport_exception is not None:
                     raise self._transport_exception
+
+                # Writer finished gracefully
+                if self._send_queue.empty():
+                    return
 
                 raise WebSocketError("Writer task stopped unexpectedly while flushing.")
 
@@ -2698,13 +2864,13 @@ class AsyncWebSocket(BaseWebSocket):
                 except (QueueEmpty, ValueError):
                     break
 
+        finally:
             # Remove the reader/writer if still registered
             with suppress(Exception):
                 _ = self.loop.remove_reader(self._sock_fd)
             with suppress(Exception):
                 _ = self.loop.remove_writer(self._sock_fd)
 
-        finally:
             # Clear the socket FD
             self._sock_fd = -1
 

@@ -593,14 +593,22 @@ class Session(BaseSession[R]):
 
     def close(self) -> None:
         """Close the session."""
+        if self._closed:
+            return
+
         self._closed = True
 
-        # On a Session close, also close any live WebSockets
-        for ws in self._websockets:
-            with suppress(Exception):
-                ws.close(WsCloseCode.GOING_AWAY, timeout=WebSocket.CLOSE_NOTIFY_SECS)
+        try:
+            # On a Session close, also close any live WebSockets
+            for ws in self._websockets:
+                with suppress(Exception):
+                    ws.close(
+                        WsCloseCode.GOING_AWAY, timeout=WebSocket.CLOSE_NOTIFY_SECS
+                    )
 
-        _ = self.curl.close()
+        finally:
+            # Ensure session is closed at the end.
+            _ = self.curl.close()
 
     @contextmanager
     def stream(
@@ -768,6 +776,8 @@ class Session(BaseSession[R]):
         # Invoke connection with properly merged session attributes
         _ = ws.connect(
             url,
+            base_url=self.base_url,
+            base_params=self.params,
             params=params if params is not None else self.params,
             headers=final_headers,
             cookies=final_cookies,
@@ -1274,29 +1284,34 @@ class AsyncSession(BaseSession[R]):
 
         self._closed = True
 
-        # On a session close, also close any live WebSockets.
-        if self._websockets:
-            _ = await asyncio.gather(
-                *(
-                    ws.close(
-                        WsCloseCode.GOING_AWAY,
-                        timeout=AsyncWebSocket.CLOSE_NOTIFY_SECS,
-                    )
-                    for ws in self._websockets
-                ),
-                return_exceptions=True,
-            )
+        try:
+            # On a session close, also close any live WebSockets.
+            if self._websockets:
+                _ = await asyncio.gather(
+                    *(
+                        ws.close(
+                            WsCloseCode.GOING_AWAY,
+                            timeout=AsyncWebSocket.CLOSE_NOTIFY_SECS,
+                        )
+                        for ws in self._websockets
+                    ),
+                    return_exceptions=True,
+                )
 
-        if self._owns_acurl:
-            await self.acurl.close()
+            if self._owns_acurl:
+                await self.acurl.close()
 
-        while True:
-            try:
-                curl = self.pool.get_nowait()
+        finally:
+            # Ensure that the session is always closed.
+            while True:
+                try:
+                    curl: Curl | None = self.pool.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
                 if curl:
-                    curl.close()
-            except asyncio.QueueEmpty:
-                break
+                    with suppress(Exception):
+                        curl.close()
 
     async def upkeep(self) -> list[int]:
         """
@@ -1539,7 +1554,7 @@ class AsyncSession(BaseSession[R]):
                     CurlOpt.CONNECT_ONLY,
                     2,  # https://curl.se/docs/websocket.html
                 )
-            except Exception:
+            except BaseException:
                 curl.close()
                 self.push_curl(None)
                 raise

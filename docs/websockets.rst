@@ -114,27 +114,31 @@ All sending and receiving methods are blocking. Sending methods return the numbe
     # Receive parsed JSON
     data = ws.recv_json()
 
-``recv()`` gives you the payload exactly as it arrived, with no UTF-8 validation. Use ``recv_str()`` or ``recv_json()`` if you need that check.
+``recv()`` gives you the message exactly as it arrived, with no UTF-8 validation. Use ``recv_str()`` or ``recv_json()`` if you need that check.
 
 Event Callbacks & run_forever()
 -------------------------------
 
-For applications that prefer an event-driven approach over manual iteration, the synchronous client supports callbacks and a blocking ``run_forever()`` loop.
+For applications that prefer an event-driven approach, the synchronous client supports callbacks and a blocking ``run_forever()`` loop.
 
 .. code-block:: python
 
-    def on_message(ws, message):
+    def on_message(ws: WebSocket, message: bytes | str):
         print(f"Received: {message}")
 
-    def on_error(ws, error):
+    def on_error(ws: WebSocket, error: CurlError):
         print(f"Error: {error}")
 
-    def on_close(ws, close_code, close_reason):
-        print("Connection closed")
+    def on_open(ws: WebSocket):
+        print("Connection open")
+
+    def on_close(ws: WebSocket, close_code: int, close_reason: str):
+        print(f"Connection closed: {close_reason}")
 
     with Session() as session:
         with session.ws_connect(
             "wss://echo.websocket.org",
+            on_open=on_open,
             on_message=on_message,
             on_error=on_error,
             on_close=on_close
@@ -144,12 +148,14 @@ For applications that prefer an event-driven approach over manual iteration, the
             # Blocks the thread and dispatches events as they arrive
             ws.run_forever()
 
+These callbacks are only dispatched by ``run_forever()`` — they don't fire for direct ``send()`` / ``recv()`` use.
+
 Thread Safety
 -------------
 
 The synchronous ``WebSocket`` relies on ``libcurl`` easy handles, which is **not thread-safe** at the C level. If Thread A is blocked in ``recv()``, and Thread B concurrently calls ``send()``, libcurl's internal state machine can corrupt, leading to undefined behavior or segmentation faults.
 
-For concurrent, full-duplex streaming, using the **AsyncWebSocket** is the best option.
+For concurrent, full-duplex streaming, using the **AsyncWebSocket** is the safest and most recommended option.
 
 Asynchronous Client
 ===================
@@ -265,7 +271,7 @@ To send a manual PING frame:
     # Zero-length payload is valid
     await ws.ping()
 
-RFC 6455 also permits an unsolicited PONG as a unidirectional heartbeat. Since replies to server pings are already automatic, ``pong()`` exists for that case:
+Server pings are automatically replied, but unsolicited PONGs can be sent as a unidirectional heartbeat:
 
 .. code-block:: python
 
@@ -297,7 +303,7 @@ For asynchronous connections:
 Reliability & Retries
 ---------------------
 
-Both clients support exponential backoff retries with jitter for transient network read errors. The ``WebSocketRetryStrategy`` dataclass is used to configure the retry policy.
+Both clients support exponential backoff with jitter for retrying transient network read errors. The ``WebSocketRetryStrategy`` dataclass is used to configure the retry policy.
 
 .. code-block:: python
 
