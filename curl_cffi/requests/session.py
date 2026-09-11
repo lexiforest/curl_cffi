@@ -778,7 +778,7 @@ class Session(BaseSession[R]):
             url,
             base_url=self.base_url,
             base_params=self.params,
-            params=params if params is not None else self.params,
+            params=params,
             headers=final_headers,
             cookies=final_cookies,
             auth=auth or self.auth,
