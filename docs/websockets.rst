@@ -421,10 +421,11 @@ This is an *optional* power-user optimization technique which breaks frame bound
     ...     async with AsyncSession[Response]() as session:
     ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
     ...             # Take advantage of concurrent sends in quick succession
-    ...             async with asyncio.TaskGroup() as tg:
-    ...                 tg.create_task(ws.send_str("Concurrent sending"))
-    ...                 tg.create_task(ws.send_str(" is "))
-    ...                 tg.create_task(ws.send_str("so cool!!"))
+    ...             await asyncio.gather(
+    ...                 ws.send_str("Concurrent sending"),
+    ...                 ws.send_str(" is "),
+    ...                 ws.send_str("so cool!!"),
+    ...             )
     ...             response: str = await ws.recv_str()
     ...             print(response)
     ...

@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import queue
+import struct
 import threading
 import time
 import unittest.mock
@@ -775,6 +776,11 @@ class TestWebSocketCloseAndState:
             (1008, True),
             (1009, True),
             (3000, True),
+            (1012, True),
+            (1013, True),
+            (1014, True),
+            (1016, False),
+            (2000, False),
         ],
     )
     def test_valid_close_codes(
@@ -789,9 +795,33 @@ class TestWebSocketCloseAndState:
         ws: WebSocket = session.ws_connect(configurable_ws_server.url)
         try:
             ws.close(code, b"test")
+            assert ws.close_code == (
+                code if expected_valid else WsCloseCode.INTERNAL_ERROR
+            )
         except WebSocketError:
             if expected_valid:
                 pytest.fail(f"Close code {code} should be valid")
+
+    @pytest.mark.parametrize(
+        "code,valid",
+        [
+            (1000, True),
+            (1014, True),
+            (3000, True),
+            (1016, False),
+            (2000, False),
+            (1006, False),
+        ],
+    )
+    def test_inbound_close_code_validation(self, code: int, valid: bool) -> None:
+        """_unpack_close_frame is on BaseWebSocket, so this covers both clients."""
+        ws: WebSocket = WebSocket(curl=Mock(spec=Curl))
+        frame: bytes = struct.pack("!H", code) + b"bye"
+        if valid:
+            assert ws._unpack_close_frame(frame) == (code, "bye")
+        else:
+            with pytest.raises(WebSocketError):
+                _ = ws._unpack_close_frame(frame)
 
     def test_close_with_long_reason(
         self,

@@ -2104,6 +2104,11 @@ class TestAsyncWebSocketCloseCodeValidation:
             (3000, True),  # Reserved for libraries
             (4000, True),  # Reserved for private use
             (4999, True),  # Max valid code
+            (1012, True),
+            (1013, True),
+            (1014, True),
+            (1016, False),
+            (2000, False),
         ],
     )
     async def test_valid_close_codes(
@@ -2120,6 +2125,9 @@ class TestAsyncWebSocketCloseCodeValidation:
         try:
             # Should not raise for valid codes
             await ws.close(code, b"test")
+            assert ws.close_code == (
+                code if expected_valid else WsCloseCode.INTERNAL_ERROR
+            )
         except WebSocketError:
             if expected_valid:
                 pytest.fail(f"Close code {code} should be valid")

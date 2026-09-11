@@ -183,8 +183,8 @@ class BaseWebSocket:
     _MAX_CONTROL_FRAME_SIZE: Final = 125
     _MAX_CLOSE_REASON_SIZE: Final = _MAX_CONTROL_FRAME_SIZE - 2
     _INVALID_UTF8_MSG: Final[str] = "Invalid UTF-8 in text frame"
-    _RESERVED_CLOSE_CODES: Final[frozenset[int]] = frozenset[int](
-        {1004, 1005, 1006, 1015}
+    _DEFINED_CLOSE_CODES: Final[frozenset[int]] = frozenset[int](
+        {1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014}
     )
     _TRANSIENT_ERRNOS: Final[frozenset[int]] = frozenset[int](
         {errno.EAGAIN, errno.EWOULDBLOCK, getattr(errno, "WSAEWOULDBLOCK", 10035)}
@@ -283,7 +283,7 @@ class BaseWebSocket:
 
     def _is_valid_close_code(self, code: int) -> bool:
         """RFC 6455 §7.4 close status code range check."""
-        return 1000 <= code < 5000 and code not in self._RESERVED_CLOSE_CODES
+        return code in self._DEFINED_CLOSE_CODES or 3000 <= code < 5000
 
     def _validate_close_code(self, code: int) -> int:
         """Convert a locally-generated close code into one that may be sent."""
@@ -1278,22 +1278,20 @@ class WebSocket(BaseWebSocket):
                         msg_size += len(chunk)
                         if msg_size > max_message_size:
                             chunks_clear()
-                            self.close(WsCloseCode.MESSAGE_TOO_BIG)
+                            reason: str = (
+                                f"Message too large: {msg_size} bytes "
+                                f"(limit {max_message_size} bytes)."
+                            )
+                            self.close(WsCloseCode.MESSAGE_TOO_BIG, reason)
 
                             # Emit the close event before raising
                             emit(
                                 "close",
                                 self._close_code or WsCloseCode.MESSAGE_TOO_BIG,
-                                self._close_reason or "",
+                                self._close_reason or reason,
                             )
 
-                            raise WebSocketError(
-                                (
-                                    f"Message too large: {msg_size} bytes "
-                                    f"(limit {max_message_size} bytes)."
-                                ),
-                                CurlECode.TOO_LARGE,
-                            )
+                            raise WebSocketError(reason, CurlECode.TOO_LARGE)
 
                         # Collect the chunk
                         chunks_append(chunk)
@@ -1722,8 +1720,9 @@ class AsyncWebSocket(BaseWebSocket):
     async def _handle_close_frame(self, message: bytes) -> None:
         """Unpack and handle the closing frame, then initiate shutdown."""
         close_code = self._set_close_state(message)
-        if self.autoclose and not self.closed:
-            await self.close(close_code)
+        if not self.closed:
+            if self.autoclose:
+                await self.close(close_code)
         else:
             self.terminate()
 

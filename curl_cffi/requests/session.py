@@ -1594,15 +1594,16 @@ class AsyncSession(BaseSession[R]):
                 self._websockets.discard(ws)
                 raise
 
-            # Sync cookies set during the upgrade handshake.
-            if not self.discard_cookies:
-                with suppress(CurlError):
-                    self._cookies.update_cookies_from_curl_changes(
-                        cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
-                    )
-
             # Start the background I/O tasks
             try:
+                # Sync cookies set during the upgrade handshake.
+                if not self.discard_cookies:
+                    with suppress(CurlError):
+                        self._cookies.update_cookies_from_curl_changes(
+                            cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
+                        )
+
+                # pylint: disable-next=protected-access
                 ws._start_io_tasks()  # pyright: ignore[reportPrivateUsage]
             except BaseException:
                 ws.terminate()
