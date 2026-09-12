@@ -3,7 +3,7 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/curl-cffi/week)](https://pepy.tech/projects/curl-cffi)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
-[![Generic badge](https://img.shields.io/badge/Telegram%20Channel-join-blue?logo=telegram)](https://t.me/impersonate_pro)
+[![Generic badge](https://img.shields.io/badge/Telegram-join-blue?logo=telegram)](https://t.me/impersonate_pro)
 [![Generic badge](https://img.shields.io/badge/Discord-join-purple?logo=blue)](https://discord.gg/kJqMHHgdn2)
 
 [Documentation](https://curl-cffi.readthedocs.io)
@@ -16,12 +16,15 @@ python http clients like `httpx` or `requests`, `curl_cffi` can impersonate
 browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
+For JavaScript bindings, see [impers](https://github.com/lexiforest/impers), for solving
+JavaScript challenges, see [brimp](https://github.com/lexiforest/brimp).
+
 Python 3.10 is the minimum supported version since v0.14.
 
 ## Recent highlights
 
-- 💨 http/3 fingerprints and UDP socks5 proxy support was added in `v0.15.0`!
-- 🦞 Added `curl-cffi` CLI and skills for debugging and for claws/agents.
+- 🧭 Our new toy, [brimp](https://github.com/lexiforest/brimp), a lightweight browser, works like curl_cffi with JavaScript enabled. Try it out today!
+- 🆕 Added support for the new algorithm and extensions in Chrome 150/152.
 
 ## Recall.ai - API for meeting recordings
 
@@ -57,14 +60,21 @@ No browser automation. Just simple API calls that return the exact cookies and h
 
 ------
 
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/cloro.png" height="55" width="149"></a>
+
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi">cloro</a>: SERP and AI search API for Google, ChatGPT, Perplexity, Gemini, Copilot and Grok
+
+------
+
 ## Impersonate Suite
 
 `curl-cffi` is part of the impersonate suite.
 
 - [curl-impersonate](https://github.com/lexiforest/curl-impersonate). A curl distribution that impersonates browsers.
 - [curl_cffi](https://github.com/lexiforest/curl_cffi). Python binding to curl-impersonate.
+- [brimp](https://docs.brimp.ai). Browser-impersonate, a lightweight browser 
 - [impers](https://github.com/lexiforest/impers). Node.js binding to curl-impersonate.
-- [impersonate.pro](https://impersonate.pro). Commercial support, more fingerprints and integrated solutions.
+- [impersonate.pro](https://impersonate.pro). Commercial support, more fingerprints and cloud offering.
 
 ## Features
 
@@ -94,26 +104,6 @@ Notes:
 1. For pycurl, http/3 is usually disabled at compile time by default.
 2. http/3 support since v0.11.4, http/3 proxy and fingerprints since v0.15.0.
 
-### curl-cffi CLI(new)
-
-Since v0.15, `curl_cffi` comes with a CLI called `curl-cffi`, you can use it for debugging
-a certain url with the `--impersonate` option. It can also serve as a `web_fetch`
-replacement for "claws" and "agents".
-
-||curl|httpie|curl-cffi|
-|---|---|---|---|
-|http/2|✅|❌|✅|
-|http/3|☑️<sup>1</sup>|❌|✅|
-|human-friendly|☑️<sup>2</sup>|✅|✅|
-|colorful|❌|✅|✅<sup>3</sup>|
-|fingerprints|❌|❌|✅|
-
-Notes:
-
-1. You need an http/3 enabled curl build, it's not enabled by default, at leat on my machine.
-2. As a long time command line user, I personally feel very comfortable using `curl -X POST httpbin.org`, but some users may prefer `http GET httpbin.org` syntax. If you prefer the curl syntax, you can keep using `curl-impersonate`.
-3. Install `curl_cffi[cli]` for colorful CLI output. Without `rich`, the CLI uses plain text output.
-
 ## Install
 
     pip install curl_cffi --upgrade
@@ -123,10 +113,6 @@ This should work on Linux, macOS and Windows out of the box.
 On macOS, you can also install via Homebrew:
 
     brew install lexiforest/tap/curl-cffi
-
-<small>Android support, including Termux, is currently in beta, you can install the beta release for testing.
-For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
-If you are using these OSes, please lend an hand.</small>
 
 To install beta releases:
 
@@ -145,6 +131,11 @@ To install unstable version from GitHub:
 `curl_cffi` also bundles with a CLI called `curl-cffi`.
 
 ### CLI
+
+Since v0.15, `curl_cffi` comes with a CLI called `curl-cffi`, you can use it for debugging
+a certain url with the `--impersonate` option. It can also serve as a `web_fetch`
+replacement for "agents".
+
 
 ```sh
 curl-cffi get tls.browserleaks.com/json
