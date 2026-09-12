@@ -57,6 +57,17 @@ Bypass Cloudflare with API
 obtain verified cookies (e.g. ``cf_clearance``). Click `here <https://yescaptcha.com/i/stfnIO>`_
 to register.
 
+Cloro
+~~~~~
+
+.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/cloro.png
+   :width: 149
+   :alt: Cloro
+   :target: https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi
+
+`cloro <https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi>`_: SERP and AI
+search API for Google, ChatGPT, Perplexity, Gemini, Copilot and Grok.
+
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
 
