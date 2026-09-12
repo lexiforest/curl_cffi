@@ -169,6 +169,14 @@ NATIVE_IMPERSONATE_TARGETS = [
     },
     {
         "browser": "Chrome",
+        "version": "150",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "chrome150",
+        "h3_fingerprints": True,
+    },
+    {
+        "browser": "Chrome",
         "version": "99",
         "os": "Android",
         "os_version": "12",
@@ -383,6 +391,7 @@ class Fingerprint:
     tls_signed_cert_timestamps: bool = False
     tls_ech: str | None = None
     tls_permute_extensions: bool = False
+    tls_trust_anchors: list[str] | None = None
 
     headers: dict[str, str] = field(default_factory=dict)
     header_order: str = ""
@@ -403,6 +412,7 @@ class Fingerprint:
     http3_header_order: str = ""
     http3_tls_supported_groups: list[str] = field(default_factory=list)
     quic_transport_parameters: str = ""
+    quic_cid_length: str | None = None
 
     ws_headers: dict[str, str] = field(default_factory=dict)
     ws_header_order: str = ""
