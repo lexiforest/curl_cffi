@@ -502,7 +502,7 @@ class Curl:
             0x200000: "long*",
             0x300000: "double*",
             0x400000: "struct curl_slist **",
-            0x500000: "long*",
+            0x500000: "uintptr_t*",
             0x600000: "int64_t*",
         }
         ret_cast_option = {
@@ -522,11 +522,18 @@ class Curl:
             return ret_cast_option[option_type]()
 
         c_value = ffi.new(ret_option[option_type])
-        ret = lib.curl_easy_getinfo(self._curl, option, c_value)
+        if option_type == 0x500000:
+            ret = lib._curl_easy_getinfo_socket(self._curl, option, c_value)
+        else:
+            ret = lib.curl_easy_getinfo(self._curl, option, c_value)
         self._check_error(ret, "getinfo", option)
         # cookielist and ssl_engines starts with 0x400000, see also: const.py
         if option_type == 0x400000:
             return slist_to_list(c_value[0])
+        if option_type == 0x500000:
+            socket = int(c_value[0])
+            socket_bad = int(ffi.cast("uintptr_t", -1))
+            return -1 if socket == socket_bad else socket
         if c_value[0] == ffi.NULL:
             return b""
 
