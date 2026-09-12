@@ -301,7 +301,7 @@ class Response:
             yield chunk
         self._finalize_stream()
 
-    def json(self, **kw):
+    def json(self, **kw: Any) -> Any:
         """return a parsed json object of the content."""
         charset_encoding = self.charset_encoding
         if charset_encoding is not None:
