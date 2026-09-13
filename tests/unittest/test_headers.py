@@ -18,6 +18,16 @@ def test_headers_none_value():
     assert headers["bar"] == ""
 
 
+def test_headers_from_tuple_sequence():
+    headers = Headers((("foo", "bar"), ("X-Baz", "qux")))
+    assert headers["foo"] == "bar"
+    assert headers["x-baz"] == "qux"
+
+    headers = Headers(("foo: bar", "X-Baz: qux"))
+    assert headers["foo"] == "bar"
+    assert headers["x-baz"] == "qux"
+
+
 def test_header_output():
     headers = Headers({"X-Foo": "bar"})
     header_list = headers.multi_items()

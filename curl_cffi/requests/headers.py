@@ -100,7 +100,7 @@ class Headers(MutableMapping[str, Optional[str]]):
                 )
                 for k, v in headers.items()
             ]
-        elif isinstance(headers, list):
+        elif isinstance(headers, Sequence) and not isinstance(headers, str | bytes):
             # list of "Name: Value" pairs
             if isinstance(headers[0], str | bytes):
                 sep = ":" if isinstance(headers[0], str) else b":"
