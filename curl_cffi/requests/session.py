@@ -816,16 +816,20 @@ class Session(BaseSession[R]):
             curl_options={**self.curl_options, **(curl_options or {})},
         )
 
-        # Sync cookies set during the upgrade handshake.
-        if not self.discard_cookies:
-            with suppress(CurlError):
-                self._cookies.update_cookies_from_curl_changes(
-                    cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
-                )
+        try:
+            # Sync cookies set during the upgrade handshake.
+            if not self.discard_cookies:
+                with suppress(CurlError):
+                    self._cookies.update_cookies_from_curl_changes(
+                        cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
+                    )
 
-        # Add the connection to the tracking WeakSet
-        self._websockets.add(ws)
-        return ws
+            # Add the connection to the tracking WeakSet
+            self._websockets.add(ws)
+            return ws
+        except BaseException:
+            ws.terminate()
+            raise
 
     def upkeep(self) -> int:
         return self.curl.upkeep()

@@ -39,7 +39,7 @@ from threading import Lock as ThreadLock
 from time import monotonic as time_monotonic
 from time import sleep as sync_sleep
 from types import TracebackType
-from typing import TYPE_CHECKING, Literal, final
+from typing import TYPE_CHECKING, Literal, TypeVar, final
 from warnings import warn as user_warning
 
 from ..aio import CURL_SOCKET_BAD, get_selector
@@ -51,10 +51,8 @@ from .models import Response
 from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, TypeVar
+    from typing import ClassVar, Final
     from weakref import ReferenceType
-
-    from typing_extensions import Self
 
     from ..const import CurlHttpVersion
     from ..curl import CurlWsFrame
@@ -64,16 +62,15 @@ if TYPE_CHECKING:
     from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
     from .session import AsyncSession, ProxySpec
 
-    T = TypeVar("T")
-
     OnDataType = Callable[["WebSocket", bytes, CurlWsFrame], None]
     OnMessageType = Callable[["WebSocket", bytes | str], None]
-    OnErrorType = Callable[["WebSocket", CurlError], None]
+    OnErrorType = Callable[["WebSocket", Exception], None]
     OnOpenType = Callable[["WebSocket"], None]
     OnCloseType = Callable[["WebSocket", int, str], None]
     RecvQueueItem = tuple[bytes, int]
     SendQueueItem = tuple[bytes | bytearray | memoryview, CurlWsFlag | int]
 
+T = TypeVar("T")
 EventTypeLiteral = Literal["open", "close", "data", "message", "error"]
 
 # Bound struct methods
@@ -214,16 +211,23 @@ class BaseWebSocket:
         ws_retry: WebSocketRetryStrategy | None = None,
         max_message_size: int = 4 * 1024 * 1024,
     ) -> None:
+        self.closed: bool = False
+        self._sock_fd: int = -1
+        self._close_code: int | None = None
+        self._close_reason: str | None = None
         self._curl: Curl | NotSetType = curl
         self.autoclose: bool = autoclose
         self.skip_utf8_validation: bool = skip_utf8_validation
-        self._close_code: int | None = None
-        self._close_reason: str | None = None
         self.debug: bool = debug
-        self.closed: bool = False
         self.ws_retry: WebSocketRetryStrategy = ws_retry or WebSocketRetryStrategy()
         self._max_message_size: int = max_message_size
-        self._sock_fd: int = -1
+
+    def __repr__(self) -> str:  # pyright: ignore[reportImplicitOverride]
+        """Return a readable representation of the WebSocket state."""
+        return (
+            f"<{self.__class__.__name__} closed={self.closed} "
+            f"fd={self._sock_fd} close_code={self._close_code}>"
+        )
 
     @property
     def curl(self) -> Curl:
@@ -491,7 +495,7 @@ class WebSocket(BaseWebSocket):
             raise StopIteration
         return msg
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> WebSocket:
         """Enable context manager usage for automatic session management."""
         return self
 
@@ -599,7 +603,7 @@ class WebSocket(BaseWebSocket):
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
         curl_options: dict[CurlOpt, str] | None = None,
-    ) -> Self:
+    ) -> WebSocket:
         """Connect to the WebSocket.
 
         libcurl automatically handles pings and pongs.
@@ -995,12 +999,11 @@ class WebSocket(BaseWebSocket):
 
         # pylint: disable-next=unidiomatic-typecheck
         elif type(payload) is memoryview:
-            # Strided memoryviews can't be cast OR accepted by CFFI.
-            if not payload.c_contiguous:
-                payload = payload.tobytes()
-
-            elif payload.itemsize != 1:
+            # Handle non-contiguous and 2D memoryviews.
+            try:
                 payload = payload.cast("B")
+            except TypeError:
+                payload = payload.tobytes()
 
         # Cache locals for fast path
         total_bytes: int = len(payload)
@@ -1126,13 +1129,17 @@ class WebSocket(BaseWebSocket):
 
         return offset
 
-    def send_binary(self, payload: bytes, *, timeout: float | None = None) -> int:
+    def send_binary(
+        self, payload: bytes | bytearray | memoryview, *, timeout: float | None = None
+    ) -> int:
         """Send a binary frame.
 
         For more info, see the docstring for :meth:`send()`."""
         return self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    def send_bytes(self, payload: bytes, *, timeout: float | None = None) -> int:
+    def send_bytes(
+        self, payload: bytes | bytearray | memoryview, *, timeout: float | None = None
+    ) -> int:
         """
         Send a binary frame, alias of :meth:`send_binary`.
 
@@ -1230,6 +1237,11 @@ class WebSocket(BaseWebSocket):
             CurlError: An unrecoverable transport error, after any configured
                 retries are exhausted.
         """
+        if self.closed:
+            raise WebSocketClosed(
+                "WebSocket connection is closed.", self._close_code or WsCloseCode.OK
+            )
+
         if url:
             _ = self.connect(
                 url,
@@ -1260,6 +1272,7 @@ class WebSocket(BaseWebSocket):
         close_flag: int = int(CurlWsFlag.CLOSE)
         cont_flag: int = int(CurlWsFlag.CONT)
         data_mask: int = CurlWsFlag.BINARY | CurlWsFlag.TEXT | cont_flag
+        leave_open: bool = False
 
         try:
             while self.keep_running:
@@ -1278,20 +1291,13 @@ class WebSocket(BaseWebSocket):
                         msg_size += len(chunk)
                         if msg_size > max_message_size:
                             chunks_clear()
-                            reason: str = (
-                                f"Message too large: {msg_size} bytes "
-                                f"(limit {max_message_size} bytes)."
+                            raise WebSocketError(
+                                (
+                                    f"Message too large: {msg_size} bytes "
+                                    f"(limit {max_message_size} bytes)."
+                                ),
+                                WsCloseCode.MESSAGE_TOO_BIG,
                             )
-                            self.close(WsCloseCode.MESSAGE_TOO_BIG, reason)
-
-                            # Emit the close event before raising
-                            emit(
-                                "close",
-                                self._close_code or WsCloseCode.MESSAGE_TOO_BIG,
-                                self._close_reason or reason,
-                            )
-
-                            raise WebSocketError(reason, CurlECode.TOO_LARGE)
 
                         # Collect the chunk
                         chunks_append(chunk)
@@ -1329,6 +1335,7 @@ class WebSocket(BaseWebSocket):
                         self._handle_close_frame(chunk)
                         self.keep_running = False
                         emit("close", self._close_code or 0, self._close_reason or "")
+                        leave_open = not self.autoclose
                         break
 
                     # Silently consume PING/PONG and loop again
@@ -1393,7 +1400,7 @@ class WebSocket(BaseWebSocket):
 
         finally:
             self.keep_running = False
-            if not self.closed:
+            if not (self.closed or leave_open):
                 self.terminate()
 
     def close(
@@ -1453,7 +1460,8 @@ class WebSocket(BaseWebSocket):
         self.terminate()
 
     def terminate(self) -> None:  # pyright: ignore[reportImplicitOverride]
-        """Terminate the connection and clean up selectors."""
+        """Terminate the connection, stop :meth:`run_forever` and clean up selectors."""
+        self.keep_running = False
         if self._read_selector is not None:
             self._read_selector.close()
             self._read_selector = None
@@ -1616,13 +1624,13 @@ class AsyncWebSocket(BaseWebSocket):
 
         return not (self._write_task and self._write_task.done())
 
-    async def __aenter__(self) -> Self:
+    async def __aenter__(self) -> AsyncWebSocket:
         """Enable context manager usage for automatic session management and closure.
         This cannot be used to initiate a WebSocket connection, that must be done
         beforehand using the :meth:`AsyncSession.ws_connect()` factory method.
 
         Returns:
-            Self: The instantiated AsyncWebSocket object.
+            AsyncWebSocket: The instantiated WebSocket connection object.
         """
         return self
 
@@ -1630,7 +1638,7 @@ class AsyncWebSocket(BaseWebSocket):
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: object | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         On exiting the context manager, close the WebSocket connection.
@@ -1642,7 +1650,7 @@ class AsyncWebSocket(BaseWebSocket):
             with suppress(CurlError):
                 await self.close()
 
-    def __aiter__(self) -> Self:
+    def __aiter__(self) -> AsyncWebSocket:
         if self.closed:
             raise WebSocketClosed(
                 "WebSocket has been closed", self._close_code or WsCloseCode.OK
@@ -1959,7 +1967,7 @@ class AsyncWebSocket(BaseWebSocket):
             )
 
         # Fail fast when writer is done
-        if self._write_task is not None and self._write_task.done():
+        if self._write_task is None or self._write_task.done():
             raise WebSocketClosed(
                 "WebSocket writer terminated; cannot send",
                 self._close_code or WsCloseCode.INTERNAL_ERROR,
@@ -1971,12 +1979,11 @@ class AsyncWebSocket(BaseWebSocket):
 
         # pylint: disable-next=unidiomatic-typecheck
         elif type(payload) is memoryview:
-            # Strided memoryviews can't be cast OR accepted by CFFI.
-            if not payload.c_contiguous:
-                payload = payload.tobytes()
-
-            elif payload.itemsize != 1:
+            # Handle non-contiguous and 2D memoryviews.
+            try:
                 payload = payload.cast("B")
+            except TypeError:
+                payload = payload.tobytes()
 
         try:
             self._send_queue.put_nowait((payload, flags))
@@ -2013,7 +2020,7 @@ class AsyncWebSocket(BaseWebSocket):
                 ) from exc
 
     async def send_binary(
-        self, payload: bytes, *, timeout: float | None = None
+        self, payload: bytes | bytearray | memoryview, *, timeout: float | None = None
     ) -> None:
         """Send a binary frame.
 
@@ -2025,7 +2032,9 @@ class AsyncWebSocket(BaseWebSocket):
         """
         return await self.send(payload, CurlWsFlag.BINARY, timeout=timeout)
 
-    async def send_bytes(self, payload: bytes, *, timeout: float | None = None) -> None:
+    async def send_bytes(
+        self, payload: bytes | bytearray | memoryview, *, timeout: float | None = None
+    ) -> None:
         """Send a binary frame, alias of :meth:`send_binary`.
 
         Args:
@@ -2308,6 +2317,7 @@ class AsyncWebSocket(BaseWebSocket):
         msg_size: int = 0
         chunks_append: Callable[[bytes], None] = chunks.append
         chunks_clear: Callable[[], None] = chunks.clear
+        leave_open: bool = False
 
         try:
             while not self.closed:
@@ -2353,6 +2363,7 @@ class AsyncWebSocket(BaseWebSocket):
                                 pass
 
                         # Loop back to the top to try reading again
+                        next_yield = loop_time() + time_slice
                         continue
 
                     # Apply the user-configured retry logic
@@ -2461,6 +2472,7 @@ class AsyncWebSocket(BaseWebSocket):
 
                         await queue_put((chunk, flags))
                     await self._handle_close_frame(chunk)
+                    leave_open = not self.autoclose
                     return
 
                 # Cooperative yield for all frame types.
@@ -2479,7 +2491,7 @@ class AsyncWebSocket(BaseWebSocket):
 
         finally:
             # Ensure any sudden reader exit terminates the connection
-            if not self.closed:
+            if not (self.closed or leave_open):
                 self.terminate()
 
     async def _write_loop(self) -> None:
@@ -2728,6 +2740,7 @@ class AsyncWebSocket(BaseWebSocket):
                                 pass
 
                         # Retry the exact same chunk
+                        next_yield = loop_time() + time_slice
                         continue
 
                     # Fatal Error
@@ -2874,20 +2887,22 @@ class AsyncWebSocket(BaseWebSocket):
             self._sock_fd = -1
 
             # Close the Curl connection
-            super().terminate()
-            if (
-                self.session
-                # pylint: disable-next=protected-access
-                and not self.session._closed  # pyright: ignore[reportPrivateUsage]
-            ):
-                # WebSocket curls CANNOT be reused
-                self.session.push_curl(None)
+            try:
+                super().terminate()
+            finally:
+                if (
+                    self.session
+                    # pylint: disable-next=protected-access
+                    and not self.session._closed  # pyright: ignore[reportPrivateUsage]
+                ):
+                    # WebSocket curls CANNOT be reused
+                    self.session.push_curl(None)
 
-                # pylint: disable-next=protected-access
-                self.session._websockets.discard(  # pyright: ignore[reportPrivateUsage]
-                    self
-                )
-            self.close_event.set()
+                    # pylint: disable-next=protected-access
+                    self.session._websockets.discard(  # pyright: ignore[reportPrivateUsage]
+                        self
+                    )
+                self.close_event.set()
 
 
 @final

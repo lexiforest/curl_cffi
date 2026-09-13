@@ -126,7 +126,8 @@ For applications that prefer an event-driven approach, the synchronous client su
     def on_message(ws: WebSocket, message: bytes | str):
         print(f"Received: {message}")
 
-    def on_error(ws: WebSocket, error: CurlError):
+    def on_error(ws: WebSocket, error: Exception):
+        # CurlError for transport errors, Exception for callbacks.
         print(f"Error: {error}")
 
     def on_open(ws: WebSocket):

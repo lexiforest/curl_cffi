@@ -2007,6 +2007,46 @@ class TestAsyncWebSocketAutoclose:
         finally:
             await ws.close()
 
+    async def test_autoclose_false_survives_close_frame(
+        self,
+        session: AsyncSession[Response],
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test autoclose=False leaves the writer alive for a reciprocal close."""
+        ws_config(
+            behavior=ServerBehavior.CLOSE_AFTER_N,
+            close_after_n=1,
+            close_code=WsCloseCode.OK,
+        )
+
+        ws: AsyncWebSocket = await session.ws_connect(
+            configurable_ws_server.url,
+            autoclose=False,
+        )
+        try:
+            await ws.send(b"trigger")
+            _ = await ws.recv(timeout=5.0)
+
+            _, flags = await ws.recv(timeout=5.0)
+            assert flags & CurlWsFlag.CLOSE
+
+            # The reader exits, but teardown is the caller's job now: the
+            # writer must survive so RFC 6455 5.5.1's reply can be sent.
+            write_task: Task[None] | None = (
+                ws._write_task  # pyright: ignore[reportPrivateUsage]
+            )
+            assert not ws.closed
+            assert not ws._terminated  # pyright: ignore[reportPrivateUsage]
+            assert write_task is not None and not write_task.done()
+            assert not ws.close_event.is_set()
+
+            await ws.close(WsCloseCode.OK)
+            assert ws.closed
+        finally:
+            with suppress(Exception):
+                await ws.close()
+
 
 class TestAsyncWebSocketBlockOnRecvQueueFull:
     """Tests for block_on_recv_queue_full parameter."""
@@ -2293,7 +2333,7 @@ class TestAsyncWebSocketCoverageGaps:
         with suppress(WebSocketClosed, WebSocketError, asyncio.CancelledError):
             _ = await asyncio.wait_for(recv_task, timeout=2.0)
 
-        assert ws.closed or ws._terminated
+        assert ws.closed
 
 
 @pytest.mark.asyncio

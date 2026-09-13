@@ -420,6 +420,19 @@ class TestWebSocketMessageTypes:
             with pytest.raises(WebSocketTimeout):
                 _ = ws.recv(timeout=0.5)
 
+    def test_recv_json_empty(
+        self,
+        session: Session,
+        configurable_ws_server: ConfigurableWSServer,
+        ws_config: Callable[..., None],
+    ) -> None:
+        """Test recv_json raises on empty payload."""
+        ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=[""])
+        with session.ws_connect(configurable_ws_server.url) as ws:
+            with pytest.raises(WebSocketError) as exc_info:
+                _ = ws.recv_json()
+            assert "empty" in str(exc_info.value).lower()
+
 
 class TestWebSocketTimeouts:
     def test_recv_timeout(
@@ -561,6 +574,7 @@ class TestWebSocketLargeMessages:
         assert data == payload
 
 
+@pytest.mark.filterwarnings("error::curl_cffi.utils.CurlCffiWarning")
 class TestWebSocketRunForever:
     def test_run_forever_echo(
         self,
@@ -627,17 +641,14 @@ class TestWebSocketRunForever:
         two_mb = 2 * 1024 * 1024
         ws_config(behavior=ServerBehavior.LARGE_RESPONSE, response_size=two_mb)
 
-        error_triggered = False
         close_code: int | None = None
+        errors: list[Exception] = []
 
         def on_open(ws: WebSocket) -> None:
             _ = ws.send(b"trigger", timeout=2.0)
 
         def on_error(ws: WebSocket, exc: Exception) -> None:
-            nonlocal error_triggered
-            error_triggered = True
-            assert isinstance(exc, WebSocketError)
-            assert exc.code == CurlECode.TOO_LARGE
+            errors.append(exc)
 
         def on_close(ws: WebSocket, code: int, reason: str) -> None:
             nonlocal close_code
@@ -655,7 +666,9 @@ class TestWebSocketRunForever:
         ):
             ws.run_forever()
 
-        assert error_triggered
+        assert len(errors) == 1
+        assert isinstance(errors[0], WebSocketError)
+        assert errors[0].code == WsCloseCode.MESSAGE_TOO_BIG
         assert close_code == WsCloseCode.MESSAGE_TOO_BIG
 
     def test_run_forever_invalid_utf8_closes(self) -> None:
@@ -675,13 +688,10 @@ class TestWebSocketRunForever:
         # Simulate receiving invalid utf8
         mock_curl.ws_recv.return_value = (b"\xff\xfe", MockFrameMeta())
         mock_curl.ws_send.return_value = 0  # Dummy mock for the auto-close call
-
-        close_called = False
+        close_codes: list[int] = []
 
         def on_close(w, code, reason) -> None:
-            nonlocal close_called
-            close_called = True
-            assert code == WsCloseCode.INVALID_DATA
+            close_codes.append(code)
 
         ws._emitters["close"] = on_close
         ws._emitters["message"] = lambda w, m: None
@@ -690,7 +700,7 @@ class TestWebSocketRunForever:
             ws.run_forever()
 
         assert exc.value.code == WsCloseCode.INVALID_DATA
-        assert close_called
+        assert close_codes == [WsCloseCode.INVALID_DATA]
 
     def test_run_forever_exhausts_retries(self) -> None:
         """Verifies that transient errors exceeding retry limits abort the loop."""
@@ -705,20 +715,19 @@ class TestWebSocketRunForever:
 
         mock_curl.ws_recv.side_effect = CurlError("SSL Error", CurlECode.RECV_ERROR)
 
-        error_called = False
+        errors: list[Exception] = []
 
         def on_error(w, exc) -> None:
-            nonlocal error_called
-            error_called = True
-            assert isinstance(exc, CurlError)
-            assert exc.code == CurlECode.RECV_ERROR
+            errors.append(exc)
 
         ws._emitters["error"] = on_error
 
         with pytest.raises(CurlError):
             ws.run_forever()
 
-        assert error_called
+        assert len(errors) == 1
+        assert isinstance(errors[0], CurlError)
+        assert errors[0].code == CurlECode.RECV_ERROR
 
 
 class TestWebSocketCloseAndState:
