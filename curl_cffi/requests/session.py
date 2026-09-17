@@ -117,8 +117,8 @@ if TYPE_CHECKING:
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         debug: bool
         interface: Optional[str]
-        doh_url: Optional[str]
         dns: Optional[Union[str, list[str]]]
+        doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         response_class: Optional[type[R]]
         discard_cookies: bool
@@ -154,6 +154,7 @@ if TYPE_CHECKING:
         quote: Union[str, Literal[False]]
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]]
         interface: Optional[str]
+        dns: Optional[Union[str, list[str]]]
         doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
@@ -282,6 +283,7 @@ class BaseSession(Generic[R]):
         self.http_version = http_version
         self.debug = debug
         self.interface = interface
+        self.dns = dns
         self.doh_url = doh_url
         self.cert = cert
         self._cache = normalize_cache_backend(cache)
@@ -315,12 +317,6 @@ class BaseSession(Generic[R]):
                 or os.environ.get("CURL_CA_BUNDLE")
                 or self.verify
             )
-        if dns:
-            if not isinstance(dns, (str, list, tuple)):
-                raise TypeError("dns must be a string or a list/tuple of strings")
-            if isinstance(dns, (list, tuple)):
-                dns = ",".join(dns)
-            self.curl_options.setdefault(CurlOpt.DNS_SERVERS, dns)
 
     def _parse_response(
         self,
@@ -536,6 +532,7 @@ class Session(BaseSession[R]):
             perk: perk string to impersonate in the session.
             extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
             interface: interface name or local IP to bind to (bare IP = source address).
+            dns: DNS server IP address or list of addresses. Requires c-ares.
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             default_encoding: encoding for decoding response content if charset is not
                 found in headers. Defaults to "utf-8". Can be set to a callable for
@@ -672,6 +669,7 @@ class Session(BaseSession[R]):
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
+        dns: str | list[str] | None = None,
         doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
@@ -725,6 +723,7 @@ class Session(BaseSession[R]):
             http_version: WebSockets are always bootstrapped over HTTP/1.1 (RFC 6455),
                 so this option has no effect.
             interface: Interface name or local IP to bind to.
+            dns: DNS server IP address or list of addresses. Requires c-ares.
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             cert: Tuple of (cert, key) filenames for client certificate auth.
             max_recv_speed: Maximum receive speed in bytes per second.
@@ -818,6 +817,7 @@ class Session(BaseSession[R]):
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
+            dns=self.dns if dns is None else dns,
             doh_url=doh_url or self.doh_url,
             cert=cert or self.cert,
             max_recv_speed=max_recv_speed,
@@ -876,6 +876,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: Optional[str] = None,
+        dns: Optional[Union[str, list[str]]] = None,
         doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
@@ -928,6 +929,7 @@ class Session(BaseSession[R]):
             quote=quote,
             http_version=http_version or self.http_version,
             interface=interface or self.interface,
+            dns=self.dns if dns is None else dns,
             doh_url=doh_url or self.doh_url,
             stream=stream,
             max_recv_speed=max_recv_speed,
@@ -1060,6 +1062,7 @@ class Session(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        dns: Optional[Union[str, list[str]]] = None,
         doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
@@ -1109,6 +1112,7 @@ class Session(BaseSession[R]):
                     quote=quote,
                     http_version=http_version,
                     interface=interface,
+                    dns=dns,
                     doh_url=doh_url,
                     cert=cert,
                     stream=stream,
@@ -1408,6 +1412,7 @@ class AsyncSession(BaseSession[R]):
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
+        dns: str | list[str] | None = None,
         doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
@@ -1466,6 +1471,7 @@ class AsyncSession(BaseSession[R]):
             http_version: WebSockets are always bootstrapped over HTTP/1.1 (RFC 6455),
                 so this option has no effect.
             interface: Interface name or local IP to bind to (bare IP = source address).
+            dns: DNS server IP address or list of addresses. Requires c-ares.
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             cert: A tuple of (cert, key) filenames for client cert.
             max_recv_speed: Maximum receive speed, bytes per second.
@@ -1557,6 +1563,7 @@ class AsyncSession(BaseSession[R]):
                     quote=quote,
                     http_version=http_version or self.http_version,
                     interface=interface or self.interface,
+                    dns=self.dns if dns is None else dns,
                     doh_url=doh_url or self.doh_url,
                     max_recv_speed=max_recv_speed,
                     cert=cert or self.cert,
@@ -1672,6 +1679,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        dns: Optional[Union[str, list[str]]] = None,
         doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
@@ -1724,6 +1732,7 @@ class AsyncSession(BaseSession[R]):
                 quote=quote,
                 http_version=http_version or self.http_version,
                 interface=interface or self.interface,
+                dns=self.dns if dns is None else dns,
                 doh_url=doh_url or self.doh_url,
                 stream=stream,
                 max_recv_speed=max_recv_speed,
@@ -1851,6 +1860,7 @@ class AsyncSession(BaseSession[R]):
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
+        dns: Optional[Union[str, list[str]]] = None,
         doh_url: Optional[str] = None,
         cert: Optional[Union[str, tuple[str, str]]] = None,
         stream: Optional[bool] = None,
@@ -1900,6 +1910,7 @@ class AsyncSession(BaseSession[R]):
                     quote=quote,
                     http_version=http_version,
                     interface=interface,
+                    dns=dns,
                     doh_url=doh_url,
                     cert=cert,
                     stream=stream,
