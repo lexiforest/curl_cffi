@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import locale
+import os
 import re
-import struct
 import ssl
+import struct
 import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
-
-import os
 
 import certifi
 
@@ -69,14 +68,51 @@ CURLINFO_SSL_DATA_OUT = 6
 
 CURL_WRITEFUNC_PAUSE = 0x10000001
 CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
+
 CURL_READFUNC_ABORT = 0x10000000
 CURL_READFUNC_PAUSE = 0x10000001
 
+CURL_SEEKFUNC_OK = 0
+CURL_SEEKFUNC_FAIL = 1
+CURL_SEEKFUNC_CANTSEEK = 2
 
-@ffi.def_extern()
+CURLPAUSE_RECV = 1 << 0
+CURLPAUSE_RECV_CONT = 0
+CURLPAUSE_SEND = 1 << 2
+CURLPAUSE_SEND_CONT = 0
+CURLPAUSE_ALL = CURLPAUSE_RECV | CURLPAUSE_SEND
+CURLPAUSE_CONT = CURLPAUSE_RECV_CONT | CURLPAUSE_SEND_CONT
+
+
+class _CallbackContext:
+    def __init__(self, callback: Any) -> None:
+        self.callback = callback
+        self.exception: BaseException | None = None
+
+
+def _store_callback_error(return_value: int):
+    def onerror(exc_type, exc_value, traceback):
+        if traceback is not None:
+            # CFFI cannot propagate exceptions through C, but exposes the callback
+            # arguments through this frame so the owning handle can retain it.
+            callback_args = traceback.tb_frame.f_locals
+            userdata = callback_args.get("userdata", callback_args.get("clientp"))
+            if userdata is not None:
+                context = ffi.from_handle(userdata)
+                context.exception = exc_value
+        return return_value
+
+    return onerror
+
+
+# debug function should return 0 as error code
+@ffi.def_extern(onerror=_store_callback_error(0))
 def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     """ffi callback for curl debug info"""
-    callback = ffi.from_handle(clientp)
+    context = ffi.from_handle(clientp)
+    if context.exception is not None:
+        return 0
+    callback = context.callback
     text = ffi.buffer(data, size)[:]
     callback(type_, text)
     return 0
@@ -122,11 +158,11 @@ def debug_function_default(type_: int, data: bytes) -> None:
             sys.stderr.write(f"{prefix} [{len(data)} bytes]: {hex_str}{postfix}\n")
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_WRITEFUNC_ERROR))
 def buffer_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl write function, directly writes to a buffer"""
     # assert size == 1
-    buffer = ffi.from_handle(userdata)
+    buffer = ffi.from_handle(userdata).callback
     buffer.write(ffi.buffer(ptr, nmemb)[:])
     return nmemb * size
 
@@ -137,11 +173,11 @@ def ensure_int(s):
     return int(s)
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_WRITEFUNC_ERROR))
 def write_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl write function, calls the callback python function"""
     # although similar enough to the function above, kept here for performance reasons
-    callback = ffi.from_handle(userdata)
+    callback = ffi.from_handle(userdata).callback
     wrote = callback(ffi.buffer(ptr, nmemb)[:])
     wrote = ensure_int(wrote)
     if wrote == CURL_WRITEFUNC_PAUSE or wrote == CURL_WRITEFUNC_ERROR:  # noqa: SIM109
@@ -152,10 +188,10 @@ def write_callback(ptr, size, nmemb, userdata):
     return nmemb * size
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_READFUNC_ABORT))
 def read_buffer_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl read function, reads from a buffer/file-like object"""
-    buffer = ffi.from_handle(userdata)
+    buffer = ffi.from_handle(userdata).callback
     max_len = size * nmemb
     data = buffer.read(max_len)
     if data is None:
@@ -174,10 +210,10 @@ def read_buffer_callback(ptr, size, nmemb, userdata):
     return len(data)
 
 
-@ffi.def_extern()
+@ffi.def_extern(onerror=_store_callback_error(CURL_READFUNC_ABORT))
 def read_callback(ptr, size, nmemb, userdata):
     """ffi callback for curl read function, calls the callback python function"""
-    callback = ffi.from_handle(userdata)
+    callback = ffi.from_handle(userdata).callback
     max_len = size * nmemb
     data = callback(max_len)
     if data is None:
@@ -194,6 +230,17 @@ def read_callback(ptr, size, nmemb, userdata):
         )
     ffi.memmove(ptr, data, len(data))
     return len(data)
+
+
+@ffi.def_extern(onerror=_store_callback_error(CURL_SEEKFUNC_FAIL))
+def seek_buffer_callback(userdata, offset: int, origin: int) -> int:
+    """ffi callback for curl seek function, seeks a file-like upload source"""
+    source = ffi.from_handle(userdata).callback
+    try:
+        source.seek(offset, origin)
+    except (AttributeError, OSError):
+        return CURL_SEEKFUNC_CANTSEEK
+    return CURL_SEEKFUNC_OK
 
 
 # Credits: @alexio777 on https://github.com/lexiforest/curl_cffi/issues/4
@@ -213,7 +260,7 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
-    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
+    _WS_RECV_BUFFER_SIZE: int = 128 * 1024  # 128 kB
 
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
@@ -224,6 +271,8 @@ class Curl:
         """
         self._curl = handle if handle else lib.curl_easy_init()
         self._headers = ffi.NULL
+        self._http3_headers = ffi.NULL
+        self._ws_headers = ffi.NULL
         self._proxy_headers = ffi.NULL
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
@@ -234,16 +283,17 @@ class Curl:
         self._debug_handle: Any = None
         self._body_handle: Any = None
         self._read_handle: Any = None
+        self._seek_handle: Any = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
         self._set_error_buffer()
 
         # Pre-allocated CFFI objects for WebSocket performance
-        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
-        self._ws_recv_n_recv = ffi.new("size_t *")
-        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
-        self._ws_send_n_sent = ffi.new("size_t *")
+        self._ws_recv_buffer: object | None = None
+        self._ws_recv_n_recv: object = ffi.new("size_t *")
+        self._ws_recv_p_frame: object = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent: object = ffi.new("size_t *")
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
@@ -279,6 +329,20 @@ class Curl:
                 code=cast(CurlECode, errcode),
             )
 
+    def _get_callback_exception(self) -> BaseException | None:
+        for handle in (
+            self._write_handle,
+            self._header_handle,
+            self._debug_handle,
+            self._read_handle,
+            self._seek_handle,
+        ):
+            if handle is not None:
+                exception = ffi.from_handle(handle).exception
+                if exception is not None:
+                    return exception
+        return None
+
     def setopt(self, option: CurlOpt, value: Any) -> int:
         """Wrapper for ``curl_easy_setopt``.
 
@@ -307,44 +371,50 @@ class Curl:
         if value_type == "long*" or value_type == "int64_t*":
             c_value = ffi.new(value_type, value)
         elif option == CurlOpt.WRITEDATA:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._write_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.WRITEFUNCTION, lib.buffer_callback
             )
         elif option == CurlOpt.HEADERDATA:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._header_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.HEADERFUNCTION, lib.buffer_callback
             )
         elif option == CurlOpt.READDATA:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._read_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.READFUNCTION, lib.read_buffer_callback
             )
+        elif option == CurlOpt.SEEKDATA:
+            c_value = ffi.new_handle(_CallbackContext(value))
+            self._seek_handle = c_value
+            lib._curl_easy_setopt(
+                self._curl, CurlOpt.SEEKFUNCTION, lib.seek_buffer_callback
+            )
         elif option == CurlOpt.WRITEFUNCTION:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._write_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.WRITEFUNCTION, lib.write_callback)
             option = CurlOpt.WRITEDATA
         elif option == CurlOpt.HEADERFUNCTION:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._header_handle = c_value
             lib._curl_easy_setopt(
                 self._curl, CurlOpt.HEADERFUNCTION, lib.write_callback
             )
             option = CurlOpt.HEADERDATA
         elif option == CurlOpt.READFUNCTION:
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._read_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.READFUNCTION, lib.read_callback)
             option = CurlOpt.READDATA
         elif option == CurlOpt.DEBUGFUNCTION:
             if value is True:
                 value = debug_function_default
-            c_value = ffi.new_handle(value)
+            c_value = ffi.new_handle(_CallbackContext(value))
             self._debug_handle = c_value
             lib._curl_easy_setopt(self._curl, CurlOpt.DEBUGFUNCTION, lib.debug_function)
             option = CurlOpt.DEBUGDATA
@@ -383,10 +453,18 @@ class Curl:
         else:
             raise NotImplementedError(f"Option unsupported: {option}")
 
-        if option == CurlOpt.HTTPHEADER:
+        header_options = {
+            CurlOpt.HTTPHEADER: "_headers",
+            CurlOpt.HTTP3_HTTPHEADER: "_http3_headers",
+            CurlOpt.WS_HTTPHEADER: "_ws_headers",
+        }
+        if option in header_options:
+            headers_attr = header_options[option]
+            headers = getattr(self, headers_attr)
             for header in value:
-                self._headers = lib.curl_slist_append(self._headers, header)
-            ret = lib._curl_easy_setopt(self._curl, option, self._headers)
+                headers = lib.curl_slist_append(headers, header)
+            setattr(self, headers_attr, headers)
+            ret = lib._curl_easy_setopt(self._curl, option, headers)
         elif option == CurlOpt.PROXYHEADER:
             for proxy_header in value:
                 self._proxy_headers = lib.curl_slist_append(
@@ -423,7 +501,7 @@ class Curl:
             0x200000: "long*",
             0x300000: "double*",
             0x400000: "struct curl_slist **",
-            0x500000: "long*",
+            0x500000: "uintptr_t*",
             0x600000: "int64_t*",
         }
         ret_cast_option = {
@@ -443,11 +521,18 @@ class Curl:
             return ret_cast_option[option_type]()
 
         c_value = ffi.new(ret_option[option_type])
-        ret = lib.curl_easy_getinfo(self._curl, option, c_value)
+        if option_type == 0x500000:
+            ret = lib._curl_easy_getinfo_socket(self._curl, option, c_value)
+        else:
+            ret = lib.curl_easy_getinfo(self._curl, option, c_value)
         self._check_error(ret, "getinfo", option)
         # cookielist and ssl_engines starts with 0x400000, see also: const.py
         if option_type == 0x400000:
             return slist_to_list(c_value[0])
+        if option_type == 0x500000:
+            socket = int(c_value[0])
+            socket_bad = int(ffi.cast("uintptr_t", -1))
+            return -1 if socket == socket_bad else socket
         if c_value[0] == ffi.NULL:
             return b""
 
@@ -502,6 +587,9 @@ class Curl:
         ret = lib.curl_easy_perform(self._curl)
 
         try:
+            callback_exception = self._get_callback_exception()
+            if callback_exception is not None:
+                raise callback_exception
             self._check_error(ret, "perform")
         finally:
             # cleaning
@@ -511,6 +599,14 @@ class Curl:
         if self._curl is None:
             return 0  # silently ignore if curl handle is None
         return lib.curl_easy_upkeep(self._curl)
+
+    def pause(self, action: int) -> int:
+        """Pause or resume data transfer on this handle."""
+        if self._curl is None:
+            return 0
+        ret = lib.curl_easy_pause(self._curl, action)
+        self._check_error(ret, "pause")
+        return ret
 
     def clean_handles_and_buffers(
         self, clear_headers: bool = True, clear_resolve: bool = True
@@ -522,6 +618,7 @@ class Curl:
         self._debug_handle = None
         self._body_handle = None
         self._read_handle = None
+        self._seek_handle = None
 
         if clear_resolve:
             if self._resolve != ffi.NULL:
@@ -529,13 +626,17 @@ class Curl:
             self._resolve = ffi.NULL
 
         if clear_headers:
-            if self._headers != ffi.NULL:
-                lib.curl_slist_free_all(self._headers)
-            self._headers = ffi.NULL
-
-            if self._proxy_headers != ffi.NULL:
-                lib.curl_slist_free_all(self._proxy_headers)
-            self._proxy_headers = ffi.NULL
+            header_attrs = (
+                "_headers",
+                "_http3_headers",
+                "_ws_headers",
+                "_proxy_headers",
+            )
+            for header_attr in header_attrs:
+                headers = getattr(self, header_attr)
+                if headers != ffi.NULL:
+                    lib.curl_slist_free_all(headers)
+                setattr(self, header_attr, ffi.NULL)
 
     def duphandle(self) -> Curl:
         """Wrapper for ``curl_easy_duphandle``.
@@ -627,6 +728,9 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
 
+        if self._ws_recv_buffer is None:
+            self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
+
         if ret := lib.curl_ws_recv(
             self._curl,
             self._ws_recv_buffer,
@@ -643,7 +747,9 @@ class Curl:
         )
 
     def ws_send(
-        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+        self,
+        payload: bytes | bytearray | memoryview,
+        flags: CurlWsFlag | int = CurlWsFlag.BINARY,
     ) -> int:
         """Send data to a websocket connection.
 
@@ -656,10 +762,15 @@ class Curl:
 
         Raises:
             CurlError: if failed.
+
+        Notes:
+            Memoryview payloads must be byte-format for ``len()`` to work correctly.
         """
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
+        # Do NOT assign ffi.from_buffer() to a variable!
+        # See: https://github.com/lexiforest/curl_cffi/pull/700
         if ret := lib.curl_ws_send(
             self._curl,
             ffi.from_buffer(payload),
@@ -733,12 +844,6 @@ class CurlMime:
             if ret != 0:
                 raise CurlError("Add field failed.")
 
-        # remote file name
-        if filename is not None:
-            ret = lib.curl_mime_filename(part, filename.encode())
-            if ret != 0:
-                raise CurlError("Add field failed.")
-
         if local_path and data:
             raise CurlError("Can not use local_path and data at the same time.")
 
@@ -754,6 +859,12 @@ class CurlMime:
             if not Path(local_path_str).exists():
                 raise FileNotFoundError(f"File not found at {local_path_str}")
             ret = lib.curl_mime_filedata(part, local_path_str.encode())
+            if ret != 0:
+                raise CurlError("Add field failed.")
+
+        # remote file name
+        if filename is not None:
+            ret = lib.curl_mime_filename(part, filename.encode())
             if ret != 0:
                 raise CurlError("Add field failed.")
 

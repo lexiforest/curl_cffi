@@ -1,5 +1,6 @@
 import base64
 import json
+import pickle
 import time
 from io import BytesIO
 from uuid import uuid4
@@ -11,8 +12,14 @@ import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import HTTPError
+from curl_cffi.requests.exceptions import (
+    CertificateVerifyError,
+    HTTPError,
+    TooManyRedirects,
+    UnrewindableBodyError,
+)
 from curl_cffi.requests.models import Response
+from curl_cffi.requests.streams import _IterableReader
 from curl_cffi.utils import CurlCffiWarning
 
 
@@ -51,6 +58,27 @@ def test_response_request_body(server):
     assert r.request.body is None
 
 
+def test_response_pickle(server):
+    url = str(server.url.copy_with(path="/set_cookies"))
+    response = requests.get(url)
+    expected_text = response.text
+
+    restored = pickle.loads(pickle.dumps(response))
+
+    assert restored.url == response.url
+    assert restored.content == response.content
+    assert restored.text == expected_text
+    assert restored.status_code == response.status_code
+    assert restored.headers == response.headers
+    assert restored.cookies["foo"] == "bar"
+    assert restored.request.url == response.request.url
+    assert restored.curl is None
+    assert restored.queue is None
+    assert restored.stream_task is None
+    assert restored.astream_task is None
+    assert restored.quit_now is None
+
+
 def test_callback(server):
     buffer = BytesIO()
     r = requests.post(
@@ -60,6 +88,14 @@ def test_callback(server):
     )
     assert r.status_code == 200
     assert buffer.getvalue() == b"foo=bar"
+
+
+def test_callback_keyboard_interrupt(server):
+    def callback(data: bytes):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        requests.get(str(server.url), content_callback=callback)
 
 
 def test_post_large_body(server):
@@ -107,6 +143,119 @@ def test_post_form(server):
     r = requests.post(str(server.url.copy_with(path="/echo_body")), data=data)
     assert r.status_code == 200
     assert r.content == b"foo%5B%5D=7&foo%5B%5D=8&bar=9"
+
+
+def test_post_iterable_body(server):
+    def gen():
+        yield b"foo"
+        yield b"x" * 200000
+        yield b"bar"
+
+    r = requests.post(str(server.url.copy_with(path="/echo_body")), content=gen())
+    assert r.status_code == 200
+    assert r.content == b"foo" + b"x" * 200000 + b"bar"
+
+
+def test_post_file_like_body(server, tmp_path):
+    path = tmp_path / "body.bin"
+    path.write_bytes(b"streamed-from-file")
+
+    with path.open("rb") as f:
+        r = requests.post(str(server.url.copy_with(path="/echo_body")), content=f)
+    assert r.status_code == 200
+    assert r.content == b"streamed-from-file"
+
+
+def test_file_like_content_overrides_content_length(server, tmp_path):
+    path = tmp_path / "body.bin"
+    path.write_bytes(b"streamed-from-file")
+
+    with path.open("rb") as f:
+        r = requests.post(
+            str(server.url.copy_with(path="/echo_body")),
+            content=f,
+            headers={"Content-Length": "1"},
+        )
+
+    assert r.request.headers["Content-Length"] == str(len(b"streamed-from-file"))
+    assert r.content == b"streamed-from-file"
+
+
+def test_post_content_chunk_list(server):
+    r = requests.post(
+        str(server.url.copy_with(path="/echo_body")),
+        content=[b"foo", b"bar"],
+    )
+    assert r.content == b"foobar"
+
+
+def test_sync_session_rejects_async_content(server):
+    async def content():
+        yield b"raw"
+
+    with pytest.raises(TypeError):
+        requests.post(str(server.url), content=content())
+
+
+def test_iterable_reader_returns_available_chunk_immediately():
+    consumed = []
+
+    def chunks():
+        consumed.append("first")
+        yield b"foo"
+        consumed.append("second")
+        yield b"bar"
+
+    reader = _IterableReader(chunks())
+    assert reader.read(65536) == b"foo"
+    assert consumed == ["first"]
+    assert reader.read(65536) == b"bar"
+
+
+def test_seekable_content_rewinds_for_redirect(server, tmp_path):
+    path = tmp_path / "redirect-body.bin"
+    path.write_bytes(b"skip-streamed-body")
+
+    with path.open("rb") as f:
+        f.seek(5)
+        r = requests.post(
+            str(server.url.copy_with(path="/redirect_307")),
+            content=f,
+            allow_redirects=True,
+        )
+    assert r.content == b"streamed-body"
+
+
+def test_one_shot_content_redirect_is_unrewindable(server):
+    with pytest.raises(UnrewindableBodyError):
+        requests.post(
+            str(server.url.copy_with(path="/redirect_307")),
+            content=iter([b"streamed-body"]),
+            allow_redirects=True,
+        )
+
+
+def test_seekable_content_rewinds_for_retry(server, tmp_path):
+    path = tmp_path / "retry-body.bin"
+    path.write_bytes(b"retry-file-body")
+    url = server.url.copy_with(path="/retry_body", query=f"key={uuid4().hex}".encode())
+
+    with (
+        path.open("rb") as f,
+        requests.Session(retry=1, raise_for_status=True) as session,
+    ):
+        r = session.post(str(url), content=f)
+    assert r.content == b"retry-file-body"
+
+
+def test_one_shot_content_is_not_retried(server):
+    url = server.url.copy_with(path="/retry_body", query=f"key={uuid4().hex}".encode())
+
+    with (
+        requests.Session(retry=1, raise_for_status=True) as session,
+        pytest.raises(UnrewindableBodyError),
+    ):
+        session.post(str(url), content=iter([b"important-body"]))
 
 
 def test_post_redirect_to_get(server):
@@ -197,21 +346,21 @@ def test_url_encode(server):
     # FIXME: should use server.url, but it always encode
 
     # should not change
-    url = "http://127.0.0.1:8000/%2f%2f%2f"
+    url = "http://127.0.0.1:8008/%2f%2f%2f"
     r = requests.get(url)
     assert r.url == url
 
-    url = "http://127.0.0.1:8000/imaginary-pagination:7"
+    url = "http://127.0.0.1:8008/imaginary-pagination:7"
     r = requests.get(str(url))
     assert r.url == url
 
-    url = "http://127.0.0.1:8000/post.json?limit=1&tags=foo&page=0"
+    url = "http://127.0.0.1:8008/post.json?limit=1&tags=foo&page=0"
     r = requests.get(str(url))
     assert r.url == url
 
     # Non-ASCII URL should be percent encoded as UTF-8 sequence
-    non_ascii_url = "http://127.0.0.1:8000/search?q=测试"
-    encoded_non_ascii_url = "http://127.0.0.1:8000/search?q=%E6%B5%8B%E8%AF%95"
+    non_ascii_url = "http://127.0.0.1:8008/search?q=测试"
+    encoded_non_ascii_url = "http://127.0.0.1:8008/search?q=%E6%B5%8B%E8%AF%95"
 
     r = requests.get(non_ascii_url)
     assert r.url == encoded_non_ascii_url
@@ -220,8 +369,8 @@ def test_url_encode(server):
     assert r.url == encoded_non_ascii_url
 
     # should be quoted
-    url = "http://127.0.0.1:8000/e x a m p l e"
-    quoted = "http://127.0.0.1:8000/e%20x%20a%20m%20p%20l%20e"
+    url = "http://127.0.0.1:8008/e x a m p l e"
+    quoted = "http://127.0.0.1:8008/e%20x%20a%20m%20p%20l%20e"
     r = requests.get(str(url))
     assert r.url == quoted
 
@@ -232,37 +381,37 @@ def test_url_encode(server):
     # 1. https://stackoverflow.com/q/57365497/1061155
     # 2. https://stackoverflow.com/q/23496750/1061155
 
-    url = "http://127.0.0.1:8000/imaginary-pagination:7"
-    quoted = "http://127.0.0.1:8000/imaginary-pagination%3A7"
+    url = "http://127.0.0.1:8008/imaginary-pagination:7"
+    quoted = "http://127.0.0.1:8008/imaginary-pagination%3A7"
     r = requests.get(url, quote=":")
     assert r.url == quoted
 
-    url = "http://127.0.0.1:8000/post.json?limit=1&tags=id:<1000&page=0"
-    quoted = "http://127.0.0.1:8000/post.json?limit=1&tags=id%3A%3C1000&page=0"
+    url = "http://127.0.0.1:8008/post.json?limit=1&tags=id:<1000&page=0"
+    quoted = "http://127.0.0.1:8008/post.json?limit=1&tags=id%3A%3C1000&page=0"
     r = requests.get(url, quote=":")
     assert r.url == quoted
 
     # Do not quote at all
-    url = "http://127.0.0.1:8000/query={}"
-    quoted = "http://127.0.0.1:8000/query=%7B%7D"
+    url = "http://127.0.0.1:8008/query={}"
+    quoted = "http://127.0.0.1:8008/query=%7B%7D"
     r = requests.get(url)
     assert r.url == quoted
     r = requests.get(url, quote=False)
     assert r.url == url
 
     # Do not unquote
-    url = "http://127.0.0.1:8000/path?token=example%7C2024-10-20T10%3A00%3A00Z"
+    url = "http://127.0.0.1:8008/path?token=example%7C2024-10-20T10%3A00%3A00Z"
     r = requests.get(url)
     print(r.url)
     assert r.url == url
 
     # empty values should be kept
-    url = "http://127.0.0.1:8000/api?param1=value1&param2=&param3=value3"
+    url = "http://127.0.0.1:8008/api?param1=value1&param2=&param3=value3"
     r = requests.get(url)
     assert r.url == url
 
     # path should not be unquoted when params supplied
-    url = "http://127.0.0.1:8000/anything/%2F%3Dsilly%3D%2F"
+    url = "http://127.0.0.1:8008/anything/%2F%3Dsilly%3D%2F"
     r = requests.get(url)
     assert r.url == url
     params = {"foo": "bar"}
@@ -320,6 +469,33 @@ def test_accept_header_not_added(server):
 def test_charset_parse(server):
     r = requests.get(str(server.url.copy_with(path="/gbk")))
     assert r.encoding == "gbk"
+
+
+def test_json_charset_parse():
+    r = Response()
+    r.headers["Content-Type"] = "application/json; charset=gb2312"
+    r.content = b'{"foo":"\xd6\xd0\xce\xc4"}'
+    assert r.json()["foo"] == "\u4e2d\u6587"
+
+
+def test_json_bytes_bom_parse():
+    r = Response()
+    r.headers["Content-Type"] = "application/json"
+    r.content = b'\xef\xbb\xbf{"foo":"bar"}'
+    assert r.json()["foo"] == "bar"
+
+
+def test_response_is_redirect():
+    for status_code in (301, 302, 303, 307, 308):
+        r = Response()
+        r.status_code = status_code
+        r.headers["Location"] = "/"
+        assert r.is_redirect
+
+    r = Response()
+    r.status_code = 304
+    r.headers["Location"] = "/"
+    assert not r.is_redirect
 
 
 def test_charset_default_encoding(server):
@@ -459,48 +635,71 @@ def test_not_follow_redirects(server):
     )
     assert r.status_code == 301
     assert r.redirect_count == 0
+    assert r.history == []
     assert r.content == b"Redirecting..."
 
 
 def test_follow_redirects(server):
-    r = requests.get(
-        str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
-    )
+    url = str(server.url.copy_with(path="/redirect_301"))
+    r = requests.get(url, allow_redirects=True)
     assert r.status_code == 200
     assert r.redirect_count == 1
+    assert len(r.history) == 1
+    assert isinstance(r.history[0], Response)
+    assert r.history[0].url == url
+    assert r.history[0].status_code == 301
+    assert r.history[0].headers["location"] == "/"
+    assert r.history[0].is_redirect
+    assert r.history[0].content == b""
+
+
+def test_multiple_redirect_history(server):
+    url = str(server.url.copy_with(path="/redirect_to")) + "?to=/redirect_301"
+    intermediate_url = str(server.url.copy_with(path="/redirect_301"))
+    r = requests.get(url)
+
+    assert [response.status_code for response in r.history] == [301, 301]
+    assert [response.url for response in r.history] == [url, intermediate_url]
+    assert all(response.history == [] for response in r.history)
 
 
 def test_too_many_redirects(server):
     with pytest.raises(requests.RequestsError) as e:
         requests.get(str(server.url.copy_with(path="/redirect_loop")), max_redirects=2)
+    assert isinstance(e.value, TooManyRedirects)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
+    assert len(e.value.response.history) == 2
 
 
-def test_safe_redirect_blocks_private_ip(server):
+def test_safe_redirect_blocks_private_ip(server, https_server):
     """CurlFollow.SAFE should reject redirects to private/loopback IPs."""
-    target = str(server.url.copy_with(path="/"))
-    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
-    r = requests.get(url, allow_redirects=True)
+    public_redirect = str(server.url.copy_with(path="/redirect_to"))
+    target = str(https_server.url.copy_with(path="/"))
+    url = public_redirect + f"?to={target}"
+    r = requests.get(url, allow_redirects=True, verify=False)
     assert r.status_code == 200
     assert r.redirect_count == 1
 
-    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
-    with pytest.raises(requests.RequestsError, match="SSRF"):
-        requests.get(url, allow_redirects=CurlFollow.SAFE)
+    with pytest.raises(requests.RequestsError) as exc_info:
+        requests.get(url, allow_redirects=CurlFollow.SAFE, verify=False)
+    assert exc_info.value.code == CurlECode.COULDNT_CONNECT
 
 
-def test_safe_redirect_string(server):
+def test_safe_redirect_string(server, https_server):
     """The string 'safe' should behave the same as CurlFollow.SAFE."""
-    url = str(server.url.copy_with(path="/redirect_to")) + "?to=http://10.0.0.1/"
-    with pytest.raises(requests.RequestsError, match="SSRF"):
-        requests.get(url, allow_redirects="safe")
+    target = str(https_server.url.copy_with(path="/"))
+    url = str(server.url.copy_with(path="/redirect_to")) + f"?to={target}"
+    with pytest.raises(requests.RequestsError) as exc_info:
+        requests.get(url, allow_redirects="safe", verify=False)
+    assert exc_info.value.code == CurlECode.COULDNT_CONNECT
 
 
 def test_verify(https_server):
-    with pytest.raises(requests.RequestsError, match="SSL certificate problem"):
+    with pytest.raises(CertificateVerifyError) as exc_info:
         requests.get(str(https_server.url), verify=True)
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 def test_verify_false(https_server):
@@ -560,6 +759,27 @@ def test_response_cookies(server):
 
     # non-exist cookies
     assert r.cookies.get("xxx") is None
+
+
+@pytest.mark.parametrize(
+    "value", ["bar", '"value"', '"hello world"', '""', r'"a\"b"', r'"\141"']
+)
+@pytest.mark.parametrize("discard_cookies", [False, True])
+def test_response_cookie_preserves_value(server, value, discard_cookies):
+    with requests.Session(discard_cookies=discard_cookies) as session:
+        response = session.get(
+            str(server.url.copy_with(path="/set_cookies")), params={"value": value}
+        )
+        assert response.cookies["foo"] == value
+        if discard_cookies:
+            assert session.cookies.get("foo") is None
+        else:
+            assert session.cookies["foo"] == value
+
+        replay = session.get(
+            str(server.url.copy_with(path="/echo_cookies")), cookies=response.cookies
+        )
+        assert replay.json()["foo"] == value
 
 
 def test_elapsed(server):
@@ -675,6 +895,15 @@ def test_delete_cookies(server):
     assert not s.cookies.get("foo")
 
 
+def test_delete_cookies_before_redirect(server):
+    s = requests.Session()
+    s.get(str(server.url.copy_with(path="/set_cookies")))
+    assert s.cookies["foo"] == "bar"
+    r = s.get(str(server.url.copy_with(path="/delete_cookies_then_redirect")))
+    assert "foo" not in r.json()
+    assert not s.cookies.get("foo")
+
+
 def test_cookie_domains(server):
     s = requests.Session()
     s.cookies.set("foo", "bar", domain="example.com")
@@ -727,11 +956,11 @@ def test_cookies_with_special_chars(server):
 # https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_mislead_by_host(server):
     s = requests.Session(debug=True)
-    s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    s.curl.setopt(CurlOpt.RESOLVE, ["example.com:8008:127.0.0.1"])
     s.cookies.set("foo", "bar")
     print("URL is: ", str(server.url))
     # TODO: replace hard-coded url with server.url.replace(host="example.com")
-    r = s.get("http://example.com:8000", headers={"Host": "example.com"})
+    r = s.get("http://example.com:8008", headers={"Host": "example.com"})
     r = s.get(str(server.url.copy_with(path="/echo_cookies")))
     assert r.json()["foo"] == "bar"
 
@@ -739,11 +968,11 @@ def test_cookies_mislead_by_host(server):
 # https://github.com/lexiforest/curl_cffi/issues/119
 def test_cookies_redirect_to_another_domain(server):
     s = requests.Session()
-    s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8000:127.0.0.1"])
+    s.curl.setopt(CurlOpt.RESOLVE, ["google.com:8008:127.0.0.1"])
     s.cookies.set("foo", "google.com", domain="google.com")
     r = s.get(
         str(server.url.copy_with(path="/redirect_to")),
-        params={"to": "http://google.com:8000/echo_cookies"},
+        params={"to": "http://google.com:8008/echo_cookies"},
     )
     cookies = r.json()
     assert cookies["foo"] == "google.com"
@@ -755,16 +984,16 @@ def test_cookies_wo_hostname_redirect_to_another_domain(server):
     s.curl.setopt(
         CurlOpt.RESOLVE,
         [
-            "example.com:8000:127.0.0.1",
-            "google.com:8000:127.0.0.1",
+            "example.com:8008:127.0.0.1",
+            "google.com:8008:127.0.0.1",
         ],
     )
     s.cookies.set("foo", "bar")
     s.cookies.set("hello", "world", domain="google.com")
     r = s.get(
         # str(server.url.copy_with(path="/redirect_to")),
-        "http://example.com:8000/redirect_to",
-        params={"to": "http://google.com:8000/echo_cookies"},
+        "http://example.com:8008/redirect_to",
+        params={"to": "http://google.com:8008/echo_cookies"},
     )
     cookies = r.json()
     # cookies without domains are bound to the first domain, which is example.com in
@@ -859,6 +1088,16 @@ def test_stream_iter_content(server):
                 assert b"path" in chunk
 
 
+def test_stream_response_pickle_raises(server):
+    url = str(server.url.copy_with(path="/stream"))
+    with (
+        requests.Session() as session,
+        session.stream("GET", url, params={"n": "1"}) as response,
+        pytest.raises(TypeError, match="Streaming responses cannot be pickled"),
+    ):
+        pickle.dumps(response)
+
+
 def test_stream_iter_content_break(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/stream"))
@@ -933,6 +1172,7 @@ def test_stream_redirect_loop(server):
         with pytest.raises(requests.RequestsError) as e:  # noqa: SIM117
             with s.stream("GET", url, max_redirects=2):
                 pass
+        assert isinstance(e.value, TooManyRedirects)
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
@@ -945,6 +1185,7 @@ def test_stream_redirect_loop_without_close(server):
             # if the error happens receiving header, it's raised right away
             s.get(url, max_redirects=2, stream=True)
 
+        assert isinstance(e.value, TooManyRedirects)
         assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
         assert isinstance(e.value.response, Response)
         assert e.value.response.status_code == 301
@@ -975,6 +1216,7 @@ def test_stream_auto_close_with_header_errors(server):
     url = str(server.url.copy_with(path="/redirect_loop"))
     with pytest.raises(requests.RequestsError) as e:
         s.get(url, max_redirects=2, stream=True)
+    assert isinstance(e.value, TooManyRedirects)
     assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
     assert isinstance(e.value.response, Response)
     assert e.value.response.status_code == 301
@@ -1034,7 +1276,7 @@ def test_curl_infos(server):
     r = s.get(str(server.url))
 
     assert r.infos[CurlInfo.PRIMARY_IP] == b"127.0.0.1"  # pyright: ignore
-    assert r.infos[CurlInfo.PRIMARY_PORT] == 8000
+    assert r.infos[CurlInfo.PRIMARY_PORT] == 8008
 
 
 def test_response_ip_and_port(server):
@@ -1042,7 +1284,7 @@ def test_response_ip_and_port(server):
     r = s.get(str(server.url))
 
     assert r.primary_ip == "127.0.0.1"
-    assert r.primary_port == 8000
+    assert r.primary_port == 8008
     assert r.local_ip == "127.0.0.1"
     assert r.local_port != 0
 

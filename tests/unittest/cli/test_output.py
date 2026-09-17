@@ -35,6 +35,7 @@ def _make_args(**overrides):
         headers_only=False,
         body_only=False,
         download=False,
+        quiet=False,
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -44,6 +45,7 @@ def _make_args(**overrides):
     "overrides, expected",
     [
         (dict(print_spec="Hh"), "Hh"),
+        (dict(quiet=True), ""),
         (dict(verbose=True), "HhBb"),
         (dict(headers_only=True), "h"),
         (dict(body_only=True), "b"),

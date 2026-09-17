@@ -82,3 +82,8 @@ version of curl_cffi or create a new session on each request.
 
 Note, some other impersonation-oriented http clients give you the control over adding the
 PSK or not, but you should let the client decide, if you are trying to impersonating browsers.
+
+
+References:
+
+1. https://github.com/icing/blog/blob/main/curl-sessions-earlydata.md

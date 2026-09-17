@@ -9,10 +9,22 @@ from typing import Literal
 from curl_cffi.const import CurlHttpVersion
 from curl_cffi.requests import Response
 
-from rich.console import Console
-from rich.progress import Progress, BarColumn, DownloadColumn, TransferSpeedColumn
-from rich.syntax import Syntax
-from rich.text import Text
+try:
+    from rich.console import Console
+    from rich.progress import Progress, BarColumn, DownloadColumn, TransferSpeedColumn
+    from rich.syntax import Syntax
+    from rich.text import Text
+except ImportError:
+    Console = None  # type: ignore[assignment]
+    Progress = None  # type: ignore[assignment]
+    BarColumn = None  # type: ignore[assignment]
+    DownloadColumn = None  # type: ignore[assignment]
+    TransferSpeedColumn = None  # type: ignore[assignment]
+    Syntax = None  # type: ignore[assignment]
+    Text = None  # type: ignore[assignment]
+    HAS_RICH = False
+else:
+    HAS_RICH = True
 
 
 def _http_ver_label(response: Response) -> Literal["1.0", "1.1", "2", "3"]:
@@ -31,6 +43,8 @@ def _http_ver_label(response: Response) -> Literal["1.0", "1.1", "2", "3"]:
 def determine_print_spec(args: argparse.Namespace) -> str:
     if args.print_spec:
         return args.print_spec
+    if args.quiet:
+        return ""
     if args.verbose:
         return "HhBb"
     if args.headers_only:
@@ -140,8 +154,8 @@ def print_output(
     request_body: str | None,
     print_spec: str,
 ) -> None:
-    use_color = sys.stdout.isatty()  # interactive terminal
-    console = Console(force_terminal=use_color, no_color=not use_color)
+    use_color = HAS_RICH and sys.stdout.isatty()  # interactive terminal
+    console = Console(force_terminal=True, no_color=False) if use_color else None
 
     # print request headers
     if "H" in print_spec:
@@ -189,7 +203,10 @@ def _sanitize_filename(name: str) -> str:
 
 
 def handle_download(
-    response: Response, url: str, output_path: str | None = None
+    response: Response,
+    url: str,
+    output_path: str | None = None,
+    quiet: bool = False,
 ) -> None:
     if output_path is None:
         cd = response.headers.get("content-disposition", "")
@@ -201,19 +218,25 @@ def handle_download(
 
     content = response.content
     total = len(content)
-    console = Console(stderr=True)
-    with Progress(
-        "[progress.description]{task.description}",
-        BarColumn(),
-        DownloadColumn(),
-        TransferSpeedColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task(output_path, total=total)
+
+    if HAS_RICH and not quiet:
+        console = Console(stderr=True)
+        with Progress(
+            "[progress.description]{task.description}",
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(output_path, total=total)
+            with open(output_path, "wb") as f:
+                chunk_size = 64 * 1024
+                for offset in range(0, total, chunk_size):
+                    chunk = content[offset : offset + chunk_size]
+                    f.write(chunk)
+                    progress.advance(task, len(chunk))
+    else:
         with open(output_path, "wb") as f:
-            chunk_size = 64 * 1024
-            for offset in range(0, total, chunk_size):
-                chunk = content[offset : offset + chunk_size]
-                f.write(chunk)
-                progress.advance(task, len(chunk))
-    print(f"Downloaded to {output_path}", file=sys.stderr)
+            f.write(content)
+    if not quiet:
+        print(f"Downloaded to {output_path}", file=sys.stderr)

@@ -28,7 +28,7 @@ from .session import (
     StreamRequestParams,
     Unpack,
 )
-from .utils import HttpVersionLiteral, not_set, set_curl_options
+from .utils import HttpVersionLiteral, NOT_SET, set_curl_options
 
 _NO_PEEK = object()
 
@@ -212,7 +212,7 @@ class TrioSession(BaseSession[R]):
         cookies: Optional[CookieTypes] = None,
         files: Optional[dict] = None,
         auth: Optional[tuple[str, str]] = None,
-        timeout: Optional[Union[float, tuple[float, float], object]] = not_set,
+        timeout: Optional[Union[float, tuple[float, float], object]] = NOT_SET,
         allow_redirects: Optional[bool] = None,
         max_redirects: Optional[int] = None,
         proxies: Optional[ProxySpec] = None,
@@ -253,7 +253,7 @@ class TrioSession(BaseSession[R]):
             cookies_list=[self.cookies, cookies],
             files=files,
             auth=auth or self.auth,
-            timeout=self.timeout if timeout is not_set else timeout,
+            timeout=self.timeout if timeout is NOT_SET else timeout,
             allow_redirects=(
                 self.allow_redirects if allow_redirects is None else allow_redirects
             ),

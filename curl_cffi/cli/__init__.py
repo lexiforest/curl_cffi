@@ -3,6 +3,7 @@ import os
 import sys
 
 from .doctor import print_doctor
+from .pro import add_pro_parsers, handle_pro_command
 from .run import handle_run, parse_http_file  # noqa: F401
 from .parse import (  # noqa: F401
     SUPPORTED_METHODS,
@@ -17,6 +18,8 @@ __all__ = [
     "main",
     "handle_request",
     "handle_run",
+    "handle_pro_command",
+    "add_pro_parsers",
     "parse_http_file",
     "parse_request_items",
     "process_url",
@@ -66,6 +69,12 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         "-v",
         action="store_true",
         help="Print request and response headers and body",
+    )
+    output_group.add_argument(
+        "--quiet",
+        "-q",
+        action="store_true",
+        help="Suppress all output except errors",
     )
     output_group.add_argument(
         "--print",
@@ -187,6 +196,11 @@ Tools:
   run FILE                         Run requests from .http or .har file
   doctor                           Dump diagnostic information
 
+Fingerprints:
+  update                           Update local fingerprints cache
+  list                             List local and native fingerprints
+  config                           Configure API access for Pro fingerprints
+
 Run '{prog} <command> --help' for details on a specific command.""")
 
 
@@ -214,6 +228,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Dump diagnostic information for debugging.",
     )
     sub.set_defaults(method=None)
+
+    add_pro_parsers(subparsers)
 
     sub = subparsers.add_parser(
         "run",
@@ -266,6 +282,9 @@ def main() -> None:
 
     if args.command == "doctor":
         print_doctor()
+        return
+
+    if handle_pro_command(args):
         return
 
     if args.command == "run":

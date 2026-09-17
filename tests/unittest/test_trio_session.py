@@ -6,8 +6,10 @@ import pytest
 import trio
 
 from curl_cffi import Headers, TrioSession
+from curl_cffi.const import CurlECode
 from curl_cffi.requests import RequestsError
 from curl_cffi.requests.errors import SessionClosed
+from curl_cffi.requests.exceptions import CertificateVerifyError
 
 
 @pytest.mark.trio
@@ -212,8 +214,9 @@ async def test_follow_redirects(server):
 @pytest.mark.trio
 async def test_verify(https_server):
     async with TrioSession() as s:
-        with pytest.raises(RequestsError, match="SSL certificate problem"):
+        with pytest.raises(CertificateVerifyError) as exc_info:
             await s.get(str(https_server.url), verify=True)
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 @pytest.mark.trio

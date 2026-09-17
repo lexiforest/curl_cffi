@@ -1,14 +1,14 @@
 import base64
 import json
 import os
+from importlib import import_module
 from io import BytesIO
 from typing import cast
 from unittest.mock import patch
 
 import pytest
 
-import curl_cffi
-from curl_cffi import Curl, CurlError, CurlInfo, CurlOpt
+from curl_cffi import Curl, CurlECode, CurlError, CurlInfo, CurlOpt, _wrapper
 from curl_cffi.curl import _default_cacert
 
 #######################################################################################
@@ -81,6 +81,23 @@ def test_headers(server):
     assert headers["Foo"][0] == "baz"
 
 
+def test_protocol_specific_header_lists():
+    c = Curl()
+    try:
+        c.setopt(CurlOpt.HTTP3_HTTPHEADER, [b"X-H3: yes"])
+        c.setopt(CurlOpt.WS_HTTPHEADER, [b"X-WS: yes"])
+
+        assert _wrapper.ffi.string(c._http3_headers.data) == b"X-H3: yes"
+        assert _wrapper.ffi.string(c._ws_headers.data) == b"X-WS: yes"
+
+        c.clean_handles_and_buffers()
+
+        assert c._http3_headers == _wrapper.ffi.NULL
+        assert c._ws_headers == _wrapper.ffi.NULL
+    finally:
+        c.close()
+
+
 def test_proxy_headers(server):
     # XXX: only tests that proxy header is not present for target server, should add
     # tests that verifies proxy headers are sent to proxy server.
@@ -131,6 +148,32 @@ def test_write_function(server):
     c.setopt(CurlOpt.WRITEFUNCTION, write)
     c.perform()
     assert buffer.getvalue() == b"foo=bar"
+
+
+def test_write_function_keyboard_interrupt(server):
+    c = Curl()
+    c.setopt(CurlOpt.URL, str(server.url).encode())
+
+    def write(data: bytes):
+        raise KeyboardInterrupt
+
+    c.setopt(CurlOpt.WRITEFUNCTION, write)
+    with pytest.raises(KeyboardInterrupt):
+        c.perform()
+
+
+def test_debug_function_exception(server):
+    c = Curl()
+    c.setopt(CurlOpt.URL, str(server.url).encode())
+    c.setopt(CurlOpt.WRITEDATA, BytesIO())
+    c.setopt(CurlOpt.VERBOSE, 1)
+
+    def debug(type_: int, data: bytes):
+        raise ValueError("debug callback failed")
+
+    c.setopt(CurlOpt.DEBUGFUNCTION, debug)
+    with pytest.raises(ValueError, match="debug callback failed"):
+        c.perform()
 
 
 def test_read_function(server):
@@ -218,6 +261,7 @@ def test_follow_redirect(server):
     c.setopt(CurlOpt.FOLLOWLOCATION, 1)
     c.perform()
     assert c.getinfo(CurlInfo.RESPONSE_CODE) == 200
+    assert c.getinfo(CurlInfo.REDIRECT_HISTORY) == [f"301\t{url}".encode()]
 
 
 def test_not_follow_redirect(server):
@@ -226,6 +270,7 @@ def test_not_follow_redirect(server):
     c.setopt(CurlOpt.URL, url.encode())
     c.perform()
     assert c.getinfo(CurlInfo.RESPONSE_CODE) == 301
+    assert c.getinfo(CurlInfo.REDIRECT_HISTORY) == []
 
 
 def test_http_proxy_changed_path(server):
@@ -257,8 +302,9 @@ def test_verify(https_server):
     c = Curl()
     url = str(https_server.url)
     c.setopt(CurlOpt.URL, url.encode())
-    with pytest.raises(CurlError, match="SSL certificate problem"):
+    with pytest.raises(CurlError) as exc_info:
         c.perform()
+    assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
 def test_verify_false(https_server):
@@ -302,6 +348,21 @@ def test_status_code(server):
     c.setopt(CurlOpt.URL, url.encode())
     c.perform()
     assert c.getinfo(CurlInfo.RESPONSE_CODE) == 200
+
+
+def test_active_socket(server):
+    c = Curl()
+    c.setopt(CurlOpt.URL, str(server.url).encode())
+    c.setopt(CurlOpt.CONNECT_ONLY, 1)
+    c.perform()
+    socket = c.getinfo(CurlInfo.ACTIVESOCKET)
+    assert isinstance(socket, int)
+    assert socket >= 0
+
+
+def test_active_socket_without_connection():
+    c = Curl()
+    assert c.getinfo(CurlInfo.ACTIVESOCKET) == -1
 
 
 def test_response_headers(server):
@@ -353,8 +414,8 @@ def test_reason(server):
 
 def test_resolve(server):
     c = Curl()
-    url = "http://example.com:8000"
-    c.setopt(CurlOpt.RESOLVE, ["example.com:8000:127.0.0.1"])
+    url = "http://example.com:8008"
+    c.setopt(CurlOpt.RESOLVE, ["example.com:8008:127.0.0.1"])
     c.setopt(CurlOpt.URL, url)
     c.perform()
 
@@ -369,8 +430,27 @@ def test_duphandle(server):
         c.perform()
 
 
-def test_is_pro():
-    assert curl_cffi.is_pro() is False
+def test_resolve_curl_version_does_not_need_easy_handle(monkeypatch):
+    version_module = import_module("curl_cffi.__version__")
+
+    class DummyFFI:
+        @staticmethod
+        def string(value):
+            return value
+
+    class DummyLib:
+        @staticmethod
+        def curl_version():
+            return b"libcurl/fake"
+
+        @staticmethod
+        def curl_easy_init():
+            raise AssertionError("curl_easy_init should not be called")
+
+    monkeypatch.setattr(_wrapper, "ffi", DummyFFI())
+    monkeypatch.setattr(_wrapper, "lib", DummyLib())
+
+    assert version_module._resolve_curl_version() == "libcurl/fake"
 
 
 # ---------------------------------------------------------------------------

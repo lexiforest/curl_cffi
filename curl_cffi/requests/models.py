@@ -12,6 +12,7 @@ from ..utils import CurlCffiWarning
 from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
+from .streams import STREAM_END
 
 # Use orjson if present
 try:
@@ -24,14 +25,25 @@ with suppress(ImportError):
     import readability as rd
 
 CHARSET_RE = re.compile(r"charset=([\w-]+)")
-STREAM_END = object()
-
-
-def clear_queue(q: queue.Queue):
-    with q.mutex:
-        q.queue.clear()
-        q.all_tasks_done.notify_all()
-        q.unfinished_tasks = 0
+# https://www.rfc-editor.org/rfc/rfc7159#section-8.1
+JSON_NATIVE_ENCODINGS = {
+    "utf-8",
+    "utf8",
+    "utf-8-sig",
+    "utf-16",
+    "utf16",
+    "utf-16-be",
+    "utf-16-le",
+    "utf-16be",
+    "utf-16le",
+    "utf-32",
+    "utf32",
+    "utf-32-be",
+    "utf-32-le",
+    "utf-32be",
+    "utf-32le",
+}
+REDIRECT_STATI = (301, 302, 303, 307, 308)
 
 
 class Request:
@@ -83,7 +95,8 @@ class Response:
         redirect_count: how many redirects happened.
         redirect_url: the final redirected url.
         http_version: http version used.
-        history: history redirections, only headers are available.
+        history: redirect responses, in request order. Response bodies are not
+            available.
         download_size: total downloaded bytes (body).
         upload_size: total uploaded bytes (body).
         header_size: total header size.
@@ -110,7 +123,7 @@ class Response:
         self.primary_port: int = 0
         self.local_ip: str = ""
         self.local_port: int = 0
-        self.history: list[dict[str, Any]] = []
+        self.history: list[Response] = []
         self.infos: dict[str, Any] = {}
         self.queue: Optional[queue.Queue] = None
         self.stream_task: Optional[Future] = None
@@ -122,6 +135,41 @@ class Response:
         self.header_size: int = 0
         self.request_size: int = 0
         self.response_size: int = 0
+
+    def __getstate__(self) -> dict[str, Any]:
+        if any(
+            value is not None
+            for value in (
+                self.queue,
+                self.stream_task,
+                self.astream_task,
+                self.quit_now,
+            )
+        ):
+            raise TypeError(
+                "Streaming responses cannot be pickled; make the request without "
+                "stream=True before pickling the response."
+            )
+
+        state = self.__dict__.copy()
+        for attribute in (
+            "curl",
+            "queue",
+            "stream_task",
+            "astream_task",
+            "quit_now",
+        ):
+            state.pop(attribute, None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self.curl = None
+        self.queue = None
+        self.stream_task = None
+        self.astream_task = None
+        self.quit_now = None
+        self._stream_closed = True
 
     @property
     def charset(self) -> str:
@@ -192,6 +240,11 @@ class Response:
         if not self.ok:
             raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
 
+    @property
+    def is_redirect(self) -> bool:
+        """Whether this response is a well-formed redirect."""
+        return "location" in self.headers and self.status_code in REDIRECT_STATI
+
     def iter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
         iterate streaming content line by line, separated by ``\\n``.
@@ -250,6 +303,11 @@ class Response:
 
     def json(self, **kw):
         """return a parsed json object of the content."""
+        charset_encoding = self.charset_encoding
+        if charset_encoding is not None:
+            encoding = charset_encoding.lower().replace("_", "-")
+            if encoding not in JSON_NATIVE_ENCODINGS:
+                return loads(self.text, **kw)
         return loads(self.content, **kw)
 
     def close(self):

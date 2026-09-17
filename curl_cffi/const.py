@@ -345,6 +345,17 @@ class CurlOpt(IntEnum):
     QUIC_TRANSPORT_PARAMETERS = 10000 + 1027
     HTTP3_SIG_HASH_ALGS = 10000 + 1028
     HTTP3_TLS_EXTENSION_ORDER = 10000 + 1029
+    HTTPHEADER_ORDER = 10000 + 1030
+    HTTP3_HTTPHEADER = 10000 + 1031
+    HTTP3_HTTPHEADER_ORDER = 10000 + 1032
+    HTTP3_SSL_EC_CURVES = 10000 + 1033
+    WS_HTTPHEADER = 10000 + 1034
+    WS_HTTPHEADER_ORDER = 10000 + 1035
+    WS_SSL_DISABLE_TICKET = 0 + 1036
+    WS_SSL_CERT_COMPRESSION = 10000 + 1037
+    QUIC_CID_LENGTH = 10000 + 1038
+    HTTP3_SSL_PERMUTE_EXTENSIONS = 0 + 1039
+    TLS_TRUST_ANCHORS = 10000 + 1040
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -427,7 +438,10 @@ class CurlInfo(IntEnum):
     EARLYDATA_SENT_T = 0x600000 + 68
     HTTPAUTH_USED = 0x200000 + 69
     PROXYAUTH_USED = 0x200000 + 70
-    LASTONE = 70
+    SIZE_DELIVERED = 0x600000 + 71
+    COOKIECHANGES = 0x400000 + 1000
+    REDIRECT_HISTORY = 0x400000 + 1001
+    LASTONE = 1001
 
     if locals().get("RESPONSE_CODE"):
         HTTP_CODE = locals().get("RESPONSE_CODE")
@@ -453,6 +467,11 @@ class CurlMOpt(IntEnum):
     PUSHFUNCTION = 20000 + 14
     PUSHDATA = 10000 + 15
     MAX_CONCURRENT_STREAMS = 0 + 16
+    NETWORK_CHANGED = 0 + 17
+    NOTIFYFUNCTION = 20000 + 18
+    NOTIFYDATA = 10000 + 19
+    RESOLVE_THREADS_MAX = 0 + 20
+    QUICK_EXIT = 0 + 21
 
 
 class CurlECode(IntEnum):
@@ -585,6 +604,7 @@ class CurlWsFlag(IntEnum):
     CLOSE = 1 << 3
     PING = 1 << 4
     OFFSET = 1 << 5
+    PONG = 1 << 6
 
 
 class CurlSslVersion(IntEnum):
@@ -612,7 +632,7 @@ class CurlIpResolve(IntEnum):
 class CurlFollow(IntEnum):
     """``CURLFOLLOW_*`` consts for redirect behavior"""
 
-    # /* generic follow redirects
+    # generic follow redirects
     ALL = 1
 
     # Do not use the custom method in the follow-up request if the HTTP code

@@ -76,6 +76,9 @@ def timer_function(curlm, timeout_ms: int, clientp: Any) -> int:
         async_curl._timer.cancel()  # If already called, cancel does nothing.
         async_curl._timer = None
 
+    if timeout_ms == -1:
+        return 0
+
     # libcurl says to install a timer which calls socket_action on fire.
     async_curl._timer = async_curl.loop.call_later(
         timeout_ms / 1000,
@@ -191,7 +194,7 @@ class BaseAsyncCurl:
         while True:
             if not self._curlm:
                 break
-            self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
+            self.process_data(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
             await self.sleep(0.1)
 
     def add_handle(self, curl: Curl):
@@ -237,7 +240,10 @@ class BaseAsyncCurl:
                 if curl_msg.msg == CURLMSG_DONE:
                     curl = self._curl2curl[curl_msg.easy_handle]
                     retcode = curl_msg.data.result
-                    if retcode == 0:
+                    callback_exception = curl._get_callback_exception()
+                    if callback_exception is not None:
+                        self.set_exception(curl, callback_exception)
+                    elif retcode == 0:
                         self.set_result(curl)
                     else:
                         self.set_exception(curl, curl._get_error(retcode, "perform"))

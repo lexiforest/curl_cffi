@@ -12,8 +12,10 @@ __all__ = [
     "CurlSslVersion",
     "CurlWsFlag",
     "config_warnings",
+    "Fingerprint",
+    "FingerprintManager",
+    "get_fingerprint",
     "ffi",
-    "is_pro",
     "lib",
     "Session",
     "AsyncSession",
@@ -40,6 +42,8 @@ __all__ = [
     "WebSocketRetryStrategy",
     "WsCloseCode",
     "ExtraFingerprints",
+    "CacheBackend",
+    "FileCacheBackend",
     "CookieTypes",
     "HeaderTypes",
     "ProxySpec",
@@ -70,9 +74,11 @@ from .requests import (
     AsyncWebSocket,
     BrowserType,
     BrowserTypeLiteral,
+    CacheBackend,
     Cookies,
     CookieTypes,
     ExtraFingerprints,
+    FileCacheBackend,
     Headers,
     HeaderTypes,
     ProxySpec,
@@ -97,7 +103,8 @@ from .requests import (
     request,
 )
 
-from .utils import config_warnings, is_pro
+from .utils import config_warnings
+from .fingerprints import Fingerprint, FingerprintManager, get_fingerprint
 
 if TrioSession is None:
     __all__.remove("TrioSession")
