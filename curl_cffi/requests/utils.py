@@ -621,6 +621,7 @@ def set_curl_options(
     quote: Union[str, Literal[False]] = "",
     http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
     interface: Optional[str] = None,
+    dns: Optional[Union[str, list[str]]] = None,
     doh_url: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
@@ -1030,6 +1031,10 @@ def set_curl_options(
             else:
                 value = f"host!{interface}"
         c.setopt(CurlOpt.INTERFACE, value.encode())
+
+    if dns:
+        servers = dns if isinstance(dns, str) else ",".join(dns)
+        c.setopt(CurlOpt.DNS_SERVERS, servers.encode())
 
     if doh_url:
         c.setopt(CurlOpt.DOH_URL, doh_url.encode())
