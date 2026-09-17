@@ -401,7 +401,7 @@ class BaseSession(Generic[R]):
                 for name, morsel in cookie.items():
                     rsp.cookies.set(
                         name,
-                        morsel.value,
+                        morsel.coded_value,
                         domain=morsel.get("domain", ""),
                         path=morsel.get("path", "/"),
                         secure=bool(morsel.get("secure")),
