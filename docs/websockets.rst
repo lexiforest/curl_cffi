@@ -1,20 +1,47 @@
 WebSockets
 **********
 
-``curl_cffi`` provides WebSocket clients for both synchronous and asynchronous contexts.
+``curl_cffi`` provides high-performance WebSocket clients for synchronous and asynchronous contexts.
 
-The asynchronous client (``AsyncWebSocket``) is the recommended choice for most applications. Built for high performance, it offers a rich feature set—including background I/O, configurable backpressure, and automatic retries. All examples in this guide focus on the asynchronous API.
+Both clients are powered by a heavily optimized, SIMD-accelerated libcurl build capable of multi-gigabit throughput. The synchronous client provides a simple, direct blocking interface alongside an optional event-driven callback loop, while the asynchronous client utilizes an efficient non-blocking I/O architecture.
+
+.. contents:: Table of Contents
+   :local:
+   :depth: 2
 
 Quick Start
 ===========
 
-The recommended way to connect to a WebSocket is via the ``AsyncSession``.
+The recommended way to connect to a WebSocket is via the ``Session`` or ``AsyncSession`` context managers.
 
-.. note::
+Sync Quick Start
+----------------
 
-   **Syntax**: The ``ws_connect`` method supports the standard async context manager syntax.
+.. code-block:: python
 
-   **Recommended:** ``async with session.ws_connect(...) as ws:``
+    from curl_cffi import Session
+
+    def main():
+        with Session() as session:
+            # Connect using the standard context manager syntax
+            with session.ws_connect("wss://echo.websocket.org") as ws:
+
+                # Send a text message
+                ws.send_str("Hello, World!")
+
+                # Receive a text message
+                msg = ws.recv_str()
+                print(f"Received: {msg}")
+
+                # Iterate over messages
+                for message in ws:
+                    print(f"Stream: {message}")
+
+    if __name__ == "__main__":
+        main()
+
+Async Quick Start
+-----------------
 
 .. code-block:: python
 
@@ -23,7 +50,7 @@ The recommended way to connect to a WebSocket is via the ``AsyncSession``.
 
     async def main():
         async with AsyncSession() as session:
-            # Connect using the standard context manager syntax
+            # Connect using the async context manager syntax
             async with session.ws_connect("wss://echo.websocket.org") as ws:
 
                 # Send a text message
@@ -39,265 +66,249 @@ The recommended way to connect to a WebSocket is via the ``AsyncSession``.
 
     asyncio.run(main())
 
+Synchronous Client
+==================
+
+The synchronous ``WebSocket`` provides a traditional blocking interface. Method calls like ``recv()`` and ``send()`` will block the current thread until the network operation completes or times out.
+
 Connecting
-==========
+----------
 
-Use ``ws_connect`` from an ``AsyncSession``. This method accepts the same network parameters as standard HTTP requests.
+Use ``ws_connect`` from a ``Session``. This method accepts the same network parameters as standard HTTP requests, including impersonation, proxies, and cookies.
 
-**Key Features:**
+.. code-block:: python
 
-*   **Impersonation**: Use ``impersonate="chrome"`` to mimic browser fingerprints.
-*   **Cookies**: Automatically inherits cookies from the ``AsyncSession``, and merges any new cookies passed to the method.
-*   **Proxies**: Supports HTTP/HTTPS/SOCKS proxies.
+    with Session() as session:
+        # Session cookies are automatically injected into the WebSocket handshake
+        session.cookies.set("session_id", "xyz")
+
+        # Context manager (recommended)
+        with session.ws_connect(
+            "wss://api.example.com/v1/stream",
+            impersonate="chrome",
+            proxies={"all": "socks5h://localhost:9050"},
+            timeout=10  # Connection phase timeout
+        ) as ws:
+            pass
+
+        # Manual lifecycle management
+        ws = session.ws_connect("wss://api.example.com")
+        ws.send_str("Hello")
+        ws.close()  # Explicit Close is required
+
+Sending & Receiving
+-------------------
+
+All sending and receiving methods are blocking. Sending methods return the number of bytes successfully written to the socket.
+
+.. code-block:: python
+
+    # Send data
+    ws.send_str("Hello", timeout=5.0)
+    ws.send_bytes(b"\x00\x01\x02")
+    ws.send_json({"action": "subscribe"}, timeout=5.0)
+
+    # Receive data (decodes utf-8 automatically)
+    msg = ws.recv_str(timeout=5.0)
+
+    # Receive parsed JSON
+    data = ws.recv_json()
+
+``recv()`` gives you the message exactly as it arrived, with no UTF-8 validation. Use ``recv_str()`` or ``recv_json()`` if you need that check.
+
+Event Callbacks & run_forever()
+-------------------------------
+
+For applications that prefer an event-driven approach, the synchronous client supports callbacks and a blocking ``run_forever()`` loop.
+
+.. code-block:: python
+
+    def on_message(ws: WebSocket, message: bytes | str):
+        print(f"Received: {message}")
+
+    def on_error(ws: WebSocket, error: Exception):
+        # CurlError for transport errors, Exception for callbacks.
+        print(f"Error: {error}")
+
+    def on_open(ws: WebSocket):
+        print("Connection open")
+
+    def on_close(ws: WebSocket, close_code: int, close_reason: str):
+        print(f"Connection closed: {close_reason}")
+
+    with Session() as session:
+        with session.ws_connect(
+            "wss://echo.websocket.org",
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close
+        ) as ws:
+            ws.send_str("Hello World!")
+
+            # Blocks the thread and dispatches events as they arrive
+            ws.run_forever()
+
+These callbacks are only dispatched by ``run_forever()`` — they don't fire for direct ``send()`` / ``recv()`` use.
+
+Thread Safety
+-------------
+
+The synchronous ``WebSocket`` relies on ``libcurl`` easy handles, which is **not thread-safe** at the C level. If Thread A is blocked in ``recv()``, and Thread B concurrently calls ``send()``, libcurl's internal state machine can corrupt, leading to undefined behavior or segmentation faults.
+
+For concurrent, full-duplex streaming, using the **AsyncWebSocket** is the safest and most recommended option.
+
+Asynchronous Client
+===================
+
+The ``AsyncWebSocket`` client uses a highly optimized **non-blocking I/O Architecture**:
+
+1.  **Outgoing**: Messages are queued for immediate delivery. A background task handles the actual network transmission.
+2.  **Incoming**: A background task continuously reads from the network and populates a receive queue, separating your application logic from network speeds.
+
+Connecting
+----------
+
+Use the ``ws_connect`` context manager from an ``AsyncSession``.
 
 .. code-block:: python
 
     async with AsyncSession() as session:
-        # Session cookies are automatically included
-        session.cookies.set("session_id", "xyz")
-
-        async with session.ws_connect(
-            "wss://api.example.com/v1/stream",
-            impersonate="chrome",
-            auth=("user", "pass"),
-            params={"stream_id": "123"},
-            timeout=10  # Connection timeout
-        ) as ws:
+        async with session.ws_connect("wss://api.example.com/v1/stream") as ws:
             ...
 
-Sending Data
-============
-
-Methods for sending data place the message into an outgoing queue. They are generally non-blocking unless the send queue size limit is reached.
+These connection styles are also supported:
 
 .. code-block:: python
 
-    # Send text
+    # Manual connection management
+    ws = await session.ws_connect("wss://api.example.com")
     await ws.send_str("Hello")
+    await ws.close()  # Explicit Close is required
 
-    # Send bytes
-    await ws.send_bytes(b"\x00\x01\x02")
+    # Same as context manager, alternate style
+    async with await session.ws_connect("wss://api.example.com") as ws:
+        await ws.send_str("Hello")
 
-    # Send JSON (automatically serializes dict to JSON string)
-    await ws.send_json({"action": "subscribe", "channel": "btc_usd"})
+Sending Data
+------------
 
-    # Send generic (accepts str, bytes, bytearray, memoryview)
-    await ws.send("Auto-detected payload")
+Because sending is queued, these methods return immediately unless the internal send queue is full (backpressure).
 
-Receiving Data
-==============
-
-You can receive individual messages or iterate over the connection.
-
-Receive Methods
----------------
-
-All receive methods support an optional ``timeout`` argument (in seconds).
+Async send methods return ``None`` rather than the sent byte-count.
 
 .. code-block:: python
 
-    # Receive as string (decodes utf-8 automatically)
-    msg = await ws.recv_str()
+    # Queues data for immediate delivery
+    await ws.send_str("Hello")
+    await ws.send_json({"action": "subscribe"})
 
-    # Receive with a 5-second timeout
-    try:
-        data = await ws.recv_json(timeout=5.0)
-    except WebSocketTimeout:
-        print("No message received in 5 seconds")
-
-    # Receive raw bytes and frame flags
-    # Useful for inspecting the frame type (e.g., TEXT vs BINARY)
-    content, flags = await ws.recv()
-    if flags & CurlWsFlag.TEXT:
-        text = content.decode("utf-8")
-
-Concurrent calls to receive methods are fully supported. Messages are distributed to waiters in FIFO order, unlike many other libraries that limit consumption to a single task.
-
-.. note::
-
-    ``recv_str()`` and ``recv_json()`` check that the incoming message is a ``TEXT`` frame. If the server sends a ``BINARY`` frame, these methods will raise a ``WebSocketError``.
-
-Async Iteration
----------------
-
-The most pythonic way to consume a stream is iteration.
-
-.. note::
-
-    Iteration yields raw ``bytes``. If you expect text, you must decode it yourself.
-
-.. code-block:: python
-
-    async for message in ws:
-        print(message.decode("utf-8"))
-
-Heartbeats and Pings
-====================
-
-Libcurl handles incoming PONGs automatically. If you need to send a manual PING frame (e.g., for application-layer keepalives):
-
-.. code-block:: python
-
-    await ws.ping(b"keepalive")
-
-.. note::
-
-    PONG frames are consumed internally and are not delivered to your ``recv()`` calls or async iteration.
-
-Lifecycle Management
-====================
-
-Closing
--------
-
-The context manager handles closing automatically. If you need to close manually, there are two methods available:
-
-.. code-block:: python
-
-    # Graceful shutdown: sends a close frame, waits for queued
-    # outgoing messages to flush, and awaits server acknowledgment.
-    await ws.close(code=1000, message=b"bye")
-
-    # Forceful shutdown: cancels all background I/O tasks and
-    # cleans up the socket immediately. Thread-safe and synchronous.
-    ws.terminate()
-
-Both methods are idempotent and safe to call multiple times.
-
-Flushing
---------
-
-Because sending is non-blocking, returning from ``await ws.send()`` only guarantees the message was placed in the internal queue. A background task handles the actual network transmission.
-
-If your application logic requires confirmation that messages have been successfully handed off to the underlying network socket before proceeding (e.g., before shutting down the application or triggering a dependent side-effect), use ``flush()``.
+**Flushing:**
+If the application logic requires confirmation that messages have been successfully handed off to the underlying network socket, use ``flush()``.
 
 .. code-block:: python
 
     await ws.send_str("Critical Data")
-    await ws.flush()  # Awaits until all queued messages are transmitted
+    await ws.flush()  # Waits until all queued messages are transmitted
 
-Since the background sender sends out the data as soon as it's queued, waiting for the send queue to clear is not usually required.
-
-You can check the size of the send queue by checking the ``send_queue_size`` property.
-
-.. code-block:: python
-
-    print(ws.send_queue_size)
-
-Error Handling
-==============
-
-Network errors are raised as ``WebSocketError`` or its subclasses.
-
-.. code-block:: python
-
-    from curl_cffi import WebSocketClosed, WebSocketTimeout, WebSocketError
-
-    try:
-        msg = await ws.recv_str()
-    except WebSocketClosed as e:
-        print(f"Closed: {e.code} - {e.message}")
-    except WebSocketTimeout:
-        print("Did not receive a message in time.")
-    except WebSocketError as e:
-        print(f"Transport/Network error: {e}")
-
-Advanced Configuration
-======================
-
-The ``AsyncWebSocket`` client is powered by libcurl and tuned for high-performance asyncio applications.
-
-Background I/O Architecture
----------------------------
-
-This implementation uses a background I/O model to ensure high performance:
-
-1.  **Outgoing**: Messages are queued for delivery (non-blocking unless the queue is full).
-2.  **Incoming**: A background task continuously reads from the network and populates a receive queue.
-
-This design separates the application logic from network speeds. Even if your code processes messages slowly, the underlying network socket remains unblocked, allowing for maximum concurrency and throughput.
-
-Queue Sizes (Backpressure)
---------------------------
-
-You can control the internal buffer sizes to manage backpressure.
-
-*   **recv_queue_size** (default: 128): Max incoming messages to buffer.
-*   **send_queue_size** (default: 128): Max outgoing messages to buffer.
-*   **block_on_recv_queue_full** (default: ``True``): The reader pauses when the queue is full (TCP backpressure). If ``False``, the connection will fail instead (``OUT_OF_MEMORY``) to avoid stalling the reader.
-
-.. code-block:: python
-
-    # Increase queues for high-throughput streams (e.g., market data)
-    ws = await session.ws_connect(
-        url,
-        recv_queue_size=512,
-        send_queue_size=256
-    )
-
-Buffer sizes are a trade-off between latency, bufferbloat and burst absorption capacity.
-
-.. code-block:: python
-
-    # High throughput, fast moving streams (e.g., video)
-    ws = await session.ws_connect(
-        url,
-        recv_queue_size=2048,
-        send_queue_size=2048
-    )
-
-Message Limits
+Receiving Data
 --------------
 
-*   **max_message_size** (default: 4MB): The maximum allowed size for a single received message. Messages larger than this will raise a ``WebSocketError`` (Too Large) and close the connection.
+Concurrent calls to receive methods are fully supported. Messages are distributed to waiters in FIFO order.
 
 .. code-block:: python
 
-    # Allow large received payloads (e.g. 16MB)
-    ws = await session.ws_connect(url, max_message_size=16 * 1024 * 1024)
+    # Receive as string
+    msg = await ws.recv_str(timeout=5.0)
 
-There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, appearing as a single logical message to the server.
+    # Iteration (yields raw bytes)
+    async for message in ws:
+        print(message.decode("utf-8"))
 
-Manual Fragmentation
+    # Receive raw binary and flags
+    payload, flags = await ws.recv(timeout=5.0)  # Omit 'await' in Sync
+    if flags & CurlWsFlag.BINARY:
+        print(f"Received binary data: {payload}")
+
+``recv()`` gives you the payload exactly as it arrived, with no UTF-8 validation. Use ``recv_str()`` or ``recv_json()`` if you need that check.
+
+Shared Features
+===============
+
+The following capabilities are shared equally across both the Synchronous and Asynchronous clients.
+
+Timeouts
+--------
+
+All message receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()``) accept an optional ``timeout`` parameter, in seconds. Pass it by keyword; ``AsyncWebSocket.send()`` also accepts its existing positional timeout argument.
+
+.. code-block:: python
+
+    from curl_cffi import WebSocketTimeout
+
+    try:
+        # Omit 'await' for sync
+        data = await ws.recv_json(timeout=5.0)
+
+    except WebSocketTimeout:
+        print("No message received in 5 seconds")
+
+Receive timeouts apply to waiting for a complete message, including the time between fragments. A timeout preserves the partial message for a subsequent ``recv()`` call. This differs from custom fragment loops that ignore the deadline once the first fragment arrives.
+
+An interrupted synchronous send closes the connection because libcurl may have buffered part of a frame, even if it has not reported sending any payload bytes. Reconnect before sending another message.
+
+In ``Session.ws_connect()`` and ``AsyncSession.ws_connect()``, setting ``timeout=None`` is not honoured for the initial connection handshake. The connection phase runs inside libcurl and cannot be interrupted once started, so ``None`` is clamped to 30 seconds. Pass an explicit ``timeout`` if you need a different ceiling.
+
+Heartbeats and Pings
 --------------------
 
-The library automatically fragments large payloads for you. If you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
+When a PING frame is received from the server, libcurl automatically sends a PONG frame in response. Received PONG frames are consumed internally and not delivered to your application.
 
-.. warning::
+Libcurl queues automatic PONGs alongside outgoing messages, so a busy sender can delay it.
 
-    According to the ``libcurl`` specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in every chunk, alongside the ``CONT`` flag. The final chunk simply drops the ``CONT`` flag to conclude the message.
-
-.. code-block:: python
-
-    from curl_cffi import CurlWsFlag
-
-    # Send the first chunk
-    await ws.send("Part 1...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
-
-    # Send intermediate chunks (Type flag MUST be included)
-    await ws.send("Part 2...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
-
-    # Send the final chunk (drops the CONT flag)
-    await ws.send("Final part", flags=CurlWsFlag.TEXT)
-
-Frame Coalescing (Throughput)
------------------------------
-
-For chatty protocols sending many small messages, you can enable **coalescing**. This merges multiple queued message payloads from the send queue into a single transmission batch to reduce syscall overhead.
-
-*   **coalesce_frames** (default: ``False``): Enable batching.
-*   **max_send_batch_size** (default: 64): Max messages to merge.
+To send a manual PING frame:
 
 .. code-block:: python
 
-    # Optimize for throughput over latency
-    ws = await session.ws_connect(url, coalesce_frames=True)
+    # Omit 'await' for sync
+    await ws.ping(b"keepalive")
+
+    # Zero-length payload is valid
+    await ws.ping()
+
+Server pings are automatically replied, but unsolicited PONGs can be sent as a unidirectional heartbeat:
+
+.. code-block:: python
+
+    # Omit 'await' for sync
+    await ws.pong(b"keepalive")
+    await ws.pong()
+
+Lifecycle Management
+--------------------
+
+Context managers handle closing **automatically**. If you need to manage the lifecycle manually:
+
+.. code-block:: python
+
+    # Graceful shutdown: sends a close frame, waits for queued messages to be sent
+    # and tears down afterwards (doesn't wait for server's reply).
+    await ws.close(code=1000, message=b"bye") # Omit 'await' in sync
+
+    # Forceful shutdown: cancels all I/O and severs the socket immediately.
+    ws.terminate()
+
+These methods are fully idempotent and can be called multiple times.
+
+For asynchronous connections:
+
+-   ``ws.terminate()`` is thread-safe and task-safe.
+-   ``ws.close_event`` is an async event that can be awaited for a session closure notification.
 
 Reliability & Retries
 ---------------------
 
-*   **drain_on_error** (default: ``False``): When a network error occurs, ``recv()`` will continue to yield buffered messages in the queue before raising the exception. Helps ensure data integrity on unstable connections.
-*   **ws_retry**: A policy object to configure automatic retries on failed message receive operations.
+Both clients support exponential backoff with jitter for retrying transient network read errors. The ``WebSocketRetryStrategy`` dataclass is used to configure the retry policy.
 
 .. code-block:: python
 
@@ -309,38 +320,162 @@ Reliability & Retries
         count=5
     )
 
-    ws = await session.ws_connect(
-        url,
-        drain_on_error=True,
-        ws_retry=retry_policy
-    )
+    # Works in both session.ws_connect and async_session.ws_connect
+    ws = session.ws_connect(url, ws_retry=retry_policy)
+
+Message Limits
+--------------
+
+*   **max_message_size** (default: 4MB): The maximum allowed size for a single received message. Messages larger than this will raise a ``WebSocketError`` and close the connection.
+
+.. code-block:: python
+
+    # Allow large received payloads (e.g. 16MB)
+    ws = session.ws_connect(url, max_message_size=16 * 1024 * 1024)
+
+There are no limits on the size of the message that can be sent. Large outbound messages are seamlessly broken down into optimal fragments using the ``CURLWS_CONT`` flag, arriving as a single message to the receiver.
+
+Manual Fragmentation
+--------------------
+
+The underlying implementation automatically handles frame fragmentation for large outbound messages.
+
+However, if you are generating data on-the-fly and want to stream it to the server in chunks, you can manually fragment messages using the ``CURLWS_CONT`` flag.
+
+.. warning::
+
+    According to the ``libcurl`` specification, you **must** include the underlying message type (e.g., ``TEXT`` or ``BINARY``) in every chunk, alongside the ``CONT`` flag. The final chunk simply drops the ``CONT`` flag to conclude the message.
+
+    A manually fragmented message occupies the connection until its final chunk. If another task calls ``send()`` in between, the frames interleave and libcurl rejects the message with "fragmented message interrupted". Hold your own lock for the duration of a manually fragmented message, or send it from a single task.
+
+.. code-block:: python
+
+    from curl_cffi import CurlWsFlag
+
+    # Manually fragment across frames (omit 'await' in sync)
+    await ws.send("Part 1...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+    await ws.send("Part 2...", flags=CurlWsFlag.TEXT | CurlWsFlag.CONT)
+    await ws.send("Final part", flags=CurlWsFlag.TEXT)
+
+Error Handling
+--------------
+
+Network errors are raised as ``CurlError``. WebSocket-specific failures — a closed connection, a timeout, an oversized message — use the ``WebSocketError`` subclasses.
+
+.. code-block:: python
+
+    from curl_cffi import CurlError, WebSocketClosed, WebSocketError, WebSocketTimeout
+
+    try:
+        msg = ws.recv_str()  # Add 'await' in Async
+    except WebSocketClosed as e:
+        print(f"Closed: {e.code} - {e}")
+    except WebSocketTimeout:
+        print("Did not receive a message in time.")
+    except WebSocketError as e:
+        print(f"WebSocket specific error: {e}")
+    except CurlError as e:
+        print(f"Network transport error: {e}")
+
+Async-Only Advanced Configuration
+=================================
+
+The ``AsyncWebSocket`` client exposes several advanced configuration options to tune its I/O architecture.
+
+Queue Sizes (Backpressure)
+--------------------------
+
+You can control the internal buffer sizes to manage TCP backpressure. These values also influence the maximum possible memory footprint.
+
+*   **recv_queue_size** (default: 64): Max incoming messages to buffer internally. ``max_message_size`` caps how large each one can be, so the worst case is fixed at ``recv_queue_size`` × ``max_message_size`` — 256MB with the defaults.
+*   **send_queue_size** (default: 32): Max outgoing messages to buffer before ``send()`` blocks. Outgoing messages have no size limit, so size this against your own largest message.
+*   **block_on_recv_queue_full** (default: ``True``): Behavior when the receive queue is full. If ``True``, the reader blocks until there is space in the queue (may cause timeouts). If ``False``, the connection fails immediately to prevent data loss.
+*   **drain_on_error** (default: ``False``): When a fatal error occurs, normally it is raised immediately. When this option is enabled, calls to ``recv()`` will yield all buffered messages first before raising the exception.
+
+Queue size interacts with cache residency: the working set is ``queue_size`` × typical message size, and once it exceeds the CPU's L2/L3 cache, throughput drops.
+
+.. code-block:: python
+
+    # Many small messages (< 4KB): larger queues cut scheduling overhead
+    ws = await session.ws_connect(url, recv_queue_size=1024, send_queue_size=1024)
+
+    # Streaming large messages (>= 64KB): smaller queues keep the working
+    # set in cache and measurably improve throughput
+    ws = await session.ws_connect(url, recv_queue_size=16, send_queue_size=16)
+
+Frame Coalescing
+----------------
+
+This is an *optional* power-user optimization technique which breaks frame boundaries and concatenates multiple pending messages from the send queue into a single WebSocket frame. This significantly reduces system call overhead and boosts throughput for chatty streams with small payloads.
+
+.. warning::
+
+    Multiple messages will arrive as a single merged payload. Ensure your server application can handle concatenated strings/bytes.
+
+    Large batches share the outgoing queue with automatic PONG replies and can delay them. Lower ``max_send_batch_size`` if your server has a strict ping timeout.
+
+*   **coalesce_frames** (default: ``False``): Enable frame coalescing.
+*   **max_send_batch_size** (default: 64): Max messages to merge per frame.
+
+.. code-block:: pycon
+
+    >>> import asyncio
+    >>> from curl_cffi import AsyncSession, Response
+    >>> async def test_coalescing():
+    ...     """Test frame coalescing feature"""
+    ...     async with AsyncSession[Response]() as session:
+    ...         async with session.ws_connect("wss://ws.postman-echo.com/raw", coalesce_frames=True) as ws:
+    ...             # Take advantage of concurrent sends in quick succession
+    ...             await asyncio.gather(
+    ...                 ws.send_str("Concurrent sending"),
+    ...                 ws.send_str(" is "),
+    ...                 ws.send_str("so cool!!"),
+    ...             )
+    ...             response: str = await ws.recv_str()
+    ...             print(response)
+    ...
+    >>> asyncio.run(test_coalescing())
+    Concurrent sending is so cool!!
 
 Cooperative Multitasking
 ------------------------
 
-To prevent the background I/O tasks from starving the asyncio event loop during heavy load, you can tune the time slicing.
+To adjust event loop fairness during high-volume streams, you can tune the time-based cooperative scheduler:
 
 *   **recv_time_slice** (default: 0.01s): Max time spent processing incoming messages before yielding (10ms).
-*   **send_time_slice** (default: 0.005s): Max time spent sending messages before yielding (5ms).
+*   **send_time_slice** (default: 0.01s): Max time spent sending messages before yielding (10ms).
 
 .. code-block:: python
 
-    # Force more frequent yields for lower latency in other async tasks
+    # Force more frequent yields for lower latency in other tasks (1ms)
     ws = await session.ws_connect(url, recv_time_slice=0.001)
+
+Upgrading from Earlier Versions
+===============================
+
+**Auto-Reassembly & recv_fragment**:
+The WebSocket clients now handle message fragmentation and reassembly automatically. You are guaranteed to receive complete logical messages when calling ``recv()``, ``recv_str()``, or ``recv_json()``.
+
+Synchronous ``WebSocket.recv_fragment()`` remains available for code that needs raw fragments. It does not wait for socket readiness and can raise ``CurlError`` with ``CurlECode.AGAIN``. Do not mix it with ``recv()`` while a partial message is buffered.
+
+``AsyncWebSocket.recv_fragment()`` remains unsupported. Use ``recv()`` for complete messages; its background reader handles reassembly. Do not call ``Curl.ws_recv()`` on an ``AsyncWebSocket`` managed connection, since that would compete with the background reader. Applications requiring custom fragment handling can manage a low-level ``Curl`` connection themselves.
+
+When migrating a custom fragment loop to ``recv(timeout=...)``, note that its deadline still applies after the first fragment arrives; partial messages are retained after a timeout.
+
+**Closing a session closes its WebSockets**:
+Closing a session, or leaving its context manager block, now closes any WebSocket still open on it with a ``1001`` (going away) frame. Keep the session open for as long as the connection is needed.
+
+**WebSockets count against max_clients**:
+Each async WebSocket holds one of the ``AsyncSession`` curl handles for its lifetime. If every handle is held by a WebSocket, further requests raise ``RequestException`` rather than waiting indefinitely. Increase ``max_clients`` if you need more connections at once.
+
+**send() timeout**:
+Pass ``timeout=`` by name. ``AsyncWebSocket.send(payload, flags, timeout)`` remains supported for compatibility; the new synchronous send timeout is keyword-only.
 
 Performance Tuning
 ==================
 
-The ``curl_cffi`` WebSocket implementation uses a patched version of libcurl enhanced with AVX-512/AVX2/NEON SIMD **hardware acceleration**. It is capable of multi-gigabit throughput.
+The WebSocket protocol requires every client-to-server message to be masked (XOR) according to RFC 6455.
 
-If your application needs to push a massive volume of data (e.g., file uploads, video streaming, or bulk syncing), **you should focus on sending fewer, larger messages rather than many small messages.**
+Curl-CFFI uses a customized build of libcurl enhanced with AVX-512/AVX2/NEON SIMD vectorized masking. It is capable of multi-gigabit throughput in both directions.
 
-*   **The Overhead:** The WebSocket protocol requires every client-to-server message to be masked (XOR) for security. Additionally, every call to ``await ws.send()`` carries a small asyncio overhead.
-*   **The Solution:** Increase queue sizes and condense your data into larger blocks (e.g., 64KB to 1MB per message) before sending. This drastically reduces the framing, masking, and FFI overhead, allowing libcurl to process the data at maximum speed.
-
-Automatic Reassembly
---------------------
-
-You never need to worry about network fragmentation. If you send or receive a huge message, the underlying engine automatically chunks it into optimal network frames for transmission, and seamlessly reassembles those frames on the other side.
-
-Your application will always receive the data exactly as it was sent — as a single, complete string or bytes.
+If your application needs to send large volumes of data, you should **focus on sending fewer, larger messages** (e.g., 64KB to 1MB per message). This minimizes the framing and FFI overhead, allowing the C-layer to process the payload at hardware limits.
