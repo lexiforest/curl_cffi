@@ -240,7 +240,7 @@ The following capabilities are shared equally across both the Synchronous and As
 Timeouts
 --------
 
-All receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()``) accept an optional keyword-only ``timeout`` parameter, in seconds.
+All message receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()``) accept an optional ``timeout`` parameter, in seconds. Pass it by keyword; ``AsyncWebSocket.send()`` also accepts its existing positional timeout argument.
 
 .. code-block:: python
 
@@ -253,7 +253,11 @@ All receive and send operations (e.g., ``recv_str()``, ``send_json()``, ``ping()
     except WebSocketTimeout:
         print("No message received in 5 seconds")
 
-Setting ``timeout=None`` is not honoured for the initial connection handshake. The connection phase runs inside libcurl and cannot be interrupted once started, so ``None`` is clamped to 30 seconds. Pass an explicit ``timeout`` if you need a different ceiling.
+Receive timeouts apply to waiting for a complete message, including the time between fragments. A timeout preserves the partial message for a subsequent ``recv()`` call. This differs from custom fragment loops that ignore the deadline once the first fragment arrives.
+
+An interrupted synchronous send closes the connection because libcurl may have buffered part of a frame, even if it has not reported sending any payload bytes. Reconnect before sending another message.
+
+In ``Session.ws_connect()`` and ``AsyncSession.ws_connect()``, setting ``timeout=None`` is not honoured for the initial connection handshake. The connection phase runs inside libcurl and cannot be interrupted once started, so ``None`` is clamped to 30 seconds. Pass an explicit ``timeout`` if you need a different ceiling.
 
 Heartbeats and Pings
 --------------------
@@ -452,7 +456,11 @@ Upgrading from Earlier Versions
 **Auto-Reassembly & recv_fragment**:
 The WebSocket clients now handle message fragmentation and reassembly automatically. You are guaranteed to receive complete logical messages when calling ``recv()``, ``recv_str()``, or ``recv_json()``.
 
-As a result, the ``recv_fragment()`` method has been deprecated and removed. If your existing code relied on ``recv_fragment()`` to manually stitch together ``CONT`` frames, you can safely remove that logic and simply call ``recv()``.
+Synchronous ``WebSocket.recv_fragment()`` remains available for code that needs raw fragments. It does not wait for socket readiness and can raise ``CurlError`` with ``CurlECode.AGAIN``. Do not mix it with ``recv()`` while a partial message is buffered.
+
+``AsyncWebSocket.recv_fragment()`` remains unsupported. Use ``recv()`` for complete messages; its background reader handles reassembly. Do not call ``Curl.ws_recv()`` on an ``AsyncWebSocket`` managed connection, since that would compete with the background reader. Applications requiring custom fragment handling can manage a low-level ``Curl`` connection themselves.
+
+When migrating a custom fragment loop to ``recv(timeout=...)``, note that its deadline still applies after the first fragment arrives; partial messages are retained after a timeout.
 
 **Closing a session closes its WebSockets**:
 Closing a session, or leaving its context manager block, now closes any WebSocket still open on it with a ``1001`` (going away) frame. Keep the session open for as long as the connection is needed.
@@ -460,8 +468,8 @@ Closing a session, or leaving its context manager block, now closes any WebSocke
 **WebSockets count against max_clients**:
 Each async WebSocket holds one of the ``AsyncSession`` curl handles for its lifetime. If every handle is held by a WebSocket, further requests raise ``RequestException`` rather than waiting indefinitely. Increase ``max_clients`` if you need more connections at once.
 
-**send() timeout is keyword-only**:
-``ws.send(payload, flags, timeout)`` no longer works — pass ``timeout=`` by name. This matches every other send and receive method.
+**send() timeout**:
+Pass ``timeout=`` by name. ``AsyncWebSocket.send(payload, flags, timeout)`` remains supported for compatibility; the new synchronous send timeout is keyword-only.
 
 Performance Tuning
 ==================

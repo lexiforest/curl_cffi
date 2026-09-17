@@ -28,6 +28,7 @@ from collections.abc import Awaitable, Callable, Generator, Iterator
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from json import JSONDecodeError
 from typing import Final, Literal
 from unittest.mock import MagicMock, Mock
 
@@ -384,9 +385,8 @@ class TestWebSocketMessageTypes:
 
     def test_recv_json_invalid(self, ws_connection: WebSocket) -> None:
         _ = ws_connection.send_str("not valid json {", timeout=5.0)
-        with pytest.raises(WebSocketError) as exc_info:
+        with pytest.raises(JSONDecodeError):
             ws_connection.recv_json(timeout=5.0)
-        assert exc_info.value.code == WsCloseCode.INVALID_DATA
 
     def test_server_ping_is_silently_consumed(
         self,
@@ -428,10 +428,11 @@ class TestWebSocketMessageTypes:
     ) -> None:
         """Test recv_json raises on empty payload."""
         ws_config(behavior=ServerBehavior.BROADCAST, broadcast_messages=[""])
-        with session.ws_connect(configurable_ws_server.url) as ws:
-            with pytest.raises(WebSocketError) as exc_info:
-                _ = ws.recv_json()
-            assert "empty" in str(exc_info.value).lower()
+        with (
+            session.ws_connect(configurable_ws_server.url) as ws,
+            pytest.raises(JSONDecodeError),
+        ):
+            _ = ws.recv_json()
 
 
 class TestWebSocketTimeouts:
@@ -1034,11 +1035,11 @@ class TestWebSocketFragmentationFix:
         with pytest.raises(WebSocketClosed):
             _ = ws.send(b"data", timeout=1.0)
 
-    def test_send_timeout_zero_write_keeps_connection_open(self) -> None:
+    def test_send_timeout_zero_write_closes_connection(self) -> None:
         """
         Verifies that if a send() operation times out before writing a single byte
-        (offset == 0), the connection remains open (closed = False) since the
-        frame was never initiated and no C-side frame state was corrupted.
+        (offset == 0), the connection closes because libcurl may already have
+        buffered the frame without reporting any payload bytes sent.
         """
         mock_curl: Mock = Mock(spec=Curl)
         ws: WebSocket = WebSocket(curl=mock_curl)
@@ -1059,8 +1060,9 @@ class TestWebSocketFragmentationFix:
         with pytest.raises(WebSocketTimeout):
             _ = ws.send(b"X" * 100000, timeout=0.05)
 
-        # Connection must remain open because offset was 0
-        assert ws.closed is False
+        # Pending libcurl frame state cannot be replaced by a later send.
+        assert ws.closed is True
+        mock_curl.close.assert_called_once()
 
     def test_partial_write_exact_boundary_resumption(
         self, ws_connection: WebSocket

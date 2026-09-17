@@ -557,21 +557,25 @@ class WebSocket(BaseWebSocket):
 
     def _handle_close_frame(self, message: bytes) -> None:
         """Process a CLOSE frame."""
-        close_code: int = self._set_close_state(message)
+        try:
+            self._close_code, self._close_reason = self._unpack_close_frame(message)
+        except WebSocketError as e:
+            self._close_code = e.code
+            self._close_reason = ""
+            self.close(e.code)
+            raise
+
+        close_code = (
+            WsCloseCode.OK
+            if self._close_code == WsCloseCode.UNKNOWN
+            else self._close_code
+        )
         if self.autoclose and not self.closed:
             self.close(close_code)
 
     def connect(
         self,
         url: str,
-        *,
-        base_url: str | None = None,
-        base_params: (
-            dict[str, object]
-            | list[object]
-            | tuple[str, int | list[str] | dict[str, str | int]]
-            | None
-        ) = None,
         params: (
             dict[str, object]
             | list[object]
@@ -599,10 +603,18 @@ class WebSocket(BaseWebSocket):
         quote: str | Literal[False] = "",
         http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
         interface: str | None = None,
-        doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
         curl_options: dict[CurlOpt, str] | None = None,
+        *,
+        base_url: str | None = None,
+        base_params: (
+            dict[str, object]
+            | list[object]
+            | tuple[str, int | list[str] | dict[str, str | int]]
+            | None
+        ) = None,
+        doh_url: str | None = None,
     ) -> WebSocket:
         """Connect to the WebSocket.
 
@@ -819,9 +831,8 @@ class WebSocket(BaseWebSocket):
 
                     if self._is_transient_error(e):
                         if has_deadline:
-                            if not read_selector.select(
-                                max(0.0, deadline - time_monotonic())
-                            ):
+                            remaining = deadline - time_monotonic()
+                            if remaining <= 0 or not read_selector.select(remaining):
                                 raise WebSocketTimeout(
                                     "WebSocket receive operation timed out",
                                     CurlECode.OPERATION_TIMEDOUT,
@@ -920,8 +931,8 @@ class WebSocket(BaseWebSocket):
             timeout: How many seconds to wait before raising a timeout.
 
         Raises:
-            WebSocketError: The JSON data was empty.
-            WebSocketError: The JSON was invalid.
+            JSONDecodeError: The default decoder could not decode the message.
+                Exceptions from a custom decoder propagate unchanged.
 
         Returns:
             T: Deserialized JSON object.
@@ -933,23 +944,24 @@ class WebSocket(BaseWebSocket):
             This method inherits the same exceptions from :meth:`recv_str`.
         """
         data: str = self.recv_str(timeout=timeout)
-        if not data:
-            raise WebSocketError("Empty frame", WsCloseCode.INVALID_DATA)
-        try:
-            return loads(data)
-        except Exception as e:
-            raise WebSocketError(f"Invalid JSON: {e}", WsCloseCode.INVALID_DATA) from e
+        return loads(data)
 
     def recv_fragment(self) -> tuple[bytes, CurlWsFrame]:
-        """This function has been removed.
-        The new architecture automatically handles frame reassembly.
-        Call :meth:`recv()` instead to get complete, fully assembled frames.
+        """Receive a single curl WebSocket fragment without waiting for readiness.
+
+        Raises ``CurlError`` with ``CurlECode.AGAIN`` when no data is available.
+        Prefer :meth:`recv` for complete messages. Do not mix fragment reads with
+        ``recv()`` while it has a partially assembled message. Frame metadata is
+        only valid until the next receive or connection shutdown.
         """
-        raise NotImplementedError(
-            "recv_fragment() is no longer supported. "
-            + "Call recv() instead to get complete messages. "
-            + "See docs: https://curl-cffi.readthedocs.io/en/latest/websockets.html"
-        )
+        if self.closed:
+            raise WebSocketClosed("WebSocket is already closed")
+
+        chunk, frame = self.curl.ws_recv()
+        if frame.flags & CurlWsFlag.CLOSE:
+            self._handle_close_frame(chunk)
+
+        return chunk, frame
 
     def send(
         self,
@@ -1090,8 +1102,9 @@ class WebSocket(BaseWebSocket):
                         # Check the clock when the socket is blocked
                         try:
                             if has_deadline:
-                                if not write_selector.select(
-                                    max(0.0, deadline - time_monotonic())
+                                remaining = deadline - time_monotonic()
+                                if remaining <= 0 or not write_selector.select(
+                                    remaining
                                 ):
                                     raise WebSocketTimeout(
                                         "Socket write timeout",
@@ -1121,10 +1134,9 @@ class WebSocket(BaseWebSocket):
                     )
 
         except BaseException:
-            # If we get interrupted after some data is already sent,
-            # the framing alignment is lost. Tear down the connection.
-            if 0 < offset < total_bytes:
-                self.terminate()
+            # EAGAIN can leave a frame buffered even when no payload bytes
+            # were reported sent. A later send cannot safely replace it.
+            self.terminate()
             raise
 
         return offset
@@ -1927,7 +1939,6 @@ class AsyncWebSocket(BaseWebSocket):
         self,
         payload: str | bytes | bytearray | memoryview,
         flags: CurlWsFlag | int = CurlWsFlag.BINARY,
-        *,
         timeout: float | None = None,
     ) -> None:
         """Send a WebSocket message.
@@ -2748,14 +2759,13 @@ class AsyncWebSocket(BaseWebSocket):
                     return False
 
         except BaseException:
-            # Tear down after an interrupted send.
-            if 0 < offset < total_bytes:
-                self._finalize_connection(
-                    WebSocketError(
-                        "Send interrupted mid-message; framing lost",
-                        CurlECode.SEND_ERROR,
-                    )
+            # EAGAIN can leave a frame buffered even with offset == 0.
+            self._finalize_connection(
+                WebSocketError(
+                    "Send interrupted mid-message; framing lost",
+                    CurlECode.SEND_ERROR,
                 )
+            )
             raise
 
         return True

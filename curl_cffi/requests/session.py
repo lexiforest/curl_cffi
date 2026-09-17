@@ -1225,6 +1225,7 @@ class AsyncSession(BaseSession[R]):
         self._owns_acurl: bool = async_curl is None
         self.max_clients: int = max_clients
         self._websockets: WeakSet[AsyncWebSocket] = WeakSet[AsyncWebSocket]()
+        self._pending_ws_connects = 0
         self.init_pool()
 
     @property
@@ -1258,7 +1259,10 @@ class AsyncSession(BaseSession[R]):
             ``RequestException``: All curl handles are held by live WebSockets.
         """
         # If all Curl pool handles are consumed by WebSockets, raise an error.
-        if len(self._websockets) >= self.max_clients and self.pool.empty():
+        if (
+            len(self._websockets) + self._pending_ws_connects >= self.max_clients
+            and self.pool.empty()
+        ):
             raise RequestException(
                 f"All {self.max_clients} curl handles are held by live WebSockets. "
                 + "Close one, or raise max_clients."
@@ -1373,9 +1377,7 @@ class AsyncSession(BaseSession[R]):
     def ws_connect(
         self,
         url: str,
-        *,
         autoclose: bool = True,
-        skip_utf8_validation: bool = False,
         params: dict[str, object] | list[object] | tuple[object, ...] | None = None,
         headers: HeaderTypes | None = None,
         cookies: CookieTypes | None = None,
@@ -1412,6 +1414,8 @@ class AsyncSession(BaseSession[R]):
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
         curl_options: dict[CurlOpt, str] | None = None,
+        *,
+        skip_utf8_validation: bool = False,
     ) -> AsyncWebSocketContext:
         """Connects to a WebSocket.
 
@@ -1581,22 +1585,32 @@ class AsyncSession(BaseSession[R]):
                 debug=self.debug,
             )
 
-            # Register the connection with the tracking WeakSet.
-            # Needs to be before the perform since pop_curl reads it.
-            self._websockets.add(ws)
+            # Count handshakes for pool exhaustion, but only expose connected
+            # WebSockets to close(): the worker still owns this Curl handle.
+            self._pending_ws_connects += 1
+            perform: asyncio.Future[None] | None = None
 
-            # Connect to the WebSocket
-            perform: asyncio.Future[None] = self.loop.run_in_executor(
-                None, curl.perform
-            )
+            def close_after_perform(future: asyncio.Future[None]) -> None:
+                with suppress(BaseException):
+                    future.result()
+                curl.close()
+
             try:
-                _ = await perform
+                perform = self.loop.run_in_executor(None, curl.perform)
+                _ = await asyncio.shield(perform)
+                self._check_session_closed()
             except BaseException:
-                if not perform.cancelled():
+                if perform is not None and not perform.done():
+                    perform.add_done_callback(close_after_perform)
+                else:
                     curl.close()
-                self.push_curl(None)
-                self._websockets.discard(ws)
+                if not self._closed:
+                    self.push_curl(None)
                 raise
+            finally:
+                self._pending_ws_connects -= 1
+
+            self._websockets.add(ws)
 
             # Start the background I/O tasks
             try:
