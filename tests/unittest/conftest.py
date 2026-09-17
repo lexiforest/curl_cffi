@@ -409,13 +409,15 @@ async def set_headers(scope, receive, send):
 
 
 async def set_cookies(scope, receive, send):
+    params = parse_qs(scope["query_string"].decode())
+    value = params.get("value", ["bar"])[0]
     await send(
         {
             "type": "http.response.start",
             "status": 200,
             "headers": [
                 [b"content-type", b"text/plain"],
-                [b"set-cookie", b"foo=bar"],
+                [b"set-cookie", f"foo={value}; Path=/".encode()],
             ],
         }
     )

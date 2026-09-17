@@ -761,6 +761,27 @@ def test_response_cookies(server):
     assert r.cookies.get("xxx") is None
 
 
+@pytest.mark.parametrize(
+    "value", ["bar", '"value"', '"hello world"', '""', r'"a\"b"', r'"\141"']
+)
+@pytest.mark.parametrize("discard_cookies", [False, True])
+def test_response_cookie_preserves_value(server, value, discard_cookies):
+    with requests.Session(discard_cookies=discard_cookies) as session:
+        response = session.get(
+            str(server.url.copy_with(path="/set_cookies")), params={"value": value}
+        )
+        assert response.cookies["foo"] == value
+        if discard_cookies:
+            assert session.cookies.get("foo") is None
+        else:
+            assert session.cookies["foo"] == value
+
+        replay = session.get(
+            str(server.url.copy_with(path="/echo_cookies")), cookies=response.cookies
+        )
+        assert replay.json()["foo"] == value
+
+
 def test_elapsed(server):
     r = requests.get(str(server.url.copy_with(path="/slow_response")))
     assert r.elapsed.total_seconds() > 0.1
