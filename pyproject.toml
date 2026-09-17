@@ -23,9 +23,15 @@ classifiers = [
 
 
 [project.optional-dependencies]
-extra = ["readability-lxml>=0.8.1", "markdownify>=1.1.0", "lxml_html_clean"]
+extra = [
+    "readability-lxml>=0.8.1",
+    "markdownify>=1.1.0",
+    "lxml_html_clean",
+    "jsonpath-ng>=1.7,<2",
+]
 cli = ["rich"]
 dev = [
+    "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
     "cryptography>=46.0.4,<47.0",
@@ -42,6 +48,7 @@ dev = [
 ]
 build = ["cibuildwheel", "wheel"]
 test = [
+    "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
     "cryptography>=46.0.4,<47.0",
     "litestar>=2.19.0,<3.0",

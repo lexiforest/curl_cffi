@@ -340,6 +340,19 @@ If the response content is ``json``, you can parse them directly:
     >>> r.json()
     {'headers': {'Accept': '*/*', 'Accept-Encoding': 'gz...')
 
+Install ``curl_cffi[extra]`` to select part of the response using JSONPath:
+
+.. code-block:: python
+
+    users = r.json(path=".data.users", default=[])
+    first_name = r.json(path="$.data.users[*].name")
+
+Path selection returns the first matched value. If there are no matches, it
+returns ``default``, which is ``None`` when omitted. Matched values such as
+``None`` or empty lists are returned unchanged. Invalid JSON and invalid paths
+raise errors rather than returning the default. Calling ``r.json()`` returns
+the entire parsed response and does not require the extra dependencies.
+
 
 Response status
 ---------------
