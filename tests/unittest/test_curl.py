@@ -350,6 +350,21 @@ def test_status_code(server):
     assert c.getinfo(CurlInfo.RESPONSE_CODE) == 200
 
 
+def test_active_socket(server):
+    c = Curl()
+    c.setopt(CurlOpt.URL, str(server.url).encode())
+    c.setopt(CurlOpt.CONNECT_ONLY, 1)
+    c.perform()
+    socket = c.getinfo(CurlInfo.ACTIVESOCKET)
+    assert isinstance(socket, int)
+    assert socket >= 0
+
+
+def test_active_socket_without_connection():
+    c = Curl()
+    assert c.getinfo(CurlInfo.ACTIVESOCKET) == -1
+
+
 def test_response_headers(server):
     c = Curl()
     url = str(server.url.copy_with(path="/set_headers"))

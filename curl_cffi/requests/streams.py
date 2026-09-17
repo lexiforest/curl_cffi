@@ -13,7 +13,7 @@ from .exceptions import UnrewindableBodyError
 
 RequestData = Union[
     dict[str, str],
-    list[tuple],
+    list[tuple[str, str]],
     str,
     BytesIO,
     bytes,
