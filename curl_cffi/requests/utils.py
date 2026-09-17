@@ -362,6 +362,8 @@ def set_extra_fp(curl: Curl, fp: ExtraFingerprints):
         curl.setopt(CurlOpt.HTTP3_SIG_HASH_ALGS, fp.http3_sig_hash_algs)
     if fp.http3_tls_extension_order is not None:
         curl.setopt(CurlOpt.HTTP3_TLS_EXTENSION_ORDER, fp.http3_tls_extension_order)
+    if fp.quic_initial_packet_number is not None:
+        curl.setopt(CurlOpt.QUIC_INITIAL_PACKET_NUMBER, fp.quic_initial_packet_number)
 
 
 def _normalize_tls_version(version: str) -> CurlSslVersion:
@@ -539,6 +541,10 @@ def _apply_fingerprint(
         )
     if fingerprint.quic_cid_length is not None:
         curl.setopt(CurlOpt.QUIC_CID_LENGTH, fingerprint.quic_cid_length)
+    if fingerprint.quic_initial_packet_number is not None:
+        curl.setopt(
+            CurlOpt.QUIC_INITIAL_PACKET_NUMBER, fingerprint.quic_initial_packet_number
+        )
 
     # websocket settings
     if fingerprint.ws_header_order:

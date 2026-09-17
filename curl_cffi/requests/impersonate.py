@@ -191,6 +191,7 @@ class ExtraFingerprints:
     form_boundary: Optional[bool] = None
     http3_sig_hash_algs: Optional[str] = None
     http3_tls_extension_order: Optional[str] = None
+    quic_initial_packet_number: Optional[int] = None
 
 
 class ExtraFpDict(TypedDict, total=False):
@@ -209,6 +210,7 @@ class ExtraFpDict(TypedDict, total=False):
     form_boundary: Optional[bool]
     http3_sig_hash_algs: Optional[str]
     http3_tls_extension_order: Optional[str]
+    quic_initial_packet_number: Optional[int]
 
 
 # TLS version are in the format of 0xAABB, where AA is major version and BB is minor
