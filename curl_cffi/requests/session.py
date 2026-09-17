@@ -32,12 +32,7 @@ from typing import (
     cast,
 )
 from urllib.parse import urlparse
-
-# Unpack introduced in 3.11
-try:
-    from typing import Unpack
-except ImportError:
-    from typing_extensions import Unpack
+from weakref import WeakSet
 
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
@@ -69,8 +64,8 @@ from .websockets import (
     AsyncWebSocket,
     AsyncWebSocketContext,
     WebSocket,
-    WebSocketError,
     WebSocketRetryStrategy,
+    WsCloseCode,
 )
 
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
@@ -80,8 +75,12 @@ else:
     R = TypeVar("R", bound=Response)
 
 if TYPE_CHECKING:
-    from typing_extensions import Unpack
+    if sys.version_info >= (3, 11):
+        from typing import Unpack
+    else:
+        from typing_extensions import Unpack
 
+    from ..curl import CurlWsFrame
     from ..fingerprints import Fingerprint
 
     class ProxySpec(TypedDict, total=False):
@@ -305,7 +304,7 @@ class BaseSession(Generic[R]):
         if self.base_url and not _is_absolute_url(self.base_url):
             raise ValueError("You need to provide an absolute url for 'base_url'")
 
-        self._closed = False
+        self._closed: bool = False
         # Look for requests environment configuration
         # and be compatible with cURL.
         if self.verify is True or self.verify is None:
@@ -441,7 +440,7 @@ class BaseSession(Generic[R]):
 
         return rsp
 
-    def _check_session_closed(self):
+    def _check_session_closed(self) -> None:
         if self._closed:
             raise SessionClosed("Session is closed, cannot send request.")
 
@@ -552,6 +551,7 @@ class Session(BaseSession[R]):
         self._thread = thread
         self._use_thread_local_curl = use_thread_local_curl
         self._queue = None
+        self._websockets: WeakSet[WebSocket] = WeakSet[WebSocket]()
         self._executor = None
         if use_thread_local_curl:
             self._local = threading.local()
@@ -593,8 +593,22 @@ class Session(BaseSession[R]):
 
     def close(self) -> None:
         """Close the session."""
+        if self._closed:
+            return
+
         self._closed = True
-        self.curl.close()
+
+        try:
+            # On a Session close, also close any live WebSockets
+            for ws in self._websockets:
+                with suppress(Exception):
+                    ws.close(
+                        WsCloseCode.GOING_AWAY, timeout=WebSocket.CLOSE_NOTIFY_SECS
+                    )
+
+        finally:
+            # Ensure session is closed at the end.
+            _ = self.curl.close()
 
     @contextmanager
     def stream(
@@ -613,53 +627,209 @@ class Session(BaseSession[R]):
     def ws_connect(
         self,
         url: str,
-        on_message=None,
-        on_error=None,
-        on_open=None,
-        on_close=None,
-        **kwargs,
+        on_message: Callable[[WebSocket, bytes | str], None] | None = None,
+        on_error: Callable[[WebSocket, CurlError], None] | None = None,
+        on_open: Callable[[WebSocket], None] | None = None,
+        on_close: Callable[[WebSocket, int, str], None] | None = None,
+        on_data: Callable[[WebSocket, bytes, CurlWsFrame], None] | None = None,
+        *,
+        autoclose: bool = True,
+        skip_utf8_validation: bool = False,
+        ws_retry: WebSocketRetryStrategy | None = None,
+        max_message_size: int = 4 * 1024 * 1024,
+        params: (
+            dict[str, object]
+            | list[object]
+            | tuple[str, int | list[str] | dict[str, str | int]]
+            | None
+        ) = None,
+        headers: HeaderTypes | None = None,
+        cookies: CookieTypes | None = None,
+        auth: tuple[str, str] | None = None,
+        timeout: float | tuple[float, float] | NotSetType | None = NOT_SET,
+        allow_redirects: bool | CurlFollow | str | None = None,
+        max_redirects: int | None = None,
+        proxies: ProxySpec | None = None,
+        proxy: str | None = None,
+        proxy_auth: tuple[str, str] | None = None,
+        verify: bool | str | None = None,
+        referer: str | None = None,
+        accept_encoding: str | None = "gzip, deflate, br",
+        impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
+        ja3: str | None = None,
+        akamai: str | None = None,
+        perk: str | None = None,
+        extra_fp: ExtraFingerprints | ExtraFpDict | None = None,
+        default_headers: bool | None = None,
+        quote: str | Literal[False] = "",
+        http_version: CurlHttpVersion | HttpVersionLiteral | None = None,
+        interface: str | None = None,
+        doh_url: str | None = None,
+        cert: str | tuple[str, str] | None = None,
+        max_recv_speed: int = 0,
+        curl_options: dict[CurlOpt, str] | None = None,
     ) -> WebSocket:
-        """Connects to a websocket url.
+        """Connects to a WebSocket URL using the session's configuration.
 
-        Note: This method is deprecated, use WebSocket instead.
+        libcurl automatically handles pings and pongs under the hood.
+        Ref: https://curl.se/libcurl/c/libcurl-ws.html
 
         Args:
-            url: the ws url to connect.
-            on_message: message callback, ``def on_message(ws, str)``
-            on_error: error callback, ``def on_error(ws, error)``
-            on_open: open callback, ``def on_open(ws)``
-            on_close: close callback, ``def on_close(ws)``
-
-        Other parameters are the same as ``.request``
+            url: The WebSocket URL to connect to.
+            on_message: Message received callback: ``def on_message(ws, msg)``.
+            on_error: Error callback: ``def on_error(ws, error)``.
+            on_open: Open callback: ``def on_open(ws)``.
+            on_close: Close callback: ``def on_close(ws, code, reason)``.
+            on_data: Raw data frame callback: ``def on_data(ws, bytes, frame)``.
+            autoclose: Whether to automatically close on CLOSE frame.
+            skip_utf8_validation: Skips UTF-8 validation of text frames in
+                ``run_forever()``, ``recv_str()``, and ``recv_json()``.
+                When set, raise but don't close connection per RFC 6455 §8.1.
+            ws_retry: Custom retry strategy for failed network receives.
+            max_message_size: Maximum allowed message size in bytes (default ``4 MiB``).
+            params: Query string parameters to attach to the handshake URL.
+            headers: Handshake request headers (merges with session defaults).
+            cookies: Handshake request cookies (merges with session defaults).
+            auth: HTTP basic auth, a tuple of (username, password).
+            timeout: Handshake connection phase timeout in seconds.
+                ``None`` is clamped to ``MAX_HANDSHAKE_SECS`` (30s)
+                because the handshake cannot be interrupted once started.
+            allow_redirects: Allow redirects. Can be a bool, ``CurlFollow``, or "safe".
+                Defaults to session's value (True).
+            max_redirects: Max redirect counts. Defaults to the session's configured
+                value (30 by default).
+            proxies: Dictionary of proxies, e.g. ``{"http": proxy_url}``.
+            proxy: Proxy URL. Cannot be used concurrently with `proxies`.
+            proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
+            verify: Whether to verify SSL/TLS certificates.
+            referer: Shortcut for setting the HTTP Referer header.
+            accept_encoding: Shortcut for setting the Accept-Encoding header.
+            impersonate: Which browser version or fingerprint to impersonate.
+            ja3: JA3 TLS client fingerprint string to impersonate.
+            akamai: Akamai HTTP/2 fingerprint string to impersonate.
+            perk: Perk fingerprint option to impersonate.
+            extra_fp: Extra fingerprint options complementing ja3 and akamai.
+            default_headers: Whether to set default browser headers.
+                Defaults to session's value (True).
+            quote: Quote (percent-encode) characters. Default safe string is
+                ``!#$%&'()*+,/:;=?@[]~``. Set to a string to quote more, or ``False``
+                to bypass automatic encoding.
+            http_version: WebSockets are always bootstrapped over HTTP/1.1 (RFC 6455),
+                so this option has no effect.
+            interface: Interface name or local IP to bind to.
+            doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
+            cert: Tuple of (cert, key) filenames for client certificate auth.
+            max_recv_speed: Maximum receive speed in bytes per second.
+            curl_options: Dictionary of extra low-level curl options to apply.
 
         Returns:
-            a WebSocket instance to communicate with the server.
+            WebSocket: A fully-connected synchronous WebSocket instance.
+
+        Note:
+            The ``WebSocket`` is NOT thread-safe, add your own locking
+            or use ``AsyncWebSocket`` for concurrent sending and receiving.
         """
         self._check_session_closed()
 
         curl = self.curl.duphandle()
-        self.curl.reset()
+        _ = self.curl.reset()
 
         ws: WebSocket = WebSocket(
             curl=curl,
+            autoclose=autoclose,
+            skip_utf8_validation=skip_utf8_validation,
+            ws_retry=ws_retry,
+            max_message_size=max_message_size,
             on_message=on_message,
             on_error=on_error,
             on_open=on_open,
             on_close=on_close,
+            on_data=on_data,
             debug=self.debug,
         )
 
-        # Fix session cookies being ignored
-        user_cookies = cast(Cookies | None, kwargs.get("cookies"))
-        if user_cookies is not None:
-            merged_cookies = Cookies(self.cookies)
-            merged_cookies.update(user_cookies)
-            kwargs["cookies"] = merged_cookies
+        # Merge session headers
+        if headers is not None:
+            merged_headers: Headers = Headers(self.headers)
+            merged_headers.update(headers)
+            final_headers: Headers | None = merged_headers
         else:
-            kwargs["cookies"] = self.cookies
+            final_headers = self.headers if self.headers else None
 
-        ws.connect(url, **kwargs)
-        return ws
+        # Merge session cookies
+        if cookies is not None:
+            merged_cookies: Cookies = Cookies(self.cookies)
+            merged_cookies.update(cookies)
+            final_cookies: Cookies | None = merged_cookies
+        else:
+            final_cookies = self.cookies if self.cookies else None
+
+        # perform() blocks this thread inside libcurl, so nothing runs
+        # until it returns. An unbounded handshake is uninterruptible.
+        # Therefore, None is clamped instead of being honoured.
+        handshake_timeout: float | tuple[float, float] | NotSetType | None = (
+            self.timeout if timeout is NOT_SET else timeout
+        )
+        if handshake_timeout is None:
+            handshake_timeout = WebSocket.MAX_HANDSHAKE_SECS
+
+        # Invoke connection with properly merged session attributes
+        _ = ws.connect(
+            url,
+            base_url=self.base_url,
+            base_params=self.params,
+            params=params,
+            headers=final_headers,
+            cookies=final_cookies,
+            auth=auth or self.auth,
+            timeout=handshake_timeout,
+            allow_redirects=(
+                self.allow_redirects if allow_redirects is None else allow_redirects
+            ),
+            max_redirects=(
+                self.max_redirects if max_redirects is None else max_redirects
+            ),
+            proxies=(
+                (proxies if proxies is not None else self.proxies)
+                if not proxy
+                else None
+            ),
+            proxy=proxy,
+            proxy_auth=proxy_auth or self.proxy_auth,
+            verify=self.verify if verify is None else verify,
+            referer=referer,
+            accept_encoding=accept_encoding,
+            impersonate=impersonate or self.impersonate,
+            ja3=ja3 or self.ja3,
+            akamai=akamai or self.akamai,
+            perk=perk or self.perk,
+            extra_fp=extra_fp or self.extra_fp,
+            default_headers=(
+                self.default_headers if default_headers is None else default_headers
+            ),
+            quote=quote,
+            http_version=http_version or self.http_version,
+            interface=interface or self.interface,
+            doh_url=doh_url or self.doh_url,
+            cert=cert or self.cert,
+            max_recv_speed=max_recv_speed,
+            curl_options={**self.curl_options, **(curl_options or {})},
+        )
+
+        try:
+            # Sync cookies set during the upgrade handshake.
+            if not self.discard_cookies:
+                with suppress(CurlError):
+                    self._cookies.update_cookies_from_curl_changes(
+                        cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
+                    )
+
+            # Add the connection to the tracking WeakSet
+            self._websockets.add(ws)
+            return ws
+        except BaseException:
+            ws.terminate()
+            raise
 
     def upkeep(self) -> int:
         return self.curl.upkeep()
@@ -888,7 +1058,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
-    ):
+    ) -> R:
         """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
@@ -991,8 +1161,9 @@ class AsyncSession(BaseSession[R]):
         Parameters:
             loop: loop to use, if not provided, the running loop will be used.
             async_curl: [AsyncCurl](/api/curl_cffi#curl_cffi.AsyncCurl) object to use.
-            max_clients: maxmium curl handle to use in the session,
-                this will affect the concurrency ratio.
+            max_clients: maximum curl handles to use in the session,
+                this will affect the concurrency ratio. WebSockets count
+                against this limit for their connection lifetime.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
@@ -1053,6 +1224,8 @@ class AsyncSession(BaseSession[R]):
         self._acurl: AsyncCurl | None = async_curl
         self._owns_acurl: bool = async_curl is None
         self.max_clients: int = max_clients
+        self._websockets: WeakSet[AsyncWebSocket] = WeakSet[AsyncWebSocket]()
+        self._pending_ws_connects = 0
         self.init_pool()
 
     @property
@@ -1077,6 +1250,24 @@ class AsyncSession(BaseSession[R]):
                 break
 
     async def pop_curl(self) -> Curl:
+        """Get a Curl handle from the pool or create one if None.
+
+        Returns:
+            Curl: Fresh Curl handle.
+
+        Raises:
+            ``RequestException``: All curl handles are held by live WebSockets.
+        """
+        # If all Curl pool handles are consumed by WebSockets, raise an error.
+        if (
+            len(self._websockets) + self._pending_ws_connects >= self.max_clients
+            and self.pool.empty()
+        ):
+            raise RequestException(
+                f"All {self.max_clients} curl handles are held by live WebSockets. "
+                + "Close one, or raise max_clients."
+            )
+
         curl: Curl | None = await self.pool.get()
         if curl is None:
             curl = Curl(cacert=self.acurl._cacert, debug=self.debug)
@@ -1095,16 +1286,40 @@ class AsyncSession(BaseSession[R]):
 
     async def close(self) -> None:
         """Close the session."""
-        if self._owns_acurl:
-            await self.acurl.close()
+        # If the session is already closed, don't close again.
+        if self._closed:
+            return
+
         self._closed = True
-        while True:
-            try:
-                curl = self.pool.get_nowait()
+
+        try:
+            # On a session close, also close any live WebSockets.
+            if self._websockets:
+                _ = await asyncio.gather(
+                    *(
+                        ws.close(
+                            WsCloseCode.GOING_AWAY,
+                            timeout=AsyncWebSocket.CLOSE_NOTIFY_SECS,
+                        )
+                        for ws in self._websockets
+                    ),
+                    return_exceptions=True,
+                )
+
+            if self._owns_acurl:
+                await self.acurl.close()
+
+        finally:
+            # Ensure that the session is always closed.
+            while True:
+                try:
+                    curl: Curl | None = self.pool.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
                 if curl:
-                    curl.close()
-            except asyncio.QueueEmpty:
-                break
+                    with suppress(Exception):
+                        curl.close()
 
     async def upkeep(self) -> list[int]:
         """
@@ -1151,7 +1366,7 @@ class AsyncSession(BaseSession[R]):
         method: HttpMethod,
         url: str,
         **kwargs: Unpack[StreamRequestParams],
-    ) -> AsyncGenerator[R, None, None]:
+    ) -> AsyncGenerator[R, None]:
         """Equivalent to ``async with request(..., stream=True) as r:``"""
         rsp = await self.request(method=method, url=url, **kwargs, stream=True)
         try:
@@ -1173,7 +1388,7 @@ class AsyncSession(BaseSession[R]):
         proxies: ProxySpec | None = None,
         proxy: str | None = None,
         proxy_auth: tuple[str, str] | None = None,
-        verify: bool | None = None,
+        verify: bool | str | None = None,
         referer: str | None = None,
         accept_encoding: str | None = "gzip, deflate, br",
         impersonate: BrowserTypeLiteral | str | Fingerprint | None = None,
@@ -1188,58 +1403,64 @@ class AsyncSession(BaseSession[R]):
         doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
-        recv_queue_size: int = 128,
-        send_queue_size: int = 128,
+        recv_queue_size: int = 64,
+        send_queue_size: int = 32,
         max_send_batch_size: int = 64,
         coalesce_frames: bool = False,
         ws_retry: WebSocketRetryStrategy | None = None,
         recv_time_slice: float = 0.01,
-        send_time_slice: float = 0.005,
+        send_time_slice: float = 0.01,
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
         curl_options: dict[CurlOpt, str] | None = None,
+        *,
+        skip_utf8_validation: bool = False,
     ) -> AsyncWebSocketContext:
         """Connects to a WebSocket.
 
         Args:
-            url: url for the requests.
-            autoclose: whether to close the WebSocket after receiving a close frame.
-            params: query string for the requests.
-            headers: headers to send.
-            cookies: cookies to use.
-            auth: HTTP basic auth, a tuple of (username, password), only basic auth is
-                supported.
-            timeout: how many seconds to wait before giving up.
-            allow_redirects: whether to allow redirection. Can be a bool, a
+            url: The WebSocket URL to connect to (e.g. ``wss://echo.websocket.org``).
+            autoclose: Whether to automatically close on CLOSE frame.
+            skip_utf8_validation: Skips UTF-8 validation of text frames in
+                ``recv_str()``, and ``recv_json()``. When set, raise an error
+                but don't close the connection as per RFC 6455 §8.1.
+            params: Query string parameters to attach to the handshake URL.
+            headers: Handshake request headers (merges with session defaults).
+            cookies: Handshake request cookies (merges with session defaults).
+            auth: HTTP basic auth, a tuple of (username, password).
+                Only basic auth is supported.
+            timeout: Handshake connection phase timeout in seconds.
+                ``None`` is clamped to ``MAX_HANDSHAKE_SECS`` (30s)
+                because the handshake cannot be interrupted once started.
+            allow_redirects: Whether to allow redirection. Can be a bool, a
                 ``CurlFollow`` value, or the string ``"safe"``. Use
                 ``CurlFollow.SAFE`` or ``"safe"`` to reject redirects to
                 internal/private IP addresses (SSRF protection).
-            max_redirects: max redirect counts, default 30, use -1 for unlimited.
-            proxies: dict of proxies to use, prefer to use ``proxy`` if they are the
+            max_redirects: Max redirect counts, default 30, use -1 for unlimited.
+            proxies: Dict of proxies to use, prefer to use ``proxy`` if they are the
                 same. format: ``{"http": proxy_url, "https": proxy_url}``.
-            proxy: proxy to use, format: "http://user@pass:proxy_url".
+            proxy: Proxy to use, format: ``http://user@pass:proxy_url``.
                 Can't be used with `proxies` parameter.
             proxy_auth: HTTP basic auth for proxy, a tuple of (username, password).
-            verify: whether to verify https certs.
-            referer: shortcut for setting referer header.
-            accept_encoding: shortcut for setting accept-encoding header.
-            impersonate: which browser version or fingerprint to impersonate.
-            ja3: ja3 string to impersonate.
-            akamai: akamai string to impersonate.
-            perk: perk string to impersonate.
-            extra_fp: extra fingerprints options, in complement to ja3 and akamai str.
-            default_headers: whether to set default browser headers.
-            quote: Set characters to be quoted, i.e. percent-encoded. Default safe
-                string is ``!#$%&'()*+,/:;=?@[]~``. If set to a string, the character
-                will be removed from the safe string, thus quoted. If set to False, the
-                url will be kept as is, without any automatic percent-encoding, you must
-                encode the URL yourself.
-            http_version: limiting http version, defaults to http2.
-            interface: interface name or local IP to bind to (bare IP = source address).
+            verify: Whether to verify SSL/TLS certificates.
+            referer: Shortcut for setting the HTTP Referer header.
+            accept_encoding: Shortcut for setting the Accept-Encoding header.
+            impersonate: Which browser version or fingerprint to impersonate.
+            ja3: JA3 string to impersonate.
+            akamai: Akamai HTTP/2 fingerprint string to impersonate.
+            perk: Perk fingerprint option to impersonate.
+            extra_fp: Extra fingerprints options, in complement to ja3 and akamai str.
+            default_headers: Whether to set default browser headers.
+            quote: Quote (percent-encode) characters. Default safe string is
+                ``!#$%&'()*+,/:;=?@[]~``. Set to a string to quote more, or ``False``
+                to bypass automatic encoding.
+            http_version: WebSockets are always bootstrapped over HTTP/1.1 (RFC 6455),
+                so this option has no effect.
+            interface: Interface name or local IP to bind to (bare IP = source address).
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
-            cert: a tuple of (cert, key) filenames for client cert.
-            max_recv_speed: maximum receive speed, bytes per second.
+            cert: A tuple of (cert, key) filenames for client cert.
+            max_recv_speed: Maximum receive speed, bytes per second.
             recv_queue_size: The maximum number of incoming WebSocket
                 messages to buffer internally. This queue stores messages received by
                 the Curl socket that are waiting to be consumed on calling ``recv()``.
@@ -1247,84 +1468,101 @@ class AsyncSession(BaseSession[R]):
                 messages to buffer before applying network backpressure. When you call
                 ``send()`` the message is placed in this queue and transmitted when
                 the Curl socket is next available for sending.
-            max_send_batch_size: The max batch size for sent frames.
-            coalesce_frames: When set, multiple pending messages in the send queue
-                may be merged into a single WebSocket frame for improved throughput.
-                **Warning:** This breaks the one-to-one mapping of ``send()`` calls
-                to frames and should only be used when the application protocol is
-                designed to handle concatenated data streams. Defaults to ``False``.
+            coalesce_frames: When enabled, multiple outgoing messages in the send queue
+                can be merged into a single message for improved throughput.
+                Defaults to ``False``.
+                This is an optional power-user optimization, which breaks frame
+                boundaries and merges multiple frame payloads together. It should
+                only be used when the application protocol is designed to handle
+                concatenated data streams. See online docs before use.
+            max_send_batch_size: The max batch size when ``coalesce_frames`` is used.
             ws_retry (WebSocketRetryStrategy): Retry policy for WebSocket messages.
             recv_time_slice: The maximum duration (in seconds) to process incoming
                 messages before yielding to the event loop.
                 Defaults to ``0.01`` (10ms).
             send_time_slice: The maximum duration (in seconds) to process outgoing
                 messages before yielding to the event loop.
-                Defaults to ``0.005`` (5ms).
-            max_message_size: Maximum allowed size for a complete received
-                WebSocket message (default: ``4 MiB``).
-            drain_on_error: If ``True``, when a connection error occurs,
-            attempt to consume all the buffered received messages first,
-            before raising the error. Otherwise, raise it immediately (default).
-            block_on_recv_queue_full (bool, optional): If ``False``, the connection
-                is failed immediately when the receive queue is full. The message that
-                caused the overflow is not delivered; any messages already buffered may
-                still be drained if ``drain_on_error=True``.
-            curl_options: extra curl options to use.
+                Defaults to ``0.01`` (10ms).
+            max_message_size: Maximum allowed message size in bytes (default ``4 MiB``).
+            drain_on_error: When a connection error occurs, attempt to consume all the
+                buffered received messages first, before raising the error. Otherwise,
+                raise it immediately, discarding the buffered messages (the default).
+            block_on_recv_queue_full: When the receive queue is full, receiving is
+                paused for backpressure. When this option is disabled, the connection
+                is immediately failed instead. The message that caused the overflow is
+                not delivered; any messages already buffered can still be drained
+                if ``drain_on_error`` is also set.
+            curl_options: Dictionary of extra low-level curl options to apply.
+
+        Documentation:
+            https://curl-cffi.readthedocs.io/en/latest/websockets.html
         """
 
         async def _connect_coro() -> AsyncWebSocket:
             self._check_session_closed()
 
             curl: Curl = await self.pop_curl()
-            _ = set_curl_options(
-                curl=curl,
-                method="GET",
-                url=url,
-                base_url=self.base_url,
-                params_list=[self.params, params],
-                headers_list=[self.headers, headers],
-                cookies_list=[self.cookies, cookies],
-                auth=auth or self.auth,
-                timeout=self.timeout if timeout is NOT_SET else timeout,
-                allow_redirects=(
-                    self.allow_redirects if allow_redirects is None else allow_redirects
-                ),
-                max_redirects=(
-                    self.max_redirects if max_redirects is None else max_redirects
-                ),
-                proxies_list=[self.proxies, proxies],
-                proxy=proxy,
-                proxy_auth=proxy_auth or self.proxy_auth,
-                verify_list=[self.verify, verify],
-                referer=referer,
-                accept_encoding=accept_encoding,
-                impersonate=impersonate or self.impersonate,
-                ja3=ja3 or self.ja3,
-                akamai=akamai or self.akamai,
-                extra_fp=extra_fp or self.extra_fp,
-                default_headers=(
-                    self.default_headers if default_headers is None else default_headers
-                ),
-                quote=quote,
-                http_version=http_version or self.http_version,
-                interface=interface or self.interface,
-                doh_url=doh_url or self.doh_url,
-                max_recv_speed=max_recv_speed,
-                cert=cert or self.cert,
-                queue_class=asyncio.Queue,
-                event_class=asyncio.Event,
-                curl_options=curl_options,
-                perk=perk,
+
+            # The handshake runs perform() on a worker thread, which cannot be
+            # interrupted -- cancelling stops the await but shutdown still joins
+            # the thread. So None is clamped instead of being honoured.
+            handshake_timeout: float | tuple[float, float] | NotSetType | None = (
+                self.timeout if timeout is NOT_SET else timeout
             )
-            _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
-            _ = curl.setopt(
-                CurlOpt.CONNECT_ONLY,
-                2,  # https://curl.se/docs/websocket.html
-            )
+            if handshake_timeout is None:
+                handshake_timeout = AsyncWebSocket.MAX_HANDSHAKE_SECS
 
             try:
-                _ = await self.loop.run_in_executor(None, curl.perform)
-            except Exception:
+                _ = set_curl_options(
+                    curl=curl,
+                    method="GET",
+                    url=url,
+                    base_url=self.base_url,
+                    params_list=[self.params, params],
+                    headers_list=[self.headers, headers],
+                    cookies_list=[self.cookies, cookies],
+                    auth=auth or self.auth,
+                    timeout=handshake_timeout,
+                    allow_redirects=(
+                        self.allow_redirects
+                        if allow_redirects is None
+                        else allow_redirects
+                    ),
+                    max_redirects=(
+                        self.max_redirects if max_redirects is None else max_redirects
+                    ),
+                    proxies_list=[self.proxies, proxies],
+                    proxy=proxy,
+                    proxy_auth=proxy_auth or self.proxy_auth,
+                    verify_list=[self.verify, verify],
+                    referer=referer,
+                    accept_encoding=accept_encoding,
+                    impersonate=impersonate or self.impersonate,
+                    ja3=ja3 or self.ja3,
+                    akamai=akamai or self.akamai,
+                    extra_fp=extra_fp or self.extra_fp,
+                    default_headers=(
+                        self.default_headers
+                        if default_headers is None
+                        else default_headers
+                    ),
+                    quote=quote,
+                    http_version=http_version or self.http_version,
+                    interface=interface or self.interface,
+                    doh_url=doh_url or self.doh_url,
+                    max_recv_speed=max_recv_speed,
+                    cert=cert or self.cert,
+                    queue_class=asyncio.Queue,
+                    event_class=asyncio.Event,
+                    curl_options={**self.curl_options, **(curl_options or {})},
+                    perk=perk or self.perk,
+                )
+                _ = curl.setopt(CurlOpt.TCP_NODELAY, 1)
+                _ = curl.setopt(
+                    CurlOpt.CONNECT_ONLY,
+                    2,  # https://curl.se/docs/websocket.html
+                )
+            except BaseException:
                 curl.close()
                 self.push_curl(None)
                 raise
@@ -1333,6 +1571,7 @@ class AsyncSession(BaseSession[R]):
                 cast(AsyncSession[Response], self),
                 curl,
                 autoclose=autoclose,
+                skip_utf8_validation=skip_utf8_validation,
                 recv_queue_size=recv_queue_size,
                 send_queue_size=send_queue_size,
                 max_send_batch_size=max_send_batch_size,
@@ -1346,10 +1585,47 @@ class AsyncSession(BaseSession[R]):
                 debug=self.debug,
             )
 
+            # Count handshakes for pool exhaustion, but only expose connected
+            # WebSockets to close(): the worker still owns this Curl handle.
+            self._pending_ws_connects += 1
+            perform: asyncio.Future[None] | None = None
+
+            def close_after_perform(future: asyncio.Future[None]) -> None:
+                with suppress(BaseException):
+                    future.result()
+                curl.close()
+
             try:
-                ws._start_io_tasks()
-            except WebSocketError:
+                perform = self.loop.run_in_executor(None, curl.perform)
+                _ = await asyncio.shield(perform)
+                self._check_session_closed()
+            except BaseException:
+                if perform is not None and not perform.done():
+                    perform.add_done_callback(close_after_perform)
+                else:
+                    curl.close()
+                if not self._closed:
+                    self.push_curl(None)
+                raise
+            finally:
+                self._pending_ws_connects -= 1
+
+            self._websockets.add(ws)
+
+            # Start the background I/O tasks
+            try:
+                # Sync cookies set during the upgrade handshake.
+                if not self.discard_cookies:
+                    with suppress(CurlError):
+                        self._cookies.update_cookies_from_curl_changes(
+                            cast(list[bytes], curl.getinfo(CurlInfo.COOKIECHANGES))
+                        )
+
+                # pylint: disable-next=protected-access
+                ws._start_io_tasks()  # pyright: ignore[reportPrivateUsage]
+            except BaseException:
                 ws.terminate()
+                self._websockets.discard(ws)
                 raise
 
             return ws

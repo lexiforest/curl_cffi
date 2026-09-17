@@ -391,6 +391,7 @@ class Fingerprint:
     tls_signed_cert_timestamps: bool = False
     tls_ech: str | None = None
     tls_permute_extensions: bool = False
+    tls_trust_anchors: list[str] | None = None
 
     headers: dict[str, str] = field(default_factory=dict)
     header_order: str = ""
