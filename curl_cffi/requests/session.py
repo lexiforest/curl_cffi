@@ -891,6 +891,14 @@ class Session(BaseSession[R]):
         else:
             c = self.curl
 
+        stream_response: Optional[R] = None
+
+        def parse_stream_response() -> None:
+            nonlocal stream_response
+            stream_response = self._parse_response(
+                c, buffer, header_buffer, default_encoding, discard_cookies
+            )
+
         req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
             c,
             method=method,
@@ -932,6 +940,7 @@ class Session(BaseSession[R]):
             dns=self.dns if dns is None else dns,
             doh_url=doh_url or self.doh_url,
             stream=stream,
+            stream_response_callback=parse_stream_response if stream else None,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
             cert=cert or self.cert,
@@ -966,17 +975,23 @@ class Session(BaseSession[R]):
                     error = code2error(e.code, str(e))
                     q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
                 finally:
-                    if not cast(threading.Event, header_recved).is_set():
+                    try:
+                        if stream_response is None:
+                            parse_stream_response()
+                    finally:
                         cast(threading.Event, header_recved).set()
-                    q.put(STREAM_END)  # type: ignore
+                        q.put(STREAM_END)  # type: ignore
 
             stream_task = self.executor.submit(perform)
 
-            # Wait for the first chunk
+            # Metadata is captured in the transfer thread before waking the caller.
             header_recved.wait()  # type: ignore
-            rsp = self._parse_response(
-                c, buffer, header_buffer, default_encoding, discard_cookies
-            )
+            if stream_response is None:
+                try:
+                    stream_task.result()
+                finally:
+                    c.close()
+            rsp = cast(R, stream_response)
 
             # Raise the exception if something wrong happens when receiving the header.
             first_element = _peek_queue(q)  # type: ignore
