@@ -4,7 +4,7 @@ import re
 from itertools import zip_longest
 from urllib.parse import urlencode
 
-from curl_cffi import requests
+from curl_cffi import CurlOpt, requests
 from curl_cffi.fingerprints import FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 
 
@@ -128,10 +128,6 @@ def _load_raw_fingerprint(
             ]
         )
     )
-
-
-def _should_print_target_progress() -> bool:
-    return os.environ.get("CI", "").lower() not in {"1", "true", "yes"}
 
 
 def _get_path(value: object, path: tuple[object, ...]) -> object:
@@ -604,7 +600,7 @@ def test_mismatch_output_labels_expected_and_captured_values():
     }
 
 
-def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
+def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path, capfd):
     api_key = _require_live_api_key()
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
 
@@ -625,11 +621,9 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
     assert custom_targets, "No non-preset fingerprints found in updated cache"
 
     mismatches: dict[str, list[str]] = {}
-    should_print_target_progress = _should_print_target_progress()
-
     for target in custom_targets:
-        if should_print_target_progress:
-            print(f"verifying fingerprint: {target}")
+        with capfd.disabled():
+            print(f"verifying fingerprint: {target}", flush=True)
         protocol = (
             "http3" if fingerprints[target].http_version in {"v3", "h3"} else "http2"
         )
@@ -667,7 +661,9 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
         raise AssertionError("\n\n".join(formatted))
 
 
-def test_live_http3_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path):
+def test_live_http3_fingerprint_data_matches_runtime_output(
+    monkeypatch, tmp_path, capfd
+):
     api_key = _require_live_api_key()
     monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
 
@@ -690,17 +686,18 @@ def test_live_http3_fingerprint_data_matches_runtime_output(monkeypatch, tmp_pat
     assert custom_targets, "No non-preset HTTP/3 fingerprints found in updated cache"
 
     mismatches: dict[str, list[str]] = {}
-    should_print_target_progress = _should_print_target_progress()
-
     for target in custom_targets:
-        if should_print_target_progress:
-            print(f"verifying HTTP/3 fingerprint: {target}")
+        with capfd.disabled():
+            print(f"verifying HTTP/3 fingerprint: {target}", flush=True)
         raw_payload = _load_raw_fingerprint(target, api_root, "http3")
         if raw_payload.get("source") == "ping":
             ping_payload = requests.get(
                 PING_FP_URL,
                 impersonate=target,
                 http_version="v3",
+                curl_options={
+                    CurlOpt.DOH_URL: "https://cloudflare-dns.com/dns-query",
+                },
                 timeout=30,
             ).json()
             _verify_ping_fingerprint(
@@ -714,6 +711,9 @@ def test_live_http3_fingerprint_data_matches_runtime_output(monkeypatch, tmp_pat
                 TLS_PEET_URL,
                 impersonate=target,
                 http_version="v3",
+                curl_options={
+                    CurlOpt.DOH_URL: "https://cloudflare-dns.com/dns-query",
+                },
                 timeout=30,
             ).json()
             _verify_api_fingerprint(
