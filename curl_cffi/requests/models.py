@@ -303,17 +303,42 @@ class Response:
             yield chunk
         self._finalize_stream()
 
-    def json(self, **kw):
-        """return a parsed json object of the content."""
-        # orjson.loads() takes no keyword arguments, so fall back to the stdlib
-        # json parser whenever the caller passes any (e.g. parse_float). See #639.
+    def json(self, *, path: Optional[str] = None, default: Any = None, **kw) -> Any:
+        """Parse JSON, optionally returning the first JSONPath match.
+
+        Path selection requires ``curl_cffi[extra]``. Return ``default`` (None
+        if omitted) only when no matches exist; decoding and path errors raise.
+        Additional keyword arguments are passed to the JSON decoder.
+        """
         _loads = _stdlib_loads if kw else loads
         charset_encoding = self.charset_encoding
+        content = self.content
         if charset_encoding is not None:
             encoding = charset_encoding.lower().replace("_", "-")
             if encoding not in JSON_NATIVE_ENCODINGS:
-                return _loads(self.text, **kw)
-        return _loads(self.content, **kw)
+                content = self.text
+        data = _loads(content, **kw)
+        if path is None:
+            return data
+        if not isinstance(path, str):
+            raise TypeError("path must be a string")
+        if not path.strip():
+            raise ValueError("path must not be empty")
+        try:
+            from jsonpath_ng.exceptions import JSONPathError
+            from jsonpath_ng.ext import parse
+        except ImportError as exc:
+            raise ImportError(
+                'JSONPath selection requires installing "curl_cffi[extra]"'
+            ) from exc
+        expression = path.strip()
+        if expression.startswith("."):
+            expression = "$" + expression
+        try:
+            matches = parse(expression).find(data)
+        except JSONPathError as exc:
+            raise ValueError(f"Invalid JSONPath: {path!r}") from exc
+        return matches[0].value if matches else default
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""
