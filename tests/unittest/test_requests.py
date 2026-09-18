@@ -3,6 +3,7 @@ import json
 import pickle
 import time
 from io import BytesIO
+from threading import Event, get_ident
 from uuid import uuid4
 
 import pytest
@@ -1253,6 +1254,43 @@ def test_stream_options_persist(server):
         buffer.append(line)
     data = json.loads(b"".join(buffer))
     assert data["User-agent"][0] == "foo/1.0"
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD"])
+def test_stream_metadata_stays_in_transfer_thread(server, monkeypatch, method):
+    release_transfer = Event()
+    transfer_finished = Event()
+    transfer_thread = None
+    original_perform = Curl.perform
+    original_getinfo = Curl.getinfo
+
+    def perform(curl, *args, **kwargs):
+        nonlocal transfer_thread
+        transfer_thread = get_ident()
+        try:
+            original_perform(curl, *args, **kwargs)
+            # Keep the worker active until the caller receives the response.
+            if method == "GET":
+                assert release_transfer.wait(timeout=5)
+        finally:
+            transfer_finished.set()
+
+    def getinfo(curl, option):
+        assert get_ident() == transfer_thread
+        return original_getinfo(curl, option)
+
+    monkeypatch.setattr(Curl, "perform", perform)
+    monkeypatch.setattr(Curl, "getinfo", getinfo)
+    with requests.Session() as session:
+        try:
+            response = session.request(method, str(server.url), stream=True)
+            assert response.status_code == 200
+            assert response.url == str(server.url)
+            if method == "GET":
+                assert not transfer_finished.is_set()
+        finally:
+            release_transfer.set()
+        response.close()
 
 
 @pytest.mark.skip(reason="External url unstable")
