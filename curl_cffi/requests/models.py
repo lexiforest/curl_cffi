@@ -3,6 +3,7 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
+from json import loads as _stdlib_loads
 from typing import Any, Optional, Union
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
@@ -14,11 +15,12 @@ from .exceptions import HTTPError, RequestException
 from .headers import Headers
 from .streams import STREAM_END
 
-# Use orjson if present
+# Use orjson if present. orjson.loads() is faster but accepts no keyword
+# arguments, so Response.json() falls back to stdlib json when kwargs are given.
 try:
     from orjson import loads
 except ImportError:
-    from json import loads
+    loads = _stdlib_loads
 
 with suppress(ImportError):
     from markdownify import markdownify as md
@@ -308,13 +310,14 @@ class Response:
         if omitted) only when no matches exist; decoding and path errors raise.
         Additional keyword arguments are passed to the JSON decoder.
         """
+        _loads = _stdlib_loads if kw else loads
         charset_encoding = self.charset_encoding
         content = self.content
         if charset_encoding is not None:
             encoding = charset_encoding.lower().replace("_", "-")
             if encoding not in JSON_NATIVE_ENCODINGS:
                 content = self.text
-        data = loads(content, **kw)
+        data = _loads(content, **kw)
         if path is None:
             return data
         if not isinstance(path, str):

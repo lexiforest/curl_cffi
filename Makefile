@@ -6,7 +6,7 @@ PIP ?= $(PYTHON) -m pip
 
 # this is the upstream libcurl-impersonate version
 VERSION := 2.2.3
-CURL_VERSION := curl-8_21_0
+CURL_VERSION := curl-8_22_0
 
 ifeq ($(OS),Windows_NT)
     CURRENT_USER := $(shell echo %USERNAME%)

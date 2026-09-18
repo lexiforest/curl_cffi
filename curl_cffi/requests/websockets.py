@@ -614,6 +614,7 @@ class WebSocket(BaseWebSocket):
             | tuple[str, int | list[str] | dict[str, str | int]]
             | None
         ) = None,
+        dns: str | list[str] | None = None,
         doh_url: str | None = None,
     ) -> WebSocket:
         """Connect to the WebSocket.
@@ -655,6 +656,7 @@ class WebSocket(BaseWebSocket):
                 is used as-is (you must encode it yourself).
             http_version: WebSockets are bootstrapped over HTTP/1.1, this has no effect.
             interface: interface name or local IP to bind to (bare IP = source address).
+            dns: DNS server IP address or list of addresses. Requires c-ares.
             doh_url: DNS-over-HTTPS server url, e.g. https://1.1.1.1/dns-query.
             cert: a tuple of (cert, key) filenames for client cert.
             max_recv_speed: maximum receive speed, bytes per second.
@@ -704,6 +706,7 @@ class WebSocket(BaseWebSocket):
                 quote=quote,
                 http_version=http_version,
                 interface=interface,
+                dns=dns,
                 doh_url=doh_url,
                 max_recv_speed=max_recv_speed,
                 cert=cert,

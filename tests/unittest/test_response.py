@@ -69,7 +69,10 @@ def test_json_path_charset():
 
 
 def test_json_path_decoder_kwargs(monkeypatch):
-    monkeypatch.setattr(models, "loads", json.loads)
+    def loads(content):
+        return json.loads(content)
+
+    monkeypatch.setattr(models, "loads", loads)
     response = Response()
     response.content = b'{"value": 1.5}'
     assert response.json(path=".value", parse_float=str) == "1.5"
