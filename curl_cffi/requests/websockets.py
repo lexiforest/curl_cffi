@@ -42,7 +42,8 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Literal, TypeVar, final
 from warnings import warn as user_warning
 
-from ..aio import CURL_SOCKET_BAD, get_selector
+from ..async_base import CURL_SOCKET_BAD
+from ..aio import get_selector
 from ..const import CurlECode, CurlFollow, CurlInfo, CurlOpt, CurlWsFlag
 from ..curl import Curl, CurlError
 from ..utils import CurlCffiWarning

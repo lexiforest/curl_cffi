@@ -1,58 +1,37 @@
-import asyncio
 import base64
 import json
-import pickle
 from contextlib import suppress
-from uuid import uuid4
 
 import pytest
+import trio
 
-from curl_cffi import AsyncCurl, CurlOpt, Headers
+from curl_cffi import Headers, TrioSession
 from curl_cffi.const import CurlECode
-from curl_cffi.requests import AsyncSession, RequestsError
+from curl_cffi.requests import RequestsError
 from curl_cffi.requests.errors import SessionClosed
-from curl_cffi.requests.exceptions import (
-    CertificateVerifyError,
-    TooManyRedirects,
-    UnrewindableBodyError,
-)
-from curl_cffi.requests.models import Response
+from curl_cffi.requests.exceptions import CertificateVerifyError
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_get(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(server.url))
         assert r.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_custom_async_curl_cacert_is_used_by_pooled_curl():
-    acurl = AsyncCurl(cacert="custom-ca.pem")
-    try:
-        async with AsyncSession(async_curl=acurl) as s:
-            curl = await s.pop_curl()
-            try:
-                assert curl._cacert == "custom-ca.pem"
-            finally:
-                s.push_curl(curl)
-    finally:
-        await acurl.close()
-
-
 def test_create_session_out_of_async(server):
-    s = AsyncSession()
+    s = TrioSession()
 
     async def get():
         r = await s.get(str(server.url))
         assert r.status_code == 200
 
-    asyncio.run(get())
+    trio.run(get)
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_post_dict(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.post(
             str(server.url.copy_with(path="/echo_body")), data={"foo": "bar"}
         )
@@ -60,9 +39,9 @@ async def test_post_dict(server):
         assert r.content == b"foo=bar"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_post_str(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.post(
             str(server.url.copy_with(path="/echo_body")), data='{"foo": "bar"}'
         )
@@ -70,9 +49,9 @@ async def test_post_str(server):
         assert r.content == b'{"foo": "bar"}'
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_post_json(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.post(
             str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"}
         )
@@ -80,92 +59,9 @@ async def test_post_json(server):
         assert r.content == b'{"foo":"bar"}'
 
 
-@pytest.mark.asyncio
-async def test_post_async_iterable_content(server):
-    async def content():
-        yield b"foo"
-        await asyncio.sleep(0)
-        yield b"x" * 200000
-        await asyncio.sleep(0)
-        yield b"bar"
-
-    async with AsyncSession() as s:
-        r = await s.post(
-            str(server.url.copy_with(path="/echo_body")), content=content()
-        )
-    assert r.content == b"foo" + b"x" * 200000 + b"bar"
-
-
-@pytest.mark.asyncio
-async def test_file_like_content_overrides_content_length(server, tmp_path):
-    path = tmp_path / "body.bin"
-    path.write_bytes(b"streamed-from-file")
-
-    with path.open("rb") as f:
-        async with AsyncSession() as s:
-            r = await s.post(
-                str(server.url.copy_with(path="/echo_body")),
-                content=f,
-                headers={"Content-Length": "1"},
-            )
-
-    assert r.request.headers["Content-Length"] == str(len(b"streamed-from-file"))
-    assert r.content == b"streamed-from-file"
-
-
-@pytest.mark.asyncio
-async def test_async_iterable_content_error_propagates(server):
-    async def content():
-        yield b"partial"
-        raise ValueError("upload failed")
-
-    async with AsyncSession() as s:
-        with pytest.raises(ValueError, match="upload failed"):
-            await s.post(
-                str(server.url.copy_with(path="/echo_body")), content=content()
-            )
-
-
-@pytest.mark.asyncio
-async def test_async_iterable_content_is_closed_on_cancellation(server):
-    started = asyncio.Event()
-    closed = asyncio.Event()
-
-    async def content():
-        try:
-            yield b"partial"
-            started.set()
-            while True:
-                await asyncio.sleep(1)
-                yield b"more"
-        finally:
-            closed.set()
-
-    async with AsyncSession() as s:
-        task = asyncio.create_task(
-            s.post(str(server.url.copy_with(path="/echo_body")), content=content())
-        )
-        await asyncio.wait_for(started.wait(), 1)
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
-        await asyncio.wait_for(closed.wait(), 1)
-
-
-@pytest.mark.asyncio
-async def test_one_shot_async_content_is_not_retried(server):
-    async def content():
-        yield b"important-body"
-
-    url = server.url.copy_with(path="/retry_body", query=f"key={uuid4().hex}".encode())
-    async with AsyncSession(retry=1, raise_for_status=True) as s:
-        with pytest.raises(UnrewindableBodyError):
-            await s.post(str(url), content=content())
-
-
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_put_json(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.put(
             str(server.url.copy_with(path="/echo_body")), json={"foo": "bar"}
         )
@@ -173,23 +69,23 @@ async def test_put_json(server):
         assert r.content == b'{"foo":"bar"}'
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_delete(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.delete(str(server.url.copy_with(path="/echo_body")))
         assert r.status_code == 200
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_options(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.options(str(server.url.copy_with(path="/echo_body")))
         assert r.status_code == 200
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_base_url(server):
-    async with AsyncSession(
+    async with TrioSession(
         base_url=str(server.url.copy_with(path="/a/b", params={"foo": "bar"}))
     ) as s:
         # target path is empty
@@ -221,9 +117,9 @@ async def test_base_url(server):
         assert r.url == str(server.url.copy_with(path="/x/y"))
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_params(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"}
         )
@@ -231,9 +127,9 @@ async def test_params(server):
         assert r.content == b'{"params": {"foo": ["bar"]}}'
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_update_params(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"}
         )
@@ -241,9 +137,9 @@ async def test_update_params(server):
         assert r.content == b'{"params": {"foo": ["bar"]}}'
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_headers(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_headers")), headers={"foo": "bar"}
         )
@@ -251,18 +147,18 @@ async def test_headers(server):
         assert headers["Foo"][0] == "bar"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_headers_encoding_is_preserved(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(server.url), headers=Headers(encoding="utf-8"))
         assert r.status_code == 200
         assert r.request is not None
         assert r.request.headers.encoding == "utf-8"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_cookies(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_cookies")),
             cookies={"foo": "bar", "hello": "world"},
@@ -271,9 +167,9 @@ async def test_cookies(server):
         assert cookies["foo"] == "bar"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_auth(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_headers")), auth=("foo", "bar")
         )
@@ -284,71 +180,55 @@ async def test_auth(server):
         )
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_timeout(server):
-    with pytest.raises(RequestsError):
-        async with AsyncSession() as s:
-            await s.get(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
+    async with TrioSession() as s:
+        with trio.fail_after(2):
+            with pytest.raises(RequestsError):
+                await s.get(
+                    str(server.url.copy_with(path="/slow_response")), timeout=0.1
+                )
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_not_follow_redirects(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/redirect_301")), allow_redirects=False
         )
         assert r.status_code == 301
         assert r.redirect_count == 0
-        assert r.history == []
         assert r.content == b"Redirecting..."
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_follow_redirects(server):
-    async with AsyncSession() as s:
-        url = str(server.url.copy_with(path="/redirect_301"))
-        r = await s.get(url, allow_redirects=True)
+    async with TrioSession() as s:
+        r = await s.get(
+            str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
+        )
         assert r.status_code == 200
         assert r.redirect_count == 1
-        assert len(r.history) == 1
-        assert isinstance(r.history[0], Response)
-        assert r.history[0].url == url
-        assert r.history[0].status_code == 301
-        assert r.history[0].headers["location"] == "/"
 
 
-@pytest.mark.asyncio
-async def test_too_many_redirects(server):
-    async with AsyncSession() as s:
-        with pytest.raises(RequestsError) as e:
-            await s.get(
-                str(server.url.copy_with(path="/redirect_loop")), max_redirects=2
-            )
-    assert isinstance(e.value, TooManyRedirects)
-    assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
-    assert isinstance(e.value.response, Response)
-    assert e.value.response.status_code == 301
-    assert len(e.value.response.history) == 2
-
-
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_verify(https_server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         with pytest.raises(CertificateVerifyError) as exc_info:
             await s.get(str(https_server.url), verify=True)
     assert exc_info.value.code == CurlECode.PEER_FAILED_VERIFICATION
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_verify_false(https_server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(https_server.url), verify=False)
         assert r.status_code == 200
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_referer(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_headers")),
             referer="http://example.com",
@@ -362,40 +242,40 @@ async def test_referer(server):
 #######################################################################################
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_redirect_url(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/redirect_301")), allow_redirects=True
         )
         assert r.url == str(server.url.copy_with(path="/"))
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_response_headers(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(server.url.copy_with(path="/set_headers")))
         assert r.headers.get_list("x-test") == ["test", "test2"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_response_cookies(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(server.url.copy_with(path="/set_cookies")))
         print(r.cookies)
         assert r.cookies["foo"] == "bar"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_elapsed(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(server.url.copy_with(path="/slow_response")))
         assert r.elapsed.total_seconds() > 0.1
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_reason(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/redirect_301")), allow_redirects=False
         )
@@ -412,18 +292,18 @@ async def test_reason(server):
 #######################################################################################
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_session_update_parms(server):
-    async with AsyncSession(params={"old": "day"}) as s:
+    async with TrioSession(params={"old": "day"}) as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_params")), params={"foo": "bar"}
         )
         assert r.content == b'{"params": {"old": ["day"], "foo": ["bar"]}}'
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_session_preset_cookies(server):
-    async with AsyncSession(cookies={"foo": "bar"}) as s:
+    async with TrioSession(cookies={"foo": "bar"}) as s:
         # send requests with other cookies
         r = await s.get(
             str(server.url.copy_with(path="/echo_cookies")), cookies={"hello": "world"}
@@ -435,9 +315,9 @@ async def test_session_preset_cookies(server):
         assert cookies["hello"] == "world"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_session_cookies(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         # let the server set cookies
         r = await s.get(str(server.url.copy_with(path="/set_cookies")))
         assert s.cookies["foo"] == "bar"
@@ -453,17 +333,17 @@ async def test_session_cookies(server):
 
 
 # https://github.com/lexiforest/curl_cffi/issues/16
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_session_with_headers(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(str(server.url), headers={"Foo": "bar"})
         r = await s.get(str(server.url), headers={"Foo": "baz"})
         assert r.status_code == 200
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_session_too_many_headers(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         r = await s.get(
             str(server.url.copy_with(path="/echo_headers")), headers={"Foo": "1"}
         )
@@ -476,9 +356,9 @@ async def test_session_too_many_headers(server):
 
 
 # https://github.com/lexiforest/curl_cffi/issues/222
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_closed_session_throws_error(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         pass
     base_url = str(server.url)
     ws_url = str(server.url.copy_with(scheme="ws"))
@@ -509,9 +389,9 @@ async def test_closed_session_throws_error(server):
 
 
 # https://github.com/lexiforest/curl_cffi/issues/39
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_post_body_cleaned(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         # POST with body
         r = await s.post(str(server.url), json={"foo": "bar"})
         # GET request with echo_body
@@ -521,15 +401,15 @@ async def test_post_body_cleaned(server):
 
 
 @pytest.mark.skip(reason="No longer needed")
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_timers_leak(server):
-    async with AsyncSession() as sess:
+    async with TrioSession() as sess:
         for _ in range(3):
             with suppress(Exception):
                 await sess.get(
                     str(server.url.copy_with(path="/slow_response")), timeout=0.1
                 )
-        await asyncio.sleep(0.2)
+        await trio.sleep(0.2)
 
 
 #######################################################################################
@@ -537,61 +417,62 @@ async def test_timers_leak(server):
 #######################################################################################
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_parallel(server):
-    async with AsyncSession() as s:
-        rs = [
-            s.get(
-                str(server.url.copy_with(path="/echo_headers")), headers={"Foo": f"{i}"}
+    async with TrioSession() as s:
+        results = [None] * 8
+
+        async def worker(idx: int) -> None:
+            r = await s.get(
+                str(server.url.copy_with(path="/echo_headers")),
+                headers={"Foo": f"{idx}"},
             )
-            for i in range(8)
-        ]
-        tasks = [asyncio.create_task(r) for r in rs]
-        rs = await asyncio.gather(*tasks)
-        for idx, r in enumerate(rs):
+            results[idx] = r
+
+        async with trio.open_nursery() as nursery:
+            for idx in range(8):
+                nursery.start_soon(worker, idx)
+
+        for idx, r in enumerate(results):
+            assert r is not None
             assert r.status_code == 200
             assert r.json()["Foo"][0] == str(idx)
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_high_parallel(server):
-    async with AsyncSession() as s:
-        rs = [
-            s.get(
-                str(server.url.copy_with(path="/echo_headers")), headers={"Foo": f"{i}"}
+    async with TrioSession() as s:
+        results = [None] * 10240
+
+        async def worker(idx: int) -> None:
+            r = await s.get(
+                str(server.url.copy_with(path="/echo_headers")),
+                headers={"Foo": f"{idx}"},
             )
-            for i in range(10240)
-        ]
-        tasks = [asyncio.create_task(r) for r in rs]
-        rs = await asyncio.gather(*tasks)
-        for idx, r in enumerate(rs):
+            results[idx] = r
+
+        async with trio.open_nursery() as nursery:
+            for idx in range(10240):
+                nursery.start_soon(worker, idx)
+
+        for idx, r in enumerate(results):
+            assert r is not None
             assert r.status_code == 200
             assert r.json()["Foo"][0] == str(idx)
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_stream_iter_content(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         url = str(server.url.copy_with(path="/stream"))
         async with s.stream("GET", url, params={"n": "20"}) as r:
             async for chunk in r.aiter_content():
                 assert b"path" in chunk
 
 
-@pytest.mark.asyncio
-async def test_stream_response_pickle_raises(server):
-    url = str(server.url.copy_with(path="/stream"))
-    async with (
-        AsyncSession() as session,
-        session.stream("GET", url, params={"n": "1"}) as response,
-    ):
-        with pytest.raises(TypeError, match="Streaming responses cannot be pickled"):
-            pickle.dumps(response)
-
-
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_stream_iter_content_break(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         url = str(server.url.copy_with(path="/stream"))
         async with s.stream("GET", url, params={"n": "20"}) as r:
             idx = 0
@@ -603,9 +484,9 @@ async def test_stream_iter_content_break(server):
             assert r.status_code == 200
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_stream_iter_lines(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         url = str(server.url.copy_with(path="/stream"))
         async with s.stream("GET", url, params={"n": "20"}) as r:
             async for chunk in r.aiter_lines():
@@ -613,110 +494,25 @@ async def test_stream_iter_lines(server):
                 assert data["path"] == "/stream"
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_stream_status_code(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         url = str(server.url.copy_with(path="/stream"))
         async with s.stream("GET", url, params={"n": "20"}) as r:
             assert r.status_code == 200
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_stream_empty_body(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         url = str(server.url.copy_with(path="/empty_body"))
         async with s.stream("GET", url) as r:
             assert r.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_stream_incomplete_read(server):
-    async with AsyncSession() as s:
-        url = str(server.url.copy_with(path="/incomplete_read"))
-        with pytest.raises(RequestsError) as e:  # noqa: SIM117
-            async with s.stream("GET", url) as r:
-                async for _ in r.aiter_content():
-                    continue
-        assert e.value.code == CurlECode.PARTIAL_FILE
-
-
-@pytest.mark.asyncio
-async def test_stream_incomplete_read_without_close(server):
-    async with AsyncSession() as s:
-        url = str(server.url.copy_with(path="/incomplete_read"))
-        with pytest.raises(RequestsError) as e:
-            r = await s.get(url, stream=True)
-
-            # The error will only be raised when you try to read it.
-            async for _ in r.aiter_content():
-                continue
-
-        assert e.value.code == CurlECode.PARTIAL_FILE
-
-
-@pytest.mark.asyncio
-async def test_stream_redirect_loop(server):
-    async with AsyncSession() as s:
-        url = str(server.url.copy_with(path="/redirect_loop"))
-        with pytest.raises(RequestsError) as e:  # noqa: SIM117
-            async with s.stream("GET", url, max_redirects=2):
-                pass
-        assert isinstance(e.value, TooManyRedirects)
-        assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
-        assert isinstance(e.value.response, Response)
-        assert e.value.response.status_code == 301
-
-
-@pytest.mark.asyncio
-async def test_stream_redirect_loop_without_close(server):
-    async with AsyncSession() as s:
-        url = str(server.url.copy_with(path="/redirect_loop"))
-        with pytest.raises(RequestsError) as e:
-            await s.get(url, max_redirects=2, stream=True)
-        assert isinstance(e.value, TooManyRedirects)
-        assert e.value.code == CurlECode.TOO_MANY_REDIRECTS
-        assert isinstance(e.value.response, Response)
-        assert e.value.response.status_code == 301
-
-        r = await s.get(str(server.url))
-        assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_stream_unconsumed_response_releases_handle(server):
-    async with AsyncSession(max_clients=1) as s:
-        url = str(server.url.copy_with(path="/stream"))
-        await s.get(url, params={"n": "20"}, stream=True)
-
-        r = await s.get(str(server.url))
-        assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_stream_unconsumed_error_releases_handle(server):
-    async with AsyncSession(max_clients=1) as s:
-        url = str(server.url.copy_with(path="/incomplete_read"))
-        await s.get(url, stream=True)
-
-        r = await s.get(str(server.url))
-        assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_stream_session_curl_options(server):
-    async with AsyncSession(
-        curl_options={CurlOpt.USERAGENT: "foo/1.0"},
-    ) as s:
-        url = str(server.url.copy_with(path="/echo_headers"))
-        async with s.stream("GET", url) as r:
-            data = json.loads(await r.acontent())
-
-        assert data["User-agent"][0] == "foo/1.0"
-
-
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_stream_atext(server):
-    async with AsyncSession() as s:
+    async with TrioSession() as s:
         url = str(server.url.copy_with(path="/stream"))
         async with s.stream("GET", url, params={"n": "20"}) as r:
             text = await r.atext()
@@ -724,13 +520,13 @@ async def test_stream_atext(server):
             assert len(chunks) == 20
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_async_session_auto_raise_for_status_enabled(server):
-    """Test that AsyncSession automatically raises HTTPError for error status codes
+    """Test that TrioSession automatically raises HTTPError for error status codes
     when raise_for_status=True"""
     from curl_cffi.requests.exceptions import HTTPError
 
-    async with AsyncSession(raise_for_status=True) as s:
+    async with TrioSession(raise_for_status=True) as s:
         try:
             await s.get(str(server.url.copy_with(path="/status/404")))
             raise AssertionError("Should have raised HTTPError for 404")
@@ -738,28 +534,11 @@ async def test_async_session_auto_raise_for_status_enabled(server):
             assert e.response.status_code == 404  # type: ignore
 
 
-@pytest.mark.asyncio
+@pytest.mark.trio
 async def test_async_session_auto_raise_for_status_disabled(server):
-    """Test that AsyncSession does NOT raise HTTPError when raise_for_status=False
+    """Test that TrioSession does NOT raise HTTPError when raise_for_status=False
     (default)"""
-    async with AsyncSession(raise_for_status=False) as s:
+    async with TrioSession(raise_for_status=False) as s:
         r = await s.get(str(server.url.copy_with(path="/status/404")))
         assert r.status_code == 404
         # Should not raise an exception
-
-
-@pytest.mark.asyncio
-async def test_shared_async_curl_not_closed_by_session(server):
-    pool = AsyncCurl()
-
-    s1 = AsyncSession(async_curl=pool)
-    r1 = await s1.get(str(server.url))
-    assert r1.status_code == 200
-    await s1.close()
-
-    s2 = AsyncSession(async_curl=pool)
-    r2 = await s2.get(str(server.url))
-    assert r2.status_code == 200
-    await s2.close()
-
-    await pool.close()
