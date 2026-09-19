@@ -192,6 +192,10 @@ if is_static:
         extra_link_args = [
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
+            "-framework",
+            "CoreFoundation",
+            "-framework",
+            "SystemConfiguration",
         ]
     elif is_android:
         extra_link_args = [
