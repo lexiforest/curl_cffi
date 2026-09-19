@@ -259,3 +259,26 @@ def test_interface_name_and_prefixed_values_pass_through(interface):
     curl = _set_interface(interface)
 
     assert curl.options[CurlOpt.INTERFACE] == interface.encode()
+
+
+@pytest.mark.parametrize(
+    ("dns", "expected"),
+    [
+        ("8.8.8.8", b"8.8.8.8"),
+        (["8.8.8.8", "8.8.4.4"], b"8.8.8.8,8.8.4.4"),
+    ],
+)
+def test_dns_option(dns, expected):
+    curl = FakeCurl()
+    utils.set_curl_options(
+        curl,
+        "GET",
+        "https://example.com/",
+        params_list=[None, None],
+        headers_list=[None, None],
+        cookies_list=[None, None],
+        proxies_list=[None, None],
+        verify_list=[True, None],
+        dns=dns,
+    )
+    assert curl.options[CurlOpt.DNS_SERVERS] == expected

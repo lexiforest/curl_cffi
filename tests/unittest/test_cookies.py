@@ -48,6 +48,16 @@ def test_curl_format_with_hostname():
     assert m.to_curl_format() == "example.com\tFALSE\t/path\tFALSE\t0\tfoo\tbar"
 
 
+def test_curl_format_preserves_quoted_value():
+    # A server-quoted value (e.g. Set-Cookie: token="abc 123") must keep its
+    # quotes through parse -> serialize so it round-trips to the server as sent,
+    # matching requests. See lexiforest/curl_cffi#414.
+    line = 'example.com\tFALSE\t/\tFALSE\t0\ttoken\t"abc 123"'
+    m = CurlMorsel.from_curl_format(line.encode())
+    assert m.value == '"abc 123"'
+    assert m.to_curl_format() == line
+
+
 def test_curl_format_without_hostname():
     m = CurlMorsel(name="foo", value="bar")
     with pytest.raises(RequestsError):

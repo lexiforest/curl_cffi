@@ -6,8 +6,8 @@ Supported browser impersonate targets
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 ``chrome122``, was skipped, you can simply impersonate it with your own headers and the previous version.
 
-If you are too busy to look up those details, you can try our commercial version at `impersonate.pro <https://impersonate.pro>`_,
-which has a weekly updated list of browser profiles and even more browser types.
+**If you are too busy to look up those details, you can try our commercial version at `impersonate.pro <https://impersonate.pro>`_,
+which has a weekly updated list of browser profiles and even more browser types.**
 
 If you are trying to impersonate a target other than a browser, use ``ja3=...``, ``akamai=...`` and ``extra_fp=...``
 to specify your own customized fingerprints. See below for details.
@@ -29,6 +29,7 @@ to specify your own customized fingerprints. See below for details.
 - chrome142 :sup:`11`
 - chrome145 :sup:`13` :sup:`14`
 - chrome146 :sup:`13` :sup:`14`
+- chrome150 :sup:`14` :sup:`15`
 - chrome99_android
 - chrome131_android :sup:`5`
 - edge99
@@ -66,13 +67,14 @@ Notes:
 12. Fixed in version ``0.15.0``, previous User-Agent header was `not correct <https://github.com/lexiforest/curl-impersonate/issues/234>`_.
 13. Added in version ``0.15.0``.
 14. http3 support included.
+15. Added in version ``0.16.1``.
 
 
 Which target version to use?
 ----------------------------
 
 Generally speaking, you should use the latest Chrome or Safari versions. Currently, they're
-``chrome146``, ``safari260`` and ``safari260_ios``. To always impersonate the latest available
+``chrome150``, ``safari2601`` and ``safari260_ios``. To always impersonate the latest available
 browser versions, you can simply use ``chrome``, ``firefox``, ``safari`` and ``chrome_android``, ``safari_ios``.
 
 .. code-block:: python

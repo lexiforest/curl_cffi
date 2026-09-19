@@ -1,6 +1,27 @@
 Advanced Topics
 **************
 
+DNS servers
+===========
+
+Use ``dns`` to select a DNS server or a list of servers instead of the system
+resolver. This requires libcurl to be built with c-ares, which is how
+libcurl-impersonate was configured since 2.2.3.
+
+.. code-block:: python
+
+    from curl_cffi import Session
+
+    with Session(dns=["8.8.8.8", "8.8.4.4"]) as session:
+        response = session.get("https://example.com")
+        response = session.get("https://example.com", dns="1.1.1.1")
+
+An empty string or list uses the system resolver. Server addresses may include a port,
+for example ``"8.8.8.8:5353"``.
+
+This option can boost your performance, according to some users who have already used
+this before.
+
 Proxies
 =======
 

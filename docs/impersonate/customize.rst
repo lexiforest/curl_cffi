@@ -157,6 +157,99 @@ For a complete list of options and explanation, see the `curl-impersonate README
 .. _curl-impersonate README: https://github.com/lexiforest/curl-impersonate?tab=readme-ov-file#libcurl-impersonate
 
 
+QUIC and HTTP/3 options
+~~~~~~~~~~~~~~~~~~~~~~
+
+These options customize HTTP/3 requests and their QUIC connections. Select
+``http_version="v3"`` to allow HTTP/3 with fallback, or ``http_version="v3only"``
+to require HTTP/3. Set the options through ``curl_options`` or
+``curl.setopt(CurlOpt.OPTION, value)``.
+
+QUIC connection options:
+
+* ``CurlOpt.QUIC_TRANSPORT_PARAMETERS`` (string) sets transport parameter IDs,
+  values, and their order, using semicolon-separated decimal ``id:value`` pairs,
+  for example ``"3:1200;4:1048576;15:AUTO"``. ``15:AUTO`` inserts the connection's
+  initial source connection ID; ``15:`` sends an empty source connection ID.
+  A ``GREASE`` token inserts a randomized GREASE parameter. Parameter order is
+  randomized when HTTP/3 TLS extension permutation is enabled.
+* ``CurlOpt.QUIC_CID_LENGTH`` (string) selects initial connection ID lengths.
+  ``"webkit"`` uses an 8-byte destination connection ID and an empty source
+  connection ID. ``"firefox"`` randomizes the destination connection ID length
+  from 8 to 20 bytes and uses a 3-byte source connection ID.
+* ``CurlOpt.QUIC_INITIAL_PACKET_NUMBER`` (integer) sets the initial packet number
+  for each new QUIC connection. Values from ``0`` to ``2147483647`` select a fixed
+  number; ``-1`` uses Firefox-style randomization with Neqo's biased distribution
+  from ``1`` to ``1024``. The libcurl default is ``0``, which an impersonation
+  profile may override. Values outside this range raise ``CurlError`` with code
+  ``CurlECode.BAD_FUNCTION_ARGUMENT``.
+
+HTTP/3 TLS options:
+
+* ``CurlOpt.HTTP3_SIG_HASH_ALGS`` (string) sets comma-separated signature
+  algorithms, for example ``"rsa_pss_rsae_sha256,ecdsa_secp256r1_sha256"``. When
+  set, it overrides the shared TLS signature algorithms for QUIC connections.
+* ``CurlOpt.HTTP3_TLS_EXTENSION_ORDER`` (string) sets a hyphen-separated sequence
+  of TLS extension IDs, for example ``"0-10-13-16-43-45-51-57"``. When set, it
+  overrides ``CurlOpt.TLS_EXTENSION_ORDER`` for QUIC connections.
+* ``CurlOpt.HTTP3_SSL_EC_CURVES`` (string) sets colon-separated TLS key exchange
+  groups, for example ``"X25519:P-256"``. When set, it overrides
+  ``CurlOpt.SSL_EC_CURVES`` for QUIC connections.
+* ``CurlOpt.HTTP3_SSL_PERMUTE_EXTENSIONS`` (integer) controls HTTP/3 TLS extension
+  and QUIC transport parameter permutation: ``0`` disables it, ``1`` enables it,
+  and ``-1`` follows ``CurlOpt.SSL_PERMUTE_EXTENSIONS``. The default is ``-1``.
+
+HTTP/3 settings and headers:
+
+* ``CurlOpt.HTTP3_SETTINGS`` (string) sets HTTP/3 SETTINGS frame IDs and values,
+  using semicolon-separated ``id:value`` pairs, for example ``"1:65536;6:262144"``.
+* ``CurlOpt.HTTP3_PSEUDO_HEADERS_ORDER`` (string) sets pseudo-header order using
+  ``m`` (``:method``), ``a`` (``:authority``), ``s`` (``:scheme``), and
+  ``p`` (``:path``), for example ``"masp"``.
+* ``CurlOpt.HTTP3_HTTPHEADER`` (list of bytes) sets HTTP/3-specific headers, for
+  example ``[b"User-Agent: custom-agent", b"Accept: */*"]``. When set, this list
+  replaces ``CurlOpt.HTTPHEADER`` for HTTP/3 requests.
+* ``CurlOpt.HTTP3_HTTPHEADER_ORDER`` (string) sets comma-separated regular header
+  order, for example ``"User-Agent,Accept"``. When set, it overrides
+  ``CurlOpt.HTTPHEADER_ORDER`` for HTTP/3 requests.
+
+For example, to customize an impersonation profile's QUIC connection behavior:
+
+.. code-block:: python
+
+   from curl_cffi import CurlOpt, requests
+
+   response = requests.get(
+       url,
+       impersonate="firefox",
+       http_version="v3only",
+       curl_options={
+           CurlOpt.QUIC_CID_LENGTH: "firefox",
+           CurlOpt.QUIC_INITIAL_PACKET_NUMBER: -1,
+           CurlOpt.HTTP3_SSL_PERMUTE_EXTENSIONS: 0,
+       },
+   )
+
+The ``perk`` request parameter combines HTTP/3 settings, pseudo-header order,
+and QUIC transport parameters as ``settings|header_order|transport_parameters``,
+for example ``"1:65536;6:262144|m,a,s,p|3:1200;4:1048576;15:AUTO"``.
+
+``Fingerprint`` exposes these options through ``http3_settings``,
+``http3_pseudo_headers_order``, ``http3_tls_extension_order``, ``http3_headers``,
+``http3_header_order``, ``http3_tls_supported_groups``,
+``quic_transport_parameters``, and ``quic_cid_length``. The
+``quic_initial_packet_number`` field is available on both ``Fingerprint`` and
+``ExtraFingerprints``, and in ``extra_fp`` dictionaries:
+
+.. code-block:: python
+
+   extra_fp = {"quic_initial_packet_number": -1}
+
+Leaving ``quic_initial_packet_number`` unset or setting it to ``None`` preserves
+the impersonation profile's default. ``ExtraFingerprints`` and ``extra_fp`` also
+accept ``http3_sig_hash_algs`` and ``http3_tls_extension_order``.
+
+
 How to toggle firefox-specific extensions?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -187,4 +280,3 @@ Extension 28: record size limit
    ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037,4588-29-23-24-25-256-257,0"
 
    r = curl_cffi.get(url, ja3=ja3, extra_fp=extra_fp)
-
