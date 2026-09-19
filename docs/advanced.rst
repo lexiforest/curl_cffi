@@ -16,10 +16,11 @@ libcurl-impersonate was configured since 2.2.3.
         response = session.get("https://example.com")
         response = session.get("https://example.com", dns="1.1.1.1")
 
-The option is also available on top-level requests, ``AsyncSession``,
-``TrioSession``, and WebSocket connections. A request value overrides the session
-setting; ``None`` inherits it. An empty string or list uses the system resolver.
-Server addresses may include a port, for example ``"8.8.8.8:5353"``.
+An empty string or list uses the system resolver. Server addresses may include a port,
+for example ``"8.8.8.8:5353"``.
+
+This option can boost your performance, according to some users who have already used
+this before.
 
 Proxies
 =======
