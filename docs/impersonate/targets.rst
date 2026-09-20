@@ -6,8 +6,11 @@ Supported browser impersonate targets
 Browser versions will be added **only** when their fingerprints change. If you see a version, e.g.
 ``chrome122``, was skipped, you can simply impersonate it with your own headers and the previous version.
 
-**If you are too busy to look up those details, you can try our commercial version at `impersonate.pro <https://impersonate.pro>`_,
-which has a weekly updated list of browser profiles and even more browser types.**
+**If you are too busy to look up those details, you can try our commercial version at** |impersonate-pro|_,
+**which has a weekly updated list of browser profiles and even more browser types.**
+
+.. |impersonate-pro| replace:: **impersonate.pro**
+.. _impersonate-pro: https://impersonate.pro
 
 If you are trying to impersonate a target other than a browser, use ``ja3=...``, ``akamai=...`` and ``extra_fp=...``
 to specify your own customized fingerprints. See below for details.
