@@ -31,6 +31,12 @@ On macOS, the directory must contain ``libcurl-impersonate.dylib`` and any
 versioned symlinks required by its install name. The directory is recorded as a
 runtime search path in the extension module.
 
+macOS static builds also require ``libcurl-impersonate.link`` beside the merged
+``libcurl-impersonate.a``. Use both files from the same upstream release. The build
+passes this Clang response file to the final extension link so system frameworks
+and libraries are resolved explicitly, including on macOS 27. Older release
+archives without this metadata cannot be used for this static build path.
+
 macOS
 
 To install the local editable build:
