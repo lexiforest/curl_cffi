@@ -614,6 +614,7 @@ class WebSocket(BaseWebSocket):
             | tuple[str, int | list[str] | dict[str, str | int]]
             | None
         ) = None,
+        base_proxies: ProxySpec | None = None,
         dns: str | list[str] | None = None,
         doh_url: str | None = None,
     ) -> WebSocket:
@@ -626,6 +627,7 @@ class WebSocket(BaseWebSocket):
             url: WebSocket connection URL.
             base_url: Base URL to use for relative paths.
             base_params: Session-level params applied before the request-level params.
+            base_proxies: Session-level proxies, used when the request sets none.
             params: query string for the requests.
             headers: headers to send.
             cookies: cookies to use.
@@ -691,7 +693,7 @@ class WebSocket(BaseWebSocket):
                 timeout=timeout,
                 allow_redirects=allow_redirects,
                 max_redirects=max_redirects,
-                proxies_list=[None, proxies],
+                proxies_list=[base_proxies, proxies],
                 proxy=proxy,
                 proxy_auth=proxy_auth,
                 verify_list=[None, verify],
