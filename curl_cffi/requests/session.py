@@ -796,11 +796,8 @@ class Session(BaseSession[R]):
             max_redirects=(
                 self.max_redirects if max_redirects is None else max_redirects
             ),
-            proxies=(
-                (proxies if proxies is not None else self.proxies)
-                if not proxy
-                else None
-            ),
+            proxies=proxies,
+            base_proxies=self.proxies,
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
             verify=self.verify if verify is None else verify,

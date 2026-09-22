@@ -1523,3 +1523,34 @@ class TestWebSocketPerformance:
             _ = ws_connection.send(b"K", timeout=1.0)
             data, _ = ws_connection.recv(timeout=1.0)
             assert data == b"K"
+
+
+class _StopBeforeIO(Exception):
+    """Aborts a connect once the options are set, so no socket is opened."""
+
+
+class TestWebSocketProxyArguments:
+    PROXY: Final[str] = "http://127.0.0.1:9/"
+    PROXIES: Final[dict[str, str]] = {"all": "http://127.0.0.1:9/"}
+    URL: Final[str] = "ws://127.0.0.1:9/"
+
+    def test_request_proxy_and_proxies_are_rejected(self, session: Session) -> None:
+        """Same refusal as ``Session.request`` and ``AsyncSession.ws_connect``."""
+        with pytest.raises(TypeError, match="Cannot specify both"):
+            _ = session.ws_connect(self.URL, proxy=self.PROXY, proxies=self.PROXIES)
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            pytest.param({"proxy": PROXY}, id="request-proxy"),
+            pytest.param({"proxies": PROXIES}, id="request-proxies"),
+        ],
+    )
+    def test_session_proxies_never_conflict(self, kwargs: dict[str, object]) -> None:
+        """Session-level proxies are the base slot, so they are not the pair."""
+        with (
+            Session[Response](proxies=self.PROXIES) as session,
+            unittest.mock.patch.object(Curl, "perform", side_effect=_StopBeforeIO),
+            pytest.raises(_StopBeforeIO),
+        ):
+            _ = session.ws_connect(self.URL, **kwargs)
