@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import locale
+import os
 import re
-import struct
 import ssl
+import struct
 import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
-
-import os
 
 import certifi
 
@@ -261,7 +260,7 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
-    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
+    _WS_RECV_BUFFER_SIZE: int = 128 * 1024  # 128 kB
 
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
@@ -291,10 +290,10 @@ class Curl:
         self._set_error_buffer()
 
         # Pre-allocated CFFI objects for WebSocket performance
-        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
-        self._ws_recv_n_recv = ffi.new("size_t *")
-        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
-        self._ws_send_n_sent = ffi.new("size_t *")
+        self._ws_recv_buffer: object | None = None
+        self._ws_recv_n_recv: object = ffi.new("size_t *")
+        self._ws_recv_p_frame: object = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent: object = ffi.new("size_t *")
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
@@ -691,11 +690,11 @@ class Curl:
         m = STATUS_LINE_RE.match(status_line)
         if not m:
             return CurlHttpVersion.V1_0, 0, b""
-        if m.group(1) == "2.0":
+        if m.group(1) == b"2.0":
             http_version = CurlHttpVersion.V2_0
-        elif m.group(1) == "1.1":
+        elif m.group(1) == b"1.1":
             http_version = CurlHttpVersion.V1_1
-        elif m.group(1) == "1.0":
+        elif m.group(1) == b"1.0":
             http_version = CurlHttpVersion.V1_0
         else:
             http_version = CurlHttpVersion.NONE
@@ -729,6 +728,9 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
 
+        if self._ws_recv_buffer is None:
+            self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
+
         if ret := lib.curl_ws_recv(
             self._curl,
             self._ws_recv_buffer,
@@ -745,7 +747,9 @@ class Curl:
         )
 
     def ws_send(
-        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+        self,
+        payload: bytes | bytearray | memoryview,
+        flags: CurlWsFlag | int = CurlWsFlag.BINARY,
     ) -> int:
         """Send data to a websocket connection.
 
@@ -758,10 +762,15 @@ class Curl:
 
         Raises:
             CurlError: if failed.
+
+        Notes:
+            Memoryview payloads must be byte-format for ``len()`` to work correctly.
         """
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
+        # Do NOT assign ffi.from_buffer() to a variable!
+        # See: https://github.com/lexiforest/curl_cffi/pull/700
         if ret := lib.curl_ws_send(
             self._curl,
             ffi.from_buffer(payload),

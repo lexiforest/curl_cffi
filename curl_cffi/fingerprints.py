@@ -413,6 +413,7 @@ class Fingerprint:
     http3_tls_supported_groups: list[str] = field(default_factory=list)
     quic_transport_parameters: str = ""
     quic_cid_length: str | None = None
+    quic_initial_packet_number: int | None = None
 
     ws_headers: dict[str, str] = field(default_factory=dict)
     ws_header_order: str = ""
