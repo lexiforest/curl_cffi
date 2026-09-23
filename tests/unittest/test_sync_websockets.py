@@ -40,7 +40,9 @@ from curl_cffi import (
     Curl,
     CurlECode,
     CurlError,
+    CurlOpt,
     CurlWsFlag,
+    ProxySpec,
     Response,
     Session,
     WebSocket,
@@ -50,6 +52,10 @@ from curl_cffi import (
     WebSocketTimeout,
     WsCloseCode,
 )
+
+
+class _StopBeforeIO(Exception):
+    """Aborts a connect once the options are set, so no socket is opened."""
 
 
 class ServerBehavior(Enum):
@@ -1523,3 +1529,143 @@ class TestWebSocketPerformance:
             _ = ws_connection.send(b"K", timeout=1.0)
             data, _ = ws_connection.recv(timeout=1.0)
             assert data == b"K"
+
+
+class TestWebSocketVerifyArguments:
+    """``Session.ws_connect`` applies TLS verification exactly like ``request``."""
+
+    SESSION_CA: Final[str] = "/tmp/session-ca.pem"
+    REQUEST_CA: Final[str] = "/tmp/request-ca.pem"
+    HTTP_URL: Final[str] = "https://127.0.0.1:9/"
+    WS_URL: Final[str] = "wss://127.0.0.1:9/"
+    TLS_OPTIONS: Final[frozenset[CurlOpt]] = frozenset[CurlOpt](
+        {
+            CurlOpt.SSL_VERIFYPEER,
+            CurlOpt.SSL_VERIFYHOST,
+            CurlOpt.CAINFO,
+            CurlOpt.PROXY_CAINFO,
+        }
+    )
+
+    def _tls_state(self, connect: Callable[[], object]) -> dict[str, object]:
+        """Run ``connect`` up to ``perform()`` and return the TLS state it set."""
+        state: dict[str, object] = {}
+        real_setopt: Callable[..., int] = Curl.setopt
+
+        def setopt(curl: Curl, option: CurlOpt, value: object) -> int:
+            if option in self.TLS_OPTIONS:
+                state[option.name] = value
+            return real_setopt(curl, option, value)
+
+        def perform(curl: Curl, *_: object, **__: object) -> None:
+            state["skip_cacert"] = (
+                curl._skip_cacert  # pyright: ignore[reportPrivateUsage]
+            )
+            raise _StopBeforeIO
+
+        with (
+            unittest.mock.patch.object(Curl, "setopt", setopt),
+            unittest.mock.patch.object(Curl, "perform", perform),
+            pytest.raises(_StopBeforeIO),
+        ):
+            _ = connect()
+        return state
+
+    def test_session_ca_bundle_kept_with_verify_true(self) -> None:
+        """``verify=True`` on the call must not discard the session CA bundle."""
+        with Session[Response](
+            verify=self.SESSION_CA  # pyright: ignore[reportArgumentType]
+        ) as session:
+            state: dict[str, object] = self._tls_state(
+                lambda: session.ws_connect(self.WS_URL, verify=True)
+            )
+        assert state.get("CAINFO") == self.SESSION_CA
+
+    @pytest.mark.parametrize("session_verify", [True, False, SESSION_CA])
+    @pytest.mark.parametrize("request_verify", [None, True, False, REQUEST_CA])
+    def test_matches_session_request(
+        self, session_verify: bool | str, request_verify: bool | str | None
+    ) -> None:
+        """Every session/call combination sets the same options as ``request``."""
+        with Session[Response](
+            verify=session_verify  # pyright: ignore[reportArgumentType]
+        ) as session:
+            expected: dict[str, object] = self._tls_state(
+                lambda: session.get(
+                    self.HTTP_URL,
+                    verify=request_verify,  # pyright: ignore[reportArgumentType]
+                )
+            )
+            actual: dict[str, object] = self._tls_state(
+                lambda: session.ws_connect(self.WS_URL, verify=request_verify)
+            )
+        assert actual == expected
+
+    def test_standalone_connect_verifies_by_default(self) -> None:
+        """A ``WebSocket`` connected without a session still verifies certificates."""
+        state: dict[str, object] = self._tls_state(
+            lambda: WebSocket().connect(self.WS_URL)
+        )
+        assert state.get("SSL_VERIFYPEER") != 0
+        assert state["skip_cacert"] is False
+
+
+class TestWebSocketProxyArguments:
+    """``Session.ws_connect`` picks proxies exactly like ``request``."""
+
+    SESSION_PROXIES: Final[ProxySpec] = {"all": "http://127.0.0.1:8/"}
+    PROXIES: Final[ProxySpec] = {"all": "http://127.0.0.1:9/"}
+    PROXY: Final[str] = "http://127.0.0.1:7/"
+    HTTP_URL: Final[str] = "https://127.0.0.1:9/"
+    WS_URL: Final[str] = "wss://127.0.0.1:9/"
+
+    def _proxy_set(self, connect: Callable[[], object]) -> object:
+        """Run ``connect`` up to ``perform()`` and return the proxy it set."""
+        seen: dict[str, object] = {}
+        real_setopt: Callable[..., int] = Curl.setopt
+
+        def setopt(curl: Curl, option: CurlOpt, value: object) -> int:
+            if option == CurlOpt.PROXY:
+                seen["proxy"] = value
+            return real_setopt(curl, option, value)
+
+        with (
+            unittest.mock.patch.object(Curl, "setopt", setopt),
+            unittest.mock.patch.object(Curl, "perform", side_effect=_StopBeforeIO),
+            pytest.raises(_StopBeforeIO),
+        ):
+            _ = connect()
+        return seen.get("proxy")
+
+    def test_proxy_and_proxies_are_rejected(self) -> None:
+        """Passing both is refused, as it is by ``request`` and the async client."""
+        with (
+            Session[Response]() as session,
+            unittest.mock.patch.object(Curl, "perform", side_effect=_StopBeforeIO),
+            pytest.raises(TypeError, match="Cannot specify both"),
+        ):
+            _ = session.ws_connect(self.WS_URL, proxy=self.PROXY, proxies=self.PROXIES)
+
+    @pytest.mark.parametrize(
+        "session_proxies", [None, SESSION_PROXIES], ids=["no-session", "session"]
+    )
+    @pytest.mark.parametrize(
+        ("proxy", "proxies"),
+        [(None, None), (PROXY, None), (None, PROXIES), (None, {})],
+        ids=["inherit", "proxy", "proxies", "opt-out"],
+    )
+    def test_matches_session_request(
+        self,
+        session_proxies: ProxySpec | None,
+        proxy: str | None,
+        proxies: ProxySpec | None,
+    ) -> None:
+        """Every session/call combination picks the same proxy as ``request``."""
+        with Session[Response](proxies=session_proxies) as session:
+            expected: object = self._proxy_set(
+                lambda: session.get(self.HTTP_URL, proxy=proxy, proxies=proxies)
+            )
+            actual: object = self._proxy_set(
+                lambda: session.ws_connect(self.WS_URL, proxy=proxy, proxies=proxies)
+            )
+        assert actual == expected
