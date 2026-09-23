@@ -32,20 +32,28 @@ def detect_arch():
         archs = json.loads(f.read())
 
     uname = platform.uname()
+
+    machine = os.environ.get("CURL_CFFI_TARGET_MACHINE", uname.machine)
+    pointer_size = int(
+        os.environ.get(
+            "CURL_CFFI_TARGET_POINTER_SIZE",
+            struct.calcsize("P") * 8,
+        )
+    )
+
     uname_system = "Android" if is_android_env() else uname.system
-    glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
+    glibc_flavor = "gnueabihf" if machine in ["armv7l", "armv6l"] else "gnu"
 
     libc, _ = platform.libc_ver()
     # https://github.com/python/cpython/issues/87414
     libc = glibc_flavor if libc == "glibc" else "musl"
     if is_android_env():
         libc = "android"
-    pointer_size = struct.calcsize("P") * 8
 
     for arch in archs:
         if (
             arch["system"] == uname_system
-            and arch["machine"] == uname.machine
+            and arch["machine"] == machine
             and arch["pointer_size"] == pointer_size
             and ("libc" not in arch or arch.get("libc") == libc)
         ):
