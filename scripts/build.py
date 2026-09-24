@@ -189,9 +189,16 @@ static_libs = get_curl_archives()
 extra_link_args = []
 if is_static:
     if system == "Darwin":
+        link_options = libdir / "libcurl-impersonate.link"
+        if not link_options.is_file():
+            raise FileNotFoundError(
+                f"Missing {link_options}: macOS static builds require the link "
+                "response file shipped with the matching libcurl-impersonate archive. "
+                "Set IMPERSONATE_BUILD_DIR to the directory containing both files."
+            )
         extra_link_args = [
             f"-Wl,-force_load,{static_libs[0]}",
-            "-lc++",
+            f"@{link_options.resolve()}",
         ]
     elif is_android:
         extra_link_args = [
