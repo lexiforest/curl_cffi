@@ -303,7 +303,9 @@ class Response:
             yield chunk
         self._finalize_stream()
 
-    def json(self, *, path: Optional[str] = None, default: Any = None, **kw) -> Any:
+    def json(
+        self, *, path: Optional[str] = None, default: Any = None, **kw: Any
+    ) -> Any:
         """Parse JSON, optionally returning the first JSONPath match.
 
         Path selection requires ``curl_cffi[extra]``. Return ``default`` (None
