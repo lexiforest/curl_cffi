@@ -10,6 +10,7 @@ int curl_easy_impersonate(void *curl, char *target, int default_headers);
 void *curl_easy_duphandle(void *curl);
 int curl_easy_upkeep(void *curl);
 int curl_easy_pause(void *curl, int action);
+const char *curl_easy_strerror(int code);
 
 char *curl_version();
 

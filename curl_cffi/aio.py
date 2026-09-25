@@ -322,7 +322,7 @@ class AsyncCurl:
     def _check_error(self, errcode: int, *args: Any):
         if errcode == CurlECode.OK:
             return
-        errmsg = lib.curl_multi_strerror(errcode)
+        errmsg = ffi.string(lib.curl_multi_strerror(errcode)).decode()
         action = " ".join([str(a) for a in args])
         raise CurlError(
             f"Failed in {action}, multi: ({errcode}) {errmsg}. "
