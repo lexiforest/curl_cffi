@@ -100,15 +100,15 @@ class Headers(MutableMapping[str, Optional[str]]):
                 )
                 for k, v in headers.items()
             ]
-        elif isinstance(headers, list):
-            # list of "Name: Value" pairs
+        elif isinstance(headers, Sequence):
+            # sequence of "Name: Value" pairs
             if isinstance(headers[0], str | bytes):
                 sep = ":" if isinstance(headers[0], str) else b":"
                 h = []
                 for line in headers:
                     k, v = line.split(sep, maxsplit=1)  # pyright: ignore
                     h.append((k, v.strip()))
-            # list of (Name, Value) pairs
+            # sequence of (Name, Value) pairs
             elif isinstance(headers[0], tuple):
                 h = headers
             self._list = [

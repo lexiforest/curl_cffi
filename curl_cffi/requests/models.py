@@ -3,6 +3,7 @@ import queue
 import re
 import warnings
 from concurrent.futures import Future
+from json import loads as _stdlib_loads
 from typing import Any, Optional, Union
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
@@ -14,11 +15,12 @@ from .exceptions import HTTPError, RequestException
 from .headers import Headers
 from .streams import STREAM_END
 
-# Use orjson if present
+# Use orjson if present. orjson.loads() is faster but accepts no keyword
+# arguments, so Response.json() falls back to stdlib json when kwargs are given.
 try:
     from orjson import loads
 except ImportError:
-    from json import loads
+    loads = _stdlib_loads
 
 with suppress(ImportError):
     from markdownify import markdownify as md
@@ -301,14 +303,42 @@ class Response:
             yield chunk
         self._finalize_stream()
 
-    def json(self, **kw: Any) -> Any:
-        """return a parsed json object of the content."""
+    def json(self, *, path: Optional[str] = None, default: Any = None, **kw: Any) -> Any:
+        """Parse JSON, optionally returning the first JSONPath match.
+
+        Path selection requires ``curl_cffi[extra]``. Return ``default`` (None
+        if omitted) only when no matches exist; decoding and path errors raise.
+        Additional keyword arguments are passed to the JSON decoder.
+        """
+        _loads = _stdlib_loads if kw else loads
         charset_encoding = self.charset_encoding
+        content = self.content
         if charset_encoding is not None:
             encoding = charset_encoding.lower().replace("_", "-")
             if encoding not in JSON_NATIVE_ENCODINGS:
-                return loads(self.text, **kw)
-        return loads(self.content, **kw)
+                content = self.text
+        data = _loads(content, **kw)
+        if path is None:
+            return data
+        if not isinstance(path, str):
+            raise TypeError("path must be a string")
+        if not path.strip():
+            raise ValueError("path must not be empty")
+        try:
+            from jsonpath_ng.exceptions import JSONPathError
+            from jsonpath_ng.ext import parse
+        except ImportError as exc:
+            raise ImportError(
+                'JSONPath selection requires installing "curl_cffi[extra]"'
+            ) from exc
+        expression = path.strip()
+        if expression.startswith("."):
+            expression = "$" + expression
+        try:
+            matches = parse(expression).find(data)
+        except JSONPathError as exc:
+            raise ValueError(f"Invalid JSONPath: {path!r}") from exc
+        return matches[0].value if matches else default
 
     def close(self):
         """Close the streaming connection, only valid in stream mode."""

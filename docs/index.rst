@@ -164,7 +164,10 @@ For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websocket
 
 Since v0.15.1, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
 
-Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
+Moreover, **we offer comprehensive fingerprint suites at** |impersonate-pro|_.
+
+.. |impersonate-pro| replace:: **impersonate.pro**
+.. _impersonate-pro: https://impersonate.pro
 
 There is a CLI helper for managing fingerprints and debugging, see :doc:`cli/_index`.
 

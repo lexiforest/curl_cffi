@@ -103,6 +103,8 @@ jobs:
         java-version: '17'
 
     - uses: android-actions/setup-android@v3
+      with:
+        packages: platform-tools
 
     - name: Build wheels (Android)
       uses: pypa/cibuildwheel@v3.3.1
