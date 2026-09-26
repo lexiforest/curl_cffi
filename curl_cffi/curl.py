@@ -872,6 +872,8 @@ class CurlMime:
             if not isinstance(data, bytes):
                 data = str(data).encode()
             ret = lib.curl_mime_data(part, data, len(data))
+            if ret != 0:
+                raise CurlError("Add field failed.")
 
     @classmethod
     def from_list(cls, files: list[dict]):
