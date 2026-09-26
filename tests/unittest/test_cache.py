@@ -173,3 +173,13 @@ def test_session_accepts_timedelta_cache_shorthand():
 def test_session_does_not_expose_cache_attribute():
     with Session() as session:
         assert not hasattr(session, "cache")
+
+
+def test_cache_backend_property(tmp_path):
+    cache = FileCacheBackend(expires=timedelta(seconds=60), path=tmp_path)
+
+    with Session(cache=cache) as session:
+        assert session.cache_backend is cache
+
+    with Session() as session:
+        assert session.cache_backend is None
