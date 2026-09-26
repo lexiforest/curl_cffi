@@ -633,7 +633,7 @@ class Session(BaseSession[R]):
         self,
         url: str,
         on_message: Callable[[WebSocket, bytes | str], None] | None = None,
-        on_error: Callable[[WebSocket, CurlError], None] | None = None,
+        on_error: Callable[[WebSocket, Exception], None] | None = None,
         on_open: Callable[[WebSocket], None] | None = None,
         on_close: Callable[[WebSocket, int, str], None] | None = None,
         on_data: Callable[[WebSocket, bytes, CurlWsFrame], None] | None = None,
@@ -796,14 +796,12 @@ class Session(BaseSession[R]):
             max_redirects=(
                 self.max_redirects if max_redirects is None else max_redirects
             ),
-            proxies=(
-                (proxies if proxies is not None else self.proxies)
-                if not proxy
-                else None
-            ),
+            proxies=proxies,
+            base_proxies=self.proxies,
+            base_verify=self.verify,
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
-            verify=self.verify if verify is None else verify,
+            verify=verify,
             referer=referer,
             accept_encoding=accept_encoding,
             impersonate=impersonate or self.impersonate,

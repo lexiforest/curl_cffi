@@ -274,72 +274,60 @@ For low-level APIs, Scrapy integration and other advanced topics, see the
 
 ### WebSockets
 
-`curl_cffi` provides an advanced Python interface to libcurl's WebSocket client. Handshake requests automatically inherit all session settings — such as browser impersonation (TLS/JA3 and HTTP/2), custom proxies, and headers, enabling seamless connections to servers protected by strict anti-bot systems.
+`curl_cffi` provides an advanced Python interface to libcurl's WebSocket client.
 
-WebSockets can be used synchronously, through standard blocking methods, direct iteration, or by using an event-driven callback model (similar to `websocket-client`):
+WebSocket handshakes go through your session, so they use the same browser impersonation (TLS/JA3 fingerprint), proxies, cookies and headers as your HTTP requests.
 
 ```python
-from curl_cffi import Session, WebSocket
+from curl_cffi import Session
 
-with Session() as session:
-    # Handshake automatically inherits browser fingerprints (Chrome, Safari, etc.)
-    with session.ws_connect("wss://echo.websocket.org", impersonate="chrome") as ws:
-        ws.send_str("Hello, World!", timeout=5.0)
-
-        # Standard block-and-read
-        msg = ws.recv_str(timeout=5.0)
-        print(f"Received: {msg}")
-
-        for i in range(10):
-            ws.send_str(f"Stream #{i}")
-
-        # Stream incoming messages sequentially
-        for message, _ in zip(ws, range(11)):
-            print(message)
-
-def on_message(ws, message):
-    print(f"Received: {message}")
-
-# Automatically negotiates upgrades and listens continuously
-ws = WebSocket(on_message=on_message)
-ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
+with Session(impersonate="chrome") as s:
+    with s.ws_connect("wss://ws.postman-echo.com/raw") as ws:
+        ws.send_str("Hello, World!")
+        print(ws.recv_str())
+        # Hello, World!
 ```
 
-For high-performance applications, the async client supports concurrent receiving and sending (similar to `aiohttp`):
+The sync client also supports an event-driven callback style, similar to `websocket-client`:
+
+```python
+from curl_cffi import Session
+
+def on_message(ws, message):
+    print(message)
+
+with Session() as s:
+    url = "wss://api.gemini.com/v1/marketdata/BTCUSD"
+    with s.ws_connect(url, on_message=on_message) as ws:
+        ws.run_forever()
+```
+
+The async client sends and receives concurrently, similar to `aiohttp`:
 
 ```python
 import asyncio
 from curl_cffi import AsyncSession
 
 async def main():
-    async with AsyncSession() as session:
-        async with session.ws_connect("wss://echo.websocket.org", impersonate="chrome") as ws:
-            # Execute concurrent sends
-            await asyncio.gather(*[ws.send_str(f"Message {i}") for i in range(10)])
+    async with AsyncSession(impersonate="chrome") as s:
+        async with s.ws_connect("wss://ws.postman-echo.com/raw") as ws:
+            # Sends are queued and return immediately
+            await asyncio.gather(*(ws.send_str(f"Message {i}") for i in range(3)))
 
-            # Receive messages
-            received = await asyncio.gather(*[ws.recv_str() for i in range(11)])
-            for frame in received:
-                print(frame)
+            for _ in range(3):
+                print(await ws.recv_str())
 
-async def stream():
-    async with AsyncSession() as session:
-        async with session.ws_connect("wss://api.gemini.com/v1/marketdata/BTCUSD") as ws:
-            # Stream incoming frames asynchronously
-            async for message in ws:
-                print(f"Asyncio Stream: {message}")
-
-asyncio.run(main())  # or stream()
+asyncio.run(main())
 ```
 
 #### Features
 
-- **Impersonation & Session Inheritance:** Inherits browser fingerprints (TLS/JA3 and HTTP/2), custom proxies, and headers directly during the initial handshake request.
-- **SIMD Performance:** Frame payload masking is executed using SIMD hardware acceleration (AVX-512, AVX2, and ARM NEON) inside a customized libcurl build.
-- **Automatic Message Reassembly:** Automatically assembles fragmented WebSocket frames in the background, so messages are always delivered complete.
-- **Robust Network Resiliency:** Built with precise timeout boundaries and transient error recovery to safely handle network conditions without corrupting connection state.
+- **Browser impersonation:** the handshake uses your session's TLS/JA3 fingerprint, proxies, cookies and headers.
+- **Complete messages:** fragmented messages are reassembled for you.
+- **Timeouts and retries:** every send and receive accepts a `timeout`, and failed reads can be retried with backoff.
+- **Fast masking:** outgoing frames are masked with SIMD instructions (AVX-512, AVX2, NEON) in a customized libcurl build.
 
-See the WebSocket [docs](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for full details and advanced options.
+See the [WebSockets guide](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for callbacks, timeouts, configuration and more.
 
 ## Ecosystem
 
