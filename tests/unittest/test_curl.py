@@ -132,6 +132,29 @@ def test_write_function_memory_leak(server):
     assert c._write_handle is None
 
 
+def test_reset_cleans_wrapper_resources():
+    c = Curl()
+    try:
+        c.setopt(CurlOpt.HTTPHEADER, [b"Foo: bar"])
+        c.setopt(CurlOpt.PROXYHEADER, [b"Proxy-Foo: bar"])
+        c.setopt(CurlOpt.RESOLVE, ["example.com:443:127.0.0.1"])
+        c.setopt(CurlOpt.WRITEDATA, BytesIO())
+
+        assert c._headers != _wrapper.ffi.NULL
+        assert c._proxy_headers != _wrapper.ffi.NULL
+        assert c._resolve != _wrapper.ffi.NULL
+        assert c._write_handle is not None
+
+        c.reset()
+
+        assert c._headers == _wrapper.ffi.NULL
+        assert c._proxy_headers == _wrapper.ffi.NULL
+        assert c._resolve == _wrapper.ffi.NULL
+        assert c._write_handle is None
+    finally:
+        c.close()
+
+
 def test_write_function(server):
     c = Curl()
     url = str(server.url.copy_with(path="/echo_body"))
