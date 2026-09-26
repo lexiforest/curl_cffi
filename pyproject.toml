@@ -30,6 +30,7 @@ extra = [
     "jsonpath-ng>=1.7,<2",
 ]
 cli = ["rich"]
+trio = ["trio>=0.25.0,<1.0"]
 dev = [
     "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
@@ -140,7 +141,8 @@ repair-wheel-command = "delvewheel repair --add-path ./lib64;./lib32;./libarm64 
 
 [tool.pytest.ini_options]
 # pythonpath = [ "." ]
-asyncio_mode = "auto"
+asyncio_mode = "strict"
+trio_mode = false
 
 
 [tool.ruff]
