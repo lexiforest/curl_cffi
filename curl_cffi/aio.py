@@ -231,7 +231,15 @@ class AsyncCurl:
         while True:
             if not self._curlm:
                 break
-            self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
+            # Never let a socket_action error kill the safeguard; warn and keep going.
+            try:
+                self.socket_action(CURL_SOCKET_TIMEOUT, CURL_POLL_NONE)
+            except Exception:
+                warnings.warn(
+                    "force_timeout: socket_action failed; safeguard continuing",
+                    CurlCffiWarning,
+                    stacklevel=2,
+                )
             await asyncio.sleep(0.1)
 
     def add_handle(self, curl: Curl):
