@@ -962,7 +962,9 @@ class WebSocket(BaseWebSocket):
         only valid until the next receive or connection shutdown.
         """
         if self.closed:
-            raise WebSocketClosed("WebSocket is already closed")
+            raise WebSocketClosed(
+                "WebSocket is already closed", self._close_code or WsCloseCode.OK
+            )
 
         chunk, frame = self.curl.ws_recv()
         if frame.flags & CurlWsFlag.CLOSE:

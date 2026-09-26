@@ -757,6 +757,14 @@ class TestWebSocketCloseAndState:
         with pytest.raises((WebSocketClosed, WebSocketError)):
             _ = ws_connection.send(b"test", timeout=1.0)
 
+    def test_recv_fragment_after_close_raises_with_code(
+        self, ws_connection: WebSocket
+    ) -> None:
+        ws_connection.close(4000)
+        with pytest.raises(WebSocketClosed) as exc_info:
+            _ = ws_connection.recv_fragment()
+        assert exc_info.value.code == 4000
+
     def test_close_code_extraction(
         self,
         session: Session,
