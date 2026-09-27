@@ -321,6 +321,9 @@ class Curl:
     def _get_error(self, errcode: int, *args: Any):
         if errcode != 0:
             errmsg = ffi.string(self._error_buffer).decode(errors="backslashreplace")
+            if not errmsg:
+                # libcurl can leave the buffer empty; curl(1) then prints this too
+                errmsg = ffi.string(lib.curl_easy_strerror(errcode)).decode()
             action = " ".join([str(a) for a in args])
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
