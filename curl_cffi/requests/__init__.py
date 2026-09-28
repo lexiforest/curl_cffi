@@ -30,6 +30,7 @@ __all__ = [
     "FileCacheBackend",
     "CookieTypes",
     "HeaderTypes",
+    "HookType",
     "ProxySpec",
 ]
 
@@ -44,6 +45,7 @@ from .impersonate import BrowserType, BrowserTypeLiteral, ExtraFingerprints
 from .models import Request, Response
 from .session import (
     AsyncSession,
+    HookType,
     HttpMethod,
     ProxySpec,
     RetryStrategy,
@@ -112,6 +114,8 @@ def request(
         accept_encoding: shortcut for setting accept-encoding header.
         content_callback: a callback function to receive response body.
             ``def callback(chunk: bytes) -> None:``
+        hooks: event hooks. Only the ``response`` event is supported. A response hook
+            may be a callable or a list of callables.
         impersonate: which browser version or fingerprint to impersonate.
         ja3: ja3 string to impersonate.
         akamai: akamai string to impersonate.
