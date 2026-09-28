@@ -146,5 +146,55 @@
         "libc": "gnu",
         "obj_name": "libcurl-impersonate.a",
         "arch": "loongarch64"
+    },
+    {
+        "system": "Linux",
+        "machine": "i686",
+        "pointer_size": 32,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "i386"
+    },
+    {
+        "system": "Linux",
+        "machine": "armv6l",
+        "pointer_size": 32,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "arm"
+    },
+    {
+        "system": "Linux",
+        "machine": "armv7l",
+        "pointer_size": 32,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "arm"
+    },
+    {
+        "system": "Linux",
+        "machine": "armv8l",
+        "pointer_size": 64,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "arm"
+    },
+    {
+        "system": "Linux",
+        "machine": "loongarch64",
+        "pointer_size": 64,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "loongarch64"
     }
 ]
