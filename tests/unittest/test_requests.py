@@ -1068,6 +1068,32 @@ def test_session_with_all_proxies(server, proxy_server):
     assert r.text == "Hello from man in the middle"
 
 
+# The test server answers an absolute-form request as a proxy would, so the
+# body tells whether a request went through the proxy or straight to it.
+
+
+# https://github.com/lexiforest/curl_cffi/issues/345
+def test_env_proxy_is_used_by_default(server, monkeypatch):
+    monkeypatch.setenv("http_proxy", str(server.url))
+    r = requests.Session().get(str(server.url))
+    assert r.json() == {"Hello": "http_proxy!"}
+
+
+# https://github.com/lexiforest/curl_cffi/issues/345
+def test_trust_env_false_ignores_env_proxy(server, monkeypatch):
+    monkeypatch.setenv("http_proxy", str(server.url))
+    r = requests.Session(trust_env=False).get(str(server.url))
+    assert r.text == "Hello, world!"
+
+
+# https://github.com/lexiforest/curl_cffi/issues/345
+def test_trust_env_false_ignores_env_no_proxy(server, monkeypatch):
+    monkeypatch.setenv("no_proxy", server.url.host)
+    s = requests.Session(proxy=str(server.url), trust_env=False)
+    r = s.get(str(server.url))
+    assert r.json() == {"Hello": "http_proxy!"}
+
+
 # https://github.com/lexiforest/curl_cffi/issues/222
 def test_closed_session_throws_error():
     with requests.Session() as s:
