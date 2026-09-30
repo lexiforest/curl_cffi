@@ -316,7 +316,11 @@ class Curl:
 
         error = self._get_error(errcode, *args)
         if error is not None:
-            raise error
+            try:
+                raise error
+            finally:
+                # error.__traceback__ holds this frame, don't keep error in it
+                del error
 
     def _get_error(self, errcode: int, *args: Any):
         if errcode != 0:
