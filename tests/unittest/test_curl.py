@@ -1,6 +1,8 @@
 import base64
+import gc
 import json
 import os
+import weakref
 from importlib import import_module
 from io import BytesIO
 from typing import cast
@@ -519,3 +521,16 @@ def test_error_keeps_the_buffer_text_when_libcurl_sets_it():
     error = c._get_error(CurlECode.HTTP2, "perform")
 
     assert "curl: (16) custom detail. " in str(error)
+
+
+def test_error_is_freed_without_gc():
+    c = Curl()
+    gc.disable()
+    try:
+        try:
+            c._check_error(CurlECode.AGAIN, "WS_RECV")
+        except CurlError as e:
+            ref = weakref.ref(e)
+        assert ref() is None
+    finally:
+        gc.enable()
