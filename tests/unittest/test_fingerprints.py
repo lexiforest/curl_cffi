@@ -38,6 +38,7 @@ def test_get_default_config_dir_linux_fallback(monkeypatch):
 def test_get_default_config_dir_macos(monkeypatch):
     if os.name != "posix":
         pytest.skip("POSIX default config path test")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setenv("HOME", "/Users/tester")
 
     assert _get_default_config_dir() == "/Users/tester/.config/impersonate"
