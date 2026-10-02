@@ -220,7 +220,8 @@ async def test_params(server):
 async def test_update_params(server):
     async with AsyncSession() as s:
         r = await s.get(
-            str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"}
+            str(server.url.copy_with(path="/echo_params", query=b"foo=z")),
+            params={"foo": "bar"},
         )
         assert r.status_code == 200
         assert r.content == b'{"params": {"foo": ["bar"]}}'
