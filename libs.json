@@ -98,6 +98,36 @@
         "arch": "aarch64"
     },
     {
+        "system": "Android",
+        "machine": "x86_64",
+        "pointer_size": 64,
+        "sysname": "linux-android",
+        "link_type": "static",
+        "libc": "android",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86_64"
+    },
+    {
+        "system": "Android",
+        "machine": "i686",
+        "pointer_size": 32,
+        "sysname": "linux-android",
+        "link_type": "static",
+        "libc": "android",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86"
+    },
+    {
+        "system": "Android",
+        "machine": "armv7l",
+        "pointer_size": 32,
+        "sysname": "linux-android",
+        "link_type": "static",
+        "libc": "android",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "armv7"
+    },
+    {
         "system": "Linux",
         "machine": "riscv64",
         "pointer_size": 64,
