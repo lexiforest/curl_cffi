@@ -21,8 +21,8 @@ from .const import (
     CurlInfo,
     CurlLockData,
     CurlOpt,
-    CurlSHCode,
-    CurlSHOpt,
+    CurlShareCode,
+    CurlShareOpt,
     CurlWsFlag,
 )
 from .utils import CurlCffiWarning
@@ -869,9 +869,9 @@ class CurlShare:
             int(data): threading.Lock() for data in CurlLockData
         }
         self._userdata = ffi.new_handle(self._locks)
-        self._setopt(CurlSHOpt.LOCKFUNC, ffi.cast("void *", lib.lock_function))
-        self._setopt(CurlSHOpt.UNLOCKFUNC, ffi.cast("void *", lib.unlock_function))
-        self._setopt(CurlSHOpt.USERDATA, self._userdata)
+        self._setopt(CurlShareOpt.LOCKFUNC, ffi.cast("void *", lib.lock_function))
+        self._setopt(CurlShareOpt.UNLOCKFUNC, ffi.cast("void *", lib.unlock_function))
+        self._setopt(CurlShareOpt.USERDATA, self._userdata)
         if connect:
             self.share(CurlLockData.CONNECT)
         if dns:
@@ -879,23 +879,23 @@ class CurlShare:
         if ssl_session:
             self.share(CurlLockData.SSL_SESSION)
 
-    def _setopt(self, option: CurlSHOpt, value: Any) -> None:
-        if option in (CurlSHOpt.SHARE, CurlSHOpt.UNSHARE):
+    def _setopt(self, option: CurlShareOpt, value: Any) -> None:
+        if option in (CurlShareOpt.SHARE, CurlShareOpt.UNSHARE):
             c_value = ffi.new("int *", value)
         else:
             c_value = value
         code = lib._curl_share_setopt(self._curl_share, option, c_value)
-        if code != CurlSHCode.OK:
+        if code != CurlShareCode.OK:
             errmsg = ffi.string(lib.curl_share_strerror(code)).decode()
             raise CurlError(f"Failed to set share option {option}: {errmsg}", code=code)
 
     def share(self, data: CurlLockData) -> None:
         """Start sharing the given ``CurlLockData`` across attached handles."""
-        self._setopt(CurlSHOpt.SHARE, data)
+        self._setopt(CurlShareOpt.SHARE, data)
 
     def unshare(self, data: CurlLockData) -> None:
         """Stop sharing the given ``CurlLockData``."""
-        self._setopt(CurlSHOpt.UNSHARE, data)
+        self._setopt(CurlShareOpt.UNSHARE, data)
 
     def close(self) -> None:
         """Cleanup the share handle, wrapper for ``curl_share_cleanup``.

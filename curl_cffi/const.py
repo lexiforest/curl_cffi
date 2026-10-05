@@ -652,7 +652,7 @@ class CurlFollow(IntEnum):
     SAFE = 4
 
 
-class CurlSHOpt(IntEnum):
+class CurlShareOpt(IntEnum):
     """``CURLSHOPT_`` constants from libcurl,
     see: https://curl.se/libcurl/c/curl_share_setopt.html"""
 
@@ -685,7 +685,7 @@ class CurlLockAccess(IntEnum):
     SINGLE = 2
 
 
-class CurlSHCode(IntEnum):
+class CurlShareCode(IntEnum):
     """``CURLSHE_`` return codes from ``curl_share_*`` functions."""
 
     OK = 0
