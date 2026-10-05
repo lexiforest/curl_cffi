@@ -315,6 +315,10 @@ class CurlOpt(IntEnum):
     TCP_KEEPCNT = 0 + 326
     UPLOAD_FLAGS = 0 + 327
     SSL_SIGNATURE_ALGORITHMS = 10000 + 328
+    HTTPSIG_ALGORITHM = 0 + 329
+    HTTPSIG_KEY = 10000 + 330
+    HTTPSIG_KEYID = 10000 + 331
+    HTTPSIG_HEADERS = 10000 + 332
     IMPERSONATE = 10000 + 999
     HTTPBASEHEADER = 10000 + 1000
     SSL_SIG_HASH_ALGS = 10000 + 1001
@@ -346,6 +350,17 @@ class CurlOpt(IntEnum):
     HTTP3_SIG_HASH_ALGS = 10000 + 1028
     HTTP3_TLS_EXTENSION_ORDER = 10000 + 1029
     HTTPHEADER_ORDER = 10000 + 1030
+    HTTP3_HTTPHEADER = 10000 + 1031
+    HTTP3_HTTPHEADER_ORDER = 10000 + 1032
+    HTTP3_SSL_EC_CURVES = 10000 + 1033
+    WS_HTTPHEADER = 10000 + 1034
+    WS_HTTPHEADER_ORDER = 10000 + 1035
+    WS_SSL_DISABLE_TICKET = 0 + 1036
+    WS_SSL_CERT_COMPRESSION = 10000 + 1037
+    QUIC_CID_LENGTH = 10000 + 1038
+    HTTP3_SSL_PERMUTE_EXTENSIONS = 0 + 1039
+    TLS_TRUST_ANCHORS = 10000 + 1040
+    QUIC_INITIAL_PACKET_NUMBER = 0 + 1041
 
     if locals().get("WRITEDATA"):
         FILE = locals().get("WRITEDATA")
@@ -428,7 +443,10 @@ class CurlInfo(IntEnum):
     EARLYDATA_SENT_T = 0x600000 + 68
     HTTPAUTH_USED = 0x200000 + 69
     PROXYAUTH_USED = 0x200000 + 70
-    LASTONE = 70
+    SIZE_DELIVERED = 0x600000 + 71
+    COOKIECHANGES = 0x400000 + 1000
+    REDIRECT_HISTORY = 0x400000 + 1001
+    LASTONE = 1001
 
     if locals().get("RESPONSE_CODE"):
         HTTP_CODE = locals().get("RESPONSE_CODE")
@@ -454,6 +472,11 @@ class CurlMOpt(IntEnum):
     PUSHFUNCTION = 20000 + 14
     PUSHDATA = 10000 + 15
     MAX_CONCURRENT_STREAMS = 0 + 16
+    NETWORK_CHANGED = 0 + 17
+    NOTIFYFUNCTION = 20000 + 18
+    NOTIFYDATA = 10000 + 19
+    RESOLVE_THREADS_MAX = 0 + 20
+    QUICK_EXIT = 0 + 21
 
 
 class CurlECode(IntEnum):
@@ -627,3 +650,47 @@ class CurlFollow(IntEnum):
     # curl-impersonate: Follow redirects, but reject redirects to
     # internal/private IP addresses (SSRF protection)
     SAFE = 4
+
+
+class CurlShareOpt(IntEnum):
+    """``CURLSHOPT_`` constants from libcurl,
+    see: https://curl.se/libcurl/c/curl_share_setopt.html"""
+
+    NONE = 0
+    SHARE = 1
+    UNSHARE = 2
+    LOCKFUNC = 3
+    UNLOCKFUNC = 4
+    USERDATA = 5
+
+
+class CurlLockData(IntEnum):
+    """``CURL_LOCK_DATA_`` constants from libcurl, the data a share may hold."""
+
+    NONE = 0
+    SHARE = 1
+    COOKIE = 2
+    DNS = 3
+    SSL_SESSION = 4
+    CONNECT = 5
+    PSL = 6
+    HSTS = 7
+
+
+class CurlLockAccess(IntEnum):
+    """``CURL_LOCK_ACCESS_`` constants passed to the share lock callback."""
+
+    NONE = 0
+    SHARED = 1
+    SINGLE = 2
+
+
+class CurlShareCode(IntEnum):
+    """``CURLSHE_`` return codes from ``curl_share_*`` functions."""
+
+    OK = 0
+    BAD_OPTION = 1
+    IN_USE = 2
+    INVALID = 3
+    NOMEM = 4
+    NOT_BUILT_IN = 5

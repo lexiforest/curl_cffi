@@ -1,6 +1,7 @@
 // easy interfaces
 void *curl_easy_init();
 int _curl_easy_setopt(void *curl, int option, void *param);
+int _curl_easy_getinfo_socket(void *curl, int option, uintptr_t *result);
 int curl_easy_getinfo(void *curl, int option, void *ret);
 int curl_easy_perform(void *curl);
 void curl_easy_cleanup(void *curl);
@@ -8,6 +9,8 @@ void curl_easy_reset(void *curl);
 int curl_easy_impersonate(void *curl, char *target, int default_headers);
 void *curl_easy_duphandle(void *curl);
 int curl_easy_upkeep(void *curl);
+int curl_easy_pause(void *curl, int action);
+const char *curl_easy_strerror(int code);
 
 char *curl_version();
 
@@ -24,6 +27,7 @@ extern "Python" size_t buffer_callback(void *ptr, size_t size, size_t nmemb, voi
 extern "Python" size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" size_t read_buffer_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" size_t read_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
+extern "Python" int seek_buffer_callback(void *userdata, int64_t offset, int origin);
 extern "Python" int debug_function(void *curl, int type, char *data, size_t size, void *clientp);
 
 // multi interfaces
@@ -53,6 +57,16 @@ struct CURLMsg *curl_multi_info_read(void* curlm, int *msg_in_queue);
 // multi callbacks
 extern "Python" int socket_function(void *curl, int sockfd, int what, void *clientp, void *socketp);
 extern "Python" int timer_function(void *curlm, int timeout_ms, void *clientp);
+
+// share interfaces
+void *curl_share_init();
+int _curl_share_setopt(void *share, int option, void *param);
+int curl_share_cleanup(void *share);
+const char *curl_share_strerror(int code);
+
+// share callbacks
+extern "Python" void lock_function(void *handle, int data, int access, void *userptr);
+extern "Python" void unlock_function(void *handle, int data, void *userptr);
 
 // websocket
 struct curl_ws_frame {

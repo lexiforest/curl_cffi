@@ -27,7 +27,7 @@ jobs:
         python-version: "3.10"
     - name: Lint
       run: |
-        pip install mypy ruff
+        pip install ruff
         ruff check --exclude issues
 
   sdist:
@@ -57,8 +57,23 @@ jobs:
     name: Build bdist wheels and test
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15-intel, macos-14, windows-2022, windows-11-arm]
+        include:
+        - os: ubuntu-24.04
+          cibw_archs_linux: "x86_64 i686"
+        - os: ubuntu-24.04-arm
+          cibw_archs_linux: "aarch64"
+        - os: ubuntu-24.04
+          cibw_archs_linux: "riscv64"
+          qemu: true
+        - os: ubuntu-24.04
+          cibw_archs_linux: "armv7l"
+          qemu: true
+        - os: macos-15-intel
+        - os: macos-14
+        - os: windows-2022
+        - os: windows-11-arm
     steps:
     - uses: actions/checkout@v4
 
@@ -66,7 +81,7 @@ jobs:
       with:
         python-version: "3.11"
 
-    - if: runner.os == 'Linux'
+    - if: matrix.qemu
       uses: docker/setup-qemu-action@v3
       with:
         platforms: all
@@ -78,13 +93,15 @@ jobs:
 
     - name: Build and test wheels
       uses: pypa/cibuildwheel@v3.3.1
+      env:
+        CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs_linux }}
 
     # - name: Setup tmate session
     #   uses: mxschmitt/action-tmate@v3
 
     - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
-        name: curl_cffi-${{ github.sha }}-${{ matrix.os }}.zip
+        name: curl_cffi-${{ github.sha }}-${{ matrix.os }}-${{ strategy.job-index }}.zip
         path: ./wheelhouse/*.whl
 
   bdist_android:
@@ -103,14 +120,24 @@ jobs:
         java-version: '17'
 
     - uses: android-actions/setup-android@v3
+      with:
+        packages: platform-tools
 
     - name: Build wheels (Android)
       uses: pypa/cibuildwheel@v3.3.1
       env:
         CIBW_PLATFORM: android
-        CIBW_BUILD: cp313-android_arm64_v8a
+        # One wheel per CPython minor, see the Android note in setup.py.
+        CIBW_BUILD: cp313-android_arm64_v8a cp314-android_arm64_v8a
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         ANDROID_API_LEVEL: 24
+
+    # cibuildwheel silently reuses an abi3 wheel for a later interpreter, so a
+    # missing wheel would otherwise leave this job green.
+    - name: Check one wheel was built per CPython minor
+      run: |
+        ls -l ./wheelhouse/
+        for tag in cp313 cp314; do ls ./wheelhouse/*-$tag-*-android_*.whl; done
 
     - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:

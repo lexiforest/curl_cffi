@@ -43,6 +43,8 @@ def _http_ver_label(response: Response) -> Literal["1.0", "1.1", "2", "3"]:
 def determine_print_spec(args: argparse.Namespace) -> str:
     if args.print_spec:
         return args.print_spec
+    if args.quiet:
+        return ""
     if args.verbose:
         return "HhBb"
     if args.headers_only:
@@ -201,7 +203,10 @@ def _sanitize_filename(name: str) -> str:
 
 
 def handle_download(
-    response: Response, url: str, output_path: str | None = None
+    response: Response,
+    url: str,
+    output_path: str | None = None,
+    quiet: bool = False,
 ) -> None:
     if output_path is None:
         cd = response.headers.get("content-disposition", "")
@@ -214,7 +219,7 @@ def handle_download(
     content = response.content
     total = len(content)
 
-    if HAS_RICH:
+    if HAS_RICH and not quiet:
         console = Console(stderr=True)
         with Progress(
             "[progress.description]{task.description}",
@@ -233,4 +238,5 @@ def handle_download(
     else:
         with open(output_path, "wb") as f:
             f.write(content)
-    print(f"Downloaded to {output_path}", file=sys.stderr)
+    if not quiet:
+        print(f"Downloaded to {output_path}", file=sys.stderr)

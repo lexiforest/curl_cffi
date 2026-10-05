@@ -4,7 +4,11 @@ import os
 import pytest
 
 import curl_cffi
-from curl_cffi.fingerprints import FingerprintManager, _get_default_config_dir
+from curl_cffi.fingerprints import (
+    Fingerprint,
+    FingerprintManager,
+    _get_default_config_dir,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +38,7 @@ def test_get_default_config_dir_linux_fallback(monkeypatch):
 def test_get_default_config_dir_macos(monkeypatch):
     if os.name != "posix":
         pytest.skip("POSIX default config path test")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setenv("HOME", "/Users/tester")
 
     assert _get_default_config_dir() == "/Users/tester/.config/impersonate"
@@ -111,3 +116,40 @@ def test_get_fingerprint_returns_native_target_copy(monkeypatch, tmp_path):
 
     assert fingerprint.client == "chrome"
     assert fingerprint.headers == {}
+
+
+def test_parse_fingerprints_keeps_http3_and_websocket_fields():
+    payload = {
+        "custom": {
+            "http3_headers": {"User-Agent": "h3-agent"},
+            "http3_header_order": "User-Agent",
+            "http3_tls_supported_groups": ["X25519", "P-256"],
+            "ws_headers": {"User-Agent": "ws-agent"},
+            "ws_header_order": "User-Agent",
+            "ws_disable_session_ticket": True,
+            "ws_tls_cert_compression": [],
+        }
+    }
+
+    fingerprint = FingerprintManager._parse_fingerprints(payload)["custom"]
+
+    assert fingerprint.http3_headers == {"User-Agent": "h3-agent"}
+    assert fingerprint.http3_header_order == "User-Agent"
+    assert fingerprint.http3_tls_supported_groups == ["X25519", "P-256"]
+    assert fingerprint.ws_headers == {"User-Agent": "ws-agent"}
+    assert fingerprint.ws_header_order == "User-Agent"
+    assert fingerprint.ws_disable_session_ticket is True
+    assert fingerprint.ws_tls_cert_compression == []
+
+
+def test_parse_fingerprints_keeps_tls_trust_anchors():
+    payload = {
+        "custom": {
+            "tls_trust_anchors": ["2.5.4.3", "2.5.4.10"],
+        }
+    }
+
+    fingerprint = FingerprintManager._parse_fingerprints(payload)["custom"]
+
+    assert fingerprint.tls_trust_anchors == ["2.5.4.3", "2.5.4.10"]
+    assert Fingerprint().tls_trust_anchors is None

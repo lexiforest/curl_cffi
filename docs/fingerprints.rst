@@ -18,11 +18,11 @@ Feature matrix
    * - Open source
      - ✅
      - ✅
-     - Major releases
+     - Major browser releases
    * - Commercial update
      - ✅
      - ✅
-     - Frequent updates
+     - 🌟 Weekly updates
 
 Configure access
 ================
@@ -49,6 +49,11 @@ Or override the configured key at runtime:
 
 Update fingerprints
 ===================
+
+You don't need to update fingerprints every time you run your script. Put `curl-cffi update`
+in your cron job for a daily run is sufficient.
+
+Updating in the CLI is preferred for its simplicity.
 
 From CLI:
 

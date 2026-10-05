@@ -9,6 +9,8 @@ on cffi for interfacing between python and libcurl.
 
 `curl_cffi/cli` contains the CLI implementation.
 
+Never compromise on the fingerprints matching, it's the core value of this project.
+
 ## Build, Test, and Development Commands
 
 Use `uv` to manage venv and dependencies.
@@ -20,6 +22,18 @@ Install editable dependencies with `pip install -e .[test]` and `pip install -e 
 - `make lint` runs `ruff check --exclude issues`.
 - `ruff format --exclude issues` formats Python files.
 - `make build` preprocesses and builds a wheel into `dist/`.
+
+### sibling projects
+
+This project has some dependencies and sibling projects.
+
+- ../curl-impersonate, the build script of libcurl-impersonate
+- ../curl-chrome, the patched curl source used in libcurl-impersonate
+- ../boringssl, the patched boringssl source used in libcurl-impersonate
+- ../ngtcp2, the patched ngtcp2 source used in libcurl-impersonate
+- ../nghttp3, the patched nghttp3 source used in libcurl-impersonate
+
+When dependencies are updated, run `make build && sudo make install` in ../curl-impersonate to update local binaries.
 
 ## Coding Style & Naming Conventions
 

@@ -10,11 +10,16 @@ targets.
 
 If it's challenging for you to use WireShark, you can use the following sites for JA3 and Akamai fingerprints:
 
+- https://fp.impersonate.pro
+
+There are other sites that do the similar thing, but we cannot guarantee their terms
+work for curl_cffi.
+
 1. https://tls.browserleaks.com/json
 2. https://tls.peet.ws/api/all
 3. https://scrapfly.io/web-scraping-tools/browser-fingerprint
 
-For http/3 fingerprints, use our service:
+For http/3 fingerprints, use our service, too:
 
 1. https://fp.impersonate.pro/api/http3
 
@@ -34,6 +39,8 @@ be detected, we have a few more options listed in ``extra_fp``. Be sure to also 
     In short, if you are using curl_cffi in production and you are sure about being blocked by TLS or http
     detection, try the `curl_cffi pro version <https://impersonate.pro>`_.
 
+Since 0.15.1, use the new ``Fingerprint`` class to set every bit we supported.
+
 
 Should I randomize my fingerprints for each request?
 ----------------------------------------------------
@@ -43,10 +50,11 @@ You can choose a random version from the list above, like:
 .. code-block:: python
 
     random.choice(["chrome119", "chrome120", ...])
+    
 
 However, be aware of the browser market share, very old versions are not good choices.
 
-Generally, you should not try to generate a customized random fingerprints. The reason
+Generally, **you should not try to generate a customized random fingerprints**. The reason
 is that, for a given browser version, the fingerprints are fixed. If you create a new
 random fingerprints, the server is easy to know that you are not using a typical browser.
 
@@ -56,15 +64,16 @@ randomized, due to the ``extension permutation`` feature introduced in Chrome 11
 As far as we know, most websites use an allowlist, not a blocklist to filter out bot
 traffic. So do not expect random ja3 fingerprints would work in the wild.
 
-Moreover, do not generate random ja3 strings. There are certain limits for a valid ja3 string.
+Moreover, **do not generate random ja3 strings**. There are certain limits for a valid ja3 string.
 For example:
 
 * TLS 1.3 ciphers must be at the front.
 * GREASE extension must be the first.
 * etc.
 
-You should copy ja3 strings from sniffing tools, not generate them, unless you can make
-sure all the requirements are met.
+You should copy ja3 strings from sniffing tools, or from https://fp.impersonate.pro
+as we mentioned above. Do not generate them, unless you can make sure all the
+requirements are met.
 
 Can I change JavaScript fingerprints with this library?
 -------------------------------------------------------
@@ -84,4 +93,3 @@ Why are all the User-Agents macOS?
 Simple, because I primarily use macOS and I copied the headers from my own browser. Fingerprints
 are generally the same across desktop OSes, if you want it to look like Windows, just update the
 user-agent and other related headers to Windows.
-

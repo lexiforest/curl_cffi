@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from curl_cffi.requests.cookies import Cookies, CurlMorsel
@@ -27,6 +29,16 @@ def test_cookies_conflict_but_same():
     assert c.get("foo") == "bar"
 
 
+def test_cookies_pickle():
+    cookies = Cookies()
+    cookies.set("foo", "bar", domain="example.com")
+
+    restored = pickle.loads(pickle.dumps(cookies))
+
+    assert restored.get("foo", domain="example.com") == "bar"
+    assert restored.jar._cookies_lock is not cookies.jar._cookies_lock
+
+
 def test_curl_format_with_hostname():
     m = CurlMorsel(name="foo", value="bar", hostname="example.com")
     assert m.to_curl_format() == "example.com\tFALSE\t/\tFALSE\t0\tfoo\tbar"
@@ -34,6 +46,16 @@ def test_curl_format_with_hostname():
     assert m.to_curl_format() == "example.com\tFALSE\t/\tTRUE\t0\tfoo\tbar"
     m = CurlMorsel(name="foo", value="bar", hostname="example.com", path="/path")
     assert m.to_curl_format() == "example.com\tFALSE\t/path\tFALSE\t0\tfoo\tbar"
+
+
+def test_curl_format_preserves_quoted_value():
+    # A server-quoted value (e.g. Set-Cookie: token="abc 123") must keep its
+    # quotes through parse -> serialize so it round-trips to the server as sent,
+    # matching requests. See lexiforest/curl_cffi#414.
+    line = 'example.com\tFALSE\t/\tFALSE\t0\ttoken\t"abc 123"'
+    m = CurlMorsel.from_curl_format(line.encode())
+    assert m.value == '"abc 123"'
+    assert m.to_curl_format() == line
 
 
 def test_curl_format_without_hostname():
