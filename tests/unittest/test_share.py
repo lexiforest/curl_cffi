@@ -1,7 +1,22 @@
+import gc
 import threading
 from io import BytesIO
+from unittest.mock import patch
+from weakref import ref
 
-from curl_cffi import Curl, CurlInfo, CurlLockData, CurlOpt, CurlShare, Session
+import pytest
+
+from curl_cffi import (
+    Curl,
+    CurlError,
+    CurlInfo,
+    CurlLockData,
+    CurlOpt,
+    CurlShare,
+    CurlShareCode,
+    Session,
+    lib,
+)
 
 
 def test_curl_share_lifecycle():
@@ -10,6 +25,60 @@ def test_curl_share_lifecycle():
     share.unshare(CurlLockData.COOKIE)
     share.close()
     share.close()  # idempotent
+
+
+def test_share_close_in_use_preserves_handle():
+    share = CurlShare()
+    session = Session(curl_share=share)
+    duplicate = None
+    try:
+        with pytest.raises(CurlError) as exc:
+            share.close()
+        assert exc.value.code == CurlShareCode.IN_USE
+
+        # A failed close must leave the share usable by streaming/ws duplicates.
+        duplicate = session.curl.duphandle()
+        session.close()
+        with pytest.raises(CurlError) as exc:
+            share.close()
+        assert exc.value.code == CurlShareCode.IN_USE
+
+        duplicate.close()
+        share.close()
+        share.close()
+    finally:
+        if duplicate is not None:
+            duplicate.close()
+        session.close()
+        share.close()
+
+
+def test_share_cleanup_in_session_cycle():
+    gc.collect()
+    cleanup_results = []
+
+    class TracedLib:
+        def __getattr__(self, name):
+            return getattr(lib, name)
+
+        def curl_share_cleanup(self, handle):
+            result = lib.curl_share_cleanup(handle)
+            cleanup_results.append(result)
+            return result
+
+    with patch("curl_cffi.curl.lib", TracedLib()):
+        share = CurlShare()
+        first = Session(curl_share=share, use_thread_local_curl=False)
+        second = Session(curl_share=share, use_thread_local_curl=False)
+        first.cycle = second
+        second.cycle = first
+        references = [ref(share), ref(first), ref(second)]
+        del share, first, second
+        gc.collect()
+
+    assert all(reference() is None for reference in references)
+    assert cleanup_results[-1] == CurlShareCode.OK
+    assert cleanup_results.count(CurlShareCode.OK) == 1
 
 
 def test_share_enables_cross_handle_connection_reuse(server):

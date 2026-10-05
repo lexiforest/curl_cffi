@@ -750,6 +750,11 @@ class Curl:
         if self._curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None
+        if self._share is not None:
+            # Cyclic GC may finalize the share before its attached handles.
+            if self._share._finalizing:
+                self._share._cleanup()
+            self._share = None
         ffi.release(self._error_buffer)
 
         if self._ws_recv_buffer is not None:
@@ -859,6 +864,7 @@ class CurlShare:
             ssl_session: share the TLS session cache.
         """
         self._closed = False
+        self._finalizing = False
         self._curl_share = lib.curl_share_init()
         if not self._curl_share:
             raise CurlError(
@@ -897,19 +903,30 @@ class CurlShare:
         """Stop sharing the given ``CurlLockData``."""
         self._setopt(CurlShareOpt.UNSHARE, data)
 
+    def _cleanup(self) -> int:
+        if not self._closed and self._curl_share:
+            code = lib.curl_share_cleanup(self._curl_share)
+            if code != CurlShareCode.OK:
+                return code
+            self._closed = True
+            self._curl_share = None
+        return CurlShareCode.OK
+
     def close(self) -> None:
         """Cleanup the share handle, wrapper for ``curl_share_cleanup``.
 
         Only call this once every attached easy handle has been closed,
-        otherwise libcurl refuses to free a share still in use.
+        otherwise raises ``CurlError`` with ``CurlShareCode.IN_USE`` and keeps
+        the share open so cleanup can be retried after closing those handles.
         """
-        if not self._closed and self._curl_share:
-            lib.curl_share_cleanup(self._curl_share)
-            self._closed = True
-            self._curl_share = None
+        code = self._cleanup()
+        if code != CurlShareCode.OK:
+            errmsg = ffi.string(lib.curl_share_strerror(code)).decode()
+            raise CurlError(f"Failed to close share handle: {errmsg}", code=code)
 
     def __del__(self) -> None:
-        self.close()
+        self._finalizing = True
+        self._cleanup()
 
 
 class CurlMime:
