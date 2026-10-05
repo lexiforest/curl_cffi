@@ -66,6 +66,33 @@
         "arch": "aarch64"
     },
     {
+        "system": "OpenBSD",
+        "machine": "amd64",
+        "pointer_size": 64,
+        "sysname": "openbsd",
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86_64"
+    },
+    {
+        "system": "OpenBSD",
+        "machine": "arm64",
+        "pointer_size": 64,
+        "sysname": "openbsd",
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "aarch64"
+    },
+    {
+        "system": "OpenBSD",
+        "machine": "riscv64",
+        "pointer_size": 64,
+        "sysname": "openbsd",
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "riscv64"
+    },
+    {
         "system": "Linux",
         "machine": "x86_64",
         "pointer_size": 64,
