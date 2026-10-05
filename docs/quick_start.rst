@@ -18,7 +18,7 @@ The simplest way is to install from PyPI:
 We have sdist(source distribution) and bdist(binary distribution) on PyPI. This should
 work on Linux, macOS and Windows out of the box.
 
-If it does not work on you platform, you may need to compile and install ``curl-impersonate``
+If it does not work on your platform, you may need to compile and install ``curl-impersonate``
 first and set some environment variables like ``LD_LIBRARY_PATH``.
 
 Beta versions
@@ -50,14 +50,14 @@ Or you can download the wheels from github actions artifacts.
 requests-like
 =============
 
-``curl_cffi`` tries to follow the ``requests`` API when possible, if you are already of guru using requests,
+``curl_cffi`` tries to follow the ``requests`` API when possible, if you are already familiar with requests,
 read the warning part in this page, skip other parts and head over to the :doc:`vs-requests`.
 
 
 Basic GET requests
 ------------------
 
-Basic ``GET`` request and using the ``impersonate`` parameter.
+Basic ``GET`` request with the ``impersonate`` parameter.
 
 .. code-block:: python
 
@@ -70,7 +70,7 @@ Basic ``GET`` request and using the ``impersonate`` parameter.
 
     print(r.json())
     # output: {..., "ja3n_hash": "aa56c057ad164ec4fdcb7a5a283be9fc", ...}
-    # the js3n fingerprint should be the same as target browser
+    # the ja3n fingerprint should be the same as target browser
 
     # To keep using the latest browser version as `curl_cffi` updates,
     # simply set impersonate="chrome" without specifying a version.
@@ -88,14 +88,14 @@ Basic ``GET`` request and using the ``impersonate`` parameter.
 URL params
 ----------
 
-Messing with the URLs:
+Passing query params with ``params``:
 
 .. code-block:: python
 
     import curl_cffi
 
     >>> params = {"foo": "bar"}
-    >>> r = requests.get("http://httpbin.org/get", params=params)
+    >>> r = curl_cffi.get("http://httpbin.org/get", params=params)
     >>> r.url
     'http://httpbin.org/get?foo=bar'
 
@@ -109,7 +109,7 @@ Messing with the URLs:
 Headers
 -------
 
-Additional headers can be override with ``headers=...``.
+Additional headers can be overriden by ``headers=...``.
 
 .. code-block:: python
 
@@ -193,7 +193,7 @@ Reading the decoded content as str:
     >>> r.text
     '<!doctype html>\n<html>\n<head>\n...'
 
-By default, ``curl_cffi`` first use the ``encoding`` attribute if given, then tries to use the
+By default, ``curl_cffi`` first uses the ``encoding`` attribute if given, then tries to use the
 ``Content-Type`` header to decode the content, If not found, will fallback to ``default_encoding``,
 then to "utf-8".
 
@@ -231,11 +231,12 @@ Use the ``data={...}`` option.
 Binary data
 ~~~~~~~~~~~
 
-Still, use the ``data=b"..."`` option.
+Use the ``content=b"..."`` option. Passing bytes through ``data=`` remains supported
+for compatibility.
 
 .. code-block:: python
 
-    >>> r = curl_cffi.post("https://httpbin.org/post", data=b"LukeSkywalker")
+    >>> r = curl_cffi.post("https://httpbin.org/post", content=b"LukeSkywalker")
     >>> print(r.text)
     {
       "args": {},
@@ -244,6 +245,37 @@ Still, use the ``data=b"..."`` option.
       "form": {},
       ...
     }
+
+Streaming request bodies
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pass a byte iterable or binary file through ``content=`` to upload it without
+buffering the entire body. If no ``Content-Length`` header is supplied, libcurl uses
+streaming transfer framing appropriate for the negotiated HTTP version.
+
+.. code-block:: python
+
+    def chunks():
+        yield b"first chunk"
+        yield b"second chunk"
+
+    r = curl_cffi.post("https://httpbin.org/post", content=chunks())
+
+With ``AsyncSession``, ``content=`` also accepts an async byte iterable:
+
+.. code-block:: python
+
+    async def chunks():
+        yield b"first chunk"
+        await get_more_data()
+        yield b"second chunk"
+
+    async with curl_cffi.AsyncSession() as session:
+        r = await session.post("https://httpbin.org/post", content=chunks())
+
+One-shot iterators cannot be replayed. If a retry or redirect needs to resend the
+body, curl_cffi raises ``UnrewindableBodyError``. Seekable binary files are rewound
+automatically.
 
 Posting JSON
 ~~~~~~~~~~~~
@@ -308,6 +340,19 @@ If the response content is ``json``, you can parse them directly:
     >>> r.json()
     {'headers': {'Accept': '*/*', 'Accept-Encoding': 'gz...')
 
+Install ``curl_cffi[extra]`` to select part of the response using JSONPath:
+
+.. code-block:: python
+
+    users = r.json(path=".data.users", default=[])
+    first_name = r.json(path="$.data.users[*].name")
+
+Path selection returns the first matched value. If there are no matches, it
+returns ``default``, which is ``None`` when omitted. Matched values such as
+``None`` or empty lists are returned unchanged. Invalid JSON and invalid paths
+raise errors rather than returning the default. Calling ``r.json()`` returns
+the entire parsed response and does not require the extra dependencies.
+
 
 Response status
 ---------------
@@ -331,7 +376,7 @@ Response status
 Response headers
 ----------------
 
-Response headers is a case-insensitive dict.
+Response headers are stored as a case-insensitive dict.
 
 .. code-block:: python
 
@@ -405,9 +450,14 @@ Redirection and history
     >>> r.status_code
     302
 
-.. warning::
+Redirect responses are available in request order. Their status, URL, and headers
+are populated, but their response bodies are not available.
 
-    History is not implemented.
+.. code-block:: python
+
+    >>> r = curl_cffi.get("https://httpbin.org/redirect-to?url=/")
+    >>> r.history[0].status_code
+    302
 
 
 Authenticate
@@ -515,7 +565,7 @@ response cookies may be incomplete, it's almost always better to use a session.
     s = curl_cffi.Session()
     r = s.get("https://httpbin.org/redirect")
 
-    # ✅ Use a session instead, to retrive all cookies in the session
+    # ✅ Use a session instead, to retrieve all cookies in the session
     do_something(s.cookies)
 
 Use session without cookies
@@ -540,7 +590,7 @@ Besides the regular sync API, ``curl_cffi`` also provides a very similar ``async
     async with curl_cffi.AsyncSession() as s:
         r = await s.get("https://example.com")
 
-The benefit of asyncio is easier way to implement more concurrency:
+The benefit of asyncio is an easier way to implement more concurrency:
 
 .. code-block:: python
 

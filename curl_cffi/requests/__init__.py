@@ -90,6 +90,8 @@ def request(
         data: form values(dict/list/tuple) or binary data to use in body,
             ``Content-Type: application/x-www-form-urlencoded`` will be added if a dict
             is given.
+        content: raw request body as str, bytes, a byte iterable, or a binary file.
+            ``AsyncSession`` also accepts an async byte iterable.
         json: json values to use in body, `Content-Type: application/json` will be added
             automatically.
         headers: headers to send.
@@ -129,6 +131,7 @@ def request(
         http_version: limiting http version, defaults to http2.
         debug: print extra curl debug info.
         interface: interface name or local IP to bind to (bare IP = source address).
+        dns: DNS server IP address or list of addresses. Requires c-ares.
         cert: a tuple of (cert, key) filenames for client cert.
         stream: streaming the response, default False.
         max_recv_speed: maximum receive speed, bytes per second.

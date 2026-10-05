@@ -4,9 +4,15 @@ Websocket client simple benchmark - TLS (WSS)
 """
 
 import time
-from asyncio import AbstractEventLoop, CancelledError, Task, TaskGroup, get_running_loop
+from asyncio import (
+    AbstractEventLoop,
+    CancelledError,
+    Task,
+    TaskGroup,
+    get_running_loop,
+    sleep,
+)
 from asyncio import run as run_async
-from asyncio import sleep
 
 from typing_extensions import Never
 from ws_bench_utils import BenchmarkDirection, binary_data_generator, config, logger
@@ -128,6 +134,7 @@ async def run_benchmark() -> None:
                     config.srv_path,
                     recv_queue_size=config.recv_queue,
                     send_queue_size=config.send_queue,
+                    timeout=config.connect_timeout,
                 ) as ws,
                 TaskGroup() as tg,
             ):
@@ -150,7 +157,9 @@ async def run_benchmark() -> None:
 async def main() -> None:
     """Entrypoint"""
     loop: AbstractEventLoop = get_running_loop()
-    health_check_task: Task[Never] = loop.create_task(health_check())
+    health_check_task: Task[Never] | None = (
+        loop.create_task(health_check()) if config.health_check else None
+    )
     try:
         await run_benchmark()
 
@@ -158,11 +167,12 @@ async def main() -> None:
         logger.debug("Cancelling benchmark")
 
     finally:
-        try:
-            _ = health_check_task.cancel()
-            await health_check_task
-        except CancelledError:
-            ...
+        if health_check_task is not None:
+            try:
+                _ = health_check_task.cancel()
+                await health_check_task
+            except CancelledError:
+                ...
 
 
 if __name__ == "__main__":

@@ -57,6 +57,17 @@ Bypass Cloudflare with API
 obtain verified cookies (e.g. ``cf_clearance``). Click `here <https://yescaptcha.com/i/stfnIO>`_
 to register.
 
+Cloro
+~~~~~
+
+.. image:: https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/cloro.png
+   :width: 149
+   :alt: Cloro
+   :target: https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi
+
+`cloro <https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi>`_: SERP and AI
+search API for Google, ChatGPT, Perplexity, Gemini, Copilot and Grok.
+
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
 
@@ -153,7 +164,10 @@ For advanced topics, checkout :doc:`cookies`, :doc:`asyncio` and :doc:`websocket
 
 Since v0.15.1, you can update fingerprints without updating curl_cffi, see :doc:`fingerprints`.
 
-Moreover, we offer comprehensive fingerprint suites at `impersonate.pro <https://impersonate.pro>`_.
+Moreover, **we offer comprehensive fingerprint suites at** |impersonate-pro|_.
+
+.. |impersonate-pro| replace:: **impersonate.pro**
+.. _impersonate-pro: https://impersonate.pro
 
 There is a CLI helper for managing fingerprints and debugging, see :doc:`cli/_index`.
 
