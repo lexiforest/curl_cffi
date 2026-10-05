@@ -193,7 +193,7 @@ if is_static:
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
         ]
-    elif is_android:
+    elif system == "FreeBSD" or is_android:
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],

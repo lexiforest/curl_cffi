@@ -48,6 +48,24 @@
         "arch": "arm64"
     },
     {
+        "system": "FreeBSD",
+        "machine": "amd64",
+        "pointer_size": 64,
+        "sysname": "freebsd",
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "x86_64"
+    },
+    {
+        "system": "FreeBSD",
+        "machine": "arm64",
+        "pointer_size": 64,
+        "sysname": "freebsd",
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "aarch64"
+    },
+    {
         "system": "Linux",
         "machine": "x86_64",
         "pointer_size": 64,
