@@ -52,6 +52,16 @@ CurlMime
    .. automethod:: attach
    .. automethod:: close
 
+CurlShare
+~~~~~~~~~
+
+.. autoclass:: curl_cffi.CurlShare
+
+   .. automethod:: __init__
+   .. automethod:: share
+   .. automethod:: unshare
+   .. automethod:: close
+
 Constants
 ~~~~~~~~~
 

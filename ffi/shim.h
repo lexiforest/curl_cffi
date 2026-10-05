@@ -6,4 +6,5 @@
 #include "curl/curl.h"
 
 int _curl_easy_setopt(void* curl, int option, void* param);
+int _curl_share_setopt(void* share, int option, void* param);
 int _curl_easy_getinfo_socket(void* curl, int option, uintptr_t* result);
