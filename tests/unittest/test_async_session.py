@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import json
-from contextlib import suppress
+from contextlib import closing, suppress
 
 import pytest
 
@@ -36,11 +36,13 @@ def test_create_session_out_of_async(server):
     s = AsyncSession()
 
     async def get():
-        r = await s.get(str(server.url))
-        assert r.status_code == 200
-        await s.close()
+        async with s:
+            r = await s.get(str(server.url))
+            assert r.status_code == 200
 
-    asyncio.run(get())
+    # Leave pytest-asyncio's current loop intact so it can clean it up.
+    with closing(asyncio.new_event_loop()) as loop:
+        loop.run_until_complete(get())
 
 
 async def test_post_dict(server):
