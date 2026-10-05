@@ -36,7 +36,7 @@ from weakref import WeakSet
 
 from ..aio import AsyncCurl
 from ..const import CurlFollow, CurlHttpVersion, CurlInfo, CurlOpt
-from ..curl import Curl, CurlError, CurlMime
+from ..curl import Curl, CurlError, CurlMime, CurlShare
 from ..utils import CurlCffiWarning
 from .cache import CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes
@@ -309,6 +309,7 @@ class BaseSession(Generic[R]):
             raise ValueError("You need to provide an absolute url for 'base_url'")
 
         self._closed: bool = False
+        self._share: Optional[CurlShare] = None
         # Look for requests environment configuration
         # and be compatible with cURL.
         if self.verify is True or self.verify is None:
@@ -317,6 +318,11 @@ class BaseSession(Generic[R]):
                 or os.environ.get("CURL_CA_BUNDLE")
                 or self.verify
             )
+
+    def _attach_share(self, curl: Curl) -> None:
+        if self._share is not None:
+            curl.setopt(CurlOpt.SHARE, self._share._curl_share)
+            curl._share = self._share  # keep the share alive while in use
 
     def _parse_response(
         self,
@@ -493,6 +499,7 @@ class Session(BaseSession[R]):
         curl: Optional[Curl] = None,
         thread: Optional[ThreadType] = None,
         use_thread_local_curl: bool = True,
+        curl_share: Optional[CurlShare] = None,
         **kwargs: Unpack[BaseSessionParams[R]],
     ) -> None:
         """
@@ -505,6 +512,9 @@ class Session(BaseSession[R]):
                 from another thread.
             thread: thread engine to use for working with other thread implementations.
                 choices: eventlet, gevent.
+            curl_share: a ``CurlShare`` attached to every (thread-local) handle,
+                to share the DNS and TLS session caches across threads. See the
+                note in the docs on connection reuse across threads.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
@@ -558,6 +568,7 @@ class Session(BaseSession[R]):
         self._queue = None
         self._websockets: WeakSet[WebSocket] = WeakSet[WebSocket]()
         self._executor = None
+        self._share = curl_share
         if use_thread_local_curl:
             self._local = threading.local()
             if curl:
@@ -566,8 +577,10 @@ class Session(BaseSession[R]):
             else:
                 self._is_customized_curl = False
                 self._local.curl = Curl(debug=self.debug)
+            self._attach_share(self._local.curl)
         else:
             self._curl = curl if curl else Curl(debug=self.debug)
+            self._attach_share(self._curl)
 
     @property
     def curl(self):
@@ -580,6 +593,7 @@ class Session(BaseSession[R]):
                 )
             if not getattr(self._local, "curl", None):
                 self._local.curl = Curl(debug=self.debug)
+                self._attach_share(self._local.curl)
             return self._local.curl
         else:
             return self._curl
@@ -633,7 +647,7 @@ class Session(BaseSession[R]):
         self,
         url: str,
         on_message: Callable[[WebSocket, bytes | str], None] | None = None,
-        on_error: Callable[[WebSocket, CurlError], None] | None = None,
+        on_error: Callable[[WebSocket, Exception], None] | None = None,
         on_open: Callable[[WebSocket], None] | None = None,
         on_close: Callable[[WebSocket, int, str], None] | None = None,
         on_data: Callable[[WebSocket, bytes, CurlWsFrame], None] | None = None,
@@ -796,14 +810,12 @@ class Session(BaseSession[R]):
             max_redirects=(
                 self.max_redirects if max_redirects is None else max_redirects
             ),
-            proxies=(
-                (proxies if proxies is not None else self.proxies)
-                if not proxy
-                else None
-            ),
+            proxies=proxies,
+            base_proxies=self.proxies,
+            base_verify=self.verify,
             proxy=proxy,
             proxy_auth=proxy_auth or self.proxy_auth,
-            verify=self.verify if verify is None else verify,
+            verify=verify,
             referer=referer,
             accept_encoding=accept_encoding,
             impersonate=impersonate or self.impersonate,
@@ -1164,6 +1176,7 @@ class AsyncSession(BaseSession[R]):
         loop: asyncio.AbstractEventLoop | None = None,
         async_curl: AsyncCurl | None = None,
         max_clients: int = 10,
+        curl_share: Optional[CurlShare] = None,
         **kwargs: Unpack[BaseSessionParams[R]],
     ) -> None:
         """
@@ -1176,6 +1189,8 @@ class AsyncSession(BaseSession[R]):
             max_clients: maximum curl handles to use in the session,
                 this will affect the concurrency ratio. WebSockets count
                 against this limit for their connection lifetime.
+            curl_share: a ``CurlShare`` attached to every pooled handle, to share
+                the DNS and TLS session caches across the handles in the pool.
             headers: headers to use in the session.
             cookies: cookies to add in the session.
             auth: HTTP basic auth, a tuple of (username, password), only basic auth is
@@ -1236,6 +1251,7 @@ class AsyncSession(BaseSession[R]):
         self._acurl: AsyncCurl | None = async_curl
         self._owns_acurl: bool = async_curl is None
         self.max_clients: int = max_clients
+        self._share = curl_share
         self._websockets: WeakSet[AsyncWebSocket] = WeakSet[AsyncWebSocket]()
         self._pending_ws_connects = 0
         self.init_pool()
@@ -1283,6 +1299,7 @@ class AsyncSession(BaseSession[R]):
         curl: Curl | None = await self.pool.get()
         if curl is None:
             curl = Curl(cacert=self.acurl._cacert, debug=self.debug)
+            self._attach_share(curl)
         return curl
 
     def push_curl(self, curl: Curl | None) -> None:

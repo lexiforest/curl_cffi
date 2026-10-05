@@ -1,6 +1,8 @@
 import base64
+import gc
 import json
 import os
+import weakref
 from importlib import import_module
 from io import BytesIO
 from typing import cast
@@ -499,3 +501,36 @@ def test_default_cacert_falls_back_without_env():
         result = _default_cacert()
         # Should return either the system CA or certifi
         assert os.path.exists(result)
+
+
+def test_error_falls_back_to_the_code_text_when_the_buffer_is_empty():
+    c = Curl()
+
+    error = c._get_error(CurlECode.HTTP2, "perform")
+
+    assert error.code == CurlECode.HTTP2
+    assert str(error).startswith(
+        "Failed to perform, curl: (16) Error in the HTTP2 framing layer. "
+    )
+
+
+def test_error_keeps_the_buffer_text_when_libcurl_sets_it():
+    c = Curl()
+    _wrapper.ffi.memmove(c._error_buffer, b"custom detail", 13)
+
+    error = c._get_error(CurlECode.HTTP2, "perform")
+
+    assert "curl: (16) custom detail. " in str(error)
+
+
+def test_error_is_freed_without_gc():
+    c = Curl()
+    gc.disable()
+    try:
+        try:
+            c._check_error(CurlECode.AGAIN, "WS_RECV")
+        except CurlError as e:
+            ref = weakref.ref(e)
+        assert ref() is None
+    finally:
+        gc.enable()

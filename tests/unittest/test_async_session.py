@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import pickle
-from contextlib import suppress
+from contextlib import closing, suppress
 from uuid import uuid4
 
 import pytest
@@ -13,6 +13,7 @@ from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
     CertificateVerifyError,
+    HTTPError,
     TooManyRedirects,
     UnrewindableBodyError,
 )
@@ -42,10 +43,13 @@ def test_create_session_out_of_async(server):
     s = AsyncSession()
 
     async def get():
-        r = await s.get(str(server.url))
-        assert r.status_code == 200
+        async with s:
+            r = await s.get(str(server.url))
+            assert r.status_code == 200
 
-    asyncio.run(get())
+    # Leave pytest-asyncio's current loop intact so it can clean it up.
+    with closing(asyncio.new_event_loop()) as loop:
+        loop.run_until_complete(get())
 
 
 async def test_post_dict(server):
@@ -219,7 +223,8 @@ async def test_params(server):
 async def test_update_params(server):
     async with AsyncSession() as s:
         r = await s.get(
-            str(server.url.copy_with(path="/echo_params?foo=z")), params={"foo": "bar"}
+            str(server.url.copy_with(path="/echo_params", query=b"foo=z")),
+            params={"foo": "bar"},
         )
         assert r.status_code == 200
         assert r.content == b'{"params": {"foo": ["bar"]}}'
@@ -702,3 +707,26 @@ async def test_shared_async_curl_not_closed_by_session(server):
     await s2.close()
 
     await pool.close()
+
+
+async def test_dropped_http2_connection_error_names_the_failure():
+    preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+
+    async def drop(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        await reader.readexactly(len(preface))
+        await asyncio.sleep(0.05)  # let the client send SETTINGS and HEADERS
+        writer.transport.abort()
+
+    server = await asyncio.start_server(drop, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        async with AsyncSession() as s:
+            with pytest.raises(HTTPError, match=r"curl: \(16\) Error in the HTTP2 "):
+                await s.get(
+                    f"http://127.0.0.1:{port}/",
+                    http_version="v2_prior_knowledge",
+                    timeout=5,
+                )
+    finally:
+        server.close()
+        await server.wait_closed()

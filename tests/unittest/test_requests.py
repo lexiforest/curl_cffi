@@ -471,6 +471,50 @@ def test_charset_parse(server):
     assert r.encoding == "gbk"
 
 
+@pytest.mark.parametrize("media_type", ["text/plain", "application/json"])
+@pytest.mark.parametrize(
+    "parameter, encoding",
+    [
+        ("charset=gb2312", "gb2312"),
+        ('charset="gb2312"', "gb2312"),
+        ("charset='gb2312'", "gb2312"),
+        ("charset = gb2312", "gb2312"),
+        ("charset\t=\tgb2312", "gb2312"),
+        ("Charset=gb2312", "gb2312"),
+        ('CHARSET="GB2312"', "GB2312"),
+        ('ChArSeT = "Gb2312"', "Gb2312"),
+        ('charset="gb2312"; format=flowed', "gb2312"),
+        ('format=flowed; charset="gb2312"', "gb2312"),
+    ],
+)
+def test_response_charset_formats(media_type, parameter, encoding):
+    r = Response()
+    r.headers["Content-Type"] = f"{media_type}; {parameter}"
+    text = '{"foo":"中文"}'
+    r.content = text.encode("gb2312")
+
+    assert r.charset_encoding == encoding
+    assert r.encoding == encoding
+    if media_type == "application/json":
+        assert r.json() == {"foo": "中文"}
+    assert r.text == text
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    [None, "", "text/plain", "text/plain; charset=", 'text/plain; charset=""'],
+)
+def test_response_charset_missing(content_type):
+    r = Response()
+    if content_type is not None:
+        r.headers["Content-Type"] = content_type
+    r.content = "中文".encode()
+
+    assert r.charset_encoding is None
+    assert r.encoding == "utf-8"
+    assert r.text == "中文"
+
+
 def test_json_charset_parse():
     r = Response()
     r.headers["Content-Type"] = "application/json; charset=gb2312"

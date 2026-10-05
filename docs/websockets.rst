@@ -8,63 +8,73 @@ Both clients are powered by a heavily optimized, SIMD-accelerated libcurl build 
 .. contents:: Table of Contents
    :local:
    :depth: 2
+   :backlinks: none
 
 Quick Start
 ===========
 
 The recommended way to connect to a WebSocket is via the ``Session`` or ``AsyncSession`` context managers.
 
-Sync Quick Start
-----------------
+Sync client:
 
 .. code-block:: python
 
-    from curl_cffi import Session
+   from curl_cffi import Session
 
-    def main():
-        with Session() as session:
-            # Connect using the standard context manager syntax
-            with session.ws_connect("wss://echo.websocket.org") as ws:
+   with Session() as session:
+       with session.ws_connect("wss://ws.postman-echo.com/raw") as ws:
+           ws.send_str("Hello, World!")
+           print(ws.recv_str())  # Hello, World!
 
-                # Send a text message
-                ws.send_str("Hello, World!")
 
-                # Receive a text message
-                msg = ws.recv_str()
-                print(f"Received: {msg}")
-
-                # Iterate over messages
-                for message in ws:
-                    print(f"Stream: {message}")
-
-    if __name__ == "__main__":
-        main()
-
-Async Quick Start
------------------
+Async client:
 
 .. code-block:: python
 
-    import asyncio
-    from curl_cffi import AsyncSession
+   import asyncio
+   from curl_cffi import AsyncSession
 
-    async def main():
-        async with AsyncSession() as session:
-            # Connect using the async context manager syntax
-            async with session.ws_connect("wss://echo.websocket.org") as ws:
+   async def main():
+       async with AsyncSession() as session:
+           async with session.ws_connect("wss://ws.postman-echo.com/raw") as ws:
+               await ws.send_str("Hello, World!")
+               print(await ws.recv_str())  # Hello, World!
 
-                # Send a text message
-                await ws.send_str("Hello, World!")
+Client Selection
+================
 
-                # Receive a text message
-                msg = await ws.recv_str()
-                print(f"Received: {msg}")
+Both clients send and receive the same messages and share the same timeouts and error handling. The difference is how they perform I/O.
 
-                # Iterate over messages
-                async for message in ws:
-                    print(f"Stream: {message}")
+.. list-table::
+   :width: 100%
+   :header-rows: 1
+   :widths: 22 39 39
 
-    asyncio.run(main())
+   * -
+     - Synchronous
+     - Asynchronous
+   * - Class
+     - ``WebSocket``
+     - ``AsyncWebSocket``
+   * - Opened with
+     - ``Session.ws_connect()``
+     - ``AsyncSession.ws_connect()``
+   * - How I/O works
+     - Each call blocks until it finishes or times out
+     - Background tasks read and write through queues
+   * - Send while receiving
+     - No, one thread at a time
+     - Yes
+   * - Event callbacks
+     - Yes, with ``run_forever()``
+     - No
+   * - Good fit for
+     - Scripts and simple request/reply exchanges
+     - Long-lived streams that send and receive at once
+
+.. tip::
+
+   If your application already uses ``asyncio``, use the asynchronous client. It's also the right choice whenever you need to send and receive at the same time.
 
 Synchronous Client
 ==================
@@ -154,9 +164,9 @@ These callbacks are only dispatched by ``run_forever()`` — they don't fire for
 Thread Safety
 -------------
 
-The synchronous ``WebSocket`` relies on ``libcurl`` easy handles, which is **not thread-safe** at the C level. If Thread A is blocked in ``recv()``, and Thread B concurrently calls ``send()``, libcurl's internal state machine can corrupt, leading to undefined behavior or segmentation faults.
+A synchronous ``WebSocket`` is **not thread-safe**. It wraps a single libcurl easy handle, and calling ``send()`` in one thread while another is blocked in ``recv()`` can corrupt libcurl's internal state, leading to undefined behaviour or a segmentation fault.
 
-For concurrent, full-duplex streaming, using the **AsyncWebSocket** is the safest and most recommended option.
+To send and receive at the same time, use the asynchronous client.
 
 Asynchronous Client
 ===================

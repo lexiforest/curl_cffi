@@ -6,6 +6,7 @@ import re
 import ssl
 import struct
 import sys
+import threading
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -14,7 +15,16 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import certifi
 
 from ._wrapper import ffi, lib
-from .const import CurlECode, CurlHttpVersion, CurlInfo, CurlOpt, CurlWsFlag
+from .const import (
+    CurlECode,
+    CurlHttpVersion,
+    CurlInfo,
+    CurlLockData,
+    CurlOpt,
+    CurlShareCode,
+    CurlShareOpt,
+    CurlWsFlag,
+)
 from .utils import CurlCffiWarning
 
 
@@ -232,6 +242,24 @@ def read_callback(ptr, size, nmemb, userdata):
     return len(data)
 
 
+@ffi.def_extern()
+def lock_function(handle, data, access, userptr):
+    """ffi callback for ``curl_lock_function``, acquires the per-data mutex."""
+    locks = ffi.from_handle(userptr)
+    lock = locks.get(data)
+    if lock is not None:
+        lock.acquire()
+
+
+@ffi.def_extern()
+def unlock_function(handle, data, userptr):
+    """ffi callback for ``curl_unlock_function``, releases the per-data mutex."""
+    locks = ffi.from_handle(userptr)
+    lock = locks.get(data)
+    if lock is not None:
+        lock.release()
+
+
 @ffi.def_extern(onerror=_store_callback_error(CURL_SEEKFUNC_FAIL))
 def seek_buffer_callback(userdata, offset: int, origin: int) -> int:
     """ffi callback for curl seek function, seeks a file-like upload source"""
@@ -287,6 +315,7 @@ class Curl:
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
+        self._share: CurlShare | None = None
         self._set_error_buffer()
 
         # Pre-allocated CFFI objects for WebSocket performance
@@ -316,11 +345,18 @@ class Curl:
 
         error = self._get_error(errcode, *args)
         if error is not None:
-            raise error
+            try:
+                raise error
+            finally:
+                # error.__traceback__ holds this frame, don't keep error in it
+                del error
 
     def _get_error(self, errcode: int, *args: Any):
         if errcode != 0:
             errmsg = ffi.string(self._error_buffer).decode(errors="backslashreplace")
+            if not errmsg:
+                # libcurl can leave the buffer empty; curl(1) then prints this too
+                errmsg = ffi.string(lib.curl_easy_strerror(errcode)).decode()
             action = " ".join([str(a) for a in args])
             return CurlError(
                 f"Failed to {action}, curl: ({errcode}) {errmsg}. "
@@ -647,6 +683,10 @@ class Curl:
             raise CurlError("Cannot duplicate closed handle.")
         new_handle = lib.curl_easy_duphandle(self._curl)
         c = Curl(cacert=self._cacert, debug=self._debug, handle=new_handle)
+        # duphandle does not inherit CURLOPT_SHARE, so re-attach it.
+        if self._share is not None:
+            c.setopt(CurlOpt.SHARE, self._share._curl_share)
+            c._share = self._share
         return c
 
     def reset(self) -> None:
@@ -710,6 +750,11 @@ class Curl:
         if self._curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None
+        if self._share is not None:
+            # Cyclic GC may finalize the share before its attached handles.
+            if self._share._finalizing:
+                self._share._cleanup()
+            self._share = None
         ffi.release(self._error_buffer)
 
         if self._ws_recv_buffer is not None:
@@ -801,6 +846,89 @@ class Curl:
         return self.ws_send(payload, flags=CurlWsFlag.CLOSE)
 
 
+class CurlShare:
+    """Wrapper for the ``curl_share_*`` API."""
+
+    def __init__(
+        self,
+        connect: bool = False,
+        dns: bool = True,
+        ssl_session: bool = True,
+    ) -> None:
+        """
+        Parameters:
+            connect: share the connection cache. Only safe for serialized,
+                single-threaded use; libcurl does not support sharing
+                connections between concurrent threads.
+            dns: share the DNS cache.
+            ssl_session: share the TLS session cache.
+        """
+        self._closed = False
+        self._finalizing = False
+        self._curl_share = lib.curl_share_init()
+        if not self._curl_share:
+            raise CurlError(
+                "Failed to create share handle, curl_share_init returned NULL"
+            )
+        # Pass the lock table (not self) as userdata to avoid a reference cycle.
+        self._locks: dict[int, threading.Lock] = {
+            int(data): threading.Lock() for data in CurlLockData
+        }
+        self._userdata = ffi.new_handle(self._locks)
+        self._setopt(CurlShareOpt.LOCKFUNC, ffi.cast("void *", lib.lock_function))
+        self._setopt(CurlShareOpt.UNLOCKFUNC, ffi.cast("void *", lib.unlock_function))
+        self._setopt(CurlShareOpt.USERDATA, self._userdata)
+        if connect:
+            self.share(CurlLockData.CONNECT)
+        if dns:
+            self.share(CurlLockData.DNS)
+        if ssl_session:
+            self.share(CurlLockData.SSL_SESSION)
+
+    def _setopt(self, option: CurlShareOpt, value: Any) -> None:
+        if option in (CurlShareOpt.SHARE, CurlShareOpt.UNSHARE):
+            c_value = ffi.new("int *", value)
+        else:
+            c_value = value
+        code = lib._curl_share_setopt(self._curl_share, option, c_value)
+        if code != CurlShareCode.OK:
+            errmsg = ffi.string(lib.curl_share_strerror(code)).decode()
+            raise CurlError(f"Failed to set share option {option}: {errmsg}", code=code)
+
+    def share(self, data: CurlLockData) -> None:
+        """Start sharing the given ``CurlLockData`` across attached handles."""
+        self._setopt(CurlShareOpt.SHARE, data)
+
+    def unshare(self, data: CurlLockData) -> None:
+        """Stop sharing the given ``CurlLockData``."""
+        self._setopt(CurlShareOpt.UNSHARE, data)
+
+    def _cleanup(self) -> int:
+        if not self._closed and self._curl_share:
+            code = lib.curl_share_cleanup(self._curl_share)
+            if code != CurlShareCode.OK:
+                return code
+            self._closed = True
+            self._curl_share = None
+        return CurlShareCode.OK
+
+    def close(self) -> None:
+        """Cleanup the share handle, wrapper for ``curl_share_cleanup``.
+
+        Only call this once every attached easy handle has been closed,
+        otherwise raises ``CurlError`` with ``CurlShareCode.IN_USE`` and keeps
+        the share open so cleanup can be retried after closing those handles.
+        """
+        code = self._cleanup()
+        if code != CurlShareCode.OK:
+            errmsg = ffi.string(lib.curl_share_strerror(code)).decode()
+            raise CurlError(f"Failed to close share handle: {errmsg}", code=code)
+
+    def __del__(self) -> None:
+        self._finalizing = True
+        self._cleanup()
+
+
 class CurlMime:
     """Wrapper for the ``curl_mime_`` API."""
 
@@ -872,6 +1000,8 @@ class CurlMime:
             if not isinstance(data, bytes):
                 data = str(data).encode()
             ret = lib.curl_mime_data(part, data, len(data))
+            if ret != 0:
+                raise CurlError("Add field failed.")
 
     @classmethod
     def from_list(cls, files: list[dict]):
