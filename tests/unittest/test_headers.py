@@ -1,5 +1,42 @@
+from collections import UserList
+
+import pytest
+
 from curl_cffi.requests import Headers
 from curl_cffi.requests.utils import update_header_line
+
+
+@pytest.mark.parametrize("sequence_type", [list, tuple, UserList])
+@pytest.mark.parametrize(
+    "items",
+    [
+        [("X-Foo", "bar"), ("X-Foo", "baz")],
+        [(b"X-Foo", b"bar"), (b"X-Foo", b"baz")],
+        ["X-Foo: bar", "X-Foo: baz"],
+        [b"X-Foo: bar", b"X-Foo: baz"],
+    ],
+)
+def test_headers_sequences(sequence_type, items):
+    headers = Headers(sequence_type(items))
+
+    assert headers.raw == [(b"X-Foo", b"bar"), (b"X-Foo", b"baz")]
+    assert headers["x-foo"] == "bar, baz"
+
+
+@pytest.mark.parametrize("sequence_type", [list, tuple, UserList])
+def test_headers_empty_sequences(sequence_type):
+    headers = Headers(sequence_type())
+
+    assert headers.raw == []
+    assert not headers
+
+
+def test_headers_update_tuple():
+    headers = Headers({"foo": "old"})
+    headers.update((("foo", "bar"), ("baz", "qux")))
+
+    assert headers["foo"] == "bar"
+    assert headers["baz"] == "qux"
 
 
 def test_headers():

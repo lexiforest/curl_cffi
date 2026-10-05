@@ -1,6 +1,6 @@
 [project]
 name = "curl_cffi"
-version = "0.15.1b2"
+version = "0.16.4b1"
 authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = "MIT"
@@ -23,14 +23,19 @@ classifiers = [
 
 
 [project.optional-dependencies]
-extra = ["readability-lxml>=0.8.1", "markdownify>=1.1.0", "lxml_html_clean"]
+extra = [
+    "readability-lxml>=0.8.1",
+    "markdownify>=1.1.0",
+    "lxml_html_clean",
+    "jsonpath-ng>=1.7,<2",
+]
 cli = ["rich"]
 dev = [
+    "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
     "cryptography>=46.0.4,<47.0",
-    "httpx==0.23.1",                  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
-    "mypy>=1.9.0,<2.0",
+    "httpx>=0.23.1,<1.0",
     "pytest>=8.1.1,<9.0",
     "pytest-asyncio>=0.23.6,<1.0",
     "pytest-trio>=0.8.0,<1.0",
@@ -43,10 +48,11 @@ dev = [
 ]
 build = ["cibuildwheel", "wheel"]
 test = [
+    "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
     "cryptography>=46.0.4,<47.0",
     "litestar>=2.19.0,<3.0",
-    "httpx==0.23.1",                  # don't change, tests will raise "httpx.InvalidURL: Invalid URL component 'path'"
+    "httpx>=0.23.1,<1.0",
     "proxy.py>=2.4.3,<3.0",
     "pytest>=8.1.1,<9.0",
     "pytest-asyncio>=0.23.6,<1.0",
@@ -157,10 +163,3 @@ ignore = [
 [tool.isort]
 profile = "black"
 line_length = 88
-
-[tool.mypy]
-python_version = "3.10"
-ignore_missing_imports = true
-#warn_unused_ignores = true
-#strict = true
-exclude = ["benchmark/", "docs/", "examples/", "scripts/", "tests/", "build/"]

@@ -155,6 +155,15 @@ def test_run_http_simple_get(server, tmp_path):
     assert "Hello, world!" in r.stdout
 
 
+def test_run_http_quiet(server, tmp_path):
+    f = tmp_path / "requests.http"
+    f.write_text(f"GET {server.url}\n")
+    r = _run_cli("run", "--quiet", str(f))
+    assert r.returncode == 0
+    assert r.stdout == ""
+    assert r.stderr == ""
+
+
 def test_run_http_multiple_requests(server, tmp_path):
     f = tmp_path / "requests.http"
     f.write_text(f"GET {server.url}\n###\nGET {server.url}echo_params?foo=bar\n")

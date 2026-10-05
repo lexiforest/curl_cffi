@@ -24,3 +24,12 @@ int _curl_share_setopt(void* share, int option, void* parameter) {
     }
     return (int)curl_share_setopt((CURLSH*)share, (CURLSHoption)option, parameter);
 }
+
+int _curl_easy_getinfo_socket(void* curl, int option, uintptr_t* result) {
+    curl_socket_t socket;
+    CURLcode ret = curl_easy_getinfo(curl, (CURLINFO)option, &socket);
+    if (ret == CURLE_OK) {
+        *result = (uintptr_t)socket;
+    }
+    return (int)ret;
+}

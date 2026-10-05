@@ -169,6 +169,14 @@ NATIVE_IMPERSONATE_TARGETS = [
     },
     {
         "browser": "Chrome",
+        "version": "150",
+        "os": "macOS",
+        "os_version": "Tahoe",
+        "target_name": "chrome150",
+        "h3_fingerprints": True,
+    },
+    {
+        "browser": "Chrome",
         "version": "99",
         "os": "Android",
         "os_version": "12",
@@ -361,6 +369,8 @@ class Fingerprint:
     os: str = ""
     os_version: str = ""
 
+    # Describes the default HTTP version associated with this fingerprint. The
+    # version used for a request is selected separately with ``http_version``.
     http_version: str = "v2"
 
     tls_version: str = "1.2"
@@ -381,6 +391,7 @@ class Fingerprint:
     tls_signed_cert_timestamps: bool = False
     tls_ech: str | None = None
     tls_permute_extensions: bool = False
+    tls_trust_anchors: list[str] | None = None
 
     headers: dict[str, str] = field(default_factory=dict)
     header_order: str = ""
@@ -397,7 +408,17 @@ class Fingerprint:
     http3_settings: str = ""
     http3_pseudo_headers_order: str = ""
     http3_tls_extension_order: str = ""
+    http3_headers: dict[str, str] = field(default_factory=dict)
+    http3_header_order: str = ""
+    http3_tls_supported_groups: list[str] = field(default_factory=list)
     quic_transport_parameters: str = ""
+    quic_cid_length: str | None = None
+    quic_initial_packet_number: int | None = None
+
+    ws_headers: dict[str, str] = field(default_factory=dict)
+    ws_header_order: str = ""
+    ws_disable_session_ticket: bool = False
+    ws_tls_cert_compression: list[str] | None = None
 
     header_lang: str = ""
 
@@ -405,20 +426,20 @@ class Fingerprint:
 # fmt: off
 ClientLiteral = Literal[
     # browsers
-    "chrome", "firefox", "edge", "brave", "opera", "brave", "operamini",
-    "qihoo", "qq", "quark", "samsung", "sogou", "sogou_ie",
+    "chrome", "firefox", "edge", "brave", "opera", "operamini",
+    "qihoo", "qq", "quark", "safari", "samsung", "sogou", "sogou_ie", "tor"
     # http client
     "volley", "okhttp", "webview",
     # app with general web view
     "baidu", "wechat", "bing", "duckduckgo", "google", "yandex",
 ]
 # fmt: on
-PlatformLiteral = ["macos", "windows", "linux", "ios", "android"]
+PlatformLiteral = Literal["macos", "windows", "linux", "ios", "android"]
 
 
 @dataclass
 class FingerprintSpec:
-    platform: str | None = None
+    platform: PlatformLiteral | None = None
     client: ClientLiteral | None = None
     strategy: Literal["uniform"] | None = "uniform"
 
