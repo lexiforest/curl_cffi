@@ -730,3 +730,10 @@ async def test_dropped_http2_connection_error_names_the_failure():
     finally:
         server.close()
         await server.wait_closed()
+
+
+async def test_trust_env_false_ignores_env_proxy(server, monkeypatch):
+    monkeypatch.setenv("http_proxy", str(server.url))
+    async with AsyncSession(trust_env=False) as s:
+        r = await s.get(str(server.url))
+        assert r.text == "Hello, world!"
