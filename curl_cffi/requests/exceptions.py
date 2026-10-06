@@ -3,7 +3,7 @@
 # With our own addtions
 
 import json
-from typing import Literal, Union
+from typing import Any, Literal, Union
 
 from ..const import CurlECode
 from ..curl import CurlError
@@ -18,8 +18,8 @@ class RequestException(CurlError, OSError):
         msg,
         code: Union[CurlECode, Literal[0]] = 0,
         response=None,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ):
         super().__init__(msg, code, *args, **kwargs)
         self.response = response
