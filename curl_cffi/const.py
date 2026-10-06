@@ -600,6 +600,20 @@ class CurlHttpVersion(IntEnum):
     V3ONLY = 31  # No fallback
 
 
+class CurlProxyType(IntEnum):
+    """``CURLPROXY`` constants from libcurl."""
+
+    HTTP = 0
+    HTTP_1_0 = 1
+    HTTPS = 2
+    HTTPS2 = 3
+    SOCKS4 = 4
+    SOCKS5 = 5
+    SOCKS4A = 6
+    SOCKS5_HOSTNAME = 7
+    HTTPS3 = 8
+
+
 class CurlWsFlag(IntEnum):
     """``CURL_WS_FLAG`` constants from libcurl, see comments for details."""
 
