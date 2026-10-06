@@ -637,6 +637,7 @@ def set_curl_options(
     queue_class: Any = None,
     event_class: Any = None,
     curl_options: Optional[dict[CurlOpt, str]] = None,
+    on_headers: Optional[Callable[[], None]] = None,
 ):
     c = curl
 
@@ -1022,6 +1023,8 @@ def set_curl_options(
 
         def qput(chunk):
             if not header_recved.is_set():
+                if on_headers is not None:
+                    on_headers()
                 header_recved.set()
             if quit_now.is_set():
                 return CURL_WRITEFUNC_ERROR

@@ -908,6 +908,19 @@ class Session(BaseSession[R]):
         else:
             c = self.curl
 
+        # A curl handle can't be used by two threads at once.
+        parsed_response: list[Union[Response, BaseException]] = []
+
+        def parse_streamed_response():
+            try:
+                parsed_response.append(
+                    self._parse_response(
+                        c, buffer, header_buffer, default_encoding, discard_cookies
+                    )
+                )
+            except BaseException as e:
+                parsed_response.append(e)
+
         req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
             c,
             method=method,
@@ -956,6 +969,7 @@ class Session(BaseSession[R]):
             curl_options=self.curl_options,
             queue_class=queue.Queue,
             event_class=threading.Event,
+            on_headers=parse_streamed_response if stream else None,
         )
 
         if self._cache_enabled(req, stream=stream, content_callback=content_callback):
@@ -992,9 +1006,19 @@ class Session(BaseSession[R]):
 
             # Wait for the first chunk
             header_recved.wait()  # type: ignore
-            rsp = self._parse_response(
-                c, buffer, header_buffer, default_encoding, discard_cookies
-            )
+            if parsed_response:
+                parsed = parsed_response[0]
+                if isinstance(parsed, BaseException):
+                    quit_now.set()  # type: ignore
+                    stream_task.result()
+                    c.close()
+                    raise parsed
+                rsp = parsed
+            else:
+                # The transfer has already finished.
+                rsp = self._parse_response(
+                    c, buffer, header_buffer, default_encoding, discard_cookies
+                )
 
             # Raise the exception if something wrong happens when receiving the header.
             first_element = _peek_queue(q)  # type: ignore
