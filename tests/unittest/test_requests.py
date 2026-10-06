@@ -920,6 +920,39 @@ def test_session_update_parms(server):
     assert r.content == b'{"params": {"old": ["day"], "foo": ["bar"]}}'
 
 
+def test_session_build_request(server):
+    s = requests.Session(
+        base_url=str(server.url), params={"old": "day"}, headers={"Foo": "session"}
+    )
+    req = s.build_request("post", "/echo_params", params={"foo": "bar"}, json={"a": 1})
+    assert req.method == "POST"
+    assert (
+        req.url == str(server.url.copy_with(path="/echo_params")) + "?old=day&foo=bar"
+    )
+    assert req.headers["Foo"] == "session"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body == b'{"a":1}'
+
+
+def test_session_send(server):
+    s = requests.Session(params={"old": "day"}, headers={"Foo": "session"})
+    req = s.build_request("GET", str(server.url.copy_with(path="/echo_params")))
+    req.url = req.url.replace("old=day", "old=night")
+    r = s.send(req)
+    assert r.json() == {"params": {"old": ["night"]}}
+
+    req = s.build_request("GET", str(server.url.copy_with(path="/echo_headers")))
+    del req.headers["Foo"]
+    r = s.send(req)
+    assert "Foo" not in r.json()
+
+    req = s.build_request("GET", str(server.url.copy_with(path="/echo_body")))
+    req.method = "POST"
+    req.body = b"edited"
+    r = s.send(req)
+    assert r.content == b"edited"
+
+
 def test_session_preset_cookies(server):
     s = requests.Session(cookies={"foo": "bar"})
     # send requests with other cookies

@@ -393,6 +393,14 @@ async def test_session_update_parms(server):
         assert r.content == b'{"params": {"old": ["day"], "foo": ["bar"]}}'
 
 
+async def test_session_send(server):
+    async with AsyncSession(params={"old": "day"}) as s:
+        req = s.build_request("GET", str(server.url.copy_with(path="/echo_params")))
+        req.url = req.url.replace("old=day", "old=night")
+        r = await s.send(req)
+        assert r.json() == {"params": {"old": ["night"]}}
+
+
 async def test_session_preset_cookies(server):
     async with AsyncSession(cookies={"foo": "bar"}) as s:
         # send requests with other cookies

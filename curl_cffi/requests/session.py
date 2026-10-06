@@ -12,6 +12,7 @@ import warnings
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
+    Awaitable,
     Callable,
     Generator,
 )
@@ -31,7 +32,7 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from weakref import WeakSet
 
 from ..aio import AsyncCurl
@@ -47,7 +48,7 @@ from .exceptions import (
 )
 from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
-from .models import Response
+from .models import Request, Response
 from .streams import (
     STREAM_END,
     RequestContent,
@@ -59,7 +60,15 @@ from .streams import (
     _peek_queue,
     _rewind_body,
 )
-from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
+from .utils import (
+    NOT_SET,
+    HttpVersionLiteral,
+    NotSetType,
+    encode_request_body,
+    request_body_content_type,
+    set_curl_options,
+    update_url_params,
+)
 from .websockets import (
     AsyncWebSocket,
     AsyncWebSocketContext,
@@ -125,14 +134,8 @@ if TYPE_CHECKING:
         raise_for_status: bool
         cache: Optional[CacheSpec]
 
-    class StreamRequestParams(TypedDict, total=False):
-        params: Optional[Union[dict, list, tuple]]
-        data: Optional[RequestData]
-        content: Optional[RequestContent]
-        json: Optional[dict | list]
-        headers: Optional[HeaderTypes]
+    class _TransferParams(TypedDict, total=False):
         cookies: Optional[CookieTypes]
-        files: Optional[dict]
         auth: Optional[tuple[str, str]]
         timeout: Optional[Union[float, tuple[float, float], object]]
         allow_redirects: Optional[Union[bool, CurlFollow, str]]
@@ -158,10 +161,21 @@ if TYPE_CHECKING:
         doh_url: Optional[str]
         cert: Optional[Union[str, tuple[str, str]]]
         max_recv_speed: int
-        multipart: Optional[CurlMime]
         discard_cookies: bool
 
+    class StreamRequestParams(_TransferParams, total=False):
+        params: Optional[Union[dict, list, tuple]]
+        data: Optional[RequestData]
+        content: Optional[RequestContent]
+        json: Optional[dict | list]
+        headers: Optional[HeaderTypes]
+        files: Optional[dict]
+        multipart: Optional[CurlMime]
+
     class RequestParams(StreamRequestParams, total=False):
+        stream: Optional[bool]
+
+    class SendParams(_TransferParams, total=False):
         stream: Optional[bool]
 
 else:
@@ -175,7 +189,7 @@ else:
 
     ProxySpec = dict[str, str]
     BaseSessionParams = TypedDict
-    StreamRequestParams, RequestParams = TypedDict, TypedDict
+    StreamRequestParams, RequestParams, SendParams = TypedDict, TypedDict, TypedDict
 
 ThreadType = Literal["eventlet", "gevent"]
 HttpMethod = Literal[
@@ -479,6 +493,54 @@ class BaseSession(Generic[R]):
         if strategy.jitter:
             delay += random.uniform(0.0, strategy.jitter)
         return delay
+
+    def build_request(
+        self,
+        method: HttpMethod,
+        url: str,
+        *,
+        params: Optional[Union[dict, list, tuple]] = None,
+        data: Optional[RequestData] = None,
+        content: Optional[Union[str, bytes, bytearray]] = None,
+        json: Optional[dict | list] = None,
+        headers: Optional[HeaderTypes] = None,
+    ) -> Request:
+        """Build a request with the session params, base url and headers merged in.
+
+        The request can be inspected or modified, then sent with ``send``.
+
+        Args:
+            method: http method for the request: GET/POST/PUT/DELETE etc.
+            url: url for the request.
+            params: query string for the request.
+            data: form values (dict/list/tuple) or binary data to send.
+            content: str or bytes to send.
+            json: json object to send.
+            headers: headers to send, on top of the session headers.
+
+        Returns:
+            A ``Request`` with ``body`` encoded as bytes, or None without a body.
+        """
+        if self.params:
+            url = update_url_params(url, self.params)
+        if params:
+            url = update_url_params(url, params)
+        if self.base_url:
+            url = urljoin(self.base_url, url)
+
+        encoding = headers.encoding if isinstance(headers, Headers) else None
+        merged_headers = Headers(self.headers, encoding=encoding)
+        merged_headers.update(headers)
+
+        body = None
+        if content is not None or data is not None or json is not None:
+            body = encode_request_body(data, content, json)
+            if body and "Content-Type" not in merged_headers:
+                merged_headers["Content-Type"] = request_body_content_type(
+                    data, content, json
+                )
+
+        return Request(url, merged_headers, method.upper(), body)
 
     @property
     def cache_backend(self) -> Optional[CacheBackend]:
@@ -900,6 +962,7 @@ class Session(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        merge_session: bool = True,
     ) -> R:
         # clone a new curl instance for streaming response
         if stream:
@@ -912,12 +975,12 @@ class Session(BaseSession[R]):
             c,
             method=method,
             url=url,
-            params_list=[self.params, params],
-            base_url=self.base_url,
+            params_list=[self.params if merge_session else None, params],
+            base_url=self.base_url if merge_session else None,
             data=data,
             content=content,
             json=json,
-            headers_list=[self.headers, headers],
+            headers_list=[self.headers if merge_session else None, headers],
             cookies_list=[self._cookies, cookies],
             files=files,
             auth=auth or self.auth,
@@ -1092,6 +1155,79 @@ class Session(BaseSession[R]):
 
         self._check_session_closed()
 
+        return self._send_with_retry(
+            lambda: self._request_once(
+                method=method,
+                url=url,
+                params=params,
+                data=data,
+                content=content,
+                json=json,
+                headers=headers,
+                cookies=cookies,
+                files=files,
+                auth=auth,
+                timeout=timeout,
+                allow_redirects=allow_redirects,
+                max_redirects=max_redirects,
+                proxies=proxies,
+                proxy=proxy,
+                proxy_auth=proxy_auth,
+                verify=verify,
+                referer=referer,
+                accept_encoding=accept_encoding,
+                content_callback=content_callback,
+                impersonate=impersonate,
+                ja3=ja3,
+                akamai=akamai,
+                perk=perk,
+                extra_fp=extra_fp,
+                default_headers=default_headers,
+                default_encoding=default_encoding,
+                quote=quote,
+                http_version=http_version,
+                interface=interface,
+                dns=dns,
+                doh_url=doh_url,
+                cert=cert,
+                stream=stream,
+                max_recv_speed=max_recv_speed,
+                multipart=multipart,
+                discard_cookies=discard_cookies,
+            ),
+            data,
+            content,
+        )
+
+    def send(self, request: Request, **kwargs: Unpack[SendParams]) -> R:
+        """Send a request, usually one created by ``build_request``.
+
+        Session params, base url and headers are not merged again, so the request
+        is sent as is. Session cookies and transfer settings still apply.
+
+        Args:
+            request: the request to send.
+            **kwargs: transfer options, see ``request`` for details.
+        """
+        self._check_session_closed()
+
+        return self._send_with_retry(
+            lambda: self._request_once(
+                method=cast(HttpMethod, request.method),
+                url=request.url,
+                headers=request.headers,
+                content=request.body,
+                merge_session=False,
+                **kwargs,
+            )
+        )
+
+    def _send_with_retry(
+        self,
+        send_once: Callable[[], R],
+        data: Optional[RequestData] = None,
+        content: Optional[SyncRequestContent] = None,
+    ) -> R:
         body = content if content is not None else data
         body_position = _capture_body_position(data, content)
         strategy = self.retry
@@ -1099,45 +1235,7 @@ class Session(BaseSession[R]):
             if attempt > 0:
                 _rewind_body(body, body_position)
             try:
-                return self._request_once(
-                    method=method,
-                    url=url,
-                    params=params,
-                    data=data,
-                    content=content,
-                    json=json,
-                    headers=headers,
-                    cookies=cookies,
-                    files=files,
-                    auth=auth,
-                    timeout=timeout,
-                    allow_redirects=allow_redirects,
-                    max_redirects=max_redirects,
-                    proxies=proxies,
-                    proxy=proxy,
-                    proxy_auth=proxy_auth,
-                    verify=verify,
-                    referer=referer,
-                    accept_encoding=accept_encoding,
-                    content_callback=content_callback,
-                    impersonate=impersonate,
-                    ja3=ja3,
-                    akamai=akamai,
-                    perk=perk,
-                    extra_fp=extra_fp,
-                    default_headers=default_headers,
-                    default_encoding=default_encoding,
-                    quote=quote,
-                    http_version=http_version,
-                    interface=interface,
-                    dns=dns,
-                    doh_url=doh_url,
-                    cert=cert,
-                    stream=stream,
-                    max_recv_speed=max_recv_speed,
-                    multipart=multipart,
-                    discard_cookies=discard_cookies,
-                )
+                return send_once()
             except RequestException:
                 if attempt == strategy.count:
                     raise
@@ -1709,6 +1807,7 @@ class AsyncSession(BaseSession[R]):
         max_recv_speed: int = 0,
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
+        merge_session: bool = True,
     ) -> R:
         curl = await self.pop_curl()
         async_reader: _AsyncIterableReader | None = None
@@ -1721,12 +1820,12 @@ class AsyncSession(BaseSession[R]):
                 curl=curl,
                 method=method,
                 url=url,
-                params_list=[self.params, params],
-                base_url=self.base_url,
+                params_list=[self.params if merge_session else None, params],
+                base_url=self.base_url if merge_session else None,
                 data=data,
                 content=request_content,
                 json=json,
-                headers_list=[self.headers, headers],
+                headers_list=[self.headers if merge_session else None, headers],
                 cookies_list=[self.cookies, cookies],
                 files=files,
                 auth=auth or self.auth,
@@ -1896,52 +1995,87 @@ class AsyncSession(BaseSession[R]):
 
         self._check_session_closed()
 
+        return await self._send_with_retry(
+            lambda: self._request_once(
+                method=method,
+                url=url,
+                params=params,
+                data=data,
+                content=content,
+                json=json,
+                headers=headers,
+                cookies=cookies,
+                files=files,
+                auth=auth,
+                timeout=timeout,
+                allow_redirects=allow_redirects,
+                max_redirects=max_redirects,
+                proxies=proxies,
+                proxy=proxy,
+                proxy_auth=proxy_auth,
+                verify=verify,
+                referer=referer,
+                accept_encoding=accept_encoding,
+                content_callback=content_callback,
+                impersonate=impersonate,
+                ja3=ja3,
+                akamai=akamai,
+                perk=perk,
+                extra_fp=extra_fp,
+                default_headers=default_headers,
+                default_encoding=default_encoding,
+                quote=quote,
+                http_version=http_version,
+                interface=interface,
+                dns=dns,
+                doh_url=doh_url,
+                cert=cert,
+                stream=stream,
+                max_recv_speed=max_recv_speed,
+                multipart=multipart,
+                discard_cookies=discard_cookies,
+            ),
+            data,
+            content,
+        )
+
+    async def send(self, request: Request, **kwargs: Unpack[SendParams]) -> R:
+        """Send a request, usually one created by ``build_request``.
+
+        Session params, base url and headers are not merged again, so the request
+        is sent as is. Session cookies and transfer settings still apply.
+
+        Args:
+            request: the request to send.
+            **kwargs: transfer options, see ``request`` for details.
+        """
+        self._check_session_closed()
+
+        return await self._send_with_retry(
+            lambda: self._request_once(
+                method=cast(HttpMethod, request.method),
+                url=request.url,
+                headers=request.headers,
+                content=request.body,
+                merge_session=False,
+                **kwargs,
+            )
+        )
+
+    async def _send_with_retry(
+        self,
+        send_once: Callable[[], Awaitable[R]],
+        data: Optional[RequestData] = None,
+        content: Optional[RequestContent] = None,
+    ) -> R:
         body = content if content is not None else data
         body_position = _capture_body_position(data, content)
         strategy = self.retry
         for attempt in range(strategy.count + 1):
-            if attempt:
+            if attempt > 0:
                 _rewind_body(body, body_position)
             try:
-                return await self._request_once(
-                    method=method,
-                    url=url,
-                    params=params,
-                    data=data,
-                    content=content,
-                    json=json,
-                    headers=headers,
-                    cookies=cookies,
-                    files=files,
-                    auth=auth,
-                    timeout=timeout,
-                    allow_redirects=allow_redirects,
-                    max_redirects=max_redirects,
-                    proxies=proxies,
-                    proxy=proxy,
-                    proxy_auth=proxy_auth,
-                    verify=verify,
-                    referer=referer,
-                    accept_encoding=accept_encoding,
-                    content_callback=content_callback,
-                    impersonate=impersonate,
-                    ja3=ja3,
-                    akamai=akamai,
-                    perk=perk,
-                    extra_fp=extra_fp,
-                    default_headers=default_headers,
-                    default_encoding=default_encoding,
-                    quote=quote,
-                    http_version=http_version,
-                    interface=interface,
-                    dns=dns,
-                    doh_url=doh_url,
-                    cert=cert,
-                    stream=stream,
-                    max_recv_speed=max_recv_speed,
-                    multipart=multipart,
-                    discard_cookies=discard_cookies,
-                )
+                return await send_once()
             except RequestException:
                 if attempt == strategy.count:
                     raise

@@ -592,6 +592,45 @@ def _apply_fingerprint(
         )
 
 
+def encode_request_body(
+    data: Optional[RequestData],
+    content: Optional[Union[str, bytes, bytearray]],
+    json: Optional[dict[object, object] | list[object]],
+) -> bytes:
+    """Encode an in-memory request body, ``json`` taking precedence."""
+    if content is not None:
+        body = content.encode() if isinstance(content, str) else bytes(content)
+    elif isinstance(data, dict | list | tuple):
+        body = urlencode(data).encode()
+    elif isinstance(data, str):
+        body = data.encode()
+    elif isinstance(data, BytesIO):
+        body = data.read()
+    elif isinstance(data, bytes):
+        body = data
+    elif data is None:
+        body = b""
+    else:
+        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
+
+    if json is not None:
+        body = dumps(json, separators=(",", ":")).encode()
+    return body
+
+
+def request_body_content_type(
+    data: Optional[RequestData],
+    content: Optional[Union[str, bytes, bytearray]],
+    json: Optional[dict[object, object] | list[object]],
+) -> Optional[str]:
+    """Content-Type implied by the arguments of ``encode_request_body``."""
+    if json is not None:
+        return "application/json"
+    if content is None and isinstance(data, dict | list | tuple):
+        return "application/x-www-form-urlencoded"
+    return "application/octet-stream"
+
+
 def set_curl_options(
     curl: Curl,
     method: HttpMethod,
@@ -645,32 +684,14 @@ def set_curl_options(
     # content/data/body/json
     body_data = content if content is not None else data
     stream_reader: object | None = None
-    if content is not None:
-        if isinstance(content, str):
-            body = content.encode()
-        elif isinstance(content, (bytes, bytearray)):
-            body = bytes(content)
-        elif hasattr(content, "read"):
+    if content is None or isinstance(content, (str, bytes, bytearray)):
+        body = encode_request_body(data, content, json)
+    else:
+        if hasattr(content, "read"):
             stream_reader = _FileReader(content)
-            body = b""
         else:
             stream_reader = _IterableReader(cast(Iterable[bytes], content))
-            body = b""
-    elif isinstance(data, dict | list | tuple):
-        body = urlencode(data).encode()
-    elif isinstance(data, str):
-        body = data.encode()
-    elif isinstance(data, BytesIO):
-        body = data.read()
-    elif isinstance(data, bytes):
-        body = data
-    elif data is None:
-        body = b""
-    else:
-        raise TypeError("data must be dict/list/tuple, str, BytesIO or bytes")
-
-    if json is not None:
-        body = dumps(json, separators=(",", ":")).encode()
+        body = encode_request_body(None, None, json)
 
     if (
         (content is not None or data is not None or json is not None)
