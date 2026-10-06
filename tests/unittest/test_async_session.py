@@ -26,14 +26,6 @@ async def test_get(server):
         assert r.status_code == 200
 
 
-# https://github.com/lexiforest/curl_cffi/issues/345
-async def test_trust_env_false_ignores_env_proxy(server, monkeypatch):
-    monkeypatch.setenv("http_proxy", str(server.url))
-    async with AsyncSession(trust_env=False) as s:
-        r = await s.get(str(server.url))
-        assert r.text == "Hello, world!"
-
-
 async def test_custom_async_curl_cacert_is_used_by_pooled_curl():
     acurl = AsyncCurl(cacert="custom-ca.pem")
     try:
@@ -734,3 +726,10 @@ async def test_dropped_http2_connection_error_names_the_failure():
     finally:
         server.close()
         await server.wait_closed()
+
+
+async def test_trust_env_false_ignores_env_proxy(server, monkeypatch):
+    monkeypatch.setenv("http_proxy", str(server.url))
+    async with AsyncSession(trust_env=False) as s:
+        r = await s.get(str(server.url))
+        assert r.text == "Hello, world!"
