@@ -62,7 +62,11 @@ class CurlError(Exception):
     """Base exception for curl_cffi package"""
 
     def __init__(
-        self, msg: str, code: int | CurlECode | Literal[0] = 0, *args, **kwargs
+        self,
+        msg: str,
+        code: int | CurlECode | Literal[0] = 0,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         super().__init__(msg, *args, **kwargs)
         self.code: int | CurlECode | Literal[0] = code

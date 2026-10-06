@@ -168,7 +168,7 @@ else:
 
     class _Unpack:
         @staticmethod
-        def __getitem__(*args, **kwargs):
+        def __getitem__(*args: Any, **kwargs: Any):
             pass
 
     Unpack = _Unpack()
@@ -607,7 +607,7 @@ class Session(BaseSession[R]):
     def __enter__(self):
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(self, *args: Any) -> None:
         self.close()
 
     def close(self) -> None:
@@ -1309,7 +1309,7 @@ class AsyncSession(BaseSession[R]):
     async def __aenter__(self):  # TODO: -> Self
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         await self.close()
         return None
 
