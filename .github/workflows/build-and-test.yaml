@@ -70,6 +70,9 @@ jobs:
         - os: ubuntu-24.04
           cibw_archs_linux: "armv7l"
           qemu: true
+        - os: ubuntu-24.04
+          cibw_archs_linux: "s390x"
+          qemu: true
         - os: macos-15-intel
         - os: macos-14
         - os: windows-2022

@@ -191,5 +191,15 @@
         "libc": "gnu",
         "obj_name": "libcurl-impersonate.a",
         "arch": "loongarch64"
+    },
+    {
+        "system": "Linux",
+        "machine": "s390x",
+        "pointer_size": 64,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "gnu",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "s390x"
     }
 ]
