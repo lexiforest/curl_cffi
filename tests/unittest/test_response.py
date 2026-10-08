@@ -77,3 +77,15 @@ def test_json_path_decoder_kwargs(monkeypatch):
     response.content = b'{"value": 1.5}'
     assert response.json(path=".value", parse_float=str) == "1.5"
     assert response.json(parse_float=str) == {"value": "1.5"}
+
+
+def test_context_manager():
+    response = Response()
+    with response as r:
+        assert r is response
+
+
+async def test_async_context_manager():
+    response = Response()
+    async with response as r:
+        assert r is response

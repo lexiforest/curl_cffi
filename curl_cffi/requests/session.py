@@ -76,9 +76,9 @@ else:
 
 if TYPE_CHECKING:
     if sys.version_info >= (3, 11):
-        from typing import Unpack
+        from typing import Self, Unpack
     else:
-        from typing_extensions import Unpack
+        from typing_extensions import Self, Unpack
 
     from ..curl import CurlWsFrame
     from ..fingerprints import Fingerprint
@@ -609,7 +609,7 @@ class Session(BaseSession[R]):
             self._executor = ThreadPoolExecutor()
         return self._executor
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args: Any) -> None:
@@ -1312,7 +1312,7 @@ class AsyncSession(BaseSession[R]):
         with suppress(asyncio.QueueFull):
             self.pool.put_nowait(curl)
 
-    async def __aenter__(self):  # TODO: -> Self
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *args: Any) -> None:

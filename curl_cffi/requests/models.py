@@ -1,10 +1,12 @@
 from contextlib import suppress
 import queue
 import re
+import sys
 import warnings
 from concurrent.futures import Future
 from json import loads as _stdlib_loads
-from typing import Any, Optional, Union
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, Optional, Union
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
@@ -14,6 +16,12 @@ from .cookies import Cookies
 from .exceptions import HTTPError, RequestException
 from .headers import Headers
 from .streams import STREAM_END
+
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 # Use orjson if present. orjson.loads() is faster but accepts no keyword
 # arguments, so Response.json() falls back to stdlib json when kwargs are given.
@@ -346,6 +354,17 @@ class Response:
         """Close the streaming connection, only valid in stream mode."""
         self._finalize_stream()
 
+    def __enter__(self) -> "Self":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.close()
+
     def _finalize_stream(self) -> None:
         if self._stream_closed:
             return
@@ -434,6 +453,17 @@ class Response:
 
         if self.astream_task:
             await self.astream_task
+
+    async def __aenter__(self) -> "Self":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        await self.aclose()
 
     # It prints the status code of the response instead of the object's memory location.
     def __repr__(self) -> str:

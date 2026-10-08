@@ -651,6 +651,21 @@ async def test_stream_unconsumed_error_releases_handle(server):
         assert r.status_code == 200
 
 
+async def test_response_context_manager(server):
+    async with AsyncSession() as s, await s.get(str(server.url)) as r:
+        assert r.status_code == 200
+
+
+async def test_stream_response_context_manager(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        async with await s.get(url, params={"n": "20"}, stream=True) as r:
+            chunks = [chunk async for chunk in r.aiter_content()]
+        assert chunks
+        assert r.astream_task is not None
+        assert r.astream_task.done()
+
+
 async def test_stream_session_curl_options(server):
     async with AsyncSession(
         curl_options={CurlOpt.USERAGENT: "foo/1.0"},

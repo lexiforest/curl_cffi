@@ -1191,6 +1191,22 @@ def test_stream_iter_content_break(server):
             assert r.status_code == 200
 
 
+def test_response_context_manager(server):
+    with requests.Session() as s, s.get(str(server.url)) as r:
+        assert r.status_code == 200
+
+
+def test_stream_response_context_manager(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with s.get(url, params={"n": "20"}, stream=True) as r:
+            for idx, chunk in enumerate(r.iter_content()):
+                assert b"path" in chunk
+                if idx == 3:
+                    break
+        assert r._stream_closed
+
+
 def test_stream_iter_lines(server):
     with requests.Session() as s:
         url = str(server.url.copy_with(path="/stream"))
