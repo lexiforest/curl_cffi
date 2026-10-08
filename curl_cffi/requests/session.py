@@ -71,6 +71,11 @@ from .websockets import (
 # Added in 3.13: https://docs.python.org/3/library/typing.html#typing.TypeVar.__default__
 if sys.version_info >= (3, 13):
     R = TypeVar("R", bound=Response, default=Response)
+elif TYPE_CHECKING:
+    # Let type checkers resolve ``Session()`` to ``Session[Response]`` on < 3.13
+    import typing_extensions
+
+    R = typing_extensions.TypeVar("R", bound=Response, default=Response)
 else:
     R = TypeVar("R", bound=Response)
 
