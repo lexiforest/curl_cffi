@@ -73,6 +73,7 @@ Enum values used by ``setopt`` and ``getinfo`` can be accessed from ``CurlOpt`` 
 .. autoclass:: curl_cffi.CurlMOpt
 .. autoclass:: curl_cffi.CurlECode
 .. autoclass:: curl_cffi.CurlHttpVersion
+.. autoclass:: curl_cffi.CurlProxyType
 .. autoclass:: curl_cffi.CurlWsFlag
 .. autoclass:: curl_cffi.CurlSslVersion
 
