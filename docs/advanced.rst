@@ -61,6 +61,26 @@ For compatibility with ``requests``, we also support using dicts.
    Prefer the single `proxy` parameter, unless you do have different proxies for http and https
 
 
+Building requests
+=================
+
+``build_request`` returns the ``Request`` a session would send, with the session
+params, base url and headers merged in. Inspect or modify it, then pass it to ``send``:
+
+.. code-block:: python
+
+    from curl_cffi import Session
+
+    with Session(headers={"User-Agent": "curl_cffi"}) as s:
+        req = s.build_request("GET", "https://example.com", json={"hello": "world"})
+        req.headers["User-Agent"] = "my_web_crawler/0.1"
+        req.method = "POST"
+        r = s.send(req, impersonate="chrome")
+
+``send`` does not merge the session params and headers again, so the request is sent
+as is. Cookies and the other options still apply. ``AsyncSession`` provides the same
+methods, with ``send`` being a coroutine.
+
 Response cache
 ==============
 

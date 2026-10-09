@@ -94,6 +94,8 @@ Sessions
 
    .. automethod:: __init__
    .. automethod:: request
+   .. automethod:: build_request
+   .. automethod:: send
    .. automethod:: stream
    .. automethod:: ws_connect
 
@@ -102,6 +104,8 @@ Sessions
 
    .. automethod:: __init__
    .. automethod:: request
+   .. automethod:: build_request
+   .. automethod:: send
    .. automethod:: stream
    .. automethod:: close
    .. automethod:: ws_connect
