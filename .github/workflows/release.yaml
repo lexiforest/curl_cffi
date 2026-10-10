@@ -29,7 +29,7 @@ jobs:
       id-token: write
     steps:
     - name: Download distributions
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v8
       with:
         pattern: curl_cffi-*
         merge-multiple: true
@@ -39,12 +39,12 @@ jobs:
       run: ls -l dist
 
     - name: Publish package distributions to PyPI
-      uses: pypa/gh-action-pypi-publish@v1.14.0
+      uses: pypa/gh-action-pypi-publish@v1.14.2
       with:
         packages-dir: dist/
 
     - name: Upload release files
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           ./dist/*.whl
