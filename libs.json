@@ -191,5 +191,55 @@
         "libc": "gnu",
         "obj_name": "libcurl-impersonate.a",
         "arch": "loongarch64"
+    },
+    {
+        "system": "FreeBSD",
+        "machine": "amd64",
+        "pointer_size": 64,
+        "sysname": "freebsd",
+        "link_type": "dynamic",
+        "libdir": "/usr/local/lib",
+        "obj_name": "libcurl-impersonate.so",
+        "arch": "amd64"
+    },
+    {
+        "system": "FreeBSD",
+        "machine": "i686",
+        "pointer_size": 32,
+        "sysname": "freebsd",
+        "link_type": "dynamic",
+        "libdir": "/usr/local/lib",
+        "obj_name": "libcurl-impersonate.so",
+        "arch": "i386"
+    },
+    {
+        "system": "FreeBSD",
+        "machine": "arm64",
+        "pointer_size": 64,
+        "sysname": "freebsd",
+        "link_type": "dynamic",
+        "libdir": "/usr/local/lib",
+        "obj_name": "libcurl-impersonate.so",
+        "arch": "aarch64"
+    },
+    {
+        "system": "FreeBSD",
+        "machine": "armv7l",
+        "pointer_size": 32,
+        "sysname": "freebsd",
+        "link_type": "dynamic",
+        "libdir": "/usr/local/lib",
+        "obj_name": "libcurl-impersonate.so",
+        "arch": "arm"
+    },
+    {
+        "system": "FreeBSD",
+        "machine": "powerpc64",
+        "pointer_size": 64,
+        "sysname": "freebsd",
+        "link_type": "dynamic",
+        "libdir": "/usr/local/lib",
+        "obj_name": "libcurl-impersonate.so",
+        "arch": "powerpc64"
     }
 ]
