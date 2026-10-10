@@ -19,7 +19,7 @@ website for no obvious reason, you can give `curl_cffi` a try.
 For JavaScript bindings, see [impers](https://github.com/lexiforest/impers), for solving
 JavaScript challenges, see [brimp](https://github.com/lexiforest/brimp).
 
-Python 3.10 is the minimum supported version since v0.14.
+Python 3.11 is the minimum supported version.
 
 ## Recent highlights
 

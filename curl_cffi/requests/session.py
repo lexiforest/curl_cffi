@@ -75,10 +75,7 @@ else:
     R = TypeVar("R", bound=Response)
 
 if TYPE_CHECKING:
-    if sys.version_info >= (3, 11):
-        from typing import Unpack
-    else:
-        from typing_extensions import Unpack
+    from typing import Unpack
 
     from ..curl import CurlWsFrame
     from ..fingerprints import Fingerprint

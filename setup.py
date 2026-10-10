@@ -20,10 +20,10 @@ class bdist_wheel_abi3(bdist_wheel):
             and not (python.endswith("t") or abi.endswith("t"))
             and "android" not in plat
         ):
-            # On CPython, our wheels are abi3 and compatible back to 3.10.
+            # On CPython, our wheels are abi3 and compatible back to 3.11.
             # Free-threaded builds ("t" tag) must keep their original tags (PEP 803).
             # Once PEP 803 is accepted, we may be able to build abi3t wheels.
-            return "cp310", "abi3", plat
+            return "cp311", "abi3", plat
 
         return python, abi, plat
 

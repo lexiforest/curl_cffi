@@ -24,7 +24,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.11"
     - name: Lint
       run: |
         pip install ruff
@@ -38,7 +38,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.11"
 
     - name: build sdist
       run: |
@@ -92,7 +92,7 @@ jobs:
         brew install make automake libtool
 
     - name: Build and test wheels
-      uses: pypa/cibuildwheel@v3.3.1
+      uses: pypa/cibuildwheel@v4.2.1
       env:
         CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs_linux }}
 
@@ -124,11 +124,11 @@ jobs:
         packages: platform-tools
 
     - name: Build wheels (Android)
-      uses: pypa/cibuildwheel@v3.3.1
+      uses: pypa/cibuildwheel@v4.2.1
       env:
         CIBW_PLATFORM: android
         # One wheel per CPython minor, see the Android note in setup.py.
-        CIBW_BUILD: cp313-android_arm64_v8a cp314-android_arm64_v8a
+        CIBW_BUILD: cp313-android_arm64_v8a cp314-android_arm64_v8a cp315-android_arm64_v8a
         ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         ANDROID_API_LEVEL: 24
 
@@ -137,7 +137,7 @@ jobs:
     - name: Check one wheel was built per CPython minor
       run: |
         ls -l ./wheelhouse/
-        for tag in cp313 cp314; do ls ./wheelhouse/*-$tag-*-android_*.whl; done
+        for tag in cp313 cp314 cp315; do ls ./wheelhouse/*-$tag-*-android_*.whl; done
 
     - uses: actions/upload-artifact@v4  # https://github.com/actions/upload-artifact/issues/478
       with:
@@ -170,4 +170,4 @@ jobs:
         brew install make automake libtool
 
     - name: Build and test wheels
-      uses: pypa/cibuildwheel@v3.3.1
+      uses: pypa/cibuildwheel@v4.2.1

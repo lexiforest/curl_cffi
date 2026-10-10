@@ -4,7 +4,7 @@ Quick Start
 Install
 =======
 
-Note: We only support Python 3.10 and above. Python 3.9 has reached its end of life.
+Note: We only support Python 3.11 and above. Python 3.10 has reached its end of life.
 
 Via pip
 -------
