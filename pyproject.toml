@@ -5,7 +5,11 @@ authors = [{ name = "lexiforest", email = "infinitesheldon@gmail.com" }]
 description = "libcurl ffi bindings for Python, with impersonation support."
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["cffi>=2.0.0", "certifi>=2024.2.2"]
+dependencies = [
+    "cffi>=2.0.0",
+    "cffi>=2.1.1; python_version >= '3.15'",
+    "certifi>=2024.2.2",
+]
 readme = "README.md"
 requires-python = ">=3.10"
 urls = { "repository" = "https://github.com/lexiforest/curl_cffi" }
@@ -34,7 +38,7 @@ dev = [
     "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
     "coverage>=6.4.1,<7.0",
-    "cryptography>=46.0.4,<47.0",
+    "cryptography>=50.0.2,<51.0",
     "httpx>=0.23.1,<1.0",
     "pytest>=8.1.1,<9.0",
     "pytest-asyncio>=0.23.6,<1.0",
@@ -50,7 +54,7 @@ build = ["cibuildwheel", "wheel"]
 test = [
     "jsonpath-ng>=1.7,<2",
     "charset_normalizer>=3.3.2,<4.0",
-    "cryptography>=46.0.4,<47.0",
+    "cryptography>=50.0.2,<51.0",
     "litestar>=2.19.0,<3.0",
     "httpx>=0.23.1,<1.0",
     "proxy.py>=2.4.3,<3.0",
@@ -69,7 +73,12 @@ test = [
 curl-cffi = "curl_cffi.cli:main"
 
 [build-system]
-requires = ["wheel", "setuptools", "cffi>=2.0.0"]
+requires = [
+    "wheel",
+    "setuptools",
+    "cffi>=2.0.0",
+    "cffi>=2.1.1; python_version >= '3.15'",
+]
 build-backend = "setuptools.build_meta"
 
 
@@ -101,6 +110,14 @@ build = [
     "cp314t-manylinux_aarch64",
     "cp314t-musllinux_x86_64",
     "cp314t-musllinux_aarch64",
+    "cp315t-macosx_x86_64",
+    "cp315t-macosx_arm64",
+    "cp315t-win_amd64",
+    "cp315t-win_arm64",
+    "cp315t-manylinux_x86_64",
+    "cp315t-manylinux_aarch64",
+    "cp315t-musllinux_x86_64",
+    "cp315t-musllinux_aarch64",
 ]
 before-all = "make preprocess"
 test-requires = "pytest"
@@ -111,6 +128,7 @@ test-skip = [
     "cp310-manylinux_i686",
     "cp310-win_arm64",
     "cp314t-win_arm64",
+    "cp315t-win_arm64",
     "cp310-manylinux_armv7l",
     "cp310-manylinux_riscv64",
 ]
