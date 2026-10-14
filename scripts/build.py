@@ -192,6 +192,12 @@ if is_static:
         extra_link_args = [
             f"-Wl,-force_load,{static_libs[0]}",
             "-lc++",
+            # system libraries used by libcurl-impersonate, link them explicitly
+            # instead of relying on -undefined dynamic_lookup at load time
+            "-Wl,-framework,CoreFoundation",
+            "-Wl,-framework,Security",
+            "-liconv",
+            "-licucore",
         ]
     elif system == "FreeBSD" or system == "OpenBSD" or is_android:
         extra_link_args = [
