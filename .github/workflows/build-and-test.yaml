@@ -30,6 +30,11 @@ jobs:
         pip install ruff
         ruff check --exclude issues
 
+    - name: Test wheel tags
+      run: |
+        pip install pytest setuptools
+        python -m pytest tests/packaging
+
   sdist:
     name: Build sdist wheel
     runs-on: ubuntu-latest
