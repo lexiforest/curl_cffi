@@ -3,10 +3,8 @@ from __future__ import annotations
 __all__ = ["HttpVersionLiteral", "set_curl_options", "NOT_SET"]
 
 
-import asyncio
 import ipaddress
 import math
-import queue
 import warnings
 from collections import Counter
 from collections.abc import Callable, Iterable
@@ -16,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal, Optional, Union, cast, fi
 from urllib.parse import ParseResult, parse_qsl, quote, urlencode, urljoin, urlparse
 
 from ..const import CurlFollow, CurlHttpVersion, CurlOpt, CurlSslVersion
-from ..curl import CURL_WRITEFUNC_ERROR, CurlMime
+from ..curl import CurlMime
 from ..utils import CurlCffiWarning, HttpVersionLiteral
 from ..fingerprints import Fingerprint, FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 from .cookies import Cookies
@@ -237,20 +235,6 @@ def _header_line_key(header_line: str) -> str:
     if not indexes:
         return header_line.strip().lower()
     return header_line[: min(indexes)].strip().lower()
-
-
-def peek_queue(q: queue.Queue, default=None):
-    try:
-        return q.queue[0]
-    except IndexError:
-        return default
-
-
-def peek_aio_queue(q: asyncio.Queue, default=None):
-    try:
-        return q._queue[0]  # type: ignore
-    except IndexError:
-        return default
 
 
 def set_ja3_options(curl: Curl, ja3: str, permute: bool = False):
@@ -632,11 +616,9 @@ def set_curl_options(
     doh_url: Optional[str] = None,
     cert: Optional[Union[str, tuple[str, str]]] = None,
     stream: Optional[bool] = None,
-    stream_response_callback: Optional[Callable[[], None]] = None,
     max_recv_speed: int = 0,
     multipart: Optional[CurlMime] = None,
-    queue_class: Any = None,
-    event_class: Any = None,
+    stream_writer: Optional[Callable[[bytes], int]] = None,
     curl_options: Optional[dict[CurlOpt, Any]] = None,
 ):
     c = curl
@@ -1013,25 +995,8 @@ def set_curl_options(
         set_perk_options(c, perk)
 
     buffer = None
-    q = None
-    header_recved = None
-    quit_now = None
-    if stream:
-        q = queue_class()
-        header_recved = event_class()
-        quit_now = event_class()
-
-        def qput(chunk):
-            if not header_recved.is_set():
-                if stream_response_callback is not None:
-                    stream_response_callback()
-                header_recved.set()
-            if quit_now.is_set():
-                return CURL_WRITEFUNC_ERROR
-            q.put_nowait(chunk)
-            return len(chunk)
-
-        c.setopt(CurlOpt.WRITEFUNCTION, qput)
+    if stream_writer is not None:
+        c.setopt(CurlOpt.WRITEFUNCTION, stream_writer)
     elif content_callback is not None:
         c.setopt(CurlOpt.WRITEFUNCTION, content_callback)
     else:
@@ -1068,4 +1033,4 @@ def set_curl_options(
         for option, setting in curl_options.items():
             c.setopt(option, setting)
 
-    return req, buffer, header_buffer, q, header_recved, quit_now
+    return req, buffer, header_buffer

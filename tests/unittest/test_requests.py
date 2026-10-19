@@ -3,7 +3,7 @@ import json
 import pickle
 import time
 from io import BytesIO
-from threading import Event, get_ident
+from threading import Thread
 from uuid import uuid4
 
 import pytest
@@ -74,10 +74,6 @@ def test_response_pickle(server):
     assert restored.cookies["foo"] == "bar"
     assert restored.request.url == response.request.url
     assert restored.curl is None
-    assert restored.queue is None
-    assert restored.stream_task is None
-    assert restored.astream_task is None
-    assert restored.quit_now is None
 
 
 def test_callback(server):
@@ -1215,6 +1211,33 @@ def test_stream_empty_body(server):
             assert r.status_code == 200
 
 
+def test_stream_reads_body_on_demand(server):
+    # The transfer must stay in progress, without downloading ahead of the reader.
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/large"))
+        with s.stream("GET", url) as r:
+            next(r.iter_content())
+            time.sleep(0.5)
+            assert 0 < r.curl.getinfo(CurlInfo.SIZE_DOWNLOAD_T) < 2 * 1024 * 1024
+
+
+def test_stream_close_from_another_thread(server):
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/hang_after_chunk"))
+        r = s.get(url, stream=True)
+        chunks: list[bytes] = []
+        reader = Thread(target=lambda: chunks.extend(r.iter_content()), daemon=True)
+        reader.start()
+        time.sleep(0.3)  # the reader is now blocked waiting for more data
+        closer = Thread(target=r.close, daemon=True)
+        closer.start()
+        closer.join(timeout=1)
+        reader.join(timeout=1)
+        assert not closer.is_alive()
+        assert not reader.is_alive()
+        assert chunks == [b"first"]
+
+
 # def test_stream_large_body(server):
 #     with requests.Session() as s:
 #         url = str(server.url.copy_with(path="/stream"))
@@ -1321,43 +1344,6 @@ def test_stream_options_persist(server):
         buffer.append(line)
     data = json.loads(b"".join(buffer))
     assert data["User-agent"][0] == "foo/1.0"
-
-
-@pytest.mark.parametrize("method", ["GET", "HEAD"])
-def test_stream_metadata_stays_in_transfer_thread(server, monkeypatch, method):
-    release_transfer = Event()
-    transfer_finished = Event()
-    transfer_thread = None
-    original_perform = Curl.perform
-    original_getinfo = Curl.getinfo
-
-    def perform(curl, *args, **kwargs):
-        nonlocal transfer_thread
-        transfer_thread = get_ident()
-        try:
-            original_perform(curl, *args, **kwargs)
-            # Keep the worker active until the caller receives the response.
-            if method == "GET":
-                assert release_transfer.wait(timeout=5)
-        finally:
-            transfer_finished.set()
-
-    def getinfo(curl, option):
-        assert get_ident() == transfer_thread
-        return original_getinfo(curl, option)
-
-    monkeypatch.setattr(Curl, "perform", perform)
-    monkeypatch.setattr(Curl, "getinfo", getinfo)
-    with requests.Session() as session:
-        try:
-            response = session.request(method, str(server.url), stream=True)
-            assert response.status_code == 200
-            assert response.url == str(server.url)
-            if method == "GET":
-                assert not transfer_finished.is_set()
-        finally:
-            release_transfer.set()
-        response.close()
 
 
 @pytest.mark.skip(reason="External url unstable")
