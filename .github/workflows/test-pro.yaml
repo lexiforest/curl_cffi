@@ -43,4 +43,4 @@ jobs:
         brew install make automake libtool
 
     - name: Build and test wheels
-      uses: pypa/cibuildwheel@v3.3.1
+      uses: pypa/cibuildwheel@v4.2.1

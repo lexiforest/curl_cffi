@@ -72,6 +72,15 @@ commits focused and easy to review. For pull requests, open from a branch other 
 `main`, enable "Allow edits by maintainers", describe the user-visible change, link
 related issues, and note platform-specific build or test impact when relevant.
 
+When asked to review an issue/PR, provide the following info:
+
+- Is this PR generally good or not? Check the coding style and logic.
+- Is it in the right direction? Does it hold to its description?
+- What possible issues does this PR contain?
+- Explain briefly how it's implemented to support the feature.
+
+### Contributing
+
 The user should be warned if a PR is too large, for example, it contains more than 1k lines.
 
 **Important**
