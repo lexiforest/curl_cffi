@@ -1,3 +1,5 @@
+import sys
+
 from setuptools import setup
 
 try:
@@ -15,14 +17,14 @@ class bdist_wheel_abi3(bdist_wheel):
         # stable-ABI across minor versions even though they are built against the
         # limited API. Keep the real tag there and ship one wheel per CPython minor,
         # otherwise pip installs the 3.13 wheel on 3.14 and the import fails, see #824.
-        if (
-            python.startswith("cp")
-            and not (python.endswith("t") or abi.endswith("t"))
-            and "android" not in plat
-        ):
-            # On CPython, our wheels are abi3 and compatible back to 3.10.
-            # Free-threaded builds ("t" tag) must keep their original tags (PEP 803).
-            # Once PEP 803 is accepted, we may be able to build abi3t wheels.
+        if python.startswith("cp") and "android" not in plat:
+            if python.endswith("t") or abi.endswith("t"):
+                # CFFI targets both stable ABIs on free-threaded Python 3.15+.
+                if sys.version_info >= (3, 15):
+                    return "cp315", "abi3.abi3t", plat
+                return python, abi, plat
+
+            # GIL-enabled builds remain compatible back to 3.10.
             return "cp310", "abi3", plat
 
         return python, abi, plat
