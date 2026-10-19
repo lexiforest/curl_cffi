@@ -60,6 +60,26 @@ For compatibility with ``requests``, we also support using dicts.
 
    Prefer the single `proxy` parameter, unless you do have different proxies for http and https
 
+HTTP/3 over proxies
+-------------------
+
+With ``http_version="v3"`` or ``"v3only"``, a ``socks5://`` proxy carries QUIC via UDP
+ASSOCIATE, and an ``https://`` proxy via MASQUE CONNECT-UDP.
+
+To talk HTTP/3 to the proxy itself, set its type to ``CurlProxyType.HTTPS3``:
+
+.. code-block:: python
+
+    import curl_cffi
+    from curl_cffi import CurlOpt, CurlProxyType
+
+    curl_cffi.get(
+        url,
+        proxy="https://proxy.example.com:443",
+        http_version="v3only",
+        curl_options={CurlOpt.PROXYTYPE: CurlProxyType.HTTPS3},
+    )
+
 
 Response cache
 ==============

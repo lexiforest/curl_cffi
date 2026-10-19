@@ -10,7 +10,15 @@ from unittest.mock import patch
 
 import pytest
 
-from curl_cffi import Curl, CurlECode, CurlError, CurlInfo, CurlOpt, _wrapper
+from curl_cffi import (
+    Curl,
+    CurlECode,
+    CurlError,
+    CurlInfo,
+    CurlOpt,
+    CurlProxyType,
+    _wrapper,
+)
 from curl_cffi.curl import _default_cacert
 
 #######################################################################################
@@ -120,6 +128,11 @@ def test_proxy_headers(server):
     c.perform()
     headers = json.loads(buffer.getvalue().decode())
     assert "Foo" not in headers
+
+
+def test_http3_proxy_type():
+    c = Curl()
+    c.setopt(CurlOpt.PROXYTYPE, CurlProxyType.HTTPS3)
 
 
 def test_write_function_memory_leak(server):
