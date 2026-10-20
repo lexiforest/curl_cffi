@@ -13,6 +13,7 @@ __all__ = [
     "CurlFollow",
     "CurlSslVersion",
     "CurlWsFlag",
+    "CurlWsOption",
     "CurlShareOpt",
     "CurlLockData",
     "CurlLockAccess",
@@ -76,6 +77,7 @@ from .const import (
     CurlShareOpt,
     CurlSslVersion,
     CurlWsFlag,
+    CurlWsOption,
 )
 from .curl import Curl, CurlError, CurlMime, CurlShare
 

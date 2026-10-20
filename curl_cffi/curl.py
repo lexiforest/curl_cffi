@@ -770,6 +770,9 @@ class Curl:
 
         Returns:
             a tuple of frame content and curl frame meta struct.
+            Content is decompressed when permessage-deflate is negotiated.
+            ``bytesleft`` may be -1 while the decoded size is unknown; 0 marks
+            the end of the frame.
 
         Raises:
             CurlError: if failed.

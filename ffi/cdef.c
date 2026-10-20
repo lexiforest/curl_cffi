@@ -69,11 +69,13 @@ extern "Python" void lock_function(void *handle, int data, int access, void *use
 extern "Python" void unlock_function(void *handle, int data, void *userptr);
 
 // websocket
+typedef int... curl_off_t;
+
 struct curl_ws_frame {
   int age;              /* zero */
   int flags;            /* See the CURLWS_* defines */
-  uint64_t offset;    /* the offset of this data into the frame */
-  uint64_t bytesleft; /* number of pending bytes left of the payload */
+  curl_off_t offset;    /* the offset of this data into the frame */
+  curl_off_t bytesleft; /* pending payload bytes, -1 if decoded size unknown */
   size_t len;
   ...;
 };
