@@ -1,6 +1,7 @@
 import pytest
 
 from curl_cffi import AsyncCurl, Curl, CurlError, CurlOpt
+from curl_cffi.aio import CURL_POLL_REMOVE, socket_function
 
 
 async def test_init(server):
@@ -75,3 +76,16 @@ async def test_multi_error_message_carries_the_libcurl_text():
     with pytest.raises(CurlError, match=r"multi: \(1\) Invalid multi handle\. "):
         ac._check_error(1, "perform")
     await ac.close()
+
+
+async def test_socket_callback_remove_untracked_socket():
+    ac = AsyncCurl()
+    try:
+        for _ in range(2):
+            assert (
+                socket_function(None, 3116, CURL_POLL_REMOVE, ac._self_handle, None)
+                == 0
+            )
+        assert not ac._sockfds
+    finally:
+        await ac.close()

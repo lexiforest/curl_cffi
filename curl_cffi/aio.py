@@ -163,7 +163,7 @@ def socket_function(curl, sockfd: int, what: int, clientp: Any, data: Any) -> in
 
     # Need to remove the socket
     if what == CURL_POLL_REMOVE:
-        async_curl._sockfds.remove(sockfd)
+        async_curl._sockfds.discard(sockfd)
 
     return 0
 
