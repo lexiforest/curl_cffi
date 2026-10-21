@@ -4,6 +4,8 @@ import re
 from itertools import zip_longest
 from urllib.parse import urlencode
 
+import pytest
+
 from curl_cffi import CurlOpt, requests
 from curl_cffi.fingerprints import FingerprintManager, NATIVE_IMPERSONATE_TARGETS
 
@@ -37,6 +39,36 @@ def _request_json(url: str, *, api_key: str | None = None) -> object:
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     return json.loads(FingerprintManager._fetch_fingerprint_payload(url, headers))
+
+
+def _update_fingerprints_with_sources(
+    api_root: str, monkeypatch
+) -> dict[str, dict[str, int]]:
+    sources = {}
+    fetch_payload = FingerprintManager._fetch_fingerprint_payload
+
+    def capture_sources(url, headers):
+        payload = fetch_payload(url, headers)
+        data = json.loads(payload)
+        for item in data.get("items", data.get("data", [])):
+            name = item.get("name") or item.get("target")
+            sources[name] = {
+                protocol: item[f"{protocol}_source_id"]
+                for protocol in ("http2", "http3")
+                if item.get(f"{protocol}_source_id") is not None
+            }
+        return payload
+
+    # Keep metadata from the exact pages used to populate the runtime cache.
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            FingerprintManager,
+            "_fetch_fingerprint_payload",
+            staticmethod(capture_sources),
+        )
+        updated = FingerprintManager.update_fingerprints(api_root)
+    assert updated > 0
+    return sources
 
 
 def _wrap_fingerprint_payload(payload: object) -> dict[str, object] | None:
@@ -105,10 +137,14 @@ def _load_raw_fingerprint(
     target: str,
     api_root: str,
     protocol: str,
+    source_id: int | None = None,
 ) -> dict[str, object]:
     api_key = _require_live_api_key()
     base_url = f"{api_root.rstrip('/')}{RAW_PATH}"
-    url = f"{base_url}?{urlencode({'name': target, 'protocol': protocol})}"
+    if source_id is not None:
+        url = f"{base_url}/{source_id}"
+    else:
+        url = f"{base_url}?{urlencode({'name': target, 'protocol': protocol})}"
     try:
         payload = _request_json(url, api_key=api_key)
     except Exception as exc:
@@ -569,6 +605,110 @@ def test_load_raw_fingerprint_requests_protocol(monkeypatch):
     ]
 
 
+@pytest.mark.parametrize("protocol", ["http2", "http3"])
+def test_load_raw_fingerprint_prefers_source_id(monkeypatch, protocol):
+    requests = []
+
+    def fetch_payload(url, headers):
+        requests.append((url, headers))
+        return json.dumps(
+            {
+                "id": 107414,
+                "name": "testing",
+                "source": "ping",
+                "fingerprint": {"protocol": protocol},
+            }
+        ).encode()
+
+    monkeypatch.setenv("IMPERSONATE_API_KEY", "ci-secret")
+    monkeypatch.setattr(
+        FingerprintManager, "_fetch_fingerprint_payload", staticmethod(fetch_payload)
+    )
+
+    payload = _load_raw_fingerprint(
+        "testing", "https://api.test/", protocol, source_id=107414
+    )
+
+    assert payload["id"] == 107414
+    assert requests == [
+        ("https://api.test/raw/107414", {"Authorization": "Bearer ci-secret"})
+    ]
+
+
+def test_load_raw_fingerprint_does_not_fallback_on_source_error(monkeypatch):
+    urls = []
+
+    def fetch_payload(url, headers):
+        urls.append(url)
+        raise RuntimeError("capture not found")
+
+    monkeypatch.setenv("IMPERSONATE_API_KEY", "ci-secret")
+    monkeypatch.setattr(
+        FingerprintManager, "_fetch_fingerprint_payload", staticmethod(fetch_payload)
+    )
+
+    with pytest.raises(AssertionError, match="capture not found"):
+        _load_raw_fingerprint("testing", "https://api.test", "http2", source_id=123)
+
+    assert urls == ["https://api.test/raw/123"]
+
+
+def test_update_fingerprints_preserves_paginated_source_ids(monkeypatch, tmp_path):
+    urls = []
+
+    def fetch_payload(url, headers):
+        urls.append(url)
+        if len(urls) == 1:
+            data = {
+                "data": [
+                    {
+                        "name": "testing",
+                        "http2_source_id": 107414,
+                        "http3_source_id": 123,
+                        "fingerprint": {"client": "testing"},
+                    }
+                ],
+                "pagination": {"has_more": True, "next_skip": 100},
+            }
+        else:
+            data = {
+                "data": [
+                    {
+                        "name": "testing2",
+                        "http2_source_id": 456,
+                        "http3_source_id": None,
+                        "fingerprint": {"client": "testing2"},
+                    },
+                    {"name": "legacy", "fingerprint": {"client": "legacy"}},
+                ],
+                "pagination": {"has_more": False},
+            }
+        return json.dumps(data).encode()
+
+    monkeypatch.setenv("IMPERSONATE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        FingerprintManager, "_fetch_fingerprint_payload", staticmethod(fetch_payload)
+    )
+    try:
+        sources = _update_fingerprints_with_sources("https://api.test", monkeypatch)
+
+        assert sources == {
+            "testing": {"http2": 107414, "http3": 123},
+            "testing2": {"http2": 456},
+            "legacy": {},
+        }
+        assert urls == [
+            "https://api.test/fingerprints?skip=0&limit=100",
+            "https://api.test/fingerprints?skip=100&limit=100",
+        ]
+        fingerprints = FingerprintManager.load_fingerprints()
+        assert fingerprints["testing"].client == "testing"
+        assert fingerprints["testing2"].client == "testing2"
+        assert FingerprintManager._fetch_fingerprint_payload is fetch_payload
+    finally:
+        FingerprintManager.load_fingerprints.cache_clear()
+
+
 def test_header_line_matches_ignores_accept_language_value():
     assert _header_line_matches("accept-language: en-US", "Accept-Language: zh-CN")
     assert not _header_line_matches("accept: text/html", "accept: application/json")
@@ -608,8 +748,7 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path, cap
     FingerprintManager.set_api_key(api_key=api_key)
 
     api_root = FingerprintManager.get_api_root()
-    updated = FingerprintManager.update_fingerprints(api_root)
-    assert updated is not None and updated > 0
+    sources = _update_fingerprints_with_sources(api_root, monkeypatch)
 
     fingerprints = FingerprintManager.load_fingerprints()
     assert fingerprints
@@ -627,7 +766,9 @@ def test_live_fingerprint_data_matches_runtime_output(monkeypatch, tmp_path, cap
         protocol = (
             "http3" if fingerprints[target].http_version in {"v3", "h3"} else "http2"
         )
-        raw_payload = _load_raw_fingerprint(target, api_root, protocol)
+        raw_payload = _load_raw_fingerprint(
+            target, api_root, protocol, sources.get(target, {}).get(protocol)
+        )
         if raw_payload.get("source") == "ping":
             ping_payload = requests.get(
                 PING_FP_URL,
@@ -671,8 +812,7 @@ def test_live_http3_fingerprint_data_matches_runtime_output(
     FingerprintManager.set_api_key(api_key=api_key)
 
     api_root = FingerprintManager.get_api_root()
-    updated = FingerprintManager.update_fingerprints(api_root)
-    assert updated is not None and updated > 0
+    sources = _update_fingerprints_with_sources(api_root, monkeypatch)
 
     fingerprints = FingerprintManager.load_fingerprints()
     assert fingerprints
@@ -689,7 +829,9 @@ def test_live_http3_fingerprint_data_matches_runtime_output(
     for target in custom_targets:
         with capfd.disabled():
             print(f"verifying HTTP/3 fingerprint: {target}", flush=True)
-        raw_payload = _load_raw_fingerprint(target, api_root, "http3")
+        raw_payload = _load_raw_fingerprint(
+            target, api_root, "http3", sources.get(target, {}).get("http3")
+        )
         if raw_payload.get("source") == "ping":
             ping_payload = requests.get(
                 PING_FP_URL,
