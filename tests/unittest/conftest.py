@@ -64,21 +64,21 @@ def async_environment(request: typing.Any) -> str:
     return request.param
 
 
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def clean_environ():
-    """Keeps os.environ clean for every test without having to mock os.environ"""
-    original_environ = os.environ.copy()
-    os.environ.clear()
-    os.environ.update(
-        {
-            k: v
-            for k, v in original_environ.items()
-            if k not in ENVIRONMENT_VARIABLES and k.lower() not in ENVIRONMENT_VARIABLES
-        }
-    )
+    """Keeps os.environ clean for every test without having to mock os.environ.
+
+    Done once, before the test servers start: rewriting the environment while
+    other threads call getenv(), e.g. strerror() in glibc, can crash on
+    free-threaded builds.
+    """
+    removed = {
+        k: os.environ.pop(k)
+        for k in list(os.environ)
+        if k in ENVIRONMENT_VARIABLES or k.lower() in ENVIRONMENT_VARIABLES
+    }
     yield
-    os.environ.clear()
-    os.environ.update(original_environ)
+    os.environ.update(removed)
 
 
 async def app(scope, receive, send):
