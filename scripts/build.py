@@ -1,8 +1,10 @@
 import json
 import os
 import platform
+import shlex
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import time
@@ -187,6 +189,35 @@ def get_curl_libraries():
         return []
 
 
+def get_static_link_args():
+    # Release archives put the .pc beside the library; local installs use pkgconfig/.
+    pc_files = [
+        libdir / "libcurl-impersonate.pc",
+        libdir / "pkgconfig/libcurl-impersonate.pc",
+    ]
+    pc_file = next((path for path in pc_files if path.is_file()), None)
+    if pc_file is None:
+        raise RuntimeError(
+            f"Missing libcurl-impersonate.pc in {libdir}. "
+            "Use the complete curl-impersonate 2.3.0 or newer release archive."
+        )
+    env = os.environ.copy()
+    env["PKG_CONFIG_PATH"] = os.pathsep.join(
+        filter(None, [str(pc_file.parent.resolve()), env.get("PKG_CONFIG_PATH")])
+    )
+    try:
+        flags = subprocess.check_output(
+            ["pkg-config", "--static", "--libs", "libcurl-impersonate"],
+            env=env,
+            text=True,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError("Install pkg-config to build with static libcurl.") from e
+    # The exact archive is already force-loaded. Linking -lcurl-impersonate again
+    # could select the shared library shipped alongside it.
+    return [flag for flag in shlex.split(flags) if flag != "-lcurl-impersonate"]
+
+
 ffibuilder = FFI()
 system = platform.system()
 root_dir = Path(__file__).parent.parent
@@ -199,21 +230,14 @@ if is_static:
     if system == "Darwin":
         extra_link_args = [
             f"-Wl,-force_load,{static_libs[0]}",
-            "-lc++",
         ]
-    elif system == "FreeBSD" or system == "OpenBSD" or is_android:
-        extra_link_args = [
-            "-Wl,--whole-archive",
-            static_libs[0],
-            "-Wl,--no-whole-archive",
-            "-lc++",
-        ]
-    elif system == "Linux":
+    elif system in ("FreeBSD", "OpenBSD", "Linux") or is_android:
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
         ]
+    extra_link_args.extend(get_static_link_args())
 
 libraries = get_curl_libraries()
 

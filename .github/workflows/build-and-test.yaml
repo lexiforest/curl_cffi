@@ -30,7 +30,7 @@ jobs:
         pip install ruff
         ruff check --exclude issues
 
-    - name: Test wheel tags
+    - name: Test packaging
       run: |
         pip install pytest setuptools
         python -m pytest tests/packaging
@@ -94,7 +94,7 @@ jobs:
     # macOS make is too old
     - if: runner.os == 'macOS'
       run: |
-        brew install make automake libtool
+        brew install make automake libtool pkg-config
 
     - name: Build and test wheels
       uses: pypa/cibuildwheel@v4.2.1
@@ -172,7 +172,7 @@ jobs:
     # macOS make is too old
     - if: runner.os == 'macOS'
       run: |
-        brew install make automake libtool
+        brew install make automake libtool pkg-config
 
     - name: Build and test wheels
       uses: pypa/cibuildwheel@v4.2.1

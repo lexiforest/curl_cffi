@@ -20,6 +20,12 @@ configured for the current platform, such as ``libcurl-impersonate.so`` or
 
     IMPERSONATE_BUILD_DIR=/path/to/lib pip install .
 
+Static builds require ``pkg-config`` and the ``libcurl-impersonate.pc`` metadata
+included in curl-impersonate 2.3.0 and newer. Keep the complete release archive
+contents together: the metadata supplies the system libraries and frameworks
+needed by the static archive. For local installs, the metadata may also be in
+the library directory's ``pkgconfig`` subdirectory.
+
 The default link type is configured per platform. Set ``IMPERSONATE_LINK_TYPE``
 to ``dynamic`` or ``static`` to override it. A dynamic local build can be used
 without merging its static dependency archives::
@@ -44,7 +50,7 @@ To install the local editable build:
 
     # Dependencies
 
-    brew install libidn2 zstd
+    brew install libidn2 zstd pkg-config
 
     # Then install
 
