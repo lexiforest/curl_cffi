@@ -43,6 +43,8 @@ Async client:
 Compression
 ===========
 
+.. versionadded:: 0.17.0b1
+
 Enable ``permessage-deflate`` with ``CurlOpt.WS_OPTIONS``:
 
 .. code-block:: python
@@ -121,6 +123,10 @@ Connecting
 ----------
 
 Use ``ws_connect`` from a ``Session``. This method accepts the same network parameters as standard HTTP requests, including impersonation, proxies, and cookies.
+
+Session proxy and certificate verification settings are inherited unless
+overridden on the connection. For example, ``verify="/path/to/ca.pem"`` on the
+session supplies the CA bundle for its WebSocket handshakes as well.
 
 .. code-block:: python
 

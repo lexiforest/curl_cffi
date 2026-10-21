@@ -24,7 +24,7 @@ Python 3.10 is the minimum supported version since v0.14.
 ## Recent highlights
 
 - 🧭 Our new toy, [brimp](https://github.com/lexiforest/brimp), a lightweight browser, works like curl_cffi with JavaScript enabled. Try it out today!
-- 🆕 Added support for the new algorithm and extensions in Chrome 150/152.
+- 🆕 **0.17.0** updates to curl-impersonate 2.3.0 (curl 8.23.0), with Chrome 151/152, Safari 27, and Firefox 153–155 profiles.
 
 ## Recall.ai - API for meeting recordings
 
@@ -221,7 +221,7 @@ We offer the Safari, Chrome, Firefox updates for free and others as part of the 
 
 The current number of fingerprints:
 
-![Preset](https://img.shields.io/badge/Preset_Fingerprints-37-blue)
+![Preset](https://img.shields.io/badge/Preset_Fingerprints-47-blue)
 ![Free](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.free&label=Free%20Fingerprints)
 ![Pro](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.impersonate.pro%2Fv1%2Fcounts&query=%24.all&label=Pro%20Fingerprints)
 
@@ -325,6 +325,7 @@ asyncio.run(main())
 - **Browser impersonation:** the handshake uses your session's TLS/JA3 fingerprint, proxies, cookies and headers.
 - **Complete messages:** fragmented messages are reassembled for you.
 - **Timeouts and retries:** every send and receive accepts a `timeout`, and failed reads can be retried with backoff.
+- **Compression:** opt in to `permessage-deflate` with `curl_options={CurlOpt.WS_OPTIONS: CurlWsOption.PERMESSAGE_DEFLATE}` on `ws_connect()`.
 - **Fast masking:** outgoing frames are masked with SIMD instructions (AVX-512, AVX2, NEON) in a customized libcurl build.
 
 See the [WebSockets guide](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for callbacks, timeouts, configuration and more.

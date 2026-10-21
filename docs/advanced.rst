@@ -5,8 +5,9 @@ DNS servers
 ===========
 
 Use ``dns`` to select a DNS server or a list of servers instead of the system
-resolver. This requires libcurl to be built with c-ares, which is how
-libcurl-impersonate was configured since 2.2.3.
+resolver. This requires libcurl to be built with c-ares; it is unavailable in
+builds that use a threaded or system resolver. ``AsyncSession`` accepts the same
+session-level and request-level ``dns`` option.
 
 .. code-block:: python
 
@@ -35,6 +36,19 @@ You can use the ``proxy`` parameter:
 
 You can also use the ``http_proxy``, ``https_proxy``, and ``ws_proxy``, ``wss_proxy``
 environment variables, respectively.
+
+For HTTP requests, set ``trust_env=False`` on ``Session`` or ``AsyncSession``
+to ignore proxy environment variables:
+
+.. code-block:: python
+
+    from curl_cffi import Session
+
+    with Session(trust_env=False) as session:
+        response = session.get("https://example.com")
+
+Explicit ``proxy=`` and ``proxies=`` settings still apply. With
+``trust_env=False``, ``no_proxy`` also cannot bypass an explicit proxy.
 
 .. warning::
 
@@ -154,6 +168,20 @@ Call ``clear`` to remove cache entries managed by that backend:
 
 ``FileCacheBackend.clear`` only removes cache-looking files from its own cache
 directory.
+
+When the session creates the backend from a duration, access it through the
+read-only ``cache_backend`` property:
+
+.. code-block:: python
+
+    from curl_cffi import Session
+
+    with Session(cache=600) as session:
+        response = session.get("https://example.com")
+        session.cache_backend.clear()
+
+``cache_backend`` is ``None`` when response caching is disabled. This cache stores
+HTTP responses; ``CurlShare`` shares DNS and TLS session data separately.
 
 
 Custom backends
@@ -332,10 +360,15 @@ cuts the cost of reconnecting to the same host (DNS lookups and TLS handshakes).
    share = CurlShare()  # shares DNS + TLS sessions, safe across threads
    with Session(curl_share=share) as s:
        s.get("https://example.com")
+   share.close()
 
 The share is attached to every handle the session creates, including the ones used for
 streaming and WebSocket responses. ``AsyncSession`` accepts the same ``curl_share=``
 argument, sharing the DNS and TLS caches across the handles in its pool.
+
+Keep the share alive until all attached handles have closed. ``share.close()``
+raises ``CurlError`` if any handle is still using it; close those handles before
+retrying cleanup.
 
 ``CurlShare`` can also share the connection cache (``CurlShare(connect=True)``), but that
 is only safe when the handles are used serially, never from multiple concurrent threads.

@@ -33,6 +33,10 @@ to specify your own customized fingerprints. See below for details.
 - chrome145 :sup:`13` :sup:`14`
 - chrome146 :sup:`13` :sup:`14`
 - chrome150 :sup:`14` :sup:`15`
+- chrome151 :sup:`14` :sup:`16`
+- chrome151_macos :sup:`14` :sup:`16`
+- chrome152 :sup:`14` :sup:`16`
+- chrome152_macos :sup:`14` :sup:`16`
 - chrome99_android
 - chrome131_android :sup:`5`
 - edge99
@@ -48,10 +52,15 @@ to specify your own customized fingerprints. See below for details.
 - safari260 :sup:`9` :sup:`10`
 - safari260_ios :sup:`9` :sup:`10`
 - safari2601 :sup:`9` :sup:`11`
+- safari270 :sup:`14` :sup:`16`
+- safari270_ios :sup:`14` :sup:`16`
 - firefox133 :sup:`5`
 - firefox135 :sup:`7`
 - firefox144 :sup:`11` :sup:`12`
 - firefox147 :sup:`13` :sup:`14`
+- firefox153 :sup:`16`
+- firefox154 :sup:`16`
+- firefox155 :sup:`16`
 - tor145 :sup:`8`
 
 Notes:
@@ -71,13 +80,14 @@ Notes:
 13. Added in version ``0.15.0``.
 14. http3 support included.
 15. Added in version ``0.16.1``.
+16. Added in version ``0.17.0b1`` (curl-impersonate 2.3.0).
 
 
 Which target version to use?
 ----------------------------
 
 Generally speaking, you should use the latest Chrome or Safari versions. Currently, they're
-``chrome150``, ``safari2601`` and ``safari260_ios``. To always impersonate the latest available
+``chrome152``, ``safari270`` and ``safari270_ios``. To always impersonate the latest available
 browser versions, you can simply use ``chrome``, ``firefox``, ``safari`` and ``chrome_android``, ``safari_ios``.
 
 .. code-block:: python
@@ -86,6 +96,11 @@ browser versions, you can simply use ``chrome``, ``firefox``, ``safari`` and ``c
 
     curl_cffi.get(url, impersonate="chrome")
 
+
+Chrome 151 and 152 have separate Windows targets (``chrome151``, ``chrome152``)
+and macOS targets (``chrome151_macos``, ``chrome152_macos``). The ``chrome`` alias
+selects the Windows profile. Firefox 153, 154 and 155 do not include dedicated
+HTTP/3 fingerprints.
 
 Tips:
 

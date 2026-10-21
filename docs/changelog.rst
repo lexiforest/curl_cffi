@@ -1,6 +1,8 @@
 Change Log
 ==========
 
+This doc is no longer maintained.
+
 Please see the `GitHub Releases <https://github.com/lexiforest/curl_cffi/releases>`_ page for details.
 
 - v0.13
