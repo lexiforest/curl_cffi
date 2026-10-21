@@ -247,7 +247,7 @@ class BaseSession(Generic[R]):
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: bool = True,
         default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
-        curl_options: Optional[dict[CurlOpt, str]] = None,
+        curl_options: Optional[dict[CurlOpt, Any]] = None,
         curl_infos: Optional[list[object]] = None,
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         debug: bool = False,
@@ -692,7 +692,7 @@ class Session(BaseSession[R]):
         doh_url: str | None = None,
         cert: str | tuple[str, str] | None = None,
         max_recv_speed: int = 0,
-        curl_options: dict[CurlOpt, str] | None = None,
+        curl_options: dict[CurlOpt, Any] | None = None,
     ) -> WebSocket:
         """Connects to a WebSocket URL using the session's configuration.
 
@@ -1464,7 +1464,7 @@ class AsyncSession(BaseSession[R]):
         max_message_size: int = 4 * 1024 * 1024,
         drain_on_error: bool = False,
         block_on_recv_queue_full: bool = True,
-        curl_options: dict[CurlOpt, str] | None = None,
+        curl_options: dict[CurlOpt, Any] | None = None,
         *,
         skip_utf8_validation: bool = False,
     ) -> AsyncWebSocketContext:

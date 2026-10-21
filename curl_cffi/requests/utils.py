@@ -637,7 +637,7 @@ def set_curl_options(
     multipart: Optional[CurlMime] = None,
     queue_class: Any = None,
     event_class: Any = None,
-    curl_options: Optional[dict[CurlOpt, str]] = None,
+    curl_options: Optional[dict[CurlOpt, Any]] = None,
 ):
     c = curl
 

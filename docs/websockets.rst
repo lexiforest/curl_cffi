@@ -40,6 +40,42 @@ Async client:
                await ws.send_str("Hello, World!")
                print(await ws.recv_str())  # Hello, World!
 
+Compression
+===========
+
+Enable ``permessage-deflate`` with ``CurlOpt.WS_OPTIONS``:
+
+.. code-block:: python
+
+   from curl_cffi import CurlOpt, CurlWsOption, Session
+
+   with Session() as session:
+       with session.ws_connect(
+           "wss://example.com/ws",
+           curl_options={CurlOpt.WS_OPTIONS: CurlWsOption.PERMESSAGE_DEFLATE},
+       ) as ws:
+           ws.send_str("Hello, World!")
+           print(ws.recv_str())
+
+The same ``curl_options`` argument works with ``AsyncSession.ws_connect()`` and
+``WebSocket.connect()``. Compression is opt-in and requires a zlib-enabled
+curl-impersonate 2.3.0 or newer.
+
+Libcurl adds the extension offer
+``Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits`` and
+handles compression and decompression after the server accepts it. If the server
+declines, messages remain uncompressed. Adding the header manually does not
+enable compression. HTTP ``accept_encoding`` is a separate setting.
+
+Send and receive methods continue to use uncompressed application data, and
+``max_message_size`` limits the decompressed message size. Low-level frame
+metadata may report ``bytesleft == -1`` while the decoded size is unknown;
+``bytesleft == 0`` marks the end of a frame.
+
+``CurlWsOption`` values are options for ``CurlOpt.WS_OPTIONS``, separate from the
+``CurlWsFlag`` values passed to ``send()``. Options can be combined with ``|``,
+but ``PERMESSAGE_DEFLATE`` cannot be combined with ``RAW_MODE``.
+
 Client Selection
 ================
 

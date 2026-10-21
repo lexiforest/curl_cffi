@@ -103,6 +103,14 @@ class CurlProxyType(IntEnum):
     HTTPS3 = 8
 
 
+class CurlWsOption(IntEnum):
+    """Bitmask options for ``CurlOpt.WS_OPTIONS``."""
+
+    RAW_MODE = 1 << 0
+    NOAUTOPONG = 1 << 1
+    PERMESSAGE_DEFLATE = 1 << 2
+
+
 class CurlWsFlag(IntEnum):
     """``CURL_WS_FLAG`` constants from libcurl, see comments for details."""
 
