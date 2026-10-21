@@ -231,13 +231,16 @@ if is_static:
         extra_link_args = [
             f"-Wl,-force_load,{static_libs[0]}",
         ]
+        # Only macOS release archives ship the .pc with required system frameworks.
+        extra_link_args.extend(get_static_link_args())
     elif system in ("FreeBSD", "OpenBSD", "Linux") or is_android:
         extra_link_args = [
             "-Wl,--whole-archive",
             static_libs[0],
             "-Wl,--no-whole-archive",
         ]
-    extra_link_args.extend(get_static_link_args())
+        if system in ("FreeBSD", "OpenBSD") or is_android:
+            extra_link_args.append("-lc++")
 
 libraries = get_curl_libraries()
 
