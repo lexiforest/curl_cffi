@@ -22,7 +22,7 @@ $(CURL_VERSION):
 curl-impersonate-$(VERSION)/patches: $(CURL_VERSION)
 	curl -fL --retry 3 "https://github.com/lexiforest/curl-impersonate/archive/refs/tags/v$(VERSION).tar.gz" \
 		-o "curl-impersonate-$(VERSION).tar.gz"
-	tar -xf curl-impersonate-$(VERSION).tar.gz
+	tar -xzf curl-impersonate-$(VERSION).tar.gz
 
 .preprocessed: curl-impersonate-$(VERSION)/patches
 	cd $(CURL_VERSION)
