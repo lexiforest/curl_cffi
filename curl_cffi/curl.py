@@ -104,6 +104,12 @@ class _CallbackContext:
         self.exception: BaseException | None = None
 
 
+class _SslCtxCallbackContext(_CallbackContext):
+    def __init__(self) -> None:
+        super().__init__(None)
+        self.userdata: Any = None
+
+
 def _store_callback_error(return_value: int):
     def onerror(exc_type, exc_value, traceback):
         if traceback is not None:
@@ -130,6 +136,57 @@ def debug_function(curl, type_: int, data, size: int, clientp) -> int:
     text = ffi.buffer(data, size)[:]
     callback(type_, text)
     return 0
+
+
+@ffi.def_extern(onerror=_store_callback_error(CurlECode.ABORTED_BY_CALLBACK))
+def ssl_ctx_callback(curl, ssl_ctx, userdata) -> int:
+    context = ffi.from_handle(userdata)
+    if context.exception is not None:
+        return CurlECode.ABORTED_BY_CALLBACK
+    result = context.callback(curl, ssl_ctx, context.userdata)
+    if result is None:
+        return CurlECode.OK
+    if not isinstance(result, int) or not 0 <= result < 2**31:
+        raise TypeError("SSL context callback must return None or a CURLcode integer")
+    return result
+
+
+def ssl_ctx_set_distrust(ssl_ctx: Any, spki_sha256: list[str]) -> None:
+    """Reject verified chains containing a blocked SHA-256 SPKI hash.
+
+    Call only inside an SSL_CTX_FUNCTION callback, with its SSL context pointer.
+    Hashes are 64 hexadecimal characters encoding SHA-256 of DER SubjectPublicKeyInfo.
+    Requires curl-impersonate with curl_ssl_ctx_set_distrust support.
+
+    The helper copies the hashes and replaces the context's previous blocklist.
+    Normal chain and hostname verification should remain enabled. Existing
+    connections and resumed TLS sessions can bypass this check; use a fresh
+    connection with SSL_SESSIONID_CACHE disabled when changing policy.
+    """
+    hashes = []
+    for value in spki_sha256:
+        if not isinstance(value, str) or len(value) != 64:
+            raise ValueError(
+                "SPKI SHA-256 hashes must contain 64 hexadecimal characters"
+            )
+        try:
+            digest = bytes.fromhex(value)
+        except ValueError:
+            raise ValueError("Invalid hexadecimal SPKI SHA-256 hash") from None
+        if len(digest) != 32:
+            raise ValueError(
+                "SPKI SHA-256 hashes must contain 64 hexadecimal characters"
+            )
+        hashes.append(digest)
+    if not hashes:
+        raise ValueError("At least one SPKI SHA-256 hash is required")
+    result = lib._curl_ssl_ctx_set_distrust(ssl_ctx, b"".join(hashes), len(hashes))
+    if result == CurlECode.NOT_BUILT_IN:
+        raise CurlError(
+            "SSL context distrust requires a newer curl-impersonate build", result
+        )
+    if result:
+        raise CurlError("Failed to configure SSL context distrust", result)
 
 
 def bytes_to_hex(b: bytes, uppercase: bool = False) -> str:
@@ -316,6 +373,7 @@ class Curl:
         self._body_handle: Any = None
         self._read_handle: Any = None
         self._seek_handle: Any = None
+        self._ssl_ctx_handle: Any = None
         # TODO: use CURL_ERROR_SIZE
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
@@ -376,12 +434,41 @@ class Curl:
             self._debug_handle,
             self._read_handle,
             self._seek_handle,
+            self._ssl_ctx_handle,
         ):
             if handle is not None:
                 exception = ffi.from_handle(handle).exception
                 if exception is not None:
                     return exception
         return None
+
+    def _clear_ssl_ctx_exception(self) -> None:
+        if self._ssl_ctx_handle is not None:
+            ffi.from_handle(self._ssl_ctx_handle).exception = None
+
+    def _set_ssl_ctx_option(self, option: CurlOpt, value: Any) -> int:
+        if (
+            option == CurlOpt.SSL_CTX_FUNCTION
+            and value is not None
+            and not callable(value)
+        ):
+            raise TypeError("SSL_CTX_FUNCTION must be callable or None")
+        if self._ssl_ctx_handle is None:
+            self._ssl_ctx_handle = ffi.new_handle(_SslCtxCallbackContext())
+        context = ffi.from_handle(self._ssl_ctx_handle)
+        ret = lib._curl_easy_setopt(
+            self._curl, CurlOpt.SSL_CTX_DATA, self._ssl_ctx_handle
+        )
+        self._check_error(ret, "setopt", CurlOpt.SSL_CTX_DATA)
+        if option == CurlOpt.SSL_CTX_FUNCTION:
+            callback = lib.ssl_ctx_callback if value is not None else ffi.NULL
+            ret = lib._curl_easy_setopt(self._curl, option, callback)
+            self._check_error(ret, "setopt", option)
+            context.callback = value
+            context.exception = None
+        else:
+            context.userdata = value
+        return ret
 
     def setopt(self, option: CurlOpt, value: Any) -> int:
         """Wrapper for ``curl_easy_setopt``.
@@ -395,6 +482,8 @@ class Curl:
         """
         if self._curl is None:
             return 0  # silently ignore if curl handle is None
+        if option in (CurlOpt.SSL_CTX_FUNCTION, CurlOpt.SSL_CTX_DATA):
+            return self._set_ssl_ctx_option(option, value)
         input_option = {
             # this should be int in curl, but cffi requires pointer for void*
             # it will be convert back in the glue c code.
@@ -621,6 +710,7 @@ class Curl:
             raise CurlError("Cannot perform request on closed handle.")
 
         # make sure we set a cacert store
+        self._clear_ssl_ctx_exception()
         self._ensure_cacert()
 
         # here we go
@@ -659,6 +749,7 @@ class Curl:
         self._body_handle = None
         self._read_handle = None
         self._seek_handle = None
+        self._clear_ssl_ctx_exception()
 
         if clear_resolve:
             if self._resolve != ffi.NULL:
@@ -687,6 +778,10 @@ class Curl:
             raise CurlError("Cannot duplicate closed handle.")
         new_handle = lib.curl_easy_duphandle(self._curl)
         c = Curl(cacert=self._cacert, debug=self._debug, handle=new_handle)
+        if self._ssl_ctx_handle is not None:
+            context = ffi.from_handle(self._ssl_ctx_handle)
+            c.setopt(CurlOpt.SSL_CTX_DATA, context.userdata)
+            c.setopt(CurlOpt.SSL_CTX_FUNCTION, context.callback)
         # duphandle does not inherit CURLOPT_SHARE, so re-attach it.
         if self._share is not None:
             c.setopt(CurlOpt.SHARE, self._share._curl_share)
@@ -700,6 +795,7 @@ class Curl:
         if self._curl is not None:
             lib.curl_easy_reset(self._curl)
             self._set_error_buffer()
+        self._ssl_ctx_handle = None
         self._resolve = ffi.NULL
 
     def parse_cookie_headers(self, headers: list[bytes]) -> SimpleCookie:
@@ -754,6 +850,7 @@ class Curl:
         if self._curl:
             lib.curl_easy_cleanup(self._curl)
             self._curl = None
+        self._ssl_ctx_handle = None
         if self._share is not None:
             # Cyclic GC may finalize the share before its attached handles.
             if self._share._finalizing:

@@ -279,6 +279,89 @@ You can simply add the ``curl_options`` dict to apply the option.
    overriden internally, while the former is executed after all options have been set.
 
 
+.. _ssl-context-callbacks:
+
+SSL context callbacks and certificate distrust
+==============================================
+
+.. versionadded:: 0.17.0b1
+
+``CurlOpt.SSL_CTX_FUNCTION`` accepts a synchronous Python callback with three
+arguments: the raw libcurl handle, the backend's SSL context pointer, and the
+Python object supplied through ``CurlOpt.SSL_CTX_DATA`` (``None`` by default).
+Return ``None`` or ``CurlECode.OK`` to continue, or another ``CurlECode`` to abort.
+Exceptions raised by the callback abort the transfer and propagate to the caller,
+including with ``AsyncCurl`` and ``AsyncSession``. Async callbacks are not supported.
+
+The callback runs when libcurl creates a TLS context, after configuring its trust
+store. The pointers are only valid during the callback; do not retain or free
+them. On a low-level ``Curl`` handle the callback and its data persist across
+transfers until replaced, reset or closed. Set ``SSL_CTX_FUNCTION`` to ``None``
+to disable it. A duplicated handle retains its own callback registration with
+the same Python data object.
+
+The ``ssl_ctx_set_distrust`` helper rejects a chain containing a blocked public
+key, even when a certificate using that key is present in the loaded CA store.
+It accepts a non-empty list of 64-character hexadecimal SHA-256 hashes of
+DER-encoded SubjectPublicKeyInfo (SPKI), **not certificate fingerprints**.
+It checks the leaf, intermediates and root after normal chain validation, so
+cross-signed and reissued certificates using the same key are also blocked.
+It leaves the shared CA store unchanged. Calling it again on the same context
+replaces that context's blocklist.
+
+.. note::
+
+   The helper requires a curl-impersonate build with the native
+   ``curl_ssl_ctx_set_distrust`` API. Released curl-impersonate 2.3.0 does not
+   include it. When built against older headers, the Python helper raises
+   ``CurlError`` with ``CurlECode.NOT_BUILT_IN``; the general callback still works.
+
+For example, read the public-key hashes you want to block from a file with one
+hexadecimal hash per line:
+
+.. code-block:: python
+
+    from pathlib import Path
+    from curl_cffi import CurlOpt, Session, ssl_ctx_set_distrust
+
+    blocked_keys = Path("blocked-spki-sha256.txt").read_text().splitlines()
+
+    def configure_tls(handle, ssl_ctx, blocked):
+        ssl_ctx_set_distrust(ssl_ctx, blocked)
+
+    with Session(curl_options={
+        CurlOpt.SSL_CTX_FUNCTION: configure_tls,
+        CurlOpt.SSL_CTX_DATA: blocked_keys,
+        CurlOpt.FRESH_CONNECT: 1,
+        CurlOpt.FORBID_REUSE: 1,
+        CurlOpt.SSL_SESSIONID_CACHE: 0,
+    }) as session:
+        response = session.get("https://example.com")
+
+The same options work with ``AsyncSession`` or ``Curl.setopt``. To obtain the
+SPKI hash from a PEM certificate:
+
+.. code-block:: shell
+
+    openssl x509 -in affected-ca.pem -pubkey -noout \
+        | openssl pkey -pubin -outform DER \
+        | openssl dgst -sha256
+
+Use only the 64 hexadecimal characters from the output. No blocklist is applied
+automatically. Keep certificate and hostname verification enabled. The native
+helper replaces any existing certificate verification callback and requires
+successful backend chain validation, even if peer verification was disabled.
+Native verification fallbacks such as Apple SecTrust are not used; the trust
+anchor must be available in the backend's CA store.
+
+Existing connections and resumed TLS sessions can bypass certificate verification.
+Use a fresh connection pool when changing policy, or use the connection and
+session-cache options shown above to require a full handshake for each transfer.
+Do not enable TLS early data when policy must be checked before sending data.
+Libcurl cannot track changes made inside your callback when deciding whether
+connections or sessions can be reused.
+
+
 Selecting http version
 ======================
 

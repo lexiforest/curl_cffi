@@ -1,6 +1,25 @@
 
 #include "shim.h"
 
+int _curl_has_ssl_ctx_distrust(void) {
+#ifdef CURL_IMPERSONATE_SSL_CTX_DISTRUST
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int _curl_ssl_ctx_set_distrust(void* ssl_ctx, const unsigned char* hashes, size_t count) {
+#ifdef CURL_IMPERSONATE_SSL_CTX_DISTRUST
+    return (int)curl_ssl_ctx_set_distrust(ssl_ctx, hashes, count);
+#else
+    (void)ssl_ctx;
+    (void)hashes;
+    (void)count;
+    return CURLE_NOT_BUILT_IN;
+#endif
+}
+
 int _curl_easy_setopt(void* curl, int option, void* parameter) {
     // printf("****** hijack test begins: \n");
     // int val = curl_easy_setopt(instance->curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);

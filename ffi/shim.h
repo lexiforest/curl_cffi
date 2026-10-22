@@ -8,3 +8,5 @@
 int _curl_easy_setopt(void* curl, int option, void* param);
 int _curl_share_setopt(void* share, int option, void* param);
 int _curl_easy_getinfo_socket(void* curl, int option, uintptr_t* result);
+int _curl_has_ssl_ctx_distrust(void);
+int _curl_ssl_ctx_set_distrust(void* ssl_ctx, const unsigned char* hashes, size_t count);

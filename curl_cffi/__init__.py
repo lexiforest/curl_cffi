@@ -3,6 +3,7 @@ __all__ = [
     "AsyncCurl",
     "CurlMime",
     "CurlShare",
+    "ssl_ctx_set_distrust",
     "CurlError",
     "CurlInfo",
     "CurlOpt",
@@ -79,7 +80,7 @@ from .const import (
     CurlWsFlag,
     CurlWsOption,
 )
-from .curl import Curl, CurlError, CurlMime, CurlShare
+from .curl import Curl, CurlError, CurlMime, CurlShare, ssl_ctx_set_distrust
 
 from .requests import (
     AsyncSession,

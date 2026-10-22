@@ -239,6 +239,7 @@ class AsyncCurl:
         """Add a curl handle to be managed by curl_multi. This is the equivalent of
         `perform` in the async world."""
 
+        curl._clear_ssl_ctx_exception()
         curl._ensure_cacert()
         errcode = lib.curl_multi_add_handle(self._curlm, curl._curl)
         self._check_error(errcode)

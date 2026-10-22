@@ -24,6 +24,38 @@ Target
 
 All the clients run with session/client enabled.
 
+SSL context callbacks and distrust
+------
+
+Run from the repository root with the test dependencies installed and a native
+library that supports `curl_ssl_ctx_set_distrust`:
+
+```sh
+python -m benchmark.ssl_distrust --rounds 20 --requests 500 --output /tmp/ssl-distrust.json
+```
+
+The benchmark starts a separate local TLS 1.3 server and verifies a generated
+ECDSA leaf/intermediate/root chain against a certifi bundle plus the test root.
+It first checks that distrusting the root's SPKI actually rejects the handshake.
+It then compares normal verification, an empty Python SSL context callback,
+and the public distrust helper with 1, 8, or 128 nonmatching SPKI hashes. The
+`encoded-8` diagnostic uses the same callback bridge and native helper with
+preencoded hashes to estimate the contribution from Python input processing.
+
+Each round randomizes comparison order and warms the connection/CA caches before
+measuring. Results include wall time, client process CPU time (excluding the
+server), libcurl's TLS handshake time, raw round samples, and bootstrap intervals
+for paired differences against the baseline. Small differences whose intervals
+include zero should be treated as noise. These are local sequential measurements,
+not Internet latency or concurrent throughput measurements; no browser profile is
+applied.
+
+The `fresh` scenario opens a new connection for every request with TLS resumption
+disabled. The `reused` scenario keeps one connection with a fixed policy; it
+asserts that no new connections or SSL context callbacks occur during measurement.
+Reusing a connection does **not** apply a changed distrust policy: close existing
+connections and prevent session resumption when the policy changes.
+
 WebSocket
 ------
 

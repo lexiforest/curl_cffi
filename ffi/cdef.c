@@ -29,6 +29,9 @@ extern "Python" size_t read_buffer_callback(void *ptr, size_t size, size_t nmemb
 extern "Python" size_t read_callback(void *ptr, size_t size, size_t nmemb, void *userdata);
 extern "Python" int seek_buffer_callback(void *userdata, int64_t offset, int origin);
 extern "Python" int debug_function(void *curl, int type, char *data, size_t size, void *clientp);
+extern "Python" int ssl_ctx_callback(void *curl, void *ssl_ctx, void *userdata);
+int _curl_has_ssl_ctx_distrust(void);
+int _curl_ssl_ctx_set_distrust(void *ssl_ctx, const unsigned char *hashes, size_t count);
 
 // multi interfaces
 struct CURLMsg {

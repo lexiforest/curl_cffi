@@ -62,6 +62,14 @@ CurlShare
    .. automethod:: unshare
    .. automethod:: close
 
+SSL context distrust
+~~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: curl_cffi.ssl_ctx_set_distrust
+
+See :ref:`ssl-context-callbacks` for callback usage and
+connection reuse requirements.
+
 Constants
 ~~~~~~~~~
 

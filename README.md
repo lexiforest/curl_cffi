@@ -86,6 +86,7 @@ No browser automation. Just simple API calls that return the exact cookies and h
 - Supports http 2.0, which requests does not.
 - Supports http 3.0, with fingerprints and udp proxy.
 - Supports websocket.
+- Supports SSL context callbacks for custom certificate policy; see [advanced usage](https://curl-cffi.readthedocs.io/en/latest/advanced.html#ssl-context-callbacks-and-certificate-distrust).
 - MIT licensed.
 
 ||requests|aiohttp|httpx|pycurl|curl_cffi|

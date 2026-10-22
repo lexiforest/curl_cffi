@@ -1,6 +1,13 @@
 Security
 ========
 
+Certificate distrust
+--------------------
+
+For applications that need to reject specific certificate public keys after
+loading a CA store, see :ref:`ssl-context-callbacks`. This requires the native
+distrust helper in curl-impersonate; no blocklist is installed automatically.
+
 SSRF protection
 ---------------
 
