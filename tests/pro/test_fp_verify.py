@@ -836,11 +836,11 @@ def test_live_http3_fingerprint_data_matches_runtime_output(
             ping_payload = requests.get(
                 PING_FP_URL,
                 impersonate=target,
-                http_version="v3",
+                http_version="v3only",
                 curl_options={
                     CurlOpt.DOH_URL: "https://cloudflare-dns.com/dns-query",
                 },
-                timeout=30,
+                timeout=60,
             ).json()
             _verify_ping_fingerprint(
                 target=target,
@@ -852,11 +852,11 @@ def test_live_http3_fingerprint_data_matches_runtime_output(
             peet_payload = requests.get(
                 TLS_PEET_URL,
                 impersonate=target,
-                http_version="v3",
+                http_version="v3only",
                 curl_options={
                     CurlOpt.DOH_URL: "https://cloudflare-dns.com/dns-query",
                 },
-                timeout=30,
+                timeout=60,
             ).json()
             _verify_api_fingerprint(
                 target=target,
