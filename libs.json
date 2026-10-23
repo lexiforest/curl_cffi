@@ -65,6 +65,15 @@
         "obj_name": "libcurl-impersonate.a",
         "arch": "aarch64"
     },
+        {
+        "system": "FreeBSD",
+        "machine": "riscv64",
+        "pointer_size": 64,
+        "sysname": "freebsd",
+        "link_type": "static",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "riscv64"
+    },
     {
         "system": "OpenBSD",
         "machine": "amd64",
