@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from curl_cffi import AsyncCurl, CurlOpt, Headers
-from curl_cffi.const import CurlECode
+from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
@@ -582,6 +582,36 @@ async def test_stream_empty_body(server):
         url = str(server.url.copy_with(path="/empty_body"))
         async with s.stream("GET", url) as r:
             assert r.status_code == 200
+
+
+async def test_stream_reads_body_on_demand(server):
+    # The transfer must stay in progress, without downloading ahead of the reader.
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/large"))
+        async with s.stream("GET", url) as r:
+            await anext(r.aiter_content())
+            await asyncio.sleep(0.5)
+            assert 0 < r.curl.getinfo(CurlInfo.SIZE_DOWNLOAD_T) < 2 * 1024 * 1024
+
+
+async def test_stream_close_while_waiting_for_data(server):
+    async with AsyncSession() as s:
+        url = str(server.url.copy_with(path="/hang_after_chunk"))
+        r = await s.get(url, stream=True)
+        assert await anext(r.aiter_content()) == b"first"
+        await asyncio.wait_for(r.aclose(), timeout=1)
+        r = await s.get(str(server.url))
+        assert r.status_code == 200
+
+
+async def test_stream_outliving_its_session(server):
+    url = str(server.url.copy_with(path="/large"))
+    async with AsyncSession() as s:
+        r = await s.get(url, stream=True)
+    await asyncio.sleep(0)
+    async for _ in r.aiter_content():
+        pass
+    await r.aclose()
 
 
 async def test_stream_incomplete_read(server):

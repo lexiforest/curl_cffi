@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import http.cookies
 import os
-import queue
 import random
 import sys
 import threading
@@ -15,7 +14,6 @@ from collections.abc import (
     Callable,
     Generator,
 )
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
@@ -49,15 +47,14 @@ from .headers import Headers, HeaderTypes
 from .impersonate import BrowserTypeLiteral, ExtraFingerprints, ExtraFpDict
 from .models import Response
 from .streams import (
-    STREAM_END,
     RequestContent,
     RequestData,
     SyncRequestContent,
     _AsyncIterableReader,
+    _AsyncStreamBody,
     _capture_body_position,
-    _peek_aio_queue,
-    _peek_queue,
     _rewind_body,
+    _StreamBody,
 )
 from .utils import NOT_SET, HttpVersionLiteral, NotSetType, set_curl_options
 from .websockets import (
@@ -73,6 +70,8 @@ if sys.version_info >= (3, 13):
     R = TypeVar("R", bound=Response, default=Response)
 else:
     R = TypeVar("R", bound=Response)
+
+T = TypeVar("T")
 
 if TYPE_CHECKING:
     if sys.version_info >= (3, 11):
@@ -570,9 +569,7 @@ class Session(BaseSession[R]):
         super().__init__(**kwargs)
         self._thread = thread
         self._use_thread_local_curl = use_thread_local_curl
-        self._queue = None
         self._websockets: WeakSet[WebSocket] = WeakSet[WebSocket]()
-        self._executor = None
         self._share = curl_share
         if use_thread_local_curl:
             self._local = threading.local()
@@ -603,11 +600,20 @@ class Session(BaseSession[R]):
         else:
             return self._curl
 
-    @property
-    def executor(self):
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor()
-        return self._executor
+    def _run_blocking(self, fn: Callable[[], T]) -> T:
+        """Run a blocking libcurl call without stalling the configured thread
+        engine's event hub."""
+        if self._thread == "eventlet":
+            # see: https://eventlet.net/doc/threading.html
+            import eventlet.tpool
+
+            return eventlet.tpool.execute(fn)  # type: ignore
+        if self._thread == "gevent":
+            # see: https://www.gevent.org/api/gevent.threadpool.html
+            import gevent
+
+            return gevent.get_hub().threadpool.spawn(fn).get()  # type: ignore
+        return fn()
 
     def __enter__(self):
         return self
@@ -902,21 +908,15 @@ class Session(BaseSession[R]):
         discard_cookies: bool = False,
     ) -> R:
         # clone a new curl instance for streaming response
+        body: Optional[_StreamBody] = None
         if stream:
             c = self.curl.duphandle()
             _ = self.curl.reset()
+            body = _StreamBody(c, self._run_blocking)
         else:
             c = self.curl
 
-        stream_response: Optional[R] = None
-
-        def parse_stream_response() -> None:
-            nonlocal stream_response
-            stream_response = self._parse_response(
-                c, buffer, header_buffer, default_encoding, discard_cookies
-            )
-
-        req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+        req, buffer, header_buffer = set_curl_options(
             c,
             method=method,
             url=url,
@@ -958,13 +958,11 @@ class Session(BaseSession[R]):
             dns=self.dns if dns is None else dns,
             doh_url=doh_url or self.doh_url,
             stream=stream,
-            stream_response_callback=parse_stream_response if stream else None,
             max_recv_speed=max_recv_speed,
             multipart=multipart,
             cert=cert or self.cert,
             curl_options=self.curl_options,
-            queue_class=queue.Queue,
-            event_class=threading.Event,
+            stream_writer=body.write if body is not None else None,
         )
 
         if self._cache_enabled(req, stream=stream, content_callback=content_callback):
@@ -980,67 +978,32 @@ class Session(BaseSession[R]):
                 c.reset()
                 return cast(R, cached_response)
 
-        if stream:
+        if body is not None:
 
-            def perform():
-                try:
-                    c.perform()
-                except CurlError as e:
-                    rsp = self._parse_response(
-                        c, buffer, header_buffer, default_encoding, discard_cookies
-                    )
-                    rsp.request = req
-                    error = code2error(e.code, str(e))
-                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
-                finally:
-                    try:
-                        if stream_response is None:
-                            parse_stream_response()
-                    finally:
-                        cast(threading.Event, header_recved).set()
-                        q.put(STREAM_END)  # type: ignore
+            def to_error(e: CurlError) -> RequestException:
+                rsp = self._parse_response(
+                    c, buffer, header_buffer, default_encoding, discard_cookies
+                )
+                rsp.request = req
+                error = code2error(e.code, str(e))
+                return error(str(e), e.code, rsp)
 
-            stream_task = self.executor.submit(perform)
-
-            # Metadata is captured in the transfer thread before waking the caller.
-            header_recved.wait()  # type: ignore
-            if stream_response is None:
-                try:
-                    stream_task.result()
-                finally:
-                    c.close()
-            rsp = cast(R, stream_response)
-
-            # Raise the exception if something wrong happens when receiving the header.
-            first_element = _peek_queue(q)  # type: ignore
-            if isinstance(first_element, RequestException):
-                if quit_now:
-                    quit_now.set()
-                stream_task.result()
-                c.close()
-                raise first_element
-
+            try:
+                body.start(to_error)
+            except BaseException:
+                body.close()
+                raise
+            rsp = self._parse_response(
+                c, buffer, header_buffer, default_encoding, discard_cookies
+            )
             rsp.request = req
-            rsp.stream_task = stream_task
-            rsp.quit_now = quit_now
-            rsp.queue = q
+            rsp._set_stream(body)
             if self.raise_for_status:
                 rsp.raise_for_status()
             return rsp
         else:
             try:
-                if self._thread == "eventlet":
-                    # see: https://eventlet.net/doc/threading.html
-                    import eventlet.tpool
-
-                    eventlet.tpool.execute(c.perform)  # type: ignore
-                elif self._thread == "gevent":
-                    # see: https://www.gevent.org/api/gevent.threadpool.html
-                    import gevent
-
-                    gevent.get_hub().threadpool.spawn(c.perform).get()  # type: ignore
-                else:
-                    c.perform()
+                self._run_blocking(c.perform)
             except CurlError as e:
                 rsp = self._parse_response(
                     c, buffer, header_buffer, default_encoding, discard_cookies
@@ -1605,8 +1568,6 @@ class AsyncSession(BaseSession[R]):
                     doh_url=doh_url or self.doh_url,
                     max_recv_speed=max_recv_speed,
                     cert=cert or self.cert,
-                    queue_class=asyncio.Queue,
-                    event_class=asyncio.Event,
                     curl_options={**self.curl_options, **(curl_options or {})},
                     perk=perk or self.perk,
                 )
@@ -1731,8 +1692,9 @@ class AsyncSession(BaseSession[R]):
         if isinstance(content, AsyncIterable):
             async_reader = _AsyncIterableReader(content, curl)
             request_content = cast(SyncRequestContent, async_reader)
+        body = _AsyncStreamBody(curl, self.acurl) if stream else None
         try:
-            req, buffer, header_buffer, q, header_recved, quit_now = set_curl_options(
+            req, buffer, header_buffer = set_curl_options(
                 curl=curl,
                 method=method,
                 url=url,
@@ -1778,8 +1740,7 @@ class AsyncSession(BaseSession[R]):
                 multipart=multipart,
                 cert=cert or self.cert,
                 curl_options=self.curl_options,
-                queue_class=asyncio.Queue,
-                event_class=asyncio.Event,
+                stream_writer=body.write if body is not None else None,
             )
         # Catch BaseException so asyncio.CancelledError also returns the handle.
         except BaseException:
@@ -1787,57 +1748,31 @@ class AsyncSession(BaseSession[R]):
             raise
         if async_reader is not None:
             async_reader.start()
-        if stream:
-            task = self.acurl.add_handle(curl)
-            curl_released = False
+        if body is not None:
 
-            async def perform() -> None:
-                try:
-                    await task
-                except CurlError as e:
-                    rsp = self._parse_response(
-                        curl, buffer, header_buffer, default_encoding, discard_cookies
-                    )
-                    rsp.request = req
-                    error = code2error(e.code, str(e))
-                    q.put_nowait(error(str(e), e.code, rsp))  # type: ignore
-                finally:
-                    if async_reader is not None:
-                        await async_reader.close()
-                    if not cast(asyncio.Event, header_recved).is_set():
-                        cast(asyncio.Event, header_recved).set()
-                    await q.put(STREAM_END)  # type: ignore
+            def to_error(e: CurlError) -> RequestException:
+                rsp = self._parse_response(
+                    curl, buffer, header_buffer, default_encoding, discard_cookies
+                )
+                rsp.request = req
+                error = code2error(e.code, str(e))
+                return error(str(e), e.code, rsp)
 
-            def cleanup(fut):
-                nonlocal curl_released
-                if not curl_released:
-                    self.release_curl(curl)
-                curl_released = True
+            async def finish() -> None:
+                if async_reader is not None:
+                    await async_reader.close()
+                self.release_curl(curl)
 
-            stream_task = asyncio.create_task(perform())
-            stream_task.add_done_callback(cleanup)
-
-            await cast(asyncio.Event, header_recved).wait()
-
-            # Unlike threads, coroutines does not use preemptive scheduling.
-            # For asyncio, there is no need for a header_parsed event, the
-            # _parse_response will execute in the foreground, no background tasks
-            # running.
+            try:
+                await body.start(to_error, finish)
+            except BaseException:
+                await body.aclose()
+                raise
             rsp = self._parse_response(
                 curl, buffer, header_buffer, default_encoding, discard_cookies
             )
-
-            first_element = _peek_aio_queue(q)  # type: ignore
-            if isinstance(first_element, RequestException):
-                if not curl_released:
-                    self.release_curl(curl)
-                curl_released = True
-                raise first_element
-
             rsp.request = req
-            rsp.astream_task = stream_task
-            rsp.quit_now = quit_now
-            rsp.queue = q
+            rsp._set_stream(body)
             if self.raise_for_status:
                 rsp.raise_for_status()
             return rsp

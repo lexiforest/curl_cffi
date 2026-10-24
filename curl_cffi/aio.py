@@ -88,6 +88,19 @@ CURLPIPE_HTTP1 = 1  # deprecated
 CURLPIPE_MULTIPLEX = 2
 
 
+def check_multi_error(errcode: int, *args: Any) -> None:
+    """Raise ``CurlError`` for a failed ``curl_multi_*`` call."""
+    if errcode == CurlECode.OK:
+        return
+    errmsg = ffi.string(lib.curl_multi_strerror(errcode)).decode()
+    action = " ".join([str(a) for a in args])
+    raise CurlError(
+        f"Failed in {action}, multi: ({errcode}) {errmsg}. "
+        "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
+        "details. Please open an issue on GitHub to help debug this error.",
+    )
+
+
 """
 libcurl provides an event-based system for multiple handles with the following API:
 
@@ -328,15 +341,7 @@ class AsyncCurl:
             future.set_exception(exception)
 
     def _check_error(self, errcode: int, *args: Any):
-        if errcode == CurlECode.OK:
-            return
-        errmsg = ffi.string(lib.curl_multi_strerror(errcode)).decode()
-        action = " ".join([str(a) for a in args])
-        raise CurlError(
-            f"Failed in {action}, multi: ({errcode}) {errmsg}. "
-            "See https://curl.se/libcurl/c/libcurl-errors.html first for more "
-            "details. Please open an issue on GitHub to help debug this error.",
-        )
+        check_multi_error(errcode, *args)
 
     def setopt(self, option, value):
         """Wrapper around curl_multi_setopt."""

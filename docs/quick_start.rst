@@ -391,10 +391,12 @@ For a complete list of response attributes, see the :doc:`api`.
 Streaming response
 ------------------
 
-For compatibility, curl_cffi supports the ``stream=True`` option, and a ``stream`` method,
-with iterative-style content streaming.
+curl_cffi supports the ``stream=True`` option, and a ``stream`` method, with
+iterative-style content streaming.
 
-But when possible, you should choose the native ``content_callback`` option.
+The body is read from the network as you iterate over it: libcurl pauses the
+transfer while you hold a chunk, so only about one chunk is buffered in memory, and
+a slow reader slows the download down instead of filling your memory.
 
 .. code-block:: python
 
@@ -410,17 +412,15 @@ But when possible, you should choose the native ``content_callback`` option.
 
 For more examples, see the `examples on GitHub <https://github.com/lexiforest/curl_cffi/blob/main/examples/stream.py>`_
 
-.. warning::
+.. note::
 
-    Natively, libcurl only support a callback-style API, i.e. you pass a callback function for
-    processing the streamed response content. In curl_cffi, we use a internal queue to convert
-    the callback to a interative API.
+    A streaming response keeps its connection until the body has been fully read or
+    the response is closed. Use the ``stream`` context manager, or call ``close()``
+    (``aclose()`` in asyncio) when you stop reading early. With ``AsyncSession``, an
+    open stream also holds one of the ``max_clients`` slots.
 
-    Because of the limitation, when a request is sent, the response will start to be streamed to
-    your client at once. You need to start consuming the content immediately, otherwise, it would
-    be store in your memory, thus OOM could be triggered.
-
-    Alternatively, you should use the native ``content_callback`` API.
+    If you only need to process the chunks as they arrive, the native
+    ``content_callback`` option avoids the iterator altogether.
 
 .. code-block:: python
 

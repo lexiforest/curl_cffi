@@ -142,6 +142,8 @@ async def app(scope, receive, send):
         await hello_world_windows1251(scope, receive, send)
     elif scope["path"].startswith("/unique_cookie"):
         await set_cookies_unique(scope, receive, send)
+    elif scope["path"].startswith("/hang_after_chunk"):
+        await hang_after_chunk(scope, receive, send)
     elif scope["path"].startswith("http://"):
         await http_proxy(scope, receive, send)
     elif scope["method"] == "CONNECT":
@@ -314,6 +316,20 @@ async def stream(scope, receive, send):
             "more_body": False,
         }
     )
+
+
+async def hang_after_chunk(scope, receive, send):
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [[b"content-type", b"text/plain"]],
+        }
+    )
+    await send({"type": "http.response.body", "body": b"first", "more_body": True})
+    # Keep the response open until the client goes away.
+    while (await receive())["type"] != "http.disconnect":
+        pass
 
 
 async def large(scope, receive, send):
