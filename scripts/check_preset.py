@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
 import re
+import time
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 IMPERSONATE_PATH = ROOT_DIR / "curl_cffi" / "requests" / "impersonate.py"
 FINGERPRINTS_PATH = ROOT_DIR / "curl_cffi" / "fingerprints.py"
+BUILD_PATH = ROOT_DIR / "scripts" / "build.py"
+MAKEFILE_PATH = ROOT_DIR / "Makefile"
+
+PATCH_URL = (
+    "https://raw.githubusercontent.com/lexiforest/curl-impersonate/"
+    "v{version}/patches/curl.patch"
+)
+FETCH_ATTEMPTS = 3
+# Targets of the binary that are http clients, not browsers, so not exposed. Any
+# other target must be exposed, so that a new browser family isn't missed.
+NON_BROWSER_TARGETS = {"okhttp4_android"}
 
 DEFAULT_ALIAS_MAP = {
     "chrome": "DEFAULT_CHROME",
@@ -83,7 +98,67 @@ def format_values(values: list[str]) -> str:
     return ", ".join(values)
 
 
+def pinned_version(errors: list[str]) -> str:
+    """The curl-impersonate version, pinned in both build.py and the Makefile."""
+    build_match = re.search(
+        r'^__version__\s*=\s*"([^"]+)"$',
+        BUILD_PATH.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    make_match = re.search(
+        r"^VERSION\s*:=\s*(\S+)$",
+        MAKEFILE_PATH.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    if build_match is None:
+        raise SystemExit(f"Could not find __version__ in {BUILD_PATH}")
+    if make_match is None:
+        raise SystemExit(f"Could not find VERSION in {MAKEFILE_PATH}")
+    version = build_match.group(1)
+    if make_match.group(1) != version:
+        errors.append(
+            f"Makefile pins curl-impersonate {make_match.group(1)}, "
+            f"but scripts/build.py pins {version}"
+        )
+    return version
+
+
+def fetch_patch(version: str) -> str:
+    url = PATCH_URL.format(version=version)
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            with urlopen(url, timeout=60) as response:  # noqa: S310 (fixed host)
+                return response.read().decode("utf-8")
+        except URLError as e:
+            # Only retry errors that may be transient, a missing tag stays missing.
+            permanent = isinstance(e, HTTPError) and e.code < 500
+            if permanent or attempt == FETCH_ATTEMPTS:
+                raise SystemExit(f"Could not fetch {url}: {e}") from e
+            time.sleep(2**attempt)
+    raise AssertionError("unreachable")
+
+
+def binary_targets(version: str) -> set[str]:
+    """Browser targets compiled into the pinned curl-impersonate."""
+    targets = set(re.findall(r'\.target = "([^"]+)"', fetch_patch(version)))
+    targets -= NON_BROWSER_TARGETS
+    if not targets:
+        raise SystemExit(f"No targets found in the curl.patch of v{version}")
+    return targets
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Check that the impersonate presets are consistent with each "
+        "other and with the targets of the pinned curl-impersonate."
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="skip the comparison with the pinned curl-impersonate",
+    )
+    args = parser.parse_args()
+
     impersonate_text = IMPERSONATE_PATH.read_text(encoding="utf-8")
     fingerprints_text = FINGERPRINTS_PATH.read_text(encoding="utf-8")
     impersonate_ast = ast.parse(impersonate_text, filename=str(IMPERSONATE_PATH))
@@ -167,6 +242,23 @@ def main() -> int:
                 "NATIVE_IMPERSONATE_TARGETS"
             )
 
+    version = None
+    if not args.offline:
+        version = pinned_version(errors)
+        compiled_targets = binary_targets(version)
+        unexposed = sorted(compiled_targets - literal_targets)
+        unsupported = sorted(literal_targets - compiled_targets)
+        if unexposed:
+            errors.append(
+                f"impersonate.py is missing targets of curl-impersonate v{version}: "
+                + format_values(unexposed)
+            )
+        if unsupported:
+            errors.append(
+                f"impersonate.py has presets that curl-impersonate v{version} "
+                "doesn't support: " + format_values(unsupported)
+            )
+
     if errors:
         print("Preset consistency check failed:")
         for error in errors:
@@ -177,6 +269,7 @@ def main() -> int:
         "Preset consistency check passed for "
         f"{IMPERSONATE_PATH.relative_to(ROOT_DIR)} and "
         f"{FINGERPRINTS_PATH.relative_to(ROOT_DIR)}"
+        + (f", against curl-impersonate v{version}" if version else "")
     )
     return 0
 
