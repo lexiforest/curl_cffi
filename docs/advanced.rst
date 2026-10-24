@@ -95,6 +95,29 @@ To talk HTTP/3 to the proxy itself, set its type to ``CurlProxyType.HTTPS3``:
     )
 
 
+Building requests
+=================
+
+``build_request`` returns the ``Request`` a session would send, with the session
+params, base url and headers merged in. Inspect or modify it, then pass it to ``send``:
+
+.. code-block:: python
+
+    from curl_cffi import Session
+
+    with Session(headers={"User-Agent": "curl_cffi"}) as s:
+        req = s.build_request("GET", "https://example.com", json={"hello": "world"})
+        req.headers["User-Agent"] = "my_web_crawler/0.1"
+        req.method = "POST"
+        r = s.send(req, impersonate="chrome")
+
+``send`` does not merge the session params and headers again, nor quote the url again,
+so the request is sent as is. Cookies and the other options still apply. Headers that
+libcurl adds when sending, like the browser headers of ``impersonate``,
+``Content-Length`` or the ``Content-Type`` of form values, aren't part of the
+``Request``. ``AsyncSession`` provides the same methods, with ``send`` being a
+coroutine.
+
 Response cache
 ==============
 
