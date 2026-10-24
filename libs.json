@@ -230,5 +230,14 @@
         "libc": "gnu",
         "obj_name": "libcurl-impersonate.a",
         "arch": "loongarch64"
+    },
+    {
+        "system": "SunOS",
+        "machine": "i86pc",
+        "pointer_size": 64,
+        "sysname": "illumos",
+        "link_type": "dynamic",
+        "obj_name": "libcurl-impersonate.so",
+        "arch": "x86_64"
     }
 ]
