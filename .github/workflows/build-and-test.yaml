@@ -21,8 +21,10 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-    - uses: actions/setup-python@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: "3.10"
     - name: Lint
@@ -39,9 +41,11 @@ jobs:
     name: Build sdist wheel
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-    - uses: actions/setup-python@v7
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: "3.10"
 
@@ -53,7 +57,7 @@ jobs:
         pip install ./dist/*.tar.gz
 
     - name: upload artifacts
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: curl_cffi-${{ github.sha }}-sdist.zip
         path: ./dist/*.tar.gz
@@ -80,14 +84,16 @@ jobs:
         - os: windows-2022
         - os: windows-11-arm
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-    - uses: actions/setup-python@v7
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: "3.11"
 
     - if: matrix.qemu
-      uses: docker/setup-qemu-action@v4
+      uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       with:
         platforms: all
 
@@ -97,14 +103,14 @@ jobs:
         brew install make automake libtool pkg-config
 
     - name: Build and test wheels
-      uses: pypa/cibuildwheel@v4.2.1
+      uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
       env:
         CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs_linux }}
 
     # - name: Setup tmate session
     #   uses: mxschmitt/action-tmate@v3
 
-    - uses: actions/upload-artifact@v7
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: curl_cffi-${{ github.sha }}-${{ matrix.os }}-${{ strategy.job-index }}.zip
         path: ./wheelhouse/*.whl
@@ -113,23 +119,25 @@ jobs:
     name: Build Android wheels
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-    - uses: actions/setup-python@v7
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: '3.11'
 
-    - uses: actions/setup-java@v6
+    - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - uses: android-actions/setup-android@v4
+    - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       with:
         packages: platform-tools
 
     - name: Build wheels (Android)
-      uses: pypa/cibuildwheel@v4.2.1
+      uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
       env:
         CIBW_PLATFORM: android
         # One wheel per CPython minor, see the Android note in setup.py.
@@ -144,7 +152,7 @@ jobs:
         ls -l ./wheelhouse/
         for tag in cp313 cp314 cp315; do ls ./wheelhouse/*-$tag-*-android_*.whl; done
 
-    - uses: actions/upload-artifact@v7
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: curl_cffi-${{ github.sha }}-android.zip
         path: ./wheelhouse/*.whl
@@ -158,14 +166,16 @@ jobs:
         # For linux, it's built inside a container, no need to test for latest versions.
         os: [macos-latest, windows-latest, windows-11-arm]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-    - uses: actions/setup-python@v7
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: "3.11"
 
     - if: runner.os == 'Linux'
-      uses: docker/setup-qemu-action@v4
+      uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       with:
         platforms: all
 
@@ -175,4 +185,4 @@ jobs:
         brew install make automake libtool pkg-config
 
     - name: Build and test wheels
-      uses: pypa/cibuildwheel@v4.2.1
+      uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
