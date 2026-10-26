@@ -431,7 +431,9 @@ class Response:
 
     async def aclose(self):
         """Close the streaming connection, only valid in stream mode."""
-
+        # Abort the transfer, otherwise an unread body would still be downloaded.
+        if self.quit_now:
+            self.quit_now.set()
         if self.astream_task:
             await self.astream_task
 

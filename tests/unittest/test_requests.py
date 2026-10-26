@@ -4,6 +4,9 @@ import pickle
 import time
 from io import BytesIO
 from threading import Event, get_ident
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -11,6 +14,7 @@ from charset_normalizer import detect
 
 import curl_cffi
 from curl_cffi import Curl, CurlFollow, CurlOpt, requests
+from curl_cffi.requests import RetryStrategy
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
@@ -682,6 +686,91 @@ def test_session_retry(server):
         r = s.get(retry_url)
     assert r.status_code == 200
     assert r.content == b"ok"
+
+
+@pytest.mark.parametrize(
+    ("forcelist", "raise_for_status", "status", "fail_times", "expected"),
+    [
+        # Opt-in: without a forcelist, a 503 is returned as is.
+        ((), False, 503, 999, (False, 503, "1")),
+        ((503,), False, 503, 1, (False, 200, "2")),
+        # Once retries are exhausted, the last response is returned.
+        ((503,), False, 503, 999, (False, 503, "3")),
+        # With raise_for_status, only the listed statuses are retried.
+        ([503], True, 503, 1, (False, 200, "2")),
+        ((503,), True, 503, 999, (True, 503, "3")),
+        ((503,), True, 404, 999, (True, 404, "1")),
+    ],
+)
+def test_status_forcelist(
+    retry_status_url, forcelist, raise_for_status, status, fail_times, expected
+):
+    url = retry_status_url(status=status, fail_times=fail_times)
+    strategy = RetryStrategy(count=2, status_forcelist=forcelist)
+    with requests.Session(retry=strategy, raise_for_status=raise_for_status) as s:
+        try:
+            r, raised = s.get(url), False
+        except HTTPError as e:
+            r, raised = e.response, True
+    assert (raised, r.status_code, r.headers["x-request-count"]) == expected
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "sleeps"),
+    [
+        (lambda: "0.3", [0.3]),
+        (lambda: "-1", []),
+        # Invalid values fall back to the backoff delay.
+        (lambda: "inf", [0.5]),
+        (lambda: "soon", [0.5]),
+        (lambda: "1000", [10]),  # capped at retry_after_max
+        (lambda: "Wed, 21 Oct 2015 07:28:00 GMT", []),
+        (
+            lambda: format_datetime(
+                datetime.now(timezone.utc) + timedelta(seconds=5), usegmt=True
+            ),
+            [pytest.approx(5, abs=1.5)],
+        ),
+    ],
+)
+def test_status_forcelist_retry_after(
+    retry_status_url, monkeypatch, retry_after, sleeps
+):
+    slept = []
+    monkeypatch.setattr(
+        "curl_cffi.requests.session.time", SimpleNamespace(sleep=slept.append)
+    )
+    url = retry_status_url(fail_times=1, retry_after=retry_after())
+    strategy = RetryStrategy(
+        count=1, delay=0.5, status_forcelist=(503,), retry_after_max=10
+    )
+    with requests.Session(retry=strategy) as s:
+        assert s.get(url).status_code == 200
+    assert slept == sleeps
+
+
+@pytest.mark.parametrize(
+    ("strategy", "error"),
+    [
+        (RetryStrategy(count=1, status_forcelist=(700,)), ValueError),
+        (RetryStrategy(count=1, status_forcelist=("503",)), ValueError),
+        (RetryStrategy(count=1, status_forcelist=503), TypeError),  # type: ignore
+        (RetryStrategy(count=1, retry_after_max=-1), ValueError),
+    ],
+)
+def test_status_forcelist_invalid(strategy, error):
+    with pytest.raises(error):
+        requests.Session(retry=strategy)
+
+
+def test_status_forcelist_stream(retry_status_url):
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=2, status_forcelist=(503,))
+    with requests.Session(retry=strategy) as s, s.stream("GET", url) as r:
+        content = b"".join(r.iter_content())
+    assert r.status_code == 200
+    assert content == b"ok"
+    assert r.headers["x-request-count"] == "2"
 
 
 def test_post_timeout(server):
