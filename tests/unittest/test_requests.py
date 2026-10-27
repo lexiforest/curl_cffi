@@ -921,6 +921,47 @@ def test_session_update_parms(server):
     assert r.content == b'{"params": {"old": ["day"], "foo": ["bar"]}}'
 
 
+@pytest.mark.parametrize(
+    ("method", "body"),
+    [
+        ("post", {"data": {"a": "1"}}),  # Content-Type added by libcurl
+        ("put", {"data": {"a": "1"}}),
+        ("post", {"data": BytesIO(b"a=1")}),
+        ("post", {"content": b"a=1"}),
+        ("post", {"json": {"a": 1}}),
+    ],
+)
+def test_session_send_matches_request(server, method, body):
+    """``send(build_request(...))`` sends what ``request(...)`` would, header
+    order included, which matters for the fingerprint."""
+    s = requests.Session(
+        base_url=str(server.url), params={"old": "day"}, headers={"Foo": "session"}
+    )
+    url = "/echo_headers?q=a b"
+    expected = s.request(method, url, impersonate="chrome", **body)
+    if isinstance(body.get("data"), BytesIO):
+        body["data"].seek(0)
+    r = s.send(s.build_request(method, url, **body), impersonate="chrome")
+    assert r.url == expected.url
+    assert list(r.json().items()) == list(expected.json().items())
+
+
+def test_session_send(server):
+    s = requests.Session(params={"old": "day"}, headers={"Foo": "session"})
+    # Edits aren't undone by merging the session params and headers again.
+    req = s.build_request("GET", str(server.url.copy_with(path="/echo_headers")))
+    req.url = req.url.replace("old=day", "old=night")
+    del req.headers["Foo"]
+    r = s.send(req)
+    assert r.url.endswith("?old=night")
+    assert "Foo" not in r.json()
+
+    req = s.build_request("GET", str(server.url.copy_with(path="/echo_body")))
+    req.method = "POST"
+    req.body = b"edited"
+    assert s.send(req).content == b"edited"
+
+
 def test_session_preset_cookies(server):
     s = requests.Session(cookies={"foo": "bar"})
     # send requests with other cookies
