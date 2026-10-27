@@ -1,19 +1,18 @@
 from contextlib import suppress
-import queue
 import re
 import warnings
-from concurrent.futures import Future
+import weakref
 from json import loads as _stdlib_loads
 from typing import Any, Optional, Union
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import timedelta
 
 from ..curl import Curl
 from ..utils import CurlCffiWarning
 from .cookies import Cookies
-from .exceptions import HTTPError, RequestException
+from .exceptions import HTTPError
 from .headers import Headers
-from .streams import STREAM_END
+from .streams import _AsyncStreamBody, _StreamBody
 
 # Use orjson if present. orjson.loads() is faster but accepts no keyword
 # arguments, so Response.json() falls back to stdlib json when kwargs are given.
@@ -127,10 +126,7 @@ class Response:
         self.local_port: int = 0
         self.history: list[Response] = []
         self.infos: dict[str, Any] = {}
-        self.queue: Optional[queue.Queue] = None
-        self.stream_task: Optional[Future] = None
-        self.astream_task: Optional[Awaitable] = None
-        self.quit_now = None
+        self._stream: Optional[Union[_StreamBody, _AsyncStreamBody]] = None
         self._stream_closed = False
         self.download_size: int = 0
         self.upload_size: int = 0
@@ -139,39 +135,26 @@ class Response:
         self.response_size: int = 0
 
     def __getstate__(self) -> dict[str, Any]:
-        if any(
-            value is not None
-            for value in (
-                self.queue,
-                self.stream_task,
-                self.astream_task,
-                self.quit_now,
-            )
-        ):
+        if self._stream is not None:
             raise TypeError(
                 "Streaming responses cannot be pickled; make the request without "
                 "stream=True before pickling the response."
             )
 
         state = self.__dict__.copy()
-        for attribute in (
-            "curl",
-            "queue",
-            "stream_task",
-            "astream_task",
-            "quit_now",
-        ):
-            state.pop(attribute, None)
+        state.pop("curl", None)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         self.curl = None
-        self.queue = None
-        self.stream_task = None
-        self.astream_task = None
-        self.quit_now = None
         self._stream_closed = True
+
+    def _set_stream(self, stream: Union[_StreamBody, _AsyncStreamBody]) -> None:
+        self._stream = stream
+        # A stream that's dropped without being read or closed is aborted, so its
+        # handle and connection are released.
+        weakref.finalize(self, stream.close).atexit = False
 
     @property
     def charset(self) -> str:
@@ -276,6 +259,9 @@ class Response:
     def iter_content(self, chunk_size=None, decode_unicode=False):
         """
         iterate streaming content chunk by chunk in bytes.
+
+        The body is read from the network as it's iterated. If you stop early,
+        close the response to release the connection.
         """
         if chunk_size:
             warnings.warn(
@@ -286,22 +272,19 @@ class Response:
         if decode_unicode:
             raise NotImplementedError()
 
-        assert self.queue and self.curl, "stream mode is not enabled."
+        stream = self._stream
+        assert isinstance(stream, _StreamBody), "stream mode is not enabled."
 
         while True:
-            chunk = self.queue.get()
-
-            # re-raise the exception if something wrong happened.
-            if isinstance(chunk, RequestException):
-                self._finalize_stream()
-                raise chunk
-
-            # end of stream.
-            if chunk is STREAM_END:
+            try:
+                chunk = stream.read()
+            except BaseException:
+                self.close()
+                raise
+            if chunk is None:
                 break
-
             yield chunk
-        self._finalize_stream()
+        self.close()
 
     def json(
         self, *, path: Optional[str] = None, default: Any = None, **kw: Any
@@ -343,21 +326,14 @@ class Response:
         return matches[0].value if matches else default
 
     def close(self):
-        """Close the streaming connection, only valid in stream mode."""
-        self._finalize_stream()
+        """Close the streaming connection, only valid in stream mode.
 
-    def _finalize_stream(self) -> None:
-        if self._stream_closed:
-            return
-        if self.queue is None and self.stream_task is None and self.quit_now is None:
+        Aborts the transfer if the body has not been fully read.
+        """
+        if self._stream is None or self._stream_closed:
             return
         self._stream_closed = True
-        if self.quit_now:
-            self.quit_now.set()
-        if self.stream_task:
-            self.stream_task.result()
-        if self.curl:
-            self.curl.close()
+        self._stream.close()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
@@ -389,6 +365,9 @@ class Response:
     async def aiter_content(self, chunk_size=None, decode_unicode=False):
         """
         iterate streaming content chunk by chunk in bytes.
+
+        The body is read from the network as it's iterated. If you stop early,
+        close the response to release the connection.
         """
         if chunk_size:
             warnings.warn(
@@ -399,21 +378,18 @@ class Response:
         if decode_unicode:
             raise NotImplementedError()
 
-        assert self.queue and self.curl, "stream mode is not enabled."
+        stream = self._stream
+        assert isinstance(stream, _AsyncStreamBody), "stream mode is not enabled."
 
         while True:
-            chunk = await self.queue.get()
-
-            # re-raise the exception if something wrong happened.
-            if isinstance(chunk, RequestException):
+            try:
+                chunk = await stream.read()
+            except BaseException:
                 await self.aclose()
-                raise chunk
-
-            # end of stream.
-            if chunk is STREAM_END:
+                raise
+            if chunk is None:
                 await self.aclose()
                 return
-
             yield chunk
 
     async def atext(self) -> str:
@@ -430,10 +406,18 @@ class Response:
         return b"".join(chunks)
 
     async def aclose(self):
-        """Close the streaming connection, only valid in stream mode."""
+        """Close the streaming connection, only valid in stream mode.
 
-        if self.astream_task:
-            await self.astream_task
+        Aborts the transfer if the body has not been fully read.
+        """
+        stream = self._stream
+        if stream is None:
+            return
+        self._stream_closed = True
+        if isinstance(stream, _AsyncStreamBody):
+            await stream.aclose()
+        else:
+            stream.close()
 
     # It prints the status code of the response instead of the object's memory location.
     def __repr__(self) -> str:
