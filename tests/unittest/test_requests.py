@@ -565,6 +565,12 @@ def test_charset_default_encoding(server):
     assert r.encoding == "windows-1251"
 
 
+def test_session_default_encoding(server):
+    with requests.Session(default_encoding="latin-1") as s:
+        r = s.get(str(server.url.copy_with(path="/json")))
+    assert r.encoding == "latin-1"
+
+
 def test_charset_default_encoding_autodetect(server):
     def autodetect(content):
         return detect(content).get("encoding")
