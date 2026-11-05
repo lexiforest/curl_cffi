@@ -9,7 +9,7 @@ import pytest
 
 from curl_cffi import AsyncCurl, CurlOpt, Headers
 from curl_cffi.const import CurlECode
-from curl_cffi.requests import AsyncSession, RequestsError
+from curl_cffi.requests import AsyncSession, RequestsError, RetryStrategy
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
     CertificateVerifyError,
@@ -691,6 +691,24 @@ async def test_async_session_auto_raise_for_status_disabled(server):
         r = await s.get(str(server.url.copy_with(path="/status/404")))
         assert r.status_code == 404
         # Should not raise an exception
+
+
+@pytest.mark.parametrize(
+    ("stream", "raise_for_status"), [(False, False), (True, False), (False, True)]
+)
+async def test_status_forcelist(retry_status_url, stream, raise_for_status):
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=2, status_forcelist=(503,))
+    async with AsyncSession(
+        retry=strategy, raise_for_status=raise_for_status, max_clients=1
+    ) as s:
+        r = await s.get(url, stream=stream)
+        assert r.status_code == 200
+        assert r.headers["x-request-count"] == "2"
+        assert (await r.acontent() if stream else r.content) == b"ok"
+        # The retried response released its slot, so another request can run.
+        r2 = await s.get(retry_status_url(fail_times=0))
+        assert r2.status_code == 200
 
 
 async def test_shared_async_curl_not_closed_by_session(server):

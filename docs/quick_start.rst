@@ -547,6 +547,15 @@ Use ``retry`` to automatically re-run failed requests.
     with Session(retry=strategy) as s:
         r = s.get("https://example.com")
 
+    # Also retry on transient HTTP statuses, honouring Retry-After
+    strategy = RetryStrategy(count=3, delay=1, status_forcelist=(429, 502, 503, 504))
+    with Session(retry=strategy) as s:
+        r = s.get("https://example.com")
+
+``status_forcelist`` retries every method, so leave out the codes that aren't safe to
+retry for a ``POST``. With ``raise_for_status=True`` only the listed statuses are
+retried. The delay from ``Retry-After`` is capped at ``retry_after_max`` (120s by default).
+
 Response vs Session cookies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

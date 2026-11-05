@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import http.cookies
+import math
 import os
 import queue
 import random
@@ -17,8 +18,9 @@ from collections.abc import (
 )
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, suppress
-from dataclasses import dataclass
-from datetime import timedelta
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
@@ -41,6 +43,7 @@ from ..utils import CurlCffiWarning
 from .cache import CacheBackend, CacheSpec, normalize_cache_backend
 from .cookies import Cookies, CookieTypes
 from .exceptions import (
+    HTTPError,
     RequestException,
     SessionClosed,
     code2error,
@@ -194,10 +197,30 @@ RetryBackoff = Literal["linear", "exponential"]
 
 @dataclass
 class RetryStrategy:
+    """Configuration for retrying failed requests.
+
+    Attributes:
+        count: maximum number of retries (the first attempt is not counted).
+        delay: base delay in seconds between attempts.
+        jitter: maximum extra random delay in seconds added to each retry.
+        backoff: how ``delay`` grows across attempts, ``"linear"`` or
+            ``"exponential"``.
+        status_forcelist: HTTP status codes to retry, e.g.
+            ``(429, 500, 502, 503, 504)``. Empty by default, meaning only transport
+            errors are retried. When set, it also decides which ``HTTPError``
+            raised by ``raise_for_status`` are retried, the others are raised right
+            away. Every method is retried, so only include codes that are safe to
+            retry for non-idempotent requests like ``POST``.
+        retry_after_max: maximum delay in seconds taken from a ``Retry-After``
+            header, so that a server can't stall the client indefinitely.
+    """
+
     count: int
     delay: float = 0.0
     jitter: float = 0.0
     backoff: RetryBackoff = "linear"
+    status_forcelist: tuple[int, ...] = ()
+    retry_after_max: float = 120.0
 
 
 def _normalize_retry(retry: Optional[Union[int, RetryStrategy]]) -> RetryStrategy:
@@ -217,7 +240,41 @@ def _normalize_retry(retry: Optional[Union[int, RetryStrategy]]) -> RetryStrateg
         raise ValueError("retry.jitter must be >= 0")
     if strategy.backoff not in ("linear", "exponential"):
         raise ValueError("retry.backoff must be 'linear' or 'exponential'")
+    if not strategy.retry_after_max >= 0:
+        raise ValueError("retry.retry_after_max must be >= 0")
+    try:
+        forcelist = tuple(strategy.status_forcelist)
+    except TypeError:
+        raise TypeError("retry.status_forcelist must be a collection of ints") from None
+    for status in forcelist:
+        if not isinstance(status, int) or not 100 <= status <= 599:
+            raise ValueError(
+                "retry.status_forcelist entries must be ints in the range 100..599"
+            )
+    # Never mutate the caller's RetryStrategy, only copy if coercion happened.
+    if forcelist is not strategy.status_forcelist:
+        strategy = replace(strategy, status_forcelist=forcelist)
     return strategy
+
+
+def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+    """Seconds to wait from a ``Retry-After`` header, in seconds or as an HTTP
+    date. ``None`` if missing or invalid."""
+    if not value:
+        return None
+    try:
+        delay = float(value)
+    except ValueError:
+        try:
+            date = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        delay = (date - datetime.now(timezone.utc)).total_seconds()
+    if not math.isfinite(delay):
+        return None
+    return max(0.0, delay)
 
 
 class BaseSession(Generic[R]):
@@ -480,6 +537,23 @@ class BaseSession(Generic[R]):
             delay += random.uniform(0.0, strategy.jitter)
         return delay
 
+    def _should_retry_status(self, resp: Response, attempt: int) -> bool:
+        strategy = self.retry
+        return (
+            attempt < strategy.count and resp.status_code in strategy.status_forcelist
+        )
+
+    def _status_retry_delay(self, resp: Response, attempt: int) -> float:
+        """Delay before retrying a response whose status is in the forcelist.
+
+        Honours the ``Retry-After`` header, capped at ``retry_after_max``,
+        otherwise uses the configured backoff.
+        """
+        delay = _parse_retry_after(resp.headers.get("Retry-After"))
+        if delay is None:
+            return self._retry_delay(attempt)
+        return min(delay, self.retry.retry_after_max)
+
     @property
     def cache_backend(self) -> Optional[CacheBackend]:
         """The configured cache backend, or None when caching is disabled."""
@@ -540,6 +614,8 @@ class Session(BaseSession[R]):
                 internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
+                Pass a ``RetryStrategy`` with ``status_forcelist`` to also retry on
+                specific HTTP status codes (e.g. 429, 503).
             impersonate: which browser version or fingerprint to impersonate
                 in the session.
             ja3: ja3 string to impersonate in the session.
@@ -1053,8 +1129,12 @@ class Session(BaseSession[R]):
                     c, buffer, header_buffer, default_encoding, discard_cookies
                 )
                 rsp.request = req
-                if self._cache_enabled(
-                    req, stream=stream, content_callback=content_callback
+                # A forcelisted status is retried, so caching it would replay it.
+                if (
+                    self._cache_enabled(
+                        req, stream=stream, content_callback=content_callback
+                    )
+                    and rsp.status_code not in self.retry.status_forcelist
                 ):
                     self._cache.set(req, rsp)  # type: ignore[union-attr]
                 if self.raise_for_status:
@@ -1114,7 +1194,7 @@ class Session(BaseSession[R]):
             if attempt > 0:
                 _rewind_body(body, body_position)
             try:
-                return self._request_once(
+                resp = self._request_once(
                     method=method,
                     url=url,
                     params=params,
@@ -1153,12 +1233,30 @@ class Session(BaseSession[R]):
                     multipart=multipart,
                     discard_cookies=discard_cookies,
                 )
-            except RequestException:
-                if attempt == strategy.count:
+            except RequestException as e:
+                resp = e.response
+                if not (
+                    strategy.status_forcelist
+                    and isinstance(e, HTTPError)
+                    and resp is not None
+                ):
+                    if attempt == strategy.count:
+                        raise
+                    delay = self._retry_delay(attempt + 1)
+                    if delay:
+                        time.sleep(delay)
+                    continue
+                # raise_for_status: the forcelist decides which statuses to retry.
+                if not self._should_retry_status(resp, attempt):
                     raise
-                delay = self._retry_delay(attempt + 1)
-                if delay:
-                    time.sleep(delay)
+            else:
+                if not self._should_retry_status(resp, attempt):
+                    return resp
+
+            delay = self._status_retry_delay(resp, attempt + 1)
+            resp.close()  # release the handle/stream before retrying
+            if delay:
+                time.sleep(delay)
 
     def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return self.request(method="HEAD", url=url, **kwargs)
@@ -1232,6 +1330,8 @@ class AsyncSession(BaseSession[R]):
                 internal/private IP addresses (SSRF protection).
             max_redirects: max redirect counts, default 30, use -1 for unlimited.
             retry: number of retries or ``RetryStrategy`` for failed requests.
+                Pass a ``RetryStrategy`` with ``status_forcelist`` to also retry on
+                specific HTTP status codes (e.g. 429, 503).
             impersonate: which browser version or fingerprint to impersonate
                 in the session.
             ja3: ja3 string to impersonate in the session.
@@ -1918,7 +2018,7 @@ class AsyncSession(BaseSession[R]):
             if attempt:
                 _rewind_body(body, body_position)
             try:
-                return await self._request_once(
+                resp = await self._request_once(
                     method=method,
                     url=url,
                     params=params,
@@ -1957,12 +2057,30 @@ class AsyncSession(BaseSession[R]):
                     multipart=multipart,
                     discard_cookies=discard_cookies,
                 )
-            except RequestException:
-                if attempt == strategy.count:
+            except RequestException as e:
+                resp = e.response
+                if not (
+                    strategy.status_forcelist
+                    and isinstance(e, HTTPError)
+                    and resp is not None
+                ):
+                    if attempt == strategy.count:
+                        raise
+                    delay = self._retry_delay(attempt + 1)
+                    if delay:
+                        await asyncio.sleep(delay)
+                    continue
+                # raise_for_status: the forcelist decides which statuses to retry.
+                if not self._should_retry_status(resp, attempt):
                     raise
-                delay = self._retry_delay(attempt + 1)
-                if delay:
-                    await asyncio.sleep(delay)
+            else:
+                if not self._should_retry_status(resp, attempt):
+                    return resp
+
+            delay = self._status_retry_delay(resp, attempt + 1)
+            await resp.aclose()  # release the handle/stream before retrying
+            if delay:
+                await asyncio.sleep(delay)
 
     async def head(self, url: str, **kwargs: Unpack[RequestParams]) -> R:
         return await self.request(method="HEAD", url=url, **kwargs)

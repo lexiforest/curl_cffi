@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from curl_cffi.requests import cache
-from curl_cffi.requests import AsyncSession, FileCacheBackend, Session
+from curl_cffi.requests import AsyncSession, FileCacheBackend, RetryStrategy, Session
 from curl_cffi.requests.models import Response
 
 
@@ -24,6 +24,19 @@ def test_cache_hit_returns_cached_response(server, tmp_path):
         second = session.get(url)
 
     assert first.cookies["foo"] == second.cookies["foo"]
+    assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+def test_cache_skips_forcelisted_status(retry_status_url, tmp_path):
+    cache = FileCacheBackend(expires=timedelta(seconds=60), path=tmp_path)
+    url = retry_status_url(status=503, fail_times=1)
+    strategy = RetryStrategy(count=2, status_forcelist=(503,))
+
+    with Session(cache=cache, retry=strategy) as session:
+        response = session.get(url)
+
+    assert response.status_code == 200
+    assert response.headers["x-request-count"] == "2"
     assert len(list(tmp_path.glob("*.json"))) == 1
 
 
