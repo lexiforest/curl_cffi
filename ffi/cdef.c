@@ -44,7 +44,7 @@ int curl_multi_cleanup(void *curlm);
 int curl_multi_add_handle(void *curlm, void *curl);
 int curl_multi_remove_handle(void *curlm, void *curl);
 int curl_multi_socket_action(void *curlm, int sockfd, int ev_bitmask, int *running_handle);
-int curl_multi_setopt(void *curlm, int option, void* param);
+int _curl_multi_setopt(void *curlm, int option, void* param);
 int curl_multi_assign(void *curlm, int sockfd, void *sockptr);
 int curl_multi_perform(void *curlm, int *running_handle);
 int curl_multi_timeout(void *curlm, long *timeout_ms);
