@@ -340,15 +340,15 @@ class AsyncCurl:
 
     def setopt(self, option, value):
         """Wrapper around curl_multi_setopt."""
-        if option in (
-            CurlMOpt.PIPELINING,
-            CurlMOpt.MAXCONNECTS,
-            CurlMOpt.MAX_HOST_CONNECTIONS,
-            CurlMOpt.MAX_PIPELINE_LENGTH,
-            CurlMOpt.MAX_TOTAL_CONNECTIONS,
-            CurlMOpt.MAX_CONCURRENT_STREAMS,
-        ):
-            c_value = ffi.new("long*", value)
+        input_option = {
+            # this should be int in curl, but cffi requires pointer for void*
+            # it will be converted back in the glue c code.
+            0: "long*",
+            30000: "int64_t*",  # offset type
+        }
+        value_type = input_option.get((option // 10000) * 10000)
+        if value_type:
+            c_value = ffi.new(value_type, value)
         else:
             c_value = value
-        return lib.curl_multi_setopt(self._curlm, option, c_value)
+        return lib._curl_multi_setopt(self._curlm, option, c_value)

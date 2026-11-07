@@ -17,6 +17,17 @@ int _curl_easy_setopt(void* curl, int option, void* parameter) {
     return (int)curl_easy_setopt(curl, (CURLoption)option, parameter);
 }
 
+int _curl_multi_setopt(void* curlm, int option, void* parameter) {
+    // for integer options, we need to convert param from pointers to integers
+    if (option < CURLOPTTYPE_OBJECTPOINT) {
+        return (int)curl_multi_setopt(curlm, (CURLMoption)option, *(long*)parameter);
+    }
+    if (CURLOPTTYPE_OFF_T <= option && option < CURLOPTTYPE_BLOB) {
+        return (int)curl_multi_setopt(curlm, (CURLMoption)option, *(curl_off_t*)parameter);
+    }
+    return (int)curl_multi_setopt(curlm, (CURLMoption)option, parameter);
+}
+
 int _curl_share_setopt(void* share, int option, void* parameter) {
     // SHARE/UNSHARE read an int via va_arg; callbacks and userdata are pointers.
     if (option == CURLSHOPT_SHARE || option == CURLSHOPT_UNSHARE) {
