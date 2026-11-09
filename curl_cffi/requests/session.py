@@ -1003,7 +1003,11 @@ class Session(BaseSession[R]):
             stream_task = self.executor.submit(perform)
 
             # Metadata is captured in the transfer thread before waking the caller.
-            header_recved.wait()  # type: ignore
+            try:
+                header_recved.wait()  # type: ignore
+            except BaseException:
+                cast(threading.Event, quit_now).set()
+                raise
             if stream_response is None:
                 try:
                     stream_task.result()
@@ -1817,7 +1821,12 @@ class AsyncSession(BaseSession[R]):
             stream_task = asyncio.create_task(perform())
             stream_task.add_done_callback(cleanup)
 
-            await cast(asyncio.Event, header_recved).wait()
+            try:
+                await cast(asyncio.Event, header_recved).wait()
+            except BaseException:
+                # The cleanup callback then aborts the transfer and returns the handle.
+                stream_task.cancel()
+                raise
 
             # Unlike threads, coroutines does not use preemptive scheduling.
             # For asyncio, there is no need for a header_parsed event, the

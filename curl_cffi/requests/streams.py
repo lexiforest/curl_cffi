@@ -7,7 +7,7 @@ from contextlib import suppress
 from io import SEEK_END, SEEK_SET, BytesIO
 from typing import IO, Any, Union, cast, final
 
-from ..curl import CURL_READFUNC_PAUSE, CURLPAUSE_SEND_CONT, Curl
+from ..curl import CURL_READFUNC_ABORT, CURL_READFUNC_PAUSE, CURLPAUSE_SEND_CONT, Curl
 from .exceptions import UnrewindableBodyError
 
 
@@ -153,6 +153,7 @@ class _AsyncIterableReader:
         self._buffer = bytearray()
         self._done = False
         self._paused = False
+        self._closed = False
         self._exception: BaseException | None = None
         self._task: asyncio.Task[None] | None = None
 
@@ -163,6 +164,9 @@ class _AsyncIterableReader:
         task = self._task
         if task is None:
             return
+        # Abort, never report EOF: that would end a cancelled chunked upload as if
+        # the body were complete.
+        self._closed = True
         if not task.done():
             task.cancel()
         with suppress(asyncio.CancelledError):
@@ -206,6 +210,8 @@ class _AsyncIterableReader:
             self._curl.pause(CURLPAUSE_SEND_CONT)
 
     def read(self, size: int) -> bytes | int:
+        if self._closed:
+            return CURL_READFUNC_ABORT
         buffer = self._buffer
         if not buffer:
             try:

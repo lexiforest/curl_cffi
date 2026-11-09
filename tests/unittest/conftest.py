@@ -222,7 +222,8 @@ async def https_proxy(scope, receive, send):
 
 
 async def slow_response(scope, receive, send):
-    await sleep(0.2)
+    delay = float(parse_qs(scope["query_string"].decode()).get("delay", [0.2])[0])
+    await sleep(delay)
     await send(
         {
             "type": "http.response.start",

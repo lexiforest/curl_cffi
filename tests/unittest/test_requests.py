@@ -10,7 +10,7 @@ import pytest
 from charset_normalizer import detect
 
 import curl_cffi
-from curl_cffi import Curl, CurlFollow, CurlOpt, requests
+from curl_cffi import Curl, CurlError, CurlFollow, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
@@ -21,6 +21,7 @@ from curl_cffi.requests.exceptions import (
 )
 from curl_cffi.requests.models import Response
 from curl_cffi.requests.streams import _IterableReader
+from curl_cffi.requests.utils import set_curl_options
 from curl_cffi.utils import CurlCffiWarning
 
 
@@ -1358,6 +1359,42 @@ def test_stream_metadata_stays_in_transfer_thread(server, monkeypatch, method):
         finally:
             release_transfer.set()
         response.close()
+
+
+def test_stream_interrupted_before_headers_aborts_transfer(server, monkeypatch):
+    class InterruptedEvent(Event):
+        def wait(self, timeout=None):
+            raise KeyboardInterrupt
+
+    def interrupted_set_curl_options(*args, **kwargs):
+        return set_curl_options(*args, **{**kwargs, "event_class": InterruptedEvent})
+
+    errors = []
+    transfer_done = Event()
+    original_perform = Curl.perform
+
+    def perform(curl, *args, **kwargs):
+        try:
+            original_perform(curl, *args, **kwargs)
+        except CurlError as e:
+            errors.append(e.code)
+            raise
+        finally:
+            transfer_done.set()
+
+    monkeypatch.setattr(
+        "curl_cffi.requests.session.set_curl_options", interrupted_set_curl_options
+    )
+    monkeypatch.setattr(Curl, "perform", perform)
+
+    with requests.Session() as s:
+        url = str(server.url.copy_with(path="/stream"))
+        with pytest.raises(KeyboardInterrupt):
+            s.get(url, stream=True)
+
+        # The worker aborts on the first chunk instead of reading the whole body.
+        assert transfer_done.wait(timeout=5)
+        assert errors == [CurlECode.WRITE_ERROR]
 
 
 @pytest.mark.skip(reason="External url unstable")

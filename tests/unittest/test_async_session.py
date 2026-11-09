@@ -642,6 +642,57 @@ async def test_stream_unconsumed_response_releases_handle(server):
         assert r.status_code == 200
 
 
+async def test_stream_cancelled_before_headers_releases_handle(server):
+    async with AsyncSession(max_clients=1) as s:
+        url = str(server.url.copy_with(path="/slow_response", query=b"delay=3"))
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(s.get(url, stream=True), 0.1)
+
+        # The cancelled transfer must give its handle back right away instead of
+        # holding it until the headers arrive.
+        r = await asyncio.wait_for(s.get(str(server.url)), 1)
+        assert r.status_code == 200
+        assert not s.acurl._curl2future
+
+
+async def test_stream_cancelled_upload_is_not_terminated():
+    received = bytearray()
+    partial_received = asyncio.Event()
+    disconnected = asyncio.Event()
+
+    async def record(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        while data := await reader.read(65536):
+            received.extend(data)
+            if received.endswith(b"partial\r\n"):
+                partial_received.set()
+        writer.close()
+        disconnected.set()
+
+    async def content():
+        yield b"partial"
+        await asyncio.sleep(10)
+        yield b"rest"
+
+    server = await asyncio.start_server(record, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        async with AsyncSession() as s:
+            request = asyncio.create_task(
+                s.post(f"http://127.0.0.1:{port}/", content=content(), stream=True)
+            )
+            await asyncio.wait_for(partial_received.wait(), 3)
+            request.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await request
+            await asyncio.wait_for(disconnected.wait(), 3)
+    finally:
+        server.close()
+        await server.wait_closed()
+
+    # No zero-size final chunk: the server must not see the body as complete.
+    assert received.endswith(b"7\r\npartial\r\n")
+
+
 async def test_stream_unconsumed_error_releases_handle(server):
     async with AsyncSession(max_clients=1) as s:
         url = str(server.url.copy_with(path="/incomplete_read"))
