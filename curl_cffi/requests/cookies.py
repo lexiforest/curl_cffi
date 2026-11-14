@@ -126,7 +126,6 @@ class CurlMorsel:
 
 
 cut_port_re = re.compile(r":\d+$", re.ASCII)
-IPV4_RE = re.compile(r"\.\d+$", re.ASCII)
 
 
 class Cookies(MutableMapping[str, str]):
@@ -170,19 +169,11 @@ class Cookies(MutableMapping[str, str]):
         self.jar = jar
 
     def _eff_request_host(self, request) -> str:
-        """
-        Almost equivalent to the eff_request_host function in:
-            https://github.com/python/cpython/blob/3.11/Lib/http/cookiejar.py#L636
-        """
-        host = urlparse(request.url)[1]
-        if host == "":
-            host = request.headers.get("Host", "")
-
-        # remove port, if present
-        host = cut_port_re.sub("", host, 1)
-        host = host.lower()
-        if host.find(".") == -1 and not IPV4_RE.search(host):
-            host += ".local"
+        """The host that cookies without a domain are bound to. It must be the
+        name curl connects to, otherwise curl will not send them."""
+        host = urlparse(request.url).hostname
+        if not host:
+            host = cut_port_re.sub("", request.headers.get("Host", ""), 1).lower()
         return host
 
     def get_cookies_for_curl(self, request) -> list[CurlMorsel]:
