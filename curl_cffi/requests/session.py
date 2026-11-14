@@ -574,6 +574,8 @@ class Session(BaseSession[R]):
         self._websockets: WeakSet[WebSocket] = WeakSet[WebSocket]()
         self._executor = None
         self._share = curl_share
+        # idle handles of finished streams, kept for their open connections
+        self._stream_curls: list[Curl] = []
         if use_thread_local_curl:
             self._local = threading.local()
             if curl:
@@ -633,6 +635,15 @@ class Session(BaseSession[R]):
         finally:
             # Ensure session is closed at the end.
             _ = self.curl.close()
+            while self._stream_curls:
+                self._stream_curls.pop().close()
+
+    def _release_stream_curl(self, curl: Curl) -> None:
+        if self._closed:
+            curl.close()
+        else:
+            curl.reset()
+            self._stream_curls.append(curl)
 
     @contextmanager
     def stream(
@@ -901,10 +912,13 @@ class Session(BaseSession[R]):
         multipart: Optional[CurlMime] = None,
         discard_cookies: bool = False,
     ) -> R:
-        # clone a new curl instance for streaming response
+        # use a separate curl instance for streaming response
         if stream:
-            c = self.curl.duphandle()
-            _ = self.curl.reset()
+            try:
+                c = self._stream_curls.pop()
+            except IndexError:
+                c = self.curl.duphandle()
+                _ = self.curl.reset()
         else:
             c = self.curl
 
@@ -1024,6 +1038,7 @@ class Session(BaseSession[R]):
             rsp.stream_task = stream_task
             rsp.quit_now = quit_now
             rsp.queue = q
+            rsp._release_curl = self._release_stream_curl
             if self.raise_for_status:
                 rsp.raise_for_status()
             return rsp
