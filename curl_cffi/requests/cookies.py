@@ -220,6 +220,8 @@ class Cookies(MutableMapping[str, str]):
                 self.jar.clear(domain, morsel.path, morsel.name)
 
     def update_cookies_from_curl_changes(self, changes: list[bytes]) -> None:
+        if not changes:
+            return
         for change in changes:
             action, separator, curl_format = change.partition(b"\t")
             if not separator or action not in (b"SET", b"DELETE"):
