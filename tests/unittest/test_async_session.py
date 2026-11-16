@@ -762,3 +762,25 @@ async def test_async_iterable_reader_close_does_not_swallow_caller_cancellation(
         await asyncio.wait([task], timeout=1)
     assert task in done
     assert task.cancelled()
+
+
+@pytest.mark.parametrize("yields", range(20))
+async def test_session_close_does_not_swallow_cancellation(yields):
+    """Cancel a task at each step of an AsyncSession's lifetime; none may be lost."""
+
+    async def worker():
+        async with AsyncSession() as s:
+            _ = s.acurl
+            await asyncio.sleep(0)
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(worker())
+    for _ in range(yields):
+        await asyncio.sleep(0)
+    task.cancel()
+    done, _ = await asyncio.wait([task], timeout=1)
+    if not done:
+        task.cancel()
+        await asyncio.wait([task], timeout=1)
+    assert task in done
+    assert task.cancelled()
