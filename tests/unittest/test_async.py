@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from curl_cffi import AsyncCurl, Curl, CurlError, CurlOpt
@@ -89,3 +91,22 @@ async def test_socket_callback_remove_untracked_socket():
         assert not ac._sockfds
     finally:
         await ac.close()
+
+
+async def test_close_does_not_swallow_caller_cancellation():
+    ac = AsyncCurl()
+
+    async def closer():
+        await ac.close()
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(closer())
+    await asyncio.sleep(0)  # let closer() suspend inside close()
+    task.cancel()
+    done, _ = await asyncio.wait([task], timeout=1)
+    if not done:
+        task.cancel()
+        await asyncio.wait([task], timeout=1)
+    assert task in done
+    assert task.cancelled()
+    assert ac._curlm is None

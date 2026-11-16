@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from curl_cffi import AsyncCurl, CurlOpt, Headers
+from curl_cffi import AsyncCurl, Curl, CurlOpt, Headers
 from curl_cffi.const import CurlECode
 from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
@@ -18,6 +18,7 @@ from curl_cffi.requests.exceptions import (
     UnrewindableBodyError,
 )
 from curl_cffi.requests.models import Response
+from curl_cffi.requests.streams import _AsyncIterableReader
 
 
 async def test_get(server):
@@ -737,3 +738,27 @@ async def test_trust_env_false_ignores_env_proxy(server, monkeypatch):
     async with AsyncSession(trust_env=False) as s:
         r = await s.get(str(server.url))
         assert r.text == "Hello, world!"
+
+
+async def test_async_iterable_reader_close_does_not_swallow_caller_cancellation():
+    async def body():
+        await asyncio.Event().wait()
+        yield b""
+
+    reader = _AsyncIterableReader(body(), Curl())
+    reader.start()
+    await asyncio.sleep(0)  # let the producer start waiting
+
+    async def closer():
+        await reader.close()
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(closer())
+    await asyncio.sleep(0)  # let closer() suspend inside close()
+    task.cancel()
+    done, _ = await asyncio.wait([task], timeout=1)
+    if not done:
+        task.cancel()
+        await asyncio.wait([task], timeout=1)
+    assert task in done
+    assert task.cancelled()

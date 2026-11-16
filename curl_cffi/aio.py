@@ -1,7 +1,6 @@
 import asyncio
 import sys
 import warnings
-from contextlib import suppress
 from typing import Any, Optional
 from weakref import WeakKeyDictionary
 
@@ -201,30 +200,32 @@ class AsyncCurl:
     async def close(self):
         """Close and cleanup running timers, readers, writers and handles."""
 
-        # Close and wait for the force timeout checker to complete
+        # Close and wait for the force timeout checker to complete. Use wait()
+        # rather than awaiting the task directly, so that a cancellation of the
+        # caller is propagated instead of being swallowed with the checker's.
         self._timeout_checker.cancel()
-        with suppress(asyncio.CancelledError):
-            await self._timeout_checker
+        try:
+            await asyncio.wait([self._timeout_checker])
+        finally:
+            # Close all pending futures
+            for curl, future in self._curl2future.items():
+                if curl._curl is not None:
+                    lib.curl_multi_remove_handle(self._curlm, curl._curl)
+                if not future.done() and not future.cancelled():
+                    future.set_result(None)
 
-        # Close all pending futures
-        for curl, future in self._curl2future.items():
-            if curl._curl is not None:
-                lib.curl_multi_remove_handle(self._curlm, curl._curl)
-            if not future.done() and not future.cancelled():
-                future.set_result(None)
+            # Cleanup curl_multi handle
+            lib.curl_multi_cleanup(self._curlm)
+            self._curlm = None
 
-        # Cleanup curl_multi handle
-        lib.curl_multi_cleanup(self._curlm)
-        self._curlm = None
+            # Remove add readers and writers
+            for sockfd in self._sockfds:
+                self.loop.remove_reader(sockfd)
+                self.loop.remove_writer(sockfd)
 
-        # Remove add readers and writers
-        for sockfd in self._sockfds:
-            self.loop.remove_reader(sockfd)
-            self.loop.remove_writer(sockfd)
-
-        # Cancel all time functions
-        if self._timer:
-            self._timer.cancel()
+            # Cancel all time functions
+            if self._timer:
+                self._timer.cancel()
 
     async def _force_timeout(self):
         """This coroutine is used to safeguard from any missing signals from curl, and
