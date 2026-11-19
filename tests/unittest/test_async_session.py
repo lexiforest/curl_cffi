@@ -13,6 +13,7 @@ from curl_cffi.requests import AsyncSession, RequestsError
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
     CertificateVerifyError,
+    ConnectionError,
     HTTPError,
     TooManyRedirects,
     UnrewindableBodyError,
@@ -725,6 +726,31 @@ async def test_dropped_http2_connection_error_names_the_failure():
                 await s.get(
                     f"http://127.0.0.1:{port}/",
                     http_version="v2_prior_knowledge",
+                    timeout=5,
+                )
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+async def test_malformed_proxy_status_line_raises_curl_error():
+    # Some proxies answer CONNECT with a broken status line, e.g. missing the
+    # leading `H`. curl rejects it, and that error must not be hidden by a
+    # `ValueError` while parsing the headers.
+    async def bad_proxy(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        await reader.readuntil(b"\r\n\r\n")
+        writer.write(b"TTP/1.1 200 Connection established\r\n\r\n")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(bad_proxy, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        async with AsyncSession() as s:
+            with pytest.raises(ConnectionError, match=r"curl: \(8\) "):
+                await s.get(
+                    "https://example.com/",
+                    proxy=f"http://127.0.0.1:{port}",
                     timeout=5,
                 )
     finally:

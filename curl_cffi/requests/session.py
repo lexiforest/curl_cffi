@@ -349,7 +349,8 @@ class BaseSession(Generic[R]):
         for header_line in header_lines:
             if not header_line.strip():
                 continue
-            if header_line.startswith(b"HTTP/"):
+            # `TTP/` comes from proxies that drop the leading `H` of the status line.
+            if header_line.startswith((b"HTTP/", b"TTP/")):
                 if header_status:
                     header_blocks.append((header_status, header_reason, header_list))
                 try:

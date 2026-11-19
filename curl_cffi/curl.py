@@ -45,8 +45,9 @@ def _default_cacert() -> str:
 
 
 DEFAULT_CACERT = _default_cacert()
-REASON_PHRASE_RE = re.compile(rb"HTTP/\d\.\d [0-9]{3} (.*)")
-STATUS_LINE_RE = re.compile(rb"HTTP/(\d\.\d) ([0-9]{3}) (.*)")
+# Some proxies answer CONNECT with the leading `H` missing, like `TTP/1.1 200 ...`.
+REASON_PHRASE_RE = re.compile(rb"H?TTP/\d\.\d [0-9]{3} (.*)")
+STATUS_LINE_RE = re.compile(rb"H?TTP/(\d\.\d) ([0-9]{3}) (.*)")
 
 if TYPE_CHECKING:
 

@@ -14,6 +14,7 @@ from curl_cffi import (
     Curl,
     CurlECode,
     CurlError,
+    CurlHttpVersion,
     CurlInfo,
     CurlOpt,
     CurlProxyType,
@@ -426,6 +427,17 @@ def test_reason(server):
     headers = buffer.getvalue()
     headers = headers.splitlines()
     assert c.get_reason_phrase(headers[0]) == b"OK"
+
+
+def test_status_line_missing_leading_h():
+    # Some proxies answer CONNECT with the leading `H` missing.
+    status_line = b"TTP/1.1 200 Connection established"
+    assert Curl.get_reason_phrase(status_line) == b"Connection established"
+    assert Curl.parse_status_line(status_line) == (
+        CurlHttpVersion.V1_1,
+        200,
+        b"Connection established",
+    )
 
 
 def test_resolve(server):
