@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import queue
 from collections.abc import AsyncIterable, Iterable, Iterator
-from contextlib import suppress
 from io import SEEK_END, SEEK_SET, BytesIO
 from typing import IO, Any, Union, cast, final
 
@@ -165,8 +164,9 @@ class _AsyncIterableReader:
             return
         if not task.done():
             task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+        # Don't await the task directly, which would swallow the caller's
+        # cancellation along with the task's.
+        await asyncio.wait([task])
 
     async def _produce(self) -> None:
         iterator = self._iterable.__aiter__()
