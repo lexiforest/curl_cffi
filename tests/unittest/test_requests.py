@@ -1119,7 +1119,8 @@ def test_session_with_all_proxies(server, proxy_server):
 # body tells whether a request went through the proxy or straight to it.
 
 
-def test_malformed_proxy_status_line_raises_curl_error():
+@pytest.mark.parametrize("prefix", [b"TTP/1.1", b"TP/1.1", b"INVALID"])
+def test_malformed_proxy_status_line_raises_curl_error(prefix):
     # Some proxies answer CONNECT with a broken status line, e.g. missing the
     # leading `H`. curl rejects it, and that error must not be hidden by a
     # `ValueError` while parsing the headers.
@@ -1132,7 +1133,7 @@ def test_malformed_proxy_status_line_raises_curl_error():
             data = b""
             while b"\r\n\r\n" not in data:
                 data += conn.recv(1024)
-            conn.sendall(b"TTP/1.1 200 Connection established\r\n\r\n")
+            conn.sendall(prefix + b" 200 Connection established\r\n\r\n")
 
     thread = Thread(target=bad_proxy, daemon=True)
     thread.start()

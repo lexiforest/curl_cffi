@@ -349,8 +349,7 @@ class BaseSession(Generic[R]):
         for header_line in header_lines:
             if not header_line.strip():
                 continue
-            # `TTP/` comes from proxies that drop the leading `H` of the status line.
-            if header_line.startswith((b"HTTP/", b"TTP/")):
+            if header_line.startswith(b"HTTP/"):
                 if header_status:
                     header_blocks.append((header_status, header_reason, header_list))
                 try:
@@ -365,6 +364,9 @@ class BaseSession(Generic[R]):
                 continue
             if header_line.startswith(b" ") or header_line.startswith(b"\t"):
                 header_list[-1] += header_line
+                continue
+            if b":" not in header_line:
+                # Skip malformed lines so Headers does not hide the curl error.
                 continue
             header_list.append(header_line)
         if header_status:

@@ -733,13 +733,14 @@ async def test_dropped_http2_connection_error_names_the_failure():
         await server.wait_closed()
 
 
-async def test_malformed_proxy_status_line_raises_curl_error():
+@pytest.mark.parametrize("prefix", [b"TTP/1.1", b"TP/1.1", b"INVALID"])
+async def test_malformed_proxy_status_line_raises_curl_error(prefix):
     # Some proxies answer CONNECT with a broken status line, e.g. missing the
     # leading `H`. curl rejects it, and that error must not be hidden by a
     # `ValueError` while parsing the headers.
     async def bad_proxy(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         await reader.readuntil(b"\r\n\r\n")
-        writer.write(b"TTP/1.1 200 Connection established\r\n\r\n")
+        writer.write(prefix + b" 200 Connection established\r\n\r\n")
         await writer.drain()
         writer.close()
 
