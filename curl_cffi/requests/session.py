@@ -365,6 +365,9 @@ class BaseSession(Generic[R]):
             if header_line.startswith(b" ") or header_line.startswith(b"\t"):
                 header_list[-1] += header_line
                 continue
+            if b":" not in header_line:
+                # Skip malformed lines so Headers does not hide the curl error.
+                continue
             header_list.append(header_line)
         if header_status:
             header_blocks.append((header_status, header_reason, header_list))
