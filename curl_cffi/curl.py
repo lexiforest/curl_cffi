@@ -97,6 +97,40 @@ CURLPAUSE_SEND_CONT = 0
 CURLPAUSE_ALL = CURLPAUSE_RECV | CURLPAUSE_SEND
 CURLPAUSE_CONT = CURLPAUSE_RECV_CONT | CURLPAUSE_SEND_CONT
 
+# The lookup tables of ``Curl.setopt``, which runs dozens of times per request.
+_SETOPT_VALUE_TYPES = {
+    # this should be int in curl, but cffi requires pointer for void*
+    # it will be convert back in the glue c code.
+    0: "long*",
+    10000: "char*",
+    20000: "void*",
+    30000: "int64_t*",  # offset type
+    40000: "void*",  # blob type
+}
+_FILEPATH_OPTS = frozenset(
+    {
+        CurlOpt.CAINFO,
+        CurlOpt.CAPATH,
+        CurlOpt.PROXY_CAINFO,
+        CurlOpt.PROXY_CAPATH,
+        CurlOpt.SSLCERT,
+        CurlOpt.SSLKEY,
+        CurlOpt.CRLFILE,
+        CurlOpt.ISSUERCERT,
+        CurlOpt.SSH_PUBLIC_KEYFILE,
+        CurlOpt.SSH_PRIVATE_KEYFILE,
+        CurlOpt.COOKIEFILE,
+        CurlOpt.COOKIEJAR,
+        CurlOpt.NETRC_FILE,
+        CurlOpt.UNIX_SOCKET_PATH,
+    }
+)
+_HEADER_OPTS = {
+    CurlOpt.HTTPHEADER: "_headers",
+    CurlOpt.HTTP3_HTTPHEADER: "_http3_headers",
+    CurlOpt.WS_HTTPHEADER: "_ws_headers",
+}
+
 
 class _CallbackContext:
     def __init__(self, callback: Any) -> None:
@@ -395,19 +429,10 @@ class Curl:
         """
         if self._curl is None:
             return 0  # silently ignore if curl handle is None
-        input_option = {
-            # this should be int in curl, but cffi requires pointer for void*
-            # it will be convert back in the glue c code.
-            0: "long*",
-            10000: "char*",
-            20000: "void*",
-            30000: "int64_t*",  # offset type
-            40000: "void*",  # blob type
-        }
         # print("option", option, "value", value)
 
         # Convert value
-        value_type = input_option.get((option // 10000) * 10000)
+        value_type = _SETOPT_VALUE_TYPES.get((option // 10000) * 10000)
         if value_type == "long*" or value_type == "int64_t*":
             c_value = ffi.new(value_type, value)
         elif option == CurlOpt.WRITEDATA:
@@ -463,23 +488,7 @@ class Curl:
                 # Windows/libcurl expects ANSI code page for file paths (char*).
                 # Non-ASCII paths encoded as UTF-8 can trigger ErrCode 77.
                 # Encode file-path-like options using the system encoding on Windows.
-                filepath_opts = {
-                    CurlOpt.CAINFO,
-                    CurlOpt.CAPATH,
-                    CurlOpt.PROXY_CAINFO,
-                    CurlOpt.PROXY_CAPATH,
-                    CurlOpt.SSLCERT,
-                    CurlOpt.SSLKEY,
-                    CurlOpt.CRLFILE,
-                    CurlOpt.ISSUERCERT,
-                    CurlOpt.SSH_PUBLIC_KEYFILE,
-                    CurlOpt.SSH_PRIVATE_KEYFILE,
-                    CurlOpt.COOKIEFILE,
-                    CurlOpt.COOKIEJAR,
-                    CurlOpt.NETRC_FILE,
-                    CurlOpt.UNIX_SOCKET_PATH,
-                }
-                if sys.platform.startswith("win") and option in filepath_opts:
+                if sys.platform.startswith("win") and option in _FILEPATH_OPTS:
                     # Use the process ANSI code page to match what CRT fopen expects.
                     enc = locale.getpreferredencoding(False)
                     c_value = value.encode(enc, errors="strict")
@@ -493,13 +502,8 @@ class Curl:
         else:
             raise NotImplementedError(f"Option unsupported: {option}")
 
-        header_options = {
-            CurlOpt.HTTPHEADER: "_headers",
-            CurlOpt.HTTP3_HTTPHEADER: "_http3_headers",
-            CurlOpt.WS_HTTPHEADER: "_ws_headers",
-        }
-        if option in header_options:
-            headers_attr = header_options[option]
+        if option in _HEADER_OPTS:
+            headers_attr = _HEADER_OPTS[option]
             headers = getattr(self, headers_attr)
             for header in value:
                 headers = lib.curl_slist_append(headers, header)
