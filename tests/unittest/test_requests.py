@@ -1201,6 +1201,29 @@ def test_stream_iter_content(server):
                 assert b"path" in chunk
 
 
+def test_stream_reuses_connection(server):
+    url = str(server.url.copy_with(path="/stream"))
+    with requests.Session() as s:
+        ports = set()
+        for _ in range(3):
+            with s.stream("GET", url, params={"n": "20"}) as r:
+                for _ in r.iter_content():
+                    pass
+            ports.add(r.local_port)
+        assert len(ports) == 1
+        (curl,) = s._stream_curls
+    assert curl._curl is None
+
+
+def test_stream_closed_after_session(server):
+    url = str(server.url.copy_with(path="/stream"))
+    with requests.Session() as s:
+        r = s.get(url, params={"n": "20"}, stream=True)
+    r.close()
+    assert r.curl._curl is None
+    assert not s._stream_curls
+
+
 def test_stream_response_pickle_raises(server):
     url = str(server.url.copy_with(path="/stream"))
     with (

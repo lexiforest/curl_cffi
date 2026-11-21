@@ -132,6 +132,7 @@ class Response:
         self.astream_task: Optional[Awaitable] = None
         self.quit_now = None
         self._stream_closed = False
+        self._release_curl: Optional[Callable[[Curl], None]] = None
         self.download_size: int = 0
         self.upload_size: int = 0
         self.header_size: int = 0
@@ -357,7 +358,10 @@ class Response:
         if self.stream_task:
             self.stream_task.result()
         if self.curl:
-            self.curl.close()
+            if self._release_curl:
+                self._release_curl(self.curl)
+            else:
+                self.curl.close()
 
     async def aiter_lines(self, chunk_size=None, decode_unicode=False, delimiter=None):
         """
