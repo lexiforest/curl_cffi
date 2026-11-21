@@ -347,7 +347,7 @@ class AsyncCurl:
             30000: "int64_t*",  # offset type
         }
         value_type = input_option.get((option // 10000) * 10000)
-        if value_type:
+        if value_type:  # noqa: SIM108
             c_value = ffi.new(value_type, value)
         else:
             c_value = value

@@ -451,7 +451,7 @@ def _apply_fingerprint(
     curl.setopt(CurlOpt.TLS_STATUS_REQUEST, 1)
     curl.setopt(
         CurlOpt.TLS_SIGNED_CERT_TIMESTAMPS, int(fingerprint.tls_signed_cert_timestamps)
-        )
+    )
     curl.setopt(CurlOpt.TLS_KEY_SHARES_LIMIT, fingerprint.tls_key_shares_limit)
 
     if fingerprint.tls_cert_compression:
@@ -488,9 +488,7 @@ def _apply_fingerprint(
         curl.setopt(CurlOpt.ECH, fingerprint.tls_ech)
 
     if fingerprint.tls_trust_anchors is not None:
-        curl.setopt(
-            CurlOpt.TLS_TRUST_ANCHORS, ",".join(fingerprint.tls_trust_anchors)
-        )
+        curl.setopt(CurlOpt.TLS_TRUST_ANCHORS, ",".join(fingerprint.tls_trust_anchors))
 
     # http2 settings
     if fingerprint.http2_settings:

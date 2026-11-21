@@ -74,9 +74,7 @@ def test_explicit_http3_uses_cached_extension_order(monkeypatch):
         utils,
         "_load_named_fingerprint",
         lambda target: Fingerprint(
-            tls_extension_order=(
-                "0-10-11-13-16-23-35-43-45-51-65281-5-18"
-            ),
+            tls_extension_order=("0-10-11-13-16-23-35-43-45-51-65281-5-18"),
             tls_signed_cert_timestamps=True,
             http3_tls_extension_order=http3_extension_order,
         ),
