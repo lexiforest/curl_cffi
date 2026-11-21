@@ -220,9 +220,7 @@ HANDLERS: dict[ServerBehavior, Callable[..., Awaitable[None]]] = {
     ServerBehavior.SEND_PINGS: send_pings_handler,
 }
 
-_MAX_FRAME: Final[int] = (
-    AsyncWebSocket._MAX_CURL_FRAME_SIZE
-)  # pyright: ignore[reportPrivateUsage]
+_MAX_FRAME: Final[int] = AsyncWebSocket._MAX_CURL_FRAME_SIZE  # pyright: ignore[reportPrivateUsage]
 DEFAULT_SERVER_MAX_SIZE: Final[int] = 32 * 1024 * 1024
 
 
@@ -860,9 +858,9 @@ class TestAsyncWebSocketConcurrency:
             assert not failures, "every waiter must receive a message, got: " + repr(
                 failures
             )
-            assert (
-                received == messages
-            ), "messages must be delivered FIFO, got: " + repr(received)
+            assert received == messages, (
+                "messages must be delivered FIFO, got: " + repr(received)
+            )
 
     async def test_recv_callers_exceed_queue_with_slow_producer(
         self,
@@ -919,10 +917,9 @@ class TestAsyncWebSocketConcurrency:
             assert not errors, "every consumer must receive a message, got: " + repr(
                 errors
             )
-            assert receive_order == list[int](
-                range(num_consumers)
-            ), "waiters must wake in the order they started waiting, got: " + repr(
-                receive_order
+            assert receive_order == list[int](range(num_consumers)), (
+                "waiters must wake in the order they started waiting, got: "
+                + repr(receive_order)
             )
             assert received == [f"slow_msg_{i}" for i in range(num_consumers)]
 
@@ -1213,9 +1210,9 @@ class TestAsyncWebSocketQueueBehavior:
             try:
                 _data, flags = await ws.recv(timeout=5.0)
             except (WebSocketClosed, WebSocketError) as exc:
-                assert not isinstance(
-                    exc, WebSocketTimeout
-                ), "recv() must not time out after the server closed"
+                assert not isinstance(exc, WebSocketTimeout), (
+                    "recv() must not time out after the server closed"
+                )
             else:
                 assert flags & CurlWsFlag.CLOSE, (
                     "the only data frame after an immediate close must be the "
@@ -1877,15 +1874,15 @@ class TestAsyncWebSocketFragmentationFix:
             expected: int = min(
                 _MAX_FRAME - (offset % _MAX_FRAME), len(payload) - offset
             )
-            assert (
-                offered_len == expected
-            ), f"at offset {offset}: offered {offered_len}, expected {expected}"
+            assert offered_len == expected, (
+                f"at offset {offset}: offered {offered_len}, expected {expected}"
+            )
             offset += accepted_len
 
         assert offset == len(payload)
-        assert any(
-            a < o for o, a in zip(offered, accepted, strict=True)
-        ), "no partial write occurred, the resumption path was not exercised"
+        assert any(a < o for o, a in zip(offered, accepted, strict=True)), (
+            "no partial write occurred, the resumption path was not exercised"
+        )
 
     async def test_send_eagain_retry_preserves_state(
         self, ws_connection: AsyncWebSocket
@@ -1918,9 +1915,9 @@ class TestAsyncWebSocketFragmentationFix:
         assert data == payload
         # 1 EAGAIN attempt + at least 2 fragments (65536 + 34464).
         assert len(offers) >= 3
-        assert (
-            offers[1] == offers[0]
-        ), "the retry after EAGAIN changed the frame boundary or the flags"
+        assert offers[1] == offers[0], (
+            "the retry after EAGAIN changed the frame boundary or the flags"
+        )
 
     async def test_manual_fragmentation_with_cont_flag(
         self, ws_connection: AsyncWebSocket
@@ -2033,9 +2030,7 @@ class TestAsyncWebSocketAutoclose:
 
             # The reader exits, but teardown is the caller's job now: the
             # writer must survive so RFC 6455 5.5.1's reply can be sent.
-            write_task: Task[None] | None = (
-                ws._write_task  # pyright: ignore[reportPrivateUsage]
-            )
+            write_task: Task[None] | None = ws._write_task  # pyright: ignore[reportPrivateUsage]
             assert not ws.closed
             assert not ws._terminated  # pyright: ignore[reportPrivateUsage]
             assert write_task is not None and not write_task.done()
@@ -2121,9 +2116,9 @@ class TestAsyncWebSocketBlockOnRecvQueueFull:
         # Whatever was delivered before the failure must be an unbroken prefix:
         # dropping from the middle is the data-integrity bug this mode exists
         # to prevent.
-        assert (
-            received == messages[: len(received)]
-        ), "messages delivered before the overflow must be a contiguous prefix"
+        assert received == messages[: len(received)], (
+            "messages delivered before the overflow must be a contiguous prefix"
+        )
 
 
 class TestAsyncWebSocketCloseCodeValidation:
@@ -2764,9 +2759,9 @@ class TestAsyncWebSocketRobustness:
         start_time: float = asyncio.get_running_loop().time()
         await ws.close(timeout=close_timeout)
         duration: float = asyncio.get_running_loop().time() - start_time
-        assert (
-            duration < close_timeout + 5.0
-        ), f"close() took {duration:.2f}s against a {close_timeout}s timeout"
+        assert duration < close_timeout + 5.0, (
+            f"close() took {duration:.2f}s against a {close_timeout}s timeout"
+        )
         assert ws.closed
         assert not ws.is_alive()
         with pytest.raises((WebSocketClosed, WebSocketError)):
@@ -2856,9 +2851,9 @@ class TestAsyncWebSocketRobustness:
                 return_exceptions=True,
             )
             for r in results:
-                assert not isinstance(
-                    r, RequestException
-                ), f"request rejected by the pool guard: {r!r}"
+                assert not isinstance(r, RequestException), (
+                    f"request rejected by the pool guard: {r!r}"
+                )
 
             assert ws1.closed and not ws2.closed
             await ws2.close()
