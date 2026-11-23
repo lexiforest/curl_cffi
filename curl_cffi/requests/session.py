@@ -1094,7 +1094,7 @@ class Session(BaseSession[R]):
         perk: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
-        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+        default_encoding: Union[str, Callable[[bytes], str], 4] = NOT_SET,
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
@@ -1109,6 +1109,9 @@ class Session(BaseSession[R]):
         """Send the request, see ``requests.request`` for details on parameters."""
 
         self._check_session_closed()
+
+        if isinstance(default_encoding, NotSetType):
+            default_encoding = self.default_encoding
 
         body = content if content is not None else data
         body_position = _capture_body_position(data, content)
@@ -1898,7 +1901,7 @@ class AsyncSession(BaseSession[R]):
         perk: Optional[str] = None,
         extra_fp: Optional[Union[ExtraFingerprints, ExtraFpDict]] = None,
         default_headers: Optional[bool] = None,
-        default_encoding: Union[str, Callable[[bytes], str]] = "utf-8",
+        default_encoding: Union[str, Callable[[bytes], str], NotSetType] = NOT_SET,
         quote: Union[str, Literal[False]] = "",
         http_version: Optional[Union[CurlHttpVersion, HttpVersionLiteral]] = None,
         interface: Optional[str] = None,
@@ -1913,6 +1916,9 @@ class AsyncSession(BaseSession[R]):
         """Send the request, see ``curl_cffi.requests.request`` for details on args."""
 
         self._check_session_closed()
+
+        if isinstance(default_encoding, NotSetType):
+            default_encoding = self.default_encoding
 
         body = content if content is not None else data
         body_position = _capture_body_position(data, content)
