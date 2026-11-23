@@ -607,6 +607,17 @@ def test_cookies(server):
     assert cookies["foo"] == "bar"
 
 
+@pytest.mark.parametrize("netloc", ["intranet:{port}", "user:pass@127.0.0.1:{port}"])
+def test_cookies_dotless_host_and_userinfo(server, netloc):
+    port = server.url.port
+    r = requests.get(
+        f"http://{netloc.format(port=port)}/echo_cookies",
+        cookies={"foo": "bar"},
+        curl_options={CurlOpt.RESOLVE: [f"intranet:{port}:127.0.0.1"]},
+    )
+    assert r.json() == {"foo": "bar"}
+
+
 def test_cookies_update_disabled(server):
     s = requests.Session()
 
