@@ -158,9 +158,7 @@ async def large_response_handler(
         pass
 
 
-_MAX_FRAME: Final[int] = (
-    WebSocket._MAX_CURL_FRAME_SIZE
-)  # pyright: ignore[reportPrivateUsage]
+_MAX_FRAME: Final[int] = WebSocket._MAX_CURL_FRAME_SIZE  # pyright: ignore[reportPrivateUsage]
 DEFAULT_SERVER_MAX_SIZE: Final[int] = 32 * 1024 * 1024
 
 
@@ -1124,15 +1122,15 @@ class TestWebSocketFragmentationFix:
             expected: int = min(
                 _MAX_FRAME - (offset % _MAX_FRAME), len(payload) - offset
             )
-            assert (
-                offered_len == expected
-            ), f"at offset {offset}: offered {offered_len}, expected {expected}"
+            assert offered_len == expected, (
+                f"at offset {offset}: offered {offered_len}, expected {expected}"
+            )
             offset += accepted_len
 
         assert offset == len(payload)
-        assert any(
-            a < o for o, a in zip(offered, accepted, strict=True)
-        ), "no partial write occurred, the resumption path was not exercised"
+        assert any(a < o for o, a in zip(offered, accepted, strict=True)), (
+            "no partial write occurred, the resumption path was not exercised"
+        )
 
     def test_send_eagain_retry_preserves_state(self, ws_connection: WebSocket) -> None:
         """EAGAIN must not corrupt frame boundary state.
@@ -1158,9 +1156,9 @@ class TestWebSocketFragmentationFix:
 
         assert data == payload
         assert len(offers) >= 3
-        assert (
-            offers[1] == offers[0]
-        ), "the retry after EAGAIN changed the frame boundary or the flags"
+        assert offers[1] == offers[0], (
+            "the retry after EAGAIN changed the frame boundary or the flags"
+        )
 
 
 class TestWebSocketRobustness:
@@ -1566,9 +1564,7 @@ class TestWebSocketVerifyArguments:
             return real_setopt(curl, option, value)
 
         def perform(curl: Curl, *_: object, **__: object) -> None:
-            state["skip_cacert"] = (
-                curl._skip_cacert  # pyright: ignore[reportPrivateUsage]
-            )
+            state["skip_cacert"] = curl._skip_cacert  # pyright: ignore[reportPrivateUsage]
             raise _StopBeforeIO
 
         with (

@@ -193,6 +193,16 @@
     },
     {
         "system": "Linux",
+        "machine": "riscv64",
+        "pointer_size": 64,
+        "sysname": "linux",
+        "link_type": "static",
+        "libc": "musl",
+        "obj_name": "libcurl-impersonate.a",
+        "arch": "riscv64"
+    },
+    {
+        "system": "Linux",
         "machine": "aarch64",
         "pointer_size": 64,
         "sysname": "linux",

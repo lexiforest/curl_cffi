@@ -1,9 +1,10 @@
 import base64
 import json
 import pickle
+import socket
 import time
 from io import BytesIO
-from threading import Event, get_ident
+from threading import Event, Thread, get_ident
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,7 @@ from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import (
     CertificateVerifyError,
+    ConnectionError,
     HTTPError,
     TooManyRedirects,
     UnrewindableBodyError,
@@ -1156,6 +1158,34 @@ def test_session_with_all_proxies(server, proxy_server):
 
 # The test server answers an absolute-form request as a proxy would, so the
 # body tells whether a request went through the proxy or straight to it.
+
+
+@pytest.mark.parametrize("prefix", [b"TTP/1.1", b"TP/1.1", b"INVALID"])
+def test_malformed_proxy_status_line_raises_curl_error(prefix):
+    # Some proxies answer CONNECT with a broken status line, e.g. missing the
+    # leading `H`. curl rejects it, and that error must not be hidden by a
+    # `ValueError` while parsing the headers.
+    listener = socket.create_server(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+
+    def bad_proxy():
+        conn, _ = listener.accept()
+        with conn:
+            data = b""
+            while b"\r\n\r\n" not in data:
+                data += conn.recv(1024)
+            conn.sendall(prefix + b" 200 Connection established\r\n\r\n")
+
+    thread = Thread(target=bad_proxy, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(ConnectionError, match=r"curl: \(8\) "):
+            requests.get(
+                "https://example.com/", proxy=f"http://127.0.0.1:{port}", timeout=5
+            )
+    finally:
+        thread.join(5)
+        listener.close()
 
 
 def test_env_proxy_is_used_by_default(server, monkeypatch):
