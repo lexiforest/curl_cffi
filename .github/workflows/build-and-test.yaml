@@ -30,6 +30,9 @@ jobs:
         pip install ruff
         ruff check --exclude issues
 
+    - name: Check impersonate presets
+      run: python scripts/check_preset.py
+
     - name: Test packaging
       run: |
         pip install pytest setuptools
