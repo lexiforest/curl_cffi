@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from curl_cffi import CurlOpt
 from curl_cffi.requests import cache
 from curl_cffi.requests import AsyncSession, FileCacheBackend, Session
 from curl_cffi.requests.models import Response
@@ -39,6 +40,22 @@ def test_cache_hit_updates_session_cookies(server, tmp_path):
 
         assert response.cookies["foo"] == "bar"
         assert session.cookies["foo"] == "bar"
+
+
+def test_cache_hit_keeps_cookies_on_their_host(server, tmp_path):
+    cache = FileCacheBackend(expires=timedelta(seconds=60), path=tmp_path)
+    url = str(server.url.copy_with(path="/set_cookies"))
+    other = f"http://other.test:{server.url.port}/echo_cookies"
+    resolve = [f"other.test:{server.url.port}:127.0.0.1"]
+
+    with Session(cache=cache) as session:
+        session.get(url)
+
+    with Session(cache=cache, curl_options={CurlOpt.RESOLVE: resolve}) as session:
+        session.get(url)
+
+        assert [c.domain for c in session.cookies.jar] == ["127.0.0.1"]
+        assert session.get(other).json() == {}
 
 
 def test_cache_ignores_selected_query_params(server, tmp_path):

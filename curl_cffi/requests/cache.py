@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from .cookies import Cookies
+from .cookies import Cookies, CurlMorsel
 from .headers import Headers
 from .models import Request, Response
 
@@ -61,8 +61,9 @@ def _parse_har_timestamp(value: str) -> float:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
 
 
-def _response_cookies(headers: Headers) -> Cookies:
+def _response_cookies(headers: Headers, url: str) -> Cookies:
     cookies = Cookies()
+    host = urlsplit(url).hostname or ""
     for set_cookie in headers.get_list("set-cookie"):
         if not set_cookie:
             continue
@@ -70,13 +71,18 @@ def _response_cookies(headers: Headers) -> Cookies:
             parsed = SimpleCookie()
             parsed.load(set_cookie)
             for name, morsel in parsed.items():
-                cookies.set(
-                    name,
-                    morsel.value,
-                    domain=morsel.get("domain", ""),
-                    path=morsel.get("path", "/"),
-                    secure=bool(morsel.get("secure")),
+                domain = morsel["domain"].lstrip(".")
+                # Like curl does: without Domain the cookie is host-only. A
+                # domainless one would be sent to every host.
+                curl_morsel = CurlMorsel(
+                    name=name,
+                    value=morsel.value,
+                    hostname=f".{domain}" if domain else host,
+                    subdomains=bool(domain),
+                    path=morsel["path"] or "/",
+                    secure=bool(morsel["secure"]),
                 )
+                cookies.jar.set_cookie(curl_morsel.to_cookiejar_cookie())
         except Exception:
             continue
     return cookies
@@ -298,7 +304,7 @@ class CacheBackend(ABC):
         response.reason = har_response.get("statusText", "")
         response.ok = 200 <= response.status_code < 400
         response.headers = headers
-        response.cookies = _response_cookies(response.headers)
+        response.cookies = _response_cookies(response.headers, response.url)
         response.default_encoding = extra.get("default_encoding", "utf-8")
         response.elapsed = timedelta(milliseconds=float(entry.get("time", 0.0)))
         response.redirect_count = int(extra.get("redirect_count", 0))
