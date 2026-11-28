@@ -1,6 +1,6 @@
 import pytest
 
-from curl_cffi import AsyncCurl, Curl, CurlError, CurlOpt
+from curl_cffi import AsyncCurl, Curl, CurlError, CurlMOpt, CurlOpt
 from curl_cffi.aio import CURL_POLL_REMOVE, socket_function
 
 
@@ -87,5 +87,21 @@ async def test_socket_callback_remove_untracked_socket():
                 == 0
             )
         assert not ac._sockfds
+    finally:
+        await ac.close()
+
+
+async def test_setopt_passes_integer_options_by_value():
+    # https://github.com/lexiforest/curl_cffi/issues/901
+    # libcurl reads integer multi options with va_arg(param, long), so the
+    # pointer to the value must be dereferenced before the call.
+    ac = AsyncCurl()
+    try:
+        # libcurl rejects negative values with CURLM_BAD_FUNCTION_ARGUMENT (10)
+        assert ac.setopt(CurlMOpt.MAX_TOTAL_CONNECTIONS, -1) == 10
+        assert ac.setopt(CurlMOpt.MAX_HOST_CONNECTIONS, -1) == 10
+        # valid values are accepted
+        assert ac.setopt(CurlMOpt.MAX_TOTAL_CONNECTIONS, 5) == 0
+        assert ac.setopt(CurlMOpt.MAXCONNECTS, 10) == 0
     finally:
         await ac.close()

@@ -16,7 +16,7 @@ from urllib.request import urlretrieve
 from cffi import FFI
 
 # this is the upstream libcurl-impersonate version
-__version__ = "2.3.0"
+__version__ = "2.3.3"
 
 
 def is_android_env() -> bool:
@@ -97,9 +97,9 @@ def get_obj_name(arch, link_type):
         return "libcurl-impersonate.a"
     if arch["system"] == "Darwin":
         return "libcurl-impersonate.dylib"
-    if arch["system"] == "Linux":
-        return "libcurl-impersonate.so"
-    return "libcurl-impersonate.dll"
+    if arch["system"] == "Windows":
+        return "libcurl-impersonate.dll"
+    return "libcurl-impersonate.so"
 
 
 arch = detect_arch()

@@ -66,7 +66,8 @@ Cloro
    :target: https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi
 
 `cloro <https://cloro.dev/?utm_source=referral&utm_medium=curl_cffi>`_: SERP and AI
-search API for Google, ChatGPT, Perplexity, Gemini, Copilot and Grok.
+search API for Google, Bing, ChatGPT, Gemini, Google AI Mode, Google AI Overviews and
+Bing AI Mode
 
 
 You can also click `here <https://buymeacoffee.com/yifei>`_ to buy me a coffee.
